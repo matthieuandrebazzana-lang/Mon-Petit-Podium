@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette 10 — Récap pronos · Mon Petit Podium</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #2a2a2a; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 40px 20px; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .phone { background: #F5F0EB; width: 375px; min-height: 812px; border-radius: 54px; overflow: hidden; border: 10px solid #1a1a1a; box-shadow: 0 30px 80px rgba(0,0,0,0.5); position: relative; }
+  .sb { background: #F5F0EB; padding: 16px 24px 0; display: flex; justify-content: space-between; align-items: center; }
+  .sb-time { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+  .sb-icons { display: flex; gap: 6px; align-items: center; }
+  .widgets { padding: 16px 16px 40px; display: flex; flex-direction: column; gap: 12px; }
+
+  .back { display: flex; align-items: center; gap: 5px; color: #800111; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .page-title { font-size: 28px; font-weight: 500; color: #1a1a1a; }
+  .page-sub { font-size: 13px; color: #999; margin-top: 3px; }
+
+  /* Widget confirmation */
+  .w-confirm { background: #800111; border-radius: 24px; padding: 20px; display: flex; align-items: center; gap: 16px; }
+  .confirm-icon { width: 48px; height: 48px; background: rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .confirm-title { font-size: 17px; font-weight: 500; color: #fff; }
+  .confirm-sub { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 3px; }
+
+  .section-lbl { font-size: 11px; font-weight: 500; color: #999; letter-spacing: 0.7px; }
+
+  /* Cartes pronos */
+  .w-pronos { background: #fff; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; }
+  .sec-lbl-inner { font-size: 10px; font-weight: 500; color: #bbb; letter-spacing: 0.8px; margin-bottom: 8px; }
+  .prow { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #f0ebe4; }
+  .prow:last-child { border-bottom: none; padding-bottom: 0; }
+  .prow-left .ptype { font-size: 10px; color: #aaa; font-weight: 500; letter-spacing: 0.3px; }
+  .prow-left .pchoice { font-size: 14px; font-weight: 500; color: #1a1a1a; margin-top: 2px; }
+  .prow-right { display: flex; align-items: center; gap: 8px; }
+  .cote { background: #F5F0EB; border-radius: 10px; padding: 5px 10px; font-size: 13px; font-weight: 500; color: #800111; }
+  .tag-ob { font-size: 9px; background: #FFF3E0; color: #E65100; padding: 2px 7px; border-radius: 6px; font-weight: 500; }
+  .tag-bo { font-size: 9px; background: #E8F5E9; color: #2E7D32; padding: 2px 7px; border-radius: 6px; font-weight: 500; }
+  .divider { height: 1px; background: #f0ebe4; margin: 10px 0; }
+
+  /* Timer modif */
+  .w-modif { background: #fff; border-radius: 20px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
+  .modif-left .modif-lbl { font-size: 11px; color: #999; }
+  .modif-left .modif-val { font-size: 15px; font-weight: 500; color: #1a1a1a; margin-top: 2px; }
+  .modif-btn { background: #F5F0EB; border-radius: 12px; padding: 8px 14px; font-size: 13px; font-weight: 500; color: #800111; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="sb">
+    <span class="sb-time">9:41</span>
+    <div class="sb-icons">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="#1a1a1a"/></svg>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><rect x="2" y="7" width="20" height="11" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+    </div>
+  </div>
+
+  <div class="widgets">
+    <div>
+      <div class="back">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#800111" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        GP Pays-Bas
+      </div>
+      <div class="page-title">Récap</div>
+      <div class="page-sub">Dimanche 23 août · Départ 15h00</div>
+    </div>
+
+    <!-- Confirmation -->
+    <div class="w-confirm">
+      <div class="confirm-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div>
+        <div class="confirm-title">Pronos enregistrés !</div>
+        <div class="confirm-sub">Tu peux les modifier jusqu'au départ</div>
+      </div>
+    </div>
+
+    <!-- Pronos -->
+    <div class="w-pronos">
+      <div class="sec-lbl-inner">OBLIGATOIRES</div>
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">VAINQUEUR</div>
+          <div class="pchoice">AK. Antonelli</div>
+        </div>
+        <div class="prow-right">
+          <span class="cote">280 pts</span>
+          <span class="tag-ob">Obligatoire</span>
+        </div>
+      </div>
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">PODIUM</div>
+          <div class="pchoice">L. Norris</div>
+        </div>
+        <div class="prow-right">
+          <span class="cote">210 pts</span>
+          <span class="tag-ob">Obligatoire</span>
+        </div>
+      </div>
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">PODIUM</div>
+          <div class="pchoice">G. Russell</div>
+        </div>
+        <div class="prow-right">
+          <span class="cote">340 pts</span>
+          <span class="tag-ob">Obligatoire</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sec-lbl-inner">BONUS</div>
+
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">SAFETY CAR</div>
+          <div class="pchoice">Oui</div>
+        </div>
+        <div class="prow-right">
+          <span class="cote">185 pts</span>
+          <span class="tag-bo">Bonus</span>
+        </div>
+      </div>
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">ABANDON</div>
+          <div class="pchoice">M. Verstappen</div>
+        </div>
+        <div class="prow-right">
+          <span class="cote">950 pts</span>
+          <span class="tag-bo">Bonus</span>
+        </div>
+      </div>
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">VAINQUEUR</div>
+          <div class="pchoice">AK. Antonelli</div>
+        </div>
+        <div class="prow-right">
+          <span class="cote">280 pts</span>
+          <span class="tag-bo">Bonus</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modifier -->
+    <div class="w-modif">
+      <div class="modif-left">
+        <div class="modif-lbl">Fermeture dans</div>
+        <div class="modif-val">2j 14h 32min</div>
+      </div>
+      <div class="modif-btn">Modifier →</div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

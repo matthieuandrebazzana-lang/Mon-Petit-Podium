@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette 9 — Saisie des pronos · Mon Petit Podium</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #2a2a2a; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 40px 20px; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .phone { background: #F5F0EB; width: 375px; min-height: 812px; border-radius: 54px; overflow: hidden; border: 10px solid #1a1a1a; box-shadow: 0 30px 80px rgba(0,0,0,0.5); position: relative; }
+  .sb { background: #F5F0EB; padding: 16px 24px 0; display: flex; justify-content: space-between; align-items: center; }
+  .sb-time { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+  .sb-icons { display: flex; gap: 6px; align-items: center; }
+  .widgets { padding: 16px 16px 40px; display: flex; flex-direction: column; gap: 12px; }
+
+  .back { display: flex; align-items: center; gap: 5px; color: #800111; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .page-title { font-size: 28px; font-weight: 500; color: #1a1a1a; }
+  .page-sub { font-size: 13px; color: #999; margin-top: 3px; }
+
+  /* Timer */
+  .w-timer { background: #800111; border-radius: 20px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; }
+  .timer-lbl { font-size: 11px; color: rgba(255,255,255,0.6); letter-spacing: 0.5px; }
+  .timer-val { font-size: 20px; font-weight: 500; color: #fff; margin-top: 2px; }
+  .timer-icon { width: 36px; height: 36px; background: rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
+  .section-lbl { font-size: 11px; font-weight: 500; color: #999; letter-spacing: 0.7px; }
+
+  /* Marché obligatoire */
+  .w-obligatoire { background: #fff; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .marche-header { display: flex; justify-content: space-between; align-items: center; }
+  .marche-title { font-size: 12px; font-weight: 500; color: #800111; letter-spacing: 0.5px; }
+  .marche-tag { background: #FFF3E0; color: #E65100; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 8px; }
+  .choix-selected { background: #800111; border-radius: 14px; padding: 13px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .choix-name { font-size: 15px; font-weight: 500; color: #fff; }
+  .choix-cote { font-size: 13px; color: rgba(255,255,255,0.7); }
+  .choix-vide { background: #F5F0EB; border-radius: 14px; padding: 13px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .choix-vide-txt { font-size: 14px; color: #bbb; }
+  .choix-vide-arrow { color: #ccc; }
+
+  /* Marché bonus */
+  .w-bonus { background: #fff; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* Favoris pour bonus */
+  .favs-grid { display: flex; flex-direction: column; gap: 8px; }
+  .fav-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #F5F0EB; border-radius: 14px; }
+  .fav-row.selected { background: #800111; }
+  .fav-left { display: flex; flex-direction: column; gap: 2px; }
+  .fav-type { font-size: 10px; color: #999; font-weight: 500; letter-spacing: 0.4px; }
+  .fav-type.selected { color: rgba(255,255,255,0.6); }
+  .fav-name { font-size: 14px; font-weight: 500; color: #1a1a1a; }
+  .fav-name.selected { color: #fff; }
+  .fav-right { display: flex; align-items: center; gap: 8px; }
+  .fav-cote { background: #fff; border-radius: 8px; padding: 4px 8px; font-size: 12px; font-weight: 500; color: #543925; }
+  .fav-cote.selected { background: rgba(255,255,255,0.2); color: #fff; }
+  .check-circle { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #ddd; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .check-circle.checked { background: #fff; border-color: #fff; }
+
+  .bonus-count { font-size: 12px; color: #999; text-align: right; }
+  .bonus-count span { color: #800111; font-weight: 500; }
+
+  .w-btn { background: #800111; border-radius: 18px; padding: 19px; text-align: center; color: #fff; font-size: 17px; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="sb">
+    <span class="sb-time">9:41</span>
+    <div class="sb-icons">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="#1a1a1a"/></svg>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><rect x="2" y="7" width="20" height="11" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+    </div>
+  </div>
+
+  <div class="widgets">
+    <div>
+      <div class="back">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#800111" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        GP Pays-Bas
+      </div>
+      <div class="page-title">Mes pronos</div>
+      <div class="page-sub">Dimanche 23 août · Départ 15h00</div>
+    </div>
+
+    <!-- Timer -->
+    <div class="w-timer">
+      <div>
+        <div class="timer-lbl">FERMETURE DANS</div>
+        <div class="timer-val">2j 14h 32min</div>
+      </div>
+      <div class="timer-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+    </div>
+
+    <!-- Obligatoires -->
+    <div class="section-lbl">OBLIGATOIRES</div>
+
+    <div class="w-obligatoire">
+      <div class="marche-header">
+        <div class="marche-title">VAINQUEUR</div>
+        <div class="marche-tag">Obligatoire</div>
+      </div>
+      <div class="choix-selected">
+        <div class="choix-name">AK. Antonelli</div>
+        <div class="choix-cote">×2,80</div>
+      </div>
+    </div>
+
+    <div class="w-obligatoire">
+      <div class="marche-header">
+        <div class="marche-title">PODIUM</div>
+        <div class="marche-tag">Obligatoire</div>
+      </div>
+      <div class="choix-selected">
+        <div class="choix-name">L. Norris</div>
+        <div class="choix-cote">×2,10</div>
+      </div>
+      <div class="choix-vide">
+        <div class="choix-vide-txt">2e pilote sur le podium...</div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+
+    <!-- Bonus -->
+    <div class="section-lbl">BONUS — MES FAVORIS</div>
+    <div class="bonus-count"><span>1</span> sélectionné sur 3 max</div>
+
+    <div class="w-bonus">
+      <div class="favs-grid">
+        <div class="fav-row selected">
+          <div class="fav-left">
+            <div class="fav-type selected">SAFETY CAR</div>
+            <div class="fav-name selected">Oui</div>
+          </div>
+          <div class="fav-right">
+            <div class="fav-cote selected">×1,85</div>
+            <div class="check-circle checked">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#800111" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="fav-row">
+          <div class="fav-left">
+            <div class="fav-type">ABANDON</div>
+            <div class="fav-name">M. Verstappen</div>
+          </div>
+          <div class="fav-right">
+            <div class="fav-cote">×9,50</div>
+            <div class="check-circle"></div>
+          </div>
+        </div>
+        <div class="fav-row">
+          <div class="fav-left">
+            <div class="fav-type">VAINQUEUR</div>
+            <div class="fav-name">AK. Antonelli</div>
+          </div>
+          <div class="fav-right">
+            <div class="fav-cote">×2,80</div>
+            <div class="check-circle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="w-btn">Valider mes pronos</div>
+  </div>
+</div>
+</body>
+</html>

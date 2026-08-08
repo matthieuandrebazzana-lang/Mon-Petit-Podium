@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette 7b — Vue Piste · Mon Petit Podium</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #2a2a2a; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 40px 20px; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .phone { background: #F5F0EB; width: 375px; min-height: 812px; border-radius: 54px; overflow: hidden; border: 10px solid #1a1a1a; box-shadow: 0 30px 80px rgba(0,0,0,0.5); position: relative; }
+  .sb { background: #F5F0EB; padding: 16px 24px 0; display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 10; }
+  .sb-time { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+  .sb-icons { display: flex; gap: 6px; align-items: center; }
+  .top-section { padding: 12px 16px 10px; display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 10; }
+  .w-header { display: flex; justify-content: space-between; align-items: flex-start; }
+  .champ-name { font-size: 26px; font-weight: 500; color: #1a1a1a; }
+  .champ-meta { font-size: 13px; color: #999; margin-top: 3px; }
+  .toggle-row { display: flex; background: #fff; border-radius: 16px; padding: 4px; gap: 4px; }
+  .toggle-btn { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 500; border-radius: 12px; color: #999; }
+  .toggle-btn.active { background: #800111; color: #fff; }
+
+  /* Zone piste pleine largeur */
+  .piste-full { position: relative; width: 100%; flex: 1; overflow: hidden; min-height: 550px; }
+
+  /* Route SVG en fond */
+  .route-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+  /* Voitures + légende superposées */
+  .piste-content { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; }
+  .piste-track { flex: 1; position: relative; }
+  .legende { width: 64px; flex-shrink: 0; position: relative; padding-top: 4px; }
+  .legende-item { position: absolute; right: 8px; display: flex; flex-direction: column; align-items: flex-end; }
+  .legende-pts { font-size: 12px; font-weight: 700; color: #fff; line-height: 1; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+  .legende-name { font-size: 9px; color: rgba(255,255,255,0.7); margin-top: 1px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+  /* Ligne arrivée */
+  .ligne-arrivee { position: absolute; top: 0; left: 0; right: 0; height: 5px; background: repeating-linear-gradient(90deg, #fff 0px, #fff 8px, #1a1a1a 8px, #1a1a1a 16px); z-index: 5; }
+  .arrivee-label { position: absolute; top: 8px; left: 12px; font-size: 9px; color: rgba(255,255,255,0.8); letter-spacing: 0.5px; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.8); z-index: 5; }
+
+  .voiture { position: absolute; left: 50%; transform: translateX(-50%); z-index: 6; }
+  .voiture svg { width: 52px; height: auto; }
+
+  .navbar { position: absolute; bottom: 0; left: 0; right: 0; background: #fff; border-radius: 0 0 44px 44px; padding: 14px 32px 28px; display: flex; justify-content: space-around; align-items: center; z-index: 20; }
+  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .nav-lbl { font-size: 10px; color: #bbb; }
+  .nav-lbl.active { color: #800111; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="sb">
+    <span class="sb-time">9:41</span>
+    <div class="sb-icons">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="#1a1a1a"/></svg>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><rect x="2" y="7" width="20" height="11" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+    </div>
+  </div>
+  <div class="top-section">
+    <div class="w-header">
+      <div>
+        <div class="champ-name">Les Potes F1</div>
+        <div class="champ-meta">6 membres · Saison 2026</div>
+      </div>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" style="margin-top:6px;"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-btn">Classement</div>
+      <div class="toggle-btn active">Piste</div>
+    </div>
+  </div>
+
+  <!-- Zone piste pleine largeur -->
+  <div class="piste-full">
+
+    <!-- Route SVG en fond, pleine largeur -->
+    <svg class="route-bg" viewBox="0 0 355 560" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="redwhite" x="0" y="0" width="16" height="20" patternUnits="userSpaceOnUse">
+          <rect width="16" height="10" fill="#cc2200"/>
+          <rect y="10" width="16" height="10" fill="#fff"/>
+        </pattern>
+      </defs>
+      <!-- Fond asphalte pleine largeur -->
+      <rect width="355" height="560" fill="#1a1a1a"/>
+      <!-- Bordure rouge-blanc gauche -->
+      <rect x="0" y="0" width="20" height="560" fill="url(#redwhite)"/>
+      <!-- Bordure rouge-blanc droite -->
+      <rect x="335" y="0" width="20" height="560" fill="url(#redwhite)"/>
+      <!-- Ligne centrale pointillée -->
+      <line x1="177" y1="0" x2="177" y2="560" stroke="white" stroke-width="4" stroke-dasharray="22,16" opacity="0.5"/>
+    </svg>
+
+    <!-- Ligne d'arrivée -->
+    <div class="ligne-arrivee"></div>
+    <div class="arrivee-label">ARRIVÉE</div>
+
+    <!-- Voitures + légende -->
+    <div class="piste-content">
+      <div class="piste-track">
+
+        <!-- 1er Thomas amber -->
+        <div class="voiture" style="top:18px;">
+          <svg viewBox="0 0 275.12 332.75" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="135.5 159.96 135.5 276.97 184.54 276.97 184.54 237.27 192.01 161.42 135.5 159.96" fill="#3c3c3b"/>
+            <polygon points="86.47 237.27 86.47 276.97 135.5 276.97 135.5 159.96 78.99 162.29 86.47 237.27" fill="#3c3c3b"/>
+            <polygon points="194.54 41.81 135.5 25.71 135.5 63.41 194.54 79.51 194.54 41.81" fill="#b87010"/>
+            <polygon points="76.46 41.81 135.5 25.71 135.5 63.41 76.46 79.51 76.46 41.81" fill="#b87010"/>
+            <polygon points="206.06 44.5 186.23 36.85 186.23 82.21 206.06 82.21 206.06 44.5" fill="#E8A020"/>
+            <polygon points="64.95 44.5 84.78 36.85 84.78 82.21 64.95 82.21 64.95 44.5" fill="#E8A020"/>
+            <path d="M180.1,233.41c-13.84,58.83-35.05.39-35.26,27.97h-18.68c-.21-27.58-21.42,30.86-35.26-27.97-13.84-58.83,28.25-65.5,28.25-65.5l5.18-55.38s4.18-65.9,4.91-73.71c.5-5.46,3.36-7.21,5.03-7.77c.23-.07.44-.13.61-.17.38-.08.62-.09.62-.09,0,0,5.54.22,6.27,8.03.72,7.81,4.9,73.71,4.9,73.71l5.18,55.38s42.1,6.67,28.25,65.5Z" fill="#E8A020"/>
+            <rect x="170.71" y="234.88" width="35.29" height="60.34" rx="5.18" fill="#1c0709"/>
+            <rect x="174.74" y="87.51" width="31.32" height="55.29" rx="5.18" fill="#1c0709"/>
+            <rect x="65" y="87.51" width="31.32" height="55.29" rx="5.18" fill="#1c0709"/>
+            <rect x="65" y="234.88" width="35.29" height="60.34" rx="5.18" fill="#1c0709"/>
+            <rect x="86.47" y="276.97" width="98.06" height="36.83" fill="#b87010"/>
+            <path d="M149.95,240c-1.09,2.32-2.03,4.62-2.8,7l14.38,14.38h-52.06l14.38-14.38c-.77-2.38-1.71-4.68-2.8-7l-20.76,20.76v10.04h70.42v-10.04l-20.76-20.76Z" fill="#706f6f"/>
+            <path d="M174.74,109.75v10.04l-25.69,21.44-.89-9.5,19.39-15.6-1.12-.18-19.33,4.43-.24-2.59,12.73-2.92-13.11-2.07c-.13-2.1-.33-5.22-.57-9l28.83,5.95Z" fill="#706f6f"/>
+            <path d="M96.26,109.75v10.04l25.69,21.44.89-9.5-19.39-15.6,1.12-.18,19.33,4.43.24-2.59-12.73-2.92,13.11-2.07c.13-2.1.33-5.22.57-9l-28.83,5.95Z" fill="#706f6f"/>
+            <path d="M158.13,167.91l-7.17-55.38s-5.79-65.9-6.78-73.71c-1.01-7.79-8.63-8.03-8.67-8.03h0c-.04,0-7.67.24-8.67,8.03-1,7.81-6.78,73.71-6.78,73.71l-7.17,55.38s-20.97,22.74-3.54,54.06c7.6,13.66,11.09,22.89,12.61,28.97,1.97,7.87.64,10.44.64,10.44h25.85s-1.33-2.57.64-10.44c1.52-6.08,5.01-15.31,12.61-28.97,17.43-31.32-3.54-54.06-3.54-54.06Z" fill="#E8A020"/>
+            <circle cx="135.63" cy="196.84" r="20.41" fill="#020102"/>
+            <text transform="translate(141.21 40.38) rotate(-180)" fill="#fff" font-family="Helvetica Neue" font-weight="700" font-size="20">1</text>
+            <text transform="translate(90 308)" fill="#fff" font-family="Helvetica Neue" font-weight="700" font-size="15">Thomas</text>
+          </svg>
+        </div>
+
+        <!-- 2e Matthieu rouge -->
+        <div class="voiture" style="top:106px;">
+          <svg viewBox="0 0 275.12 332.75" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="135.5 159.96 135.5 276.97 184.54 276.97 184.54 237.27 192.01 161.42 135.5 159.96" fill="#3c3c3b"/>
+            <polygon points="86.47 237.27 86.47 276.97 135.5 276.97 135.5 159.96 78.99 162.29 86.47 237.27" fill="#3c3c3b"/>
+            <polygon points="194.54 41.81 135.5 25.71 135.5 63.41 194.54 79.51 194.54 41.81" fill="#5a000c"/>
+            <polygon points="76.46 41.81 135.5 25.71 135.5 63.41 76.46 79.51 76.46 41.81" fill="#5a000c"/>
+            <polygon points="206.06 44.5 186.23 36.85 186.23 82.21 206.06 82.21 206.06 44.5" fill="#800111"/>
+            <polygon points="64.95 44.5 84.78 36.85 84.78 82.21 64.95 82.21 64.95 44.5" fill="#800111"/>
+            <path d="M180.1,233.41c-13.84,58.83-35.05.39-35.26,27.97h-18.68c-.21-27.58-21.42,30.86-35.26-27.97-13.84-58.83,28.25-65.5,28.25-65.5l5.18-55.38s4.18-65.9,4.91-73.71c.5-5.46,3.36-7.21,5.03-7.77c.23-.07.44-.13.61-.17.38-.08.62-.09.62-.09,0,0,5.54.22,6.27,8.03.72,7.81,4.9,73.71,4.9,73.71l5.18,55.38s42.1,6.67,28.25,65.5Z" fill="#800111"/>
+            <rect x="170.71" y="234.88" width="35.29" height="60.34" rx="5.18" fill="#1c0709"/>
+            <rect x="174.74" y="87.51" width="31.32" height="55.29" rx="5.18" fill="#1c0709"/>
+            <rect x="65" y="87.51" width="31.32" height="55.29" rx="5.18" fill="#1c0709"/>
+            <rect x="65" y="234.88" width="35.29" height="60.34" rx="5.18" fill="#1c0709"/>
+            <rect x="86.47" y="276.97" width="98.06" height="36.83" fill="#5a000c"/>
+            <path d="M149.95,240c-1.09,2.32-2.03,4.62-2.8,7l14.38,14.38h-52.06l14.38-14.38c-.77-2.38-1.71-4.68-2.8-7l-20.76,20.76v10.04h70.42v-10.04l-20.76-20.76Z" fill="#706f6f"/>
+            <path d="M174.74,109.75v10.04l-25.69,21.44-.89-9.5,19.39-15.6-1.12-.18-19.33,4.43-.24-2.59,12.73-2.92-13.11-2.07c-.13-2.1-.33-5.22-.57-9l28.83,5.95Z" fill="#706f6f"/>
+            <path d="M96.26,109.75v10.04l25.69,21.44.89-9.5-19.39-15.6,1.12-.18,19.33,4.43.24-2.59-12.73-2.92,13.11-2.07c.13-2.1.33-5.22.57-9l-28.83,5.95Z" fill="#706f6f"/>
+            <path d="M158.13,167.91l-7.17-55.38s-5.79-65.9-6.78-73.71c-1.01-7.79-8.63-8.03-8.67-8.03h0c-.04,0-7.67.24-8.67,8.03-1,7.81-6.78,73.71-6.78,73.71l-7.17,55.38s-20.97,22.74-3.54,54.06c7.6,13.66,11.09,22.89,12.61,28.97,1.97,7.87.64,10.44.64,10.44h25.85s-1.33-2.57.64-10.44c1.52-6.08,5.01-15.31,12.61-28.97,17.43-31.32-3.54-54.06-3.54-54.06Z" fill="#800111"/>
+            <circle cx="135.63" cy="196.84" r="20.41" fill="#020102"/>
+            <text transform="translate(141.21 40.38) rotate(-180)" fill="#fff" font-family="Helvetica Neue" font-weight="700" font-size="20">2</text>
+            <text transform="translate(76 308)" fill="#fff" font-family="Helvetica Neue" font-weight="700" font-size="15">Matthieu</text>
+          </svg>
+        </div>
+
+        <!-- 3e Lucas marron -->
+        <div class="voiture" style="top:194px;">
+          <svg viewBox="0 0 275.12 332.75" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="135.5 159.96 135.5 276.97 184.54 276.97 184.54 237.27 192.01 161.42 135.5 159.96" fill="#3c3c3b"/>
+            <polygon points="86.47 237.27 86.47 276.97 135.5 276.97 135.5 159.96 78.99 162.29 86.47 237.27" fill="#3c3c3b"/>
+            <polygon points="194.54 41.81 135.5 25.71 135.5 63.41 194.54 79.51 194.54 41.81" fill="#3a2515"/>
+            <polygon points="76.46 41.81 135.5 25.71 135.5 63.41 76.46 79.51 76.46 41.81" fill="#3a2515"/>
+            <polygon points="206.06 44.5 186.23 36.85 186.23 82.21 206.06 82.21 206.06 44.5" fill="#543925"/>
+            <polygon points="64.95 44.5 84.78 36.85 84.78 82.21 64.95 82.21 64.95 44.5" fill="#543925"/>
+            <path d="M180.1,233.41c-13.84,58.83-35.05.39-35.26,27.97h-18.68c-.21-27.58-21.42,30.86-35.26-27.97-13.84-58.83,28.25-65.5,28.25-65.5l5.18-55.38s4.18-65.9,4.91-73.71c.5-5.46,3.36-7.21,5.03-7.77c.23-.07.44-.13.61-.17.38-.08.62-.09.62-.09,0,0,5.54.22,6.27,8.03.72,7.81,4.9,73.71,4.9,73.71l5.18,55.38s42.1,6.67,28.25,65.5Z" fill="#543925"/>
+            <rect x="170.71" y="234.88" width="35.29" height="60.34" rx="5.18" fill="#1c0709"/>
+            <rect x="174.74" y="87.51" width="31.32" height="55.29" rx="5.18" fill="#1c0709"/>
+            <rect x="65" y="87.51" width="31.32" height="55.29" rx="5.18" fill="#1c0709"/>
+            <rect x="65" y="234.88" width="35.29" height="60.34" rx="5.18" fill="#1c0709"/>
+            <rect x="86.47" y="276.97" width="98.06" height="36.83" fill="#3a2515"/>
+            <path d="M149.95,240c-1.09,2.32-2.03,4.62-2.8,7l14.38,14.38h-52.06l14.38-14.38c-.77-2.38-1.71-4.68-2.8-7l-20.76,20.76v10.04h70.42v-10.04l-20.76-20.76Z" fill="#706f6f"/>
+            <path d="M174.74,109.75v10.04l-25.69,21.44-.89-9.5,19.39-15.6-1.12-.18-19.33,4.43-.24-2.59,12.73-2.92-13.11-2.07c-.13-2.1-.33-5.22-.57-9l28.83,5.95Z" fill="#706f6f"/>
+            <path d="M96.26,109.75v10.04l25.69,21.44.89-9.5-19.39-15.6,1.12-.18,19.33,4.43.24-2.59-12.73-2.92,13.11-2.07c.13-2.1.33-5.22.57-9l-28.83,5.95Z" fill="#706f6f"/>
+            <path d="M158.13,167.91l-7.17-55.38s-5.79-65.9-6.78-73.71c-1.01-7.79-8.63-8.03-8.67-8.03h0c-.04,0-7.67.24-8.67,8.03-1,7.81-6.78,73.71-6.78,73.71l-7.17,55.38s-20.97,22.74-3.54,54.06c7.6,13.66,11.09,22.89,12.61,28.97,1.97,7.87.64,10.44.64,10.44h25.85s-1.33-2.57.64-10.44c1.52-6.08,5.01-15.31,12.61-28.97,17.43-31.32-3.54-54.06-3.54-54.06Z" fill="#543925"/>
+            <circle cx="135.63" cy="196.84" r="20.41" fill="#020102"/>
+            <text transform="translate(141.21 40.38) rotate(-180)" fill="#fff" font-family="Helvetica Neue" font-weight="700" font-size="20">3</text>
+            <text transform="translate(100 308)" fill="#fff" font-family="Helvetica Neue" font-weight="700" font-size="15">Lucas</text>
+          </svg>
+        </div>
+
+        <!-- 4e Antoine bleu -->
+        <div class="voiture" style="top:282px;">
+          <svg viewBox="0 0 275.12 332.75" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="135.5 159.96 135.5 276.97 184.54 276.97 184.54 237.27 192.01 161.42 135.5 159.96" fill="#3c3c3b"/>
+            <polygon points="86.47 237.27 86.47 276.97 135.5 276.97 135.5 159.96 78.99 162.29 86.47 237.27" fill="#3c3c3b"/>
+            <polygon points="194.54 41.81 135.5 25.71 135.5 63.41 194.54 79.51 194.54 41.81" fill="#1e4a6e"/>
+            <polygon points="76.46 41.81 135.5 25.71 135.5 63.41 76.46 79.51 76.46 41.81" fill="#1e4a6e"/>
+            <polygon points="206.06 44.5 186.23 36.85 186.23 82.21 206.06 82.21 206.06 44.5" fill="#2e6a9e"/>
+            <polygon points="64.95 44.5 84.78 36.85 84.78 82.21 64.95 82.21 64.95 44.5" fill="#2e6a9e"/>
+            <path d="M180.1,233.41c-13.84,58.83-35.05.39-35.26,27.97h-18.68c-.21-27.58-21.42,30.86-35.26-27.97-13.84-58.83,28.25-65.5,28.25-65.5l5.18-55.38s4.18-65.9,4.91-73.71c.5-5.46,3.36-7.21,5.03-7.77c.23-.07.44-.13.61-.17.38-.08.62-.09.62-.09,0,0,5.54.22,6.27,8.03.72,7.81,4.9,73.71,4.9,73.71l5.18,55.38s42.1,6.67,28.25,65.5Z" fill="#2e6a9e"/>
+            <rect x="170.71" y="234.88" width="35.29" height="60.34" rx="5.18" fill="#1c0709"/>
+            <rect x="174.74" y="87.51" width="31.32" height="55.29" rx="5.18" fill="#1c0709"/>
+            <rect x="65" y="87.51" width="31.32" height="55.29" rx="5.18" fill="#1c0709"/>
+            <rect x="65" y="234.88" width="35.29" height="60.34" rx="5.18" fill="#1c0709"/>
+            <rect x="86.47" y="276.97" width="98.06" height="36.83" fill="#1e4a6e"/>
+            <path d="M149.95,240c-1.09,2.32-2.03,4.62-2.8,7l14.38,14.38h-52.06l14.38-14.38c-.77-2.38-1.71-4.68-2.8-7l-20.76,20.76v10.04h70.42v-10.04l-20.76-20.76Z" fill="#706f6f"/>
+            <path d="M174.74,109.75v10.04l-25.69,21.44-.89-9.5,19.39-15.6-1.12-.18-19.33,4.43-.24-2.59,12.73-2.92-13.11-2.07c-.13-2.1-.33-5.22-.57-9l28.83,5.95Z" fill="#706f6f"/>
+            <path d="M96.26,109.75v10.04l25.69,21.44.89-9.5-19.39-15.6,1.12-.18,19.33,4.43.24-2.59-12.73-2.92,13.11-2.07c.13-2.1.33-5.22.57-9l-28.83,5.95Z" fill="#706f6f"/>
+            <path d="M158.13,167.91l-7.17-55.38s-5.79-65.9-6.78-73.71c-1.01-7.79-8.63-8.03-8.67-8.03h0c-.04,0-7.67.24-8.67,8.03-1,7.81-6.78,73.71-6.78,73.71l-7.17,55.38s-20.97,22.74-3.54,54.06c7.6,13.66,11.09,22.89,12.61,28.97,1.97,7.87.64,10.44.64,10.44h25.85s-1.33-2.57.64-10.44c1.52-6.08,5.01-15.31,12.61-28.97,17.43-31.32-3.54-54.06-3.54-54.06Z" fill="#2e6a9e"/>
+            <circle cx="135.63" cy="196.84" r="20.41" fill="#020102"/>
+            <text transform="translate(141.21 40.38) rotate(-180)" fill="#fff" font-family="Helvetica Neue" font-weight="700" font-size="20">4</text>
+            <text transform="translate(90 308)" fill="#fff" font-family="Helvetica Neue" font-weight="700" font-size="15">Antoine</text>
+          </svg>
+        </div>
+
+        <!-- 5e Julie violet -->
+        <div class="voiture" style="top:370px;">
+          <svg viewBox="0 0 275.12 332.75" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="135.5 159.96 135.5 276.97 184.54 276.97 184.54 237.27 192.01 161.42 135.5 159.96" fill="#3c3c3b"/>
+            <polygon points="86.47 237.27 86.47 276.97 135.5 276.97 135.5 159.96 78.99 162.29 86.47 237.27" fill="#3c3c3b"/>
+            <polygon points="194.54 41.81 135.5 25.71 135.5 63.41 194.54 79.51 194.54 41.81" fill="#5c1a6e"/>
+            <polygon points="76.46 41.81 135.5 25.71 135.5 63.41 76.46 79.51 76.46 41.81" fill="#5c1a6e"/>
+            <polygon points="206.06 44.5 186.23 36.85 186.23 82.21 206.06 82.21 206.06 44.5" fill="#7e3a9e"/>
+            <polygon points="64.95 44.5 84.78 36.85 84.78 82.21 64.95 82.21 64.95 44.5" fill="#7e3a9e"/>
+            <path d="M180.1,233.41c-13.84,58.83-35.05.39-35.26,27.97h-18.68c-.21-27.58-21.42,30.86-35.26-27.97-13.84-58.83,28.25-65.5,28.25-65.5l5.18-55.38s4.18-65.9,4.91-73.71c.5-5.46,3.36-7.21,5.03-7.77c.23-.07.44-.13.61-.17.38-.08.62-.09.62-.09,0,0,5.54.22,6.27,8.03.72,7.81,4.9,73.71,4.9,73.71l5.18,55.38s42.1,6.67,28.25,65.5Z" fill="#7e3a9e"/>
+            <rect x="170.71" y="234.88" width="35.29" height="60.34" rx="5.18" fill="#1c0709"/>
+            <rect x="174.74" y="87.51" width="31.32" height="55.29" rx="5.18" fill="#1c0709"/>
+            <rect x="65" y="87.51" width="31.32" height="55.29" rx="5.18" fill="#1c0709"/>
+            <rect x="65" y="234.88" width="35.29" height="60.34" rx="5.18" fill="#1c0709"/>
+            <rect x="86.47" y="276.97" width="98.06" height="36.83" fill="#5c1a6e"/>
+            <path d="M149.95,240c-1.09,2.32-2.03,4.62-2.8,7l14.38,14.38h-52.06l14.38-14.38c-.77-2.38-1.71-4.68-2.8-7l-20.76,20.76v10.04h70.42v-10.04l-20.76-20.76Z" fill="#706f6f"/>
+            <path d="M174.74,109.75v10.04l-25.69,21.44-.89-9.5,19.39-15.6-1.12-.18-19.33,4.43-.24-2.59,12.73-2.92-13.11-2.07c-.13-2.1-.33-5.22-.57-9l28.83,5.95Z" fill="#706f6f"/>
+            <path d="M96.26,109.75v10.04l25.69,21.44.89-9.5-19.39-15.6,1.12-.18,19.33,4.43.24-2.59-12.73-2.92,13.11-2.07c.13-2.1.33-5.22.57-9l-28.83,5.95Z" fill="#706f6f"/>
+            <path d="M158.13,167.91l-7.17-55.38s-5.79-65.9-6.78-73.71c-1.01-7.79-8.63-8.03-8.67-8.03h0c-.04,0-7.67.24-8.67,8.03-1,7.81-6.78,73.71-6.78,73.71l-7.17,55.38s-20.97,22.74-3.54,54.06c7.6,13.66,11.09,22.89,12.61,28.97,1.97,7.87.64,10.44.64,10.44h25.85s-1.33-2.57.64-10.44c1.52-6.08,5.01-15.31,12.61-28.97,17.43-31.32-3.54-54.06-3.54-54.06Z" fill="#7e3a9e"/>
+            <circle cx="135.63" cy="196.84" r="20.41" fill="#020102"/>
+            <text transform="translate(141.21 40.38) rotate(-180)" fill="#fff" font-family="Helvetica Neue" font-weight="700" font-size="20">5</text>
+            <text transform="translate(103 308)" fill="#fff" font-family="Helvetica Neue" font-weight="700" font-size="15">Julie</text>
+          </svg>
+        </div>
+
+      </div>
+
+      <!-- Légende points droite -->
+      <div class="legende">
+        <div class="legende-item" style="top:40px;"><div class="legende-pts">3420</div><div class="legende-name">pts</div></div>
+        <div class="legende-item" style="top:128px;"><div class="legende-pts">3210</div><div class="legende-name">pts</div></div>
+        <div class="legende-item" style="top:216px;"><div class="legende-pts">2980</div><div class="legende-name">pts</div></div>
+        <div class="legende-item" style="top:304px;"><div class="legende-pts">2750</div><div class="legende-name">pts</div></div>
+        <div class="legende-item" style="top:392px;"><div class="legende-pts">2480</div><div class="legende-name">pts</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="navbar">
+    <div class="nav-item">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span class="nav-lbl">Accueil</span>
+    </div>
+    <div class="nav-item">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#800111" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span class="nav-lbl active">Championnats</span>
+    </div>
+    <div class="nav-item">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span class="nav-lbl">Calendrier</span>
+    </div>
+    <div class="nav-item">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span class="nav-lbl">Profil</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette 13 — Résumé GP profil · Mon Petit Podium</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #2a2a2a; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 40px 20px; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .phone { background: #F5F0EB; width: 375px; min-height: 812px; border-radius: 54px; overflow: hidden; border: 10px solid #1a1a1a; box-shadow: 0 30px 80px rgba(0,0,0,0.5); position: relative; }
+  .sb { background: #F5F0EB; padding: 16px 24px 0; display: flex; justify-content: space-between; align-items: center; }
+  .sb-time { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+  .sb-icons { display: flex; gap: 6px; align-items: center; }
+  .widgets { padding: 16px 16px 40px; display: flex; flex-direction: column; gap: 12px; }
+  .back { display: flex; align-items: center; gap: 5px; color: #800111; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .page-title { font-size: 28px; font-weight: 500; color: #1a1a1a; }
+  .page-sub { font-size: 13px; color: #999; margin-top: 3px; }
+
+  /* Widget score */
+  .w-score { background: #800111; border-radius: 24px; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+  .score-lbl { font-size: 11px; color: rgba(255,255,255,0.6); letter-spacing: 0.5px; }
+  .score-num { font-size: 44px; font-weight: 500; color: #fff; line-height: 1; }
+  .score-sub { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+  .rank-pill { background: rgba(255,255,255,0.15); border-radius: 14px; padding: 10px 16px; text-align: center; }
+  .rank-num { font-size: 26px; font-weight: 500; color: #fff; line-height: 1; }
+  .rank-lbl { font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 3px; }
+
+  /* Liste pronos */
+  .w-pronos { background: #fff; border-radius: 20px; padding: 16px; }
+  .sec-lbl { font-size: 10px; font-weight: 500; color: #bbb; letter-spacing: 0.8px; margin-bottom: 10px; }
+  .prow { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #f0ebe4; }
+  .prow:last-child { border-bottom: none; padding-bottom: 0; }
+  .prow-left .ptype { font-size: 10px; color: #aaa; font-weight: 500; }
+  .prow-left .pchoice { font-size: 14px; font-weight: 500; color: #1a1a1a; margin-top: 2px; }
+  .prow-right { display: flex; align-items: center; gap: 8px; }
+  .pts-badge { background: #F5F0EB; border-radius: 10px; padding: 5px 10px; font-size: 13px; font-weight: 500; color: #800111; }
+  .result-win { width: 26px; height: 26px; border-radius: 50%; background: #e8f5e9; display: flex; align-items: center; justify-content: center; }
+  .result-loss { width: 26px; height: 26px; border-radius: 50%; background: #ffebee; display: flex; align-items: center; justify-content: center; }
+  .result-pending { width: 26px; height: 26px; border-radius: 50%; background: #F5F0EB; display: flex; align-items: center; justify-content: center; }
+  .tag-ob { font-size: 9px; background: #FFF3E0; color: #E65100; padding: 2px 7px; border-radius: 6px; font-weight: 500; }
+  .tag-bo { font-size: 9px; background: #E8F5E9; color: #2E7D32; padding: 2px 7px; border-radius: 6px; font-weight: 500; }
+  .divider { height: 1px; background: #f0ebe4; margin: 10px 0; }
+
+  /* Podium réel */
+  .w-podium { background: #fff; border-radius: 20px; padding: 14px 16px; }
+  .res-title { font-size: 11px; font-weight: 500; color: #999; letter-spacing: 0.7px; margin-bottom: 10px; }
+  .res-podium { display: flex; gap: 8px; }
+  .res-place { flex: 1; background: #F5F0EB; border-radius: 14px; padding: 10px; text-align: center; }
+  .res-place-num { font-size: 10px; color: #999; font-weight: 500; margin-bottom: 4px; }
+  .res-place-name { font-size: 13px; font-weight: 500; color: #1a1a1a; }
+  .res-place-team { font-size: 10px; color: #bbb; margin-top: 2px; }
+  .res-place.gold { background: #FFF8E1; }
+  .res-place.gold .res-place-num { color: #E8A020; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="sb">
+    <span class="sb-time">9:41</span>
+    <div class="sb-icons">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="#1a1a1a"/></svg>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><rect x="2" y="7" width="20" height="11" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+    </div>
+  </div>
+
+  <div class="widgets">
+    <div>
+      <div class="back">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#800111" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        Thomas · Profil
+      </div>
+      <div class="page-title">GP Pays-Bas</div>
+      <div class="page-sub">Terminé · 23 août 2026</div>
+    </div>
+
+    <!-- Score -->
+    <div class="w-score">
+      <div>
+        <div class="score-lbl">POINTS GAGNÉS</div>
+        <div class="score-num">720</div>
+        <div class="score-sub">3 pronos réussis sur 5</div>
+      </div>
+      <div class="rank-pill">
+        <div class="rank-num">1er</div>
+        <div class="rank-lbl">ce GP</div>
+      </div>
+    </div>
+
+    <!-- Podium réel -->
+    <div class="w-podium">
+      <div class="res-title">RÉSULTATS DE LA COURSE</div>
+      <div class="res-podium">
+        <div class="res-place">
+          <div class="res-place-num">2e</div>
+          <div class="res-place-name">L. Norris</div>
+          <div class="res-place-team">McLaren</div>
+        </div>
+        <div class="res-place gold">
+          <div class="res-place-num">🏆 1er</div>
+          <div class="res-place-name">AK. Antonelli</div>
+          <div class="res-place-team">Mercedes</div>
+        </div>
+        <div class="res-place">
+          <div class="res-place-num">3e</div>
+          <div class="res-place-name">C. Leclerc</div>
+          <div class="res-place-team">Ferrari</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pronos -->
+    <div class="w-pronos">
+      <div class="sec-lbl">OBLIGATOIRES</div>
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">VAINQUEUR</div>
+          <div class="pchoice">AK. Antonelli</div>
+        </div>
+        <div class="prow-right">
+          <span class="tag-ob">Obligatoire</span>
+          <div class="pts-badge">280 pts</div>
+          <div class="result-win">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">PODIUM</div>
+          <div class="pchoice">L. Norris</div>
+        </div>
+        <div class="prow-right">
+          <span class="tag-ob">Obligatoire</span>
+          <div class="pts-badge">210 pts</div>
+          <div class="result-win">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">PODIUM</div>
+          <div class="pchoice">G. Russell</div>
+        </div>
+        <div class="prow-right">
+          <span class="tag-ob">Obligatoire</span>
+          <div class="pts-badge">800 pts</div>
+          <div class="result-loss">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sec-lbl">BONUS</div>
+
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">SAFETY CAR</div>
+          <div class="pchoice">Oui</div>
+        </div>
+        <div class="prow-right">
+          <span class="tag-bo">Bonus</span>
+          <div class="pts-badge">185 pts</div>
+          <div class="result-win">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">ABANDON</div>
+          <div class="pchoice">M. Verstappen</div>
+        </div>
+        <div class="prow-right">
+          <span class="tag-bo">Bonus</span>
+          <div class="pts-badge">950 pts</div>
+          <div class="result-loss">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="prow">
+        <div class="prow-left">
+          <div class="ptype">FASTEST LAP</div>
+          <div class="pchoice">AK. Antonelli</div>
+        </div>
+        <div class="prow-right">
+          <span class="tag-bo">Bonus</span>
+          <div class="pts-badge">350 pts</div>
+          <div class="result-win">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette 5 — Créer un championnat · Mon Petit Podium</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #2a2a2a; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 40px 20px; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .phone { background: #F5F0EB; width: 375px; min-height: 812px; border-radius: 54px; overflow: hidden; border: 10px solid #1a1a1a; box-shadow: 0 30px 80px rgba(0,0,0,0.5); position: relative; }
+  .sb { background: #F5F0EB; padding: 16px 24px 0; display: flex; justify-content: space-between; align-items: center; }
+  .sb-time { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+  .sb-icons { display: flex; gap: 6px; align-items: center; }
+  .widgets { padding: 16px; display: flex; flex-direction: column; gap: 12px; padding-bottom: 40px; }
+
+  .back { display: flex; align-items: center; gap: 5px; color: #800111; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .page-title { font-size: 30px; font-weight: 500; color: #1a1a1a; line-height: 1.2; }
+
+  .w-photo { background: #fff; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .photo-circle { width: 80px; height: 80px; border-radius: 24px; background: #F5F0EB; display: flex; align-items: center; justify-content: center; }
+  .photo-lbl { font-size: 13px; color: #800111; font-weight: 500; }
+  .photo-sub { font-size: 11px; color: #bbb; }
+
+  .w-form { background: #fff; border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .field-lbl { font-size: 11px; font-weight: 500; color: #999; letter-spacing: 0.6px; margin-bottom: 6px; }
+  .field-input { background: #F5F0EB; border-radius: 14px; padding: 14px 16px; font-size: 15px; color: #bbb; }
+  .field-input.filled { color: #1a1a1a; }
+
+  .w-code { background: #800111; border-radius: 24px; padding: 20px; }
+  .code-lbl { font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.6); letter-spacing: 0.6px; margin-bottom: 8px; }
+  .code-value { font-size: 32px; font-weight: 500; color: #fff; letter-spacing: 6px; margin-bottom: 6px; }
+  .code-sub { font-size: 12px; color: rgba(255,255,255,0.5); }
+  .code-copy { background: rgba(255,255,255,0.15); border-radius: 12px; padding: 10px 16px; display: inline-flex; align-items: center; gap: 8px; color: #fff; font-size: 13px; font-weight: 500; margin-top: 12px; }
+
+  .w-btn { background: #800111; border-radius: 18px; padding: 19px; text-align: center; color: #fff; font-size: 17px; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="sb">
+    <span class="sb-time">9:41</span>
+    <div class="sb-icons">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="#1a1a1a"/></svg>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><rect x="2" y="7" width="20" height="11" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+    </div>
+  </div>
+
+  <div class="widgets">
+    <div>
+      <div class="back">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#800111" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        Retour
+      </div>
+      <div class="page-title">Créer un championnat</div>
+    </div>
+
+    <div class="w-photo">
+      <div class="photo-circle">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      </div>
+      <div class="photo-lbl">Ajouter une photo</div>
+      <div class="photo-sub">Optionnel · JPG ou PNG</div>
+    </div>
+
+    <div class="w-form">
+      <div>
+        <div class="field-lbl">NOM DU CHAMPIONNAT</div>
+        <div class="field-input filled">Les Potes F1</div>
+      </div>
+    </div>
+
+    <div class="w-code">
+      <div class="code-lbl">CODE D'INVITATION</div>
+      <div class="code-value">F1X7K2</div>
+      <div class="code-sub">Généré automatiquement à la création</div>
+      <div class="code-copy">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copier le code
+      </div>
+    </div>
+
+    <div class="w-btn">Créer le championnat</div>
+  </div>
+</div>
+</body>
+</html>

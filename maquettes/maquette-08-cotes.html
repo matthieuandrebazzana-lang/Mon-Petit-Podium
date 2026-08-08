@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette 8 — Tableau des cotes · Mon Petit Podium</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #2a2a2a; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 40px 20px; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .phone { background: #F5F0EB; width: 375px; min-height: 812px; border-radius: 54px; overflow: hidden; border: 10px solid #1a1a1a; box-shadow: 0 30px 80px rgba(0,0,0,0.5); position: relative; }
+  .sb { background: #F5F0EB; padding: 16px 24px 0; display: flex; justify-content: space-between; align-items: center; }
+  .sb-time { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+  .sb-icons { display: flex; gap: 6px; align-items: center; }
+  .widgets { padding: 16px 16px 100px; display: flex; flex-direction: column; gap: 12px; }
+
+  .back { display: flex; align-items: center; gap: 5px; color: #800111; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .page-title { font-size: 28px; font-weight: 500; color: #1a1a1a; }
+  .page-sub { font-size: 13px; color: #999; margin-top: 3px; }
+
+  /* Onglets marchés */
+  .tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { background: #fff; border-radius: 20px; padding: 8px 16px; font-size: 13px; font-weight: 500; color: #999; white-space: nowrap; flex-shrink: 0; }
+  .tab.active { background: #800111; color: #fff; }
+
+  /* Favoris */
+  .favs-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .favs-row::-webkit-scrollbar { display: none; }
+  .fav-chip { background: #fff; border-radius: 14px; padding: 8px 12px; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .fav-chip-name { font-size: 13px; font-weight: 500; color: #1a1a1a; }
+  .fav-chip-cote { font-size: 12px; color: #800111; font-weight: 500; }
+  .fav-star { width: 14px; height: 14px; }
+
+  .section-lbl { font-size: 11px; font-weight: 500; color: #999; letter-spacing: 0.7px; }
+
+  /* Liste des cotes */
+  .w-marche { background: #fff; border-radius: 20px; padding: 14px 16px; }
+  .marche-title { font-size: 12px; font-weight: 500; color: #800111; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .cote-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 0.5px solid #f0ebe4; }
+  .cote-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .cote-name { font-size: 14px; font-weight: 500; color: #1a1a1a; }
+  .cote-right { display: flex; align-items: center; gap: 10px; }
+  .cote-val { background: #F5F0EB; border-radius: 10px; padding: 5px 10px; font-size: 13px; font-weight: 500; color: #543925; }
+  .star-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
+
+  /* Bouton valider favoris */
+  .w-btn-favs { background: #800111; border-radius: 18px; padding: 18px; text-align: center; color: #fff; font-size: 16px; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="sb">
+    <span class="sb-time">9:41</span>
+    <div class="sb-icons">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="#1a1a1a"/></svg>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2"><rect x="2" y="7" width="20" height="11" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+    </div>
+  </div>
+
+  <div class="widgets">
+    <div>
+      <div class="back">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#800111" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        GP Pays-Bas
+      </div>
+      <div class="page-title">Fais tes paris</div>
+    </div>
+
+    <!-- Onglets -->
+    <div class="tabs">
+      <div class="tab active">Vainqueur</div>
+      <div class="tab">Podium</div>
+      <div class="tab">Safety Car</div>
+      <div class="tab">DNF</div>
+      <div class="tab">Fastest Lap</div>
+    </div>
+
+    <!-- Favoris -->
+    <div class="section-lbl">MES FAVORIS</div>
+    <div class="favs-row">
+      <div class="fav-chip">
+        <svg class="fav-star" viewBox="0 0 24 24" fill="#E8A020" stroke="#E8A020" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span class="fav-chip-name">Antonelli</span>
+        <span class="fav-chip-cote">×2,80</span>
+      </div>
+      <div class="fav-chip">
+        <svg class="fav-star" viewBox="0 0 24 24" fill="#E8A020" stroke="#E8A020" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span class="fav-chip-name">Safety Car</span>
+        <span class="fav-chip-cote">×1,85</span>
+      </div>
+      <div class="fav-chip">
+        <svg class="fav-star" viewBox="0 0 24 24" fill="#E8A020" stroke="#E8A020" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span class="fav-chip-name">VER DNF</span>
+        <span class="fav-chip-cote">×9,50</span>
+      </div>
+    </div>
+
+    <!-- Marché vainqueur -->
+    <div class="w-marche">
+      <div class="marche-title">VAINQUEUR</div>
+      <div class="cote-row">
+        <div class="cote-name">AK. Antonelli</div>
+        <div class="cote-right">
+          <div class="cote-val">×2,80</div>
+          <div class="star-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#E8A020" stroke="#E8A020" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="cote-row">
+        <div class="cote-name">L. Hamilton</div>
+        <div class="cote-right">
+          <div class="cote-val">×4,85</div>
+          <div class="star-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="cote-row">
+        <div class="cote-name">L. Norris</div>
+        <div class="cote-right">
+          <div class="cote-val">×5,30</div>
+          <div class="star-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="cote-row">
+        <div class="cote-name">C. Leclerc</div>
+        <div class="cote-right">
+          <div class="cote-val">×6,30</div>
+          <div class="star-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="cote-row">
+        <div class="cote-name">G. Russell</div>
+        <div class="cote-right">
+          <div class="cote-val">×8,00</div>
+          <div class="star-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="cote-row">
+        <div class="cote-name">M. Verstappen</div>
+        <div class="cote-right">
+          <div class="cote-val">×9,50</div>
+          <div class="star-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="w-btn-favs">Valider mes favoris →</div>
+
+  </div>
+</div>
+</body>
+</html>
