@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Version de l'API, alignée sur celle du frontend.
 # À incrémenter à chaque commit qui modifie l'application.
-VERSION = "0.1.2"
+VERSION = "0.2.0"
 
 # Toujours autorisées : le serveur de dev Vite, pour ne jamais casser le local.
 ORIGINES_LOCALES = [

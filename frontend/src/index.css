@@ -20,13 +20,18 @@
      La graisse 700 est réservée aux numéros de voiture. */
   --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
 
-  /* Titres de page : 28–30px, graisse 500 */
+  /* Titres de page : 28–30px, graisse 500.
+     Le crénage négatif vient d'/apple-design : au-delà de 24px les lettres
+     paraissent trop espacées. La section 5 ne fixe pas le letter-spacing des
+     titres, cet ajout l'enrichit sans rien remplacer. */
   --text-titre: 1.75rem; /* 28px */
   --text-titre--line-height: 1.2;
   --text-titre--font-weight: 500;
+  --text-titre--letter-spacing: -0.02em;
   --text-titre-lg: 1.875rem; /* 30px */
   --text-titre-lg--line-height: 1.2;
   --text-titre-lg--font-weight: 500;
+  --text-titre-lg--letter-spacing: -0.02em;
 
   /* Grands chiffres (scores, statistiques) : 32–44px, graisse 500 */
   --text-score: 2rem; /* 32px */
@@ -117,4 +122,282 @@
   padding-bottom: calc(var(--spacing-safe-bottom) + --spacing(4));
   padding-left: calc(var(--spacing-safe-left) + --spacing(4));
   padding-right: calc(var(--spacing-safe-right) + --spacing(4));
+}
+
+/* ---------------------------------------------------------------
+   Mouvement — skill Transitions.dev.
+   Jetons de mouvement partagés, puis les transitions effectivement
+   utilisées. Le skill ne touche ni aux couleurs ni aux formes :
+   les valeurs ci-dessous ne décrivent que du temps et de la distance.
+   --------------------------------------------------------------- */
+:root {
+  /* Durées */
+  --duration-stagger: 40ms;
+  --duration-micro: 80ms;
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-medium: 350ms;
+  --duration-slow: 400ms;
+  --duration-very-slow: 500ms;
+  /* Easings */
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: ease-in-out;
+  --ease-out: ease-out;
+  /* Distances */
+  --distance-micro: 4px;
+  --distance-small: 6px;
+  --distance-base: 8px;
+  --distance-medium: 12px;
+  /* Flou */
+  --blur-small: 2px;
+  --blur-medium: 3px;
+
+  /* Texts reveal — apparition échelonnée des blocs d'un écran */
+  --stagger-dur: 500ms;
+  --stagger-distance: 12px;
+  --stagger-stagger: 40ms;
+  --stagger-blur: 3px;
+  --stagger-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Error state shake — retour d'erreur de formulaire */
+  --shake-distance: 6px;
+  --shake-overshoot: 4px;
+  --shake-dur-a: 80ms;
+  --shake-dur-b: 60ms;
+  --shake-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --revert-hold: 3000ms;
+  --revert-dur: 280ms;
+
+  /* Text states swap — libellé de bouton pendant un envoi */
+  --text-swap-dur: 150ms;
+  --text-swap-translate-y: 4px;
+  --text-swap-blur: 2px;
+  --text-swap-ease: ease-in-out;
+
+  /* Page side-by-side — passage d'un écran à l'autre */
+  --page-slide-dur: 250ms;
+  --page-fade-dur: 250ms;
+  --page-slide-distance: 8px;
+  --page-blur: 3px;
+  --page-slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --page-fade-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* — Texts reveal (transitions-dev 18) —
+   Les lignes partent décalées vers le bas, floutées, invisibles ;
+   `.is-shown` sur le parent les ramène au repos. Le décalage de la
+   ligne N la retient de --stagger-stagger, pour que l'œil se pose
+   d'abord sur le premier bloc. */
+.t-stagger-line {
+  display: block;
+  opacity: 0;
+  transform: translateY(var(--stagger-distance));
+  filter: blur(var(--stagger-blur));
+  transition:
+    opacity var(--stagger-dur) var(--stagger-ease),
+    transform var(--stagger-dur) var(--stagger-ease),
+    filter var(--stagger-dur) var(--stagger-ease);
+  will-change: transform, opacity, filter;
+}
+.t-stagger-line--2 {
+  transition-delay: var(--stagger-stagger);
+}
+.t-stagger-line--3 {
+  transition-delay: calc(var(--stagger-stagger) * 2);
+}
+.t-stagger-line--4 {
+  transition-delay: calc(var(--stagger-stagger) * 3);
+}
+.t-stagger-line--5 {
+  transition-delay: calc(var(--stagger-stagger) * 4);
+}
+.t-stagger.is-shown .t-stagger-line {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+/* — Error state shake (transitions-dev 12) —
+   La couleur de bordure est pilotée par les classes du composant ;
+   cette règle ne possède que l'interpolation. */
+.t-input {
+  transition: border-color 150ms ease-out;
+  will-change: transform;
+}
+.t-input.is-error {
+  transition: border-color var(--revert-dur, 280ms) ease-out;
+}
+
+.t-error-msg {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--revert-dur, 280ms) ease-out,
+    visibility 0s linear var(--revert-dur, 280ms);
+}
+.t-input-wrap.is-error .t-error-msg {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--revert-dur, 280ms) ease-out,
+    visibility 0s linear 0s;
+}
+
+/* Les %-stops sont les durées cumulées rapportées au total
+   (80, 60, 80, 60 = 280ms) : 28.57%, 57.14%, 78.57%, 100%.
+   Les recalculer si une durée de segment change. */
+.t-input.is-shaking {
+  animation: t-input-shake
+    calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2) linear;
+}
+@keyframes t-input-shake {
+  0% {
+    transform: translateX(0);
+    animation-timing-function: var(--shake-ease);
+  }
+  28.57% {
+    transform: translateX(var(--shake-distance));
+    animation-timing-function: var(--shake-ease);
+  }
+  57.14% {
+    transform: translateX(calc(var(--shake-distance) * -1));
+    animation-timing-function: var(--shake-ease);
+  }
+  78.57% {
+    transform: translateX(var(--shake-overshoot));
+    animation-timing-function: var(--shake-ease);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* — Text states swap (transitions-dev 04) —
+   Libellé de bouton : « Se connecter » → « Connexion… ». */
+.t-text-swap {
+  display: inline-block;
+  transform: translateY(0);
+  filter: blur(0);
+  opacity: 1;
+  transition:
+    transform var(--text-swap-dur) var(--text-swap-ease),
+    filter var(--text-swap-dur) var(--text-swap-ease),
+    opacity var(--text-swap-dur) var(--text-swap-ease);
+  will-change: transform, filter, opacity;
+}
+.t-text-swap.is-exit {
+  transform: translateY(calc(var(--text-swap-translate-y) * -1));
+  filter: blur(var(--text-swap-blur));
+  opacity: 0;
+}
+.t-text-swap.is-enter-start {
+  transform: translateY(var(--text-swap-translate-y));
+  filter: blur(var(--text-swap-blur));
+  opacity: 0;
+  transition: none;
+}
+
+/* — Passage d'écran, adapté de page side-by-side (transitions-dev 08) —
+   Le snippet d'origine suppose les deux écrans montés côte à côte ; avec un
+   routeur, l'écran sortant est démonté avant que l'entrant n'existe. On garde
+   donc les jetons et la direction (avant = entre par la droite, arrière = par
+   la gauche) sur la seule apparition. Le flou du snippet est volontairement
+   omis à cette échelle : flouter tout l'écran coûte une passe de composition
+   plein cadre à chaque navigation, coûteuse sur iPhone. Il reste appliqué aux
+   blocs, plus petits (voir .t-stagger-line). */
+.t-ecran {
+  animation: t-ecran-entree var(--page-slide-dur) var(--page-slide-ease) both;
+  will-change: transform, opacity;
+}
+.t-ecran[data-direction="avant"] {
+  --t-ecran-depuis-x: var(--page-slide-distance);
+}
+.t-ecran[data-direction="arriere"] {
+  --t-ecran-depuis-x: calc(var(--page-slide-distance) * -1);
+}
+@keyframes t-ecran-entree {
+  from {
+    opacity: 0;
+    transform: translateX(var(--t-ecran-depuis-x, 0px));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* — Shimmer text (transitions-dev 15) —
+   Étiquette de chargement vivante, sans roue qui tourne. Les deux couleurs
+   sont reprises de la palette de la section 5 : aucun ton nouveau n'entre. */
+:root {
+  --shimmer-dur: 2000ms;
+  --shimmer-base: var(--color-texte-doux);
+  --shimmer-highlight: var(--color-texte);
+  --shimmer-band: 400%;
+  --shimmer-ease: linear;
+}
+.t-shimmer {
+  position: relative;
+  display: inline-block;
+  color: var(--shimmer-base);
+}
+.t-shimmer::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--shimmer-highlight) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: var(--shimmer-band) 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t-shimmer var(--shimmer-dur) var(--shimmer-ease) infinite;
+}
+@keyframes t-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+/* — Retour tactile (/apple-design) —
+   Le retour visuel se déclenche à l'appui, pas au relâchement : attendre le
+   clic donne une interface morte. 100ms suffisent à être perçus sans retarder
+   l'action. */
+@utility pressable {
+  transition: transform 100ms var(--ease-out);
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-stagger-line,
+  .t-text-swap,
+  .t-error-msg,
+  .t-input {
+    transition: none !important;
+  }
+  .t-input,
+  .t-ecran {
+    animation: none !important;
+    transform: none !important;
+  }
+  .pressable {
+    transition: none !important;
+  }
+  .t-shimmer::before {
+    animation: none !important;
+  }
 }
