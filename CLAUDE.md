@@ -220,6 +220,18 @@ Modifiable à tout moment depuis le profil.
 
 Barre de navigation basse à 4 onglets : **Accueil**, **Championnats**, **Calendrier**, **Profil**.
 
+### Skills de design installés — règle de priorité
+
+Deux skills sont installés sur ce projet : **Taste** et **Transitions.dev**.
+
+> **Le design system ci-dessus n'est pas négociable.** Les couleurs, la police Helvetica Neue, les rayons de coins, l'échelle typographique et l'esprit widget sont des décisions déjà validées. Aucun skill ne doit les remplacer ni les réinterpréter.
+
+**Taste** intervient comme directeur artistique **à l'intérieur** de ces contraintes, jamais au-dessus. Son périmètre : hiérarchie visuelle, rythme des espacements, qualité des micro-détails, équilibre des compositions, choix des proportions. Il ne propose jamais une autre palette ni une autre typographie.
+
+**Transitions.dev** intervient uniquement sur le mouvement : transitions d'écran, apparition des blocs, changements d'onglet, états de chargement, retours tactiles. Aucune influence sur les couleurs ou les formes.
+
+Si un skill suggère quelque chose qui contredit ce fichier, **ce fichier gagne**. Le signaler plutôt que de trancher seul.
+
 ---
 
 ## 6. Ressources du projet
@@ -320,7 +332,19 @@ Après chaque tâche terminée, **mettre à jour la section « État d'avancemen
 
 ### Déjà implémenté
 
-*(Rien pour l'instant — projet en cours d'initialisation.)*
+**Étape 1 — Fondations** (version `0.1.0`)
+
+Structure monorepo : `frontend/` et `backend/` à la racine, aux côtés de `maquettes/` et `assets/`.
+
+*Frontend* — React 19 + Vite 8 + Tailwind CSS 4, PWA installable.
+- Le design system de la section 5 est intégralement transcrit en variables de thème dans `frontend/src/index.css`, via le bloc `@theme` de Tailwind 4. Couleurs (`bg-primaire`, `text-texte-doux`…), échelle typographique (`text-titre`, `text-score`, `text-corps`, `text-label`), rayons (`rounded-bloc`, `rounded-carte`, `rounded-champ`). **Tout nouvel écran puise dans ces tokens, jamais dans des valeurs en dur.**
+- Contraintes iOS en place : `viewport-fit=cover`, utilitaire `ecran` qui applique les zones sûres sur les quatre côtés, espacement `tactile` (44px), `user-select: none` sur les éléments graphiques, désactivation du surlignage au toucher et de la détection de numéros de téléphone.
+- PWA via `vite-plugin-pwa` : manifest, service worker `autoUpdate`, icônes 192/512/maskable/apple-touch générées aux couleurs de la marque.
+- Écran d'accueil minimal (nom de l'app, version en bas, état du backend). **Aucun écran métier n'est encore codé.**
+
+*Backend* — FastAPI, structure `app/` avec `config.py` (pydantic-settings), `api/router.py` agrégateur et `api/routes/`. Endpoint `GET /health`, CORS ouvert au serveur de dev Vite, `Procfile` pour Railway.
+
+*Vérifié en local* : `npm run build` passe, `/health` répond `200`, le préflight CORS depuis `localhost:5173` passe, l'accueil affiche « En ligne » et la mise en page est fluide sans largeur fixe.
 
 ### Bugs connus
 
@@ -328,7 +352,12 @@ Après chaque tâche terminée, **mettre à jour la section « État d'avancemen
 
 ### Reste à faire
 
-L'intégralité de l'ordre de développement de la section 7.
+Les étapes 2 à 9 de l'ordre de développement de la section 7.
+
+Points de l'étape 1 non couverts, à traiter le moment venu :
+- **Test sur iPhone réel** — pas encore fait. Le rendu n'a été validé qu'en navigateur de bureau. À faire avant de considérer les contraintes iOS comme acquises.
+- **Connexion Supabase** — pas encore branchée ; elle arrive avec l'étape 2 (authentification).
+- **Variables d'environnement de production** — `VITE_API_URL` côté Vercel et `CORS_ORIGINS` côté Railway devront être renseignées au premier déploiement.
 
 ### Décisions validées mais non encore implémentées
 

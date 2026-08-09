@@ -1,0 +1,5 @@
+fastapi>=0.120,<1.0
+uvicorn[standard]>=0.38,<1.0
+pydantic-settings>=2.12,<3.0
+# Client HTTP asynchrone — servira au scraping Unibet et aux appels OpenF1.
+httpx>=0.28,<1.0

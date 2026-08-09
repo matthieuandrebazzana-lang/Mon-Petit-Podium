@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   Design system — section 5 du CLAUDE.md.
+   Ces valeurs sont des décisions validées : ne pas les réinterpréter.
+   Tout nouvel écran doit puiser ici, jamais dans des valeurs en dur.
+   --------------------------------------------------------------- */
+@theme {
+  /* Couleurs */
+  --color-fond: #f5f0eb;
+  --color-primaire: #800111;
+  --color-primaire-fonce: #5a000c;
+  --color-secondaire: #543925;
+  --color-accent: #e8a020;
+  --color-texte: #1a1a1a;
+  --color-texte-doux: #999999;
+  --color-surface: #ffffff;
+
+  /* Typographie — Helvetica Neue partout, graisses 400 et 500.
+     La graisse 700 est réservée aux numéros de voiture. */
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  /* Titres de page : 28–30px, graisse 500 */
+  --text-titre: 1.75rem; /* 28px */
+  --text-titre--line-height: 1.2;
+  --text-titre--font-weight: 500;
+  --text-titre-lg: 1.875rem; /* 30px */
+  --text-titre-lg--line-height: 1.2;
+  --text-titre-lg--font-weight: 500;
+
+  /* Grands chiffres (scores, statistiques) : 32–44px, graisse 500 */
+  --text-score: 2rem; /* 32px */
+  --text-score--line-height: 1;
+  --text-score--font-weight: 500;
+  --text-score-lg: 2.75rem; /* 44px */
+  --text-score-lg--line-height: 1;
+  --text-score-lg--font-weight: 500;
+
+  /* Corps de texte : 14–15px */
+  --text-corps: 0.9375rem; /* 15px */
+  --text-corps--line-height: 1.4;
+  --text-corps-sm: 0.875rem; /* 14px */
+  --text-corps-sm--line-height: 1.4;
+
+  /* Labels de section : 10–11px, majuscules, letter-spacing 0.7px */
+  --text-label: 0.6875rem; /* 11px */
+  --text-label--line-height: 1.2;
+  --text-label--letter-spacing: 0.7px;
+  --text-label--font-weight: 500;
+  --text-label-sm: 0.625rem; /* 10px */
+  --text-label-sm--line-height: 1.2;
+  --text-label-sm--letter-spacing: 0.7px;
+  --text-label-sm--font-weight: 500;
+
+  /* Formes — aucune bordure fine, uniquement des aplats très arrondis */
+  --radius-bloc: 24px; /* blocs principaux */
+  --radius-carte: 20px; /* blocs secondaires et cartes */
+  --radius-carte-sm: 18px;
+  --radius-champ: 14px; /* champs de saisie et petits éléments */
+
+  /* Rythme — 12px entre blocs, 16–20px de padding intérieur.
+     Correspond à gap-3 et p-4 / p-5 sur l'échelle Tailwind. */
+
+  /* Zones sûres iOS, exposées comme espacements utilisables
+     (pt-safe-top, pb-safe-bottom…). Valent 0 hors standalone. */
+  --spacing-safe-top: env(safe-area-inset-top, 0px);
+  --spacing-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --spacing-safe-left: env(safe-area-inset-left, 0px);
+  --spacing-safe-right: env(safe-area-inset-right, 0px);
+
+  /* Taille tactile minimale iOS : 44 × 44 px */
+  --spacing-tactile: 44px;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-fond);
+    /* Empêche iOS d'agrandir le texte en paysage. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-fond);
+    color: var(--color-texte);
+    font-family: var(--font-sans);
+    font-size: var(--text-corps);
+    line-height: 1.4;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    /* Bloque le rebond élastique vertical, qui trahit la webview. */
+    overscroll-behavior-y: none;
+  }
+
+  /* Pas de flash gris au toucher sur iOS. */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Les éléments graphiques ne doivent pas déclencher la sélection
+     de texte au toucher prolongé (contrainte iOS du CLAUDE.md). */
+  svg,
+  img,
+  button {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  svg,
+  img {
+    -webkit-touch-callout: none;
+  }
+}
+
+/* Enveloppe d'écran : marges latérales + zones sûres haute et basse. */
+@utility ecran {
+  padding-top: calc(var(--spacing-safe-top) + --spacing(4));
+  padding-bottom: calc(var(--spacing-safe-bottom) + --spacing(4));
+  padding-left: calc(var(--spacing-safe-left) + --spacing(4));
+  padding-right: calc(var(--spacing-safe-right) + --spacing(4));
+}
