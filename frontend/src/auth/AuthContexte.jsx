@@ -62,6 +62,29 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  /**
+   * Teste la disponibilité d'un pseudo avant l'inscription, via la fonction
+   * `pseudo_disponible` de la base. Sans ce test, le doublon ne serait détecté
+   * qu'à l'insertion, donc après que l'utilisateur a saisi son mot de passe.
+   *
+   * En cas d'échec de l'appel — migration pas encore appliquée, réseau coupé —
+   * on répond « disponible » et l'inscription continue. Bloquer tout le monde
+   * parce qu'une vérification de confort ne répond pas serait disproportionné :
+   * la garantie réelle est l'index unique en base, pas ce test.
+   */
+  const pseudoDisponible = useCallback(async (pseudo) => {
+    if (!supabase) return { verifie: false, disponible: true };
+    try {
+      const { data, error } = await supabase.rpc("pseudo_disponible", {
+        pseudo_a_tester: pseudo,
+      });
+      if (error) return { verifie: false, disponible: true };
+      return { verifie: true, disponible: data !== false };
+    } catch {
+      return { verifie: false, disponible: true };
+    }
+  }, []);
+
   const inscrire = useCallback(async ({ pseudo, email, motDePasse }) => {
     if (!supabase) return echec(CONFIG_MANQUANTE);
     try {
@@ -169,6 +192,7 @@ export function AuthProvider({ children }) {
       recuperation,
       configure: supabaseConfigure,
       erreurConfiguration: supabaseConfigure ? null : CONFIG_MANQUANTE,
+      pseudoDisponible,
       inscrire,
       connecter,
       connecterAvec,
@@ -180,6 +204,7 @@ export function AuthProvider({ children }) {
     session,
     chargement,
     recuperation,
+    pseudoDisponible,
     inscrire,
     connecter,
     connecterAvec,

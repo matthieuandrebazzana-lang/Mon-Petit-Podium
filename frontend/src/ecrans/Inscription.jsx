@@ -7,6 +7,7 @@ import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import BoutonsOAuth from "../composants/BoutonsOAuth.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
+import { PSEUDO_DEJA_PRIS } from "../lib/erreurs.js";
 import {
   validerEmail,
   validerMotDePasse,
@@ -17,7 +18,7 @@ const VIDE = { pseudo: "", email: "", motDePasse: "" };
 
 /** Maquette 02 — création de compte. */
 export default function Inscription() {
-  const { inscrire } = useAuth();
+  const { inscrire, pseudoDisponible } = useAuth();
   const naviguer = useNavigate();
 
   const [valeurs, setValeurs] = useState(VIDE);
@@ -60,14 +61,35 @@ export default function Inscription() {
 
     setEnvoi(true);
     setAlerte(null);
+
+    const pseudo = valeurs.pseudo.trim();
+
+    // Le pseudo est contrôlé avant l'inscription pour que le refus s'affiche
+    // sous le champ fautif, et non sous forme d'échec global après coup. La
+    // garantie d'unicité reste l'index en base : entre ce test et l'insertion,
+    // rien n'empêche quelqu'un d'autre de prendre le même pseudo.
+    const disponibilite = await pseudoDisponible(pseudo);
+    if (!disponibilite.disponible) {
+      setEnvoi(false);
+      setErreursChamps({ pseudo: PSEUDO_DEJA_PRIS });
+      return;
+    }
+
     const resultat = await inscrire({
-      pseudo: valeurs.pseudo.trim(),
+      pseudo,
       email: valeurs.email.trim(),
       motDePasse: valeurs.motDePasse,
     });
     setEnvoi(false);
 
     if (!resultat.ok) {
+      // Le doublon détecté au dernier moment (course entre deux inscriptions)
+      // revient ici : on le repose sous le champ pseudo plutôt que dans le
+      // bandeau global, pour désigner ce qu'il faut corriger.
+      if (resultat.message === PSEUDO_DEJA_PRIS) {
+        setErreursChamps({ pseudo: PSEUDO_DEJA_PRIS });
+        return;
+      }
       setAlerte({ ton: "erreur", texte: resultat.message });
       return;
     }

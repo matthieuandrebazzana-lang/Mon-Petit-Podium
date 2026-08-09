@@ -11,9 +11,15 @@
  * retombe sur une reconnaissance par sous-chaîne.
  */
 
+/** Message unique, réutilisé par les deux chemins qui détectent un doublon. */
+export const PSEUDO_DEJA_PRIS = "Ce pseudo est déjà pris. Choisis-en un autre.";
+
 const PAR_CODE = {
   // — Inscription —
   email_exists: "Cette adresse est déjà utilisée. Connecte-toi plutôt.",
+  // Violation d'unicité PostgreSQL, remontée telle quelle par PostgREST lors
+  // d'un renommage de profil vers un pseudo déjà occupé.
+  23505: PSEUDO_DEJA_PRIS,
   user_already_exists: "Cette adresse est déjà utilisée. Connecte-toi plutôt.",
   weak_password: "Mot de passe trop faible : 8 caractères minimum.",
   signup_disabled: "Les inscriptions sont momentanément fermées.",
@@ -46,6 +52,16 @@ const PAR_CODE = {
 
 /** Reconnaissance de secours, sur le message anglais brut. */
 const PAR_MESSAGE = [
+  // Le trigger `on_auth_user_created` échoue quand le pseudo est déjà pris, ce
+  // que GoTrue renvoie sous cette formule générique, sans le détail SQL. C'est
+  // le filet de sécurité pour la course entre deux inscriptions simultanées :
+  // le formulaire teste la disponibilité en amont, mais ne peut pas la
+  // garantir jusqu'à l'insertion.
+  //
+  // Ce raccourci ne tient que parce que ce trigger est le seul posé sur
+  // `auth.users`. En ajouter un autre obligerait à revoir ce message.
+  [/database error saving new user/i, PSEUDO_DEJA_PRIS],
+  [/duplicate key value|profils_pseudo_unique/i, PSEUDO_DEJA_PRIS],
   [/already registered|already been registered|already exists/i, PAR_CODE.email_exists],
   [/invalid login credentials/i, PAR_CODE.invalid_credentials],
   [/email not confirmed/i, PAR_CODE.email_not_confirmed],
