@@ -306,6 +306,7 @@ Après chaque tâche terminée, **mettre à jour la section « État d'avancemen
 - **Ne jamais ajouter de ligne `Co-Authored-By: Claude`** dans les commits. Vercel bloque les déploiements automatiques sur le plan Hobby lorsqu'un collaborateur externe est détecté.
 - Messages de commit concis, en français.
 - Vérifier que `git config user.name` et `git config user.email` sont définis localement.
+- Après chaque commit, **pousser automatiquement sur GitHub** avec `git push origin main`. Ne jamais attendre de feu vert de l'utilisateur pour pousser — chaque commit doit être immédiatement sur le remote.
 
 ### Contraintes iOS
 
@@ -345,6 +346,8 @@ Structure monorepo : `frontend/` et `backend/` à la racine, aux côtés de `maq
 *Backend* — FastAPI, structure `app/` avec `config.py` (pydantic-settings), `api/router.py` agrégateur et `api/routes/`. Endpoint `GET /health`, CORS ouvert au serveur de dev Vite, `Procfile` pour Railway.
 
 *Vérifié en local* : `npm run build` passe, `/health` répond `200`, le préflight CORS depuis `localhost:5173` passe, l'accueil affiche « En ligne » et la mise en page est fluide sans largeur fixe.
+
+**Workflow Git** — le dépôt était déjà initialisé et relié à `matthieuandrebazzana-lang/Mon-Petit-Podium`. Le `.gitignore` racine couvre Node, Python, `.env`, builds et fichiers d'éditeur. Le push automatique sur `main` après chaque commit est désormais la règle (section 8) : plus aucune validation n'est demandée avant de pousser.
 
 ### Bugs connus
 
