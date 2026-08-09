@@ -1,10 +1,37 @@
+import json
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Version de l'API, alignée sur celle du frontend.
 # À incrémenter à chaque commit qui modifie l'application.
-VERSION = "0.1.0"
+VERSION = "0.1.1"
+
+# Toujours autorisées : le serveur de dev Vite, pour ne jamais casser le local.
+ORIGINES_LOCALES = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+
+def _decouper_origines(valeur: str) -> list[str]:
+    """Transforme la valeur brute d'une variable d'environnement en liste d'origines.
+
+    Accepte « https://a.com,https://b.com ». L'ancien format JSON
+    (`["https://a.com"]`) reste toléré pour ne pas casser un `.env` existant.
+    """
+    texte = valeur.strip()
+    if not texte:
+        return []
+
+    if texte.startswith("["):
+        try:
+            decodees = json.loads(texte)
+        except json.JSONDecodeError:
+            return []
+        return [str(origine).strip() for origine in decodees if str(origine).strip()]
+
+    return [part.strip() for part in texte.split(",") if part.strip()]
 
 
 class Settings(BaseSettings):
@@ -18,16 +45,38 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
-    # Origines autorisées à appeler l'API. En local, le serveur de dev Vite.
-    # En production, y ajouter l'URL Vercel.
-    cors_origins: list[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+    # URL du frontend déployé (Vercel). C'est LA variable à définir sur Railway :
+    # elle suffit à autoriser le frontend de production à appeler l'API.
+    frontend_url: str = ""
+
+    # Origines supplémentaires éventuelles (préproduction, domaine personnalisé…),
+    # séparées par des virgules. Typé `str` volontairement : pydantic-settings
+    # exigerait du JSON strict pour un `list[str]` et planterait au démarrage
+    # sur une valeur simple comme « https://exemple.com ».
+    cors_origins: str = ""
 
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        """Liste finale des origines autorisées par le middleware CORS.
+
+        La barre oblique finale est retirée : l'en-tête `Origin` envoyé par le
+        navigateur n'en comporte jamais, et « https://site.com/ » en variable
+        d'environnement ne correspondrait donc jamais à rien.
+        """
+        origines = [*ORIGINES_LOCALES]
+
+        if self.frontend_url.strip():
+            origines.append(self.frontend_url.strip())
+
+        origines.extend(_decouper_origines(self.cors_origins))
+
+        # Normalisation puis dédoublonnage en conservant l'ordre.
+        nettoyees = [origine.rstrip("/") for origine in origines if origine.strip()]
+        return list(dict.fromkeys(nettoyees))
 
 
 @lru_cache

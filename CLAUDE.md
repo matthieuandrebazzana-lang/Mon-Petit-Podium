@@ -343,9 +343,11 @@ Structure monorepo : `frontend/` et `backend/` à la racine, aux côtés de `maq
 - PWA via `vite-plugin-pwa` : manifest, service worker `autoUpdate`, icônes 192/512/maskable/apple-touch générées aux couleurs de la marque.
 - Écran d'accueil minimal (nom de l'app, version en bas, état du backend). **Aucun écran métier n'est encore codé.**
 
-*Backend* — FastAPI, structure `app/` avec `config.py` (pydantic-settings), `api/router.py` agrégateur et `api/routes/`. Endpoint `GET /health`, CORS ouvert au serveur de dev Vite, `Procfile` pour Railway.
+*Backend* — FastAPI, structure `app/` avec `config.py` (pydantic-settings), `api/router.py` agrégateur et `api/routes/`. Endpoint `GET /health`, `Procfile` pour Railway.
 
-*Vérifié en local* : `npm run build` passe, `/health` répond `200`, le préflight CORS depuis `localhost:5173` passe, l'accueil affiche « En ligne » et la mise en page est fluide sans largeur fixe.
+*CORS* (version `0.1.1`) — l'origine du frontend de production se déclare avec la variable d'environnement **`FRONTEND_URL`** (l'URL Vercel exacte). Le serveur de dev Vite (`localhost:5173` et `127.0.0.1:5173`) est autorisé en dur, sans configuration. `CORS_ORIGINS` reste disponible pour d'éventuelles origines supplémentaires, séparées par des virgules. Les deux variables sont typées `str` et non `list[str]` : pydantic-settings exigerait du JSON strict sur un champ complexe et **planterait au démarrage** sur une valeur simple. La barre oblique finale est retirée automatiquement, l'en-tête `Origin` n'en comportant jamais. Le `CORSMiddleware` est monté au niveau de l'application : il couvre toutes les routes, présentes et à venir, préflights `OPTIONS` compris — ne jamais gérer le CORS route par route. La liste des origines chargées est journalisée au démarrage (via le logger `uvicorn.error`, le seul disposant d'un handler sous Railway) : en cas de nouvelle erreur CORS, les logs Railway la donnent immédiatement.
+
+*Vérifié en local* : `npm run build` passe, `/health` répond `200`, l'accueil affiche « En ligne » et la mise en page est fluide sans largeur fixe. Côté CORS, avec `FRONTEND_URL` définie : préflight `OPTIONS` depuis l'origine Vercel → `200` avec `access-control-allow-origin`, `GET` depuis Vercel et depuis `localhost:5173` → en-tête présent, origine inconnue → `400 Disallowed CORS origin`, route inexistante → `404` **avec** l'en-tête CORS (preuve que le middleware couvre toutes les routes).
 
 **Workflow Git** — le dépôt était déjà initialisé et relié à `matthieuandrebazzana-lang/Mon-Petit-Podium`. Le `.gitignore` racine couvre Node, Python, `.env`, builds et fichiers d'éditeur. Le push automatique sur `main` après chaque commit est désormais la règle (section 8) : plus aucune validation n'est demandée avant de pousser.
 
@@ -360,7 +362,7 @@ Les étapes 2 à 9 de l'ordre de développement de la section 7.
 Points de l'étape 1 non couverts, à traiter le moment venu :
 - **Test sur iPhone réel** — pas encore fait. Le rendu n'a été validé qu'en navigateur de bureau. À faire avant de considérer les contraintes iOS comme acquises.
 - **Connexion Supabase** — pas encore branchée ; elle arrive avec l'étape 2 (authentification).
-- **Variables d'environnement de production** — `VITE_API_URL` côté Vercel et `CORS_ORIGINS` côté Railway devront être renseignées au premier déploiement.
+- **Variables d'environnement de production** — `VITE_API_URL` côté Vercel. Côté Railway, `FRONTEND_URL` est déjà définie ; **`ENVIRONMENT=production` reste à ajouter** : le service répond aujourd'hui `environment: development`, ce qui laisse `/docs` accessible publiquement.
 
 ### Décisions validées mais non encore implémentées
 
