@@ -5,13 +5,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Version de l'API, alignée sur celle du frontend.
 # À incrémenter à chaque commit qui modifie l'application.
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 # Toujours autorisées : le serveur de dev Vite, pour ne jamais casser le local.
 ORIGINES_LOCALES = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+# URL du frontend de production. Sert de valeur par défaut à FRONTEND_URL :
+# l'origine Vercel reste ainsi autorisée même si la variable d'environnement
+# n'a pas encore été définie sur Railway.
+ORIGINE_PRODUCTION = "https://mon-petit-podium.vercel.app"
 
 
 def _decouper_origines(valeur: str) -> list[str]:
@@ -45,9 +50,9 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
-    # URL du frontend déployé (Vercel). C'est LA variable à définir sur Railway :
-    # elle suffit à autoriser le frontend de production à appeler l'API.
-    frontend_url: str = ""
+    # URL du frontend déployé (Vercel). La variable d'environnement FRONTEND_URL
+    # la surcharge sur Railway ; à défaut, l'origine de production reste couverte.
+    frontend_url: str = ORIGINE_PRODUCTION
 
     # Origines supplémentaires éventuelles (préproduction, domaine personnalisé…),
     # séparées par des virgules. Typé `str` volontairement : pydantic-settings
@@ -67,7 +72,9 @@ class Settings(BaseSettings):
         navigateur n'en comporte jamais, et « https://site.com/ » en variable
         d'environnement ne correspondrait donc jamais à rien.
         """
-        origines = [*ORIGINES_LOCALES]
+        # Les deux origines du projet — production Vercel et dev Vite — sont
+        # garanties quoi qu'il arrive à la configuration de l'environnement.
+        origines = [ORIGINE_PRODUCTION, *ORIGINES_LOCALES]
 
         if self.frontend_url.strip():
             origines.append(self.frontend_url.strip())

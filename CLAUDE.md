@@ -345,9 +345,22 @@ Structure monorepo : `frontend/` et `backend/` à la racine, aux côtés de `maq
 
 *Backend* — FastAPI, structure `app/` avec `config.py` (pydantic-settings), `api/router.py` agrégateur et `api/routes/`. Endpoint `GET /health`, `Procfile` pour Railway.
 
-*CORS* (version `0.1.1`) — l'origine du frontend de production se déclare avec la variable d'environnement **`FRONTEND_URL`** (l'URL Vercel exacte). Le serveur de dev Vite (`localhost:5173` et `127.0.0.1:5173`) est autorisé en dur, sans configuration. `CORS_ORIGINS` reste disponible pour d'éventuelles origines supplémentaires, séparées par des virgules. Les deux variables sont typées `str` et non `list[str]` : pydantic-settings exigerait du JSON strict sur un champ complexe et **planterait au démarrage** sur une valeur simple. La barre oblique finale est retirée automatiquement, l'en-tête `Origin` n'en comportant jamais. Le `CORSMiddleware` est monté au niveau de l'application : il couvre toutes les routes, présentes et à venir, préflights `OPTIONS` compris — ne jamais gérer le CORS route par route. La liste des origines chargées est journalisée au démarrage (via le logger `uvicorn.error`, le seul disposant d'un handler sous Railway) : en cas de nouvelle erreur CORS, les logs Railway la donnent immédiatement.
+*CORS* (version `0.1.2`) — **deux origines sont garanties quelle que soit la configuration de l'environnement** : la production `https://mon-petit-podium.vercel.app` et le serveur de dev Vite (`localhost:5173` et `127.0.0.1:5173`). L'origine de production reste pilotable par la variable d'environnement **`FRONTEND_URL`**, mais celle-ci a désormais l'URL Vercel pour **valeur par défaut** (constante `ORIGINE_PRODUCTION` dans `config.py`) : si la variable manque ou est vidée sur Railway, le frontend de production continue d'être autorisé au lieu de tomber en erreur CORS. Définir `FRONTEND_URL` sur une autre URL (préproduction, domaine personnalisé) l'**ajoute** aux origines, sans jamais retirer les deux garanties. `CORS_ORIGINS` reste disponible pour d'éventuelles origines supplémentaires, séparées par des virgules. Les deux variables sont typées `str` et non `list[str]` : pydantic-settings exigerait du JSON strict sur un champ complexe et **planterait au démarrage** sur une valeur simple. La barre oblique finale est retirée automatiquement, l'en-tête `Origin` n'en comportant jamais. Le `CORSMiddleware` est monté au niveau de l'application : il couvre toutes les routes, présentes et à venir, préflights `OPTIONS` compris — ne jamais gérer le CORS route par route. La liste des origines chargées est journalisée au démarrage (via le logger `uvicorn.error`, le seul disposant d'un handler sous Railway) : en cas de nouvelle erreur CORS, les logs Railway la donnent immédiatement.
 
-*Vérifié en local* : `npm run build` passe, `/health` répond `200`, l'accueil affiche « En ligne » et la mise en page est fluide sans largeur fixe. Côté CORS, avec `FRONTEND_URL` définie : préflight `OPTIONS` depuis l'origine Vercel → `200` avec `access-control-allow-origin`, `GET` depuis Vercel et depuis `localhost:5173` → en-tête présent, origine inconnue → `400 Disallowed CORS origin`, route inexistante → `404` **avec** l'en-tête CORS (preuve que le middleware couvre toutes les routes).
+*Vérifié en local* : `npm run build` passe, l'accueil affiche « En ligne » et la mise en page est fluide sans largeur fixe. Côté API, serveur lancé **sans aucune variable d'environnement** (le cas défavorable) :
+
+| Test | Résultat |
+|---|---|
+| `GET /health` | `200` — `{"status":"ok","version":"0.1.2","environment":"development"}` |
+| `GET /health` avec `Origin` Vercel | `200` + `access-control-allow-origin: https://mon-petit-podium.vercel.app` |
+| `GET /health` avec `Origin: http://localhost:5173` | `200` + en-tête correspondant |
+| Préflight `OPTIONS` depuis Vercel et depuis localhost | `200` + `allow-methods`, `allow-headers`, `max-age` |
+| Préflight `OPTIONS` sur `/championnats` (route non encore codée) | `200` + en-têtes CORS |
+| `GET` sur une route inexistante avec `Origin` autorisée | `404` **avec** en-tête CORS |
+| `GET` / préflight depuis une origine inconnue | en-tête `allow-origin` **absent** / `400 Disallowed CORS origin` |
+| `FRONTEND_URL` surchargée avec barre oblique finale + `CORS_ORIGINS` | barre retirée, origines ajoutées, les deux garanties conservées |
+
+Les deux dernières lignes prouvent respectivement que le middleware couvre **toutes les routes, y compris celles qui n'existent pas encore**, et que la surcharge par variables d'environnement n'écrase jamais les origines garanties.
 
 **Workflow Git** — le dépôt était déjà initialisé et relié à `matthieuandrebazzana-lang/Mon-Petit-Podium`. Le `.gitignore` racine couvre Node, Python, `.env`, builds et fichiers d'éditeur. Le push automatique sur `main` après chaque commit est désormais la règle (section 8) : plus aucune validation n'est demandée avant de pousser.
 
@@ -362,7 +375,7 @@ Les étapes 2 à 9 de l'ordre de développement de la section 7.
 Points de l'étape 1 non couverts, à traiter le moment venu :
 - **Test sur iPhone réel** — pas encore fait. Le rendu n'a été validé qu'en navigateur de bureau. À faire avant de considérer les contraintes iOS comme acquises.
 - **Connexion Supabase** — pas encore branchée ; elle arrive avec l'étape 2 (authentification).
-- **Variables d'environnement de production** — `VITE_API_URL` côté Vercel. Côté Railway, `FRONTEND_URL` est déjà définie ; **`ENVIRONMENT=production` reste à ajouter** : le service répond aujourd'hui `environment: development`, ce qui laisse `/docs` accessible publiquement.
+- **Variables d'environnement de production** — `VITE_API_URL` côté Vercel. Côté Railway, **`ENVIRONMENT=production` reste à ajouter** : le service répond aujourd'hui `environment: development`, ce qui laisse `/docs` accessible publiquement. `FRONTEND_URL` n'est plus bloquante depuis la version `0.1.2` (l'URL Vercel est la valeur par défaut), mais la définir explicitement reste préférable pour garder la configuration lisible sur Railway.
 
 ### Décisions validées mais non encore implémentées
 
