@@ -8,6 +8,9 @@ import Connexion from "./ecrans/Connexion.jsx";
 import MotDePasseOublie from "./ecrans/MotDePasseOublie.jsx";
 import NouveauMotDePasse from "./ecrans/NouveauMotDePasse.jsx";
 import Accueil from "./ecrans/Accueil.jsx";
+import CreerChampionnat from "./ecrans/CreerChampionnat.jsx";
+import RejoindreChampionnat from "./ecrans/RejoindreChampionnat.jsx";
+import Championnat from "./ecrans/Championnat.jsx";
 
 /** Configuration absente : mieux vaut le dire que servir une page blanche. */
 function EcranConfiguration({ message }) {
@@ -41,6 +44,11 @@ export default function App() {
 
       <Route element={<RouteProtegee />}>
         <Route path="/accueil" element={<Accueil />} />
+        {/* « creer » et « rejoindre » sont déclarés avant « :id » : sans cet
+            ordre, React Router ferait de « creer » un identifiant. */}
+        <Route path="/championnats/creer" element={<CreerChampionnat />} />
+        <Route path="/championnats/rejoindre" element={<RejoindreChampionnat />} />
+        <Route path="/championnats/:id" element={<Championnat />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

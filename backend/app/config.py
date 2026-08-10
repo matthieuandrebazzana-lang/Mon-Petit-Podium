@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Version de l'API, alignée sur celle du frontend.
 # À incrémenter à chaque commit qui modifie l'application.
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 
 # Toujours autorisées : le serveur de dev Vite, pour ne jamais casser le local.
 ORIGINES_LOCALES = [
@@ -60,9 +60,37 @@ class Settings(BaseSettings):
     # sur une valeur simple comme « https://exemple.com ».
     cors_origins: str = ""
 
+    # — Supabase —
+    # `supabase_url` et `supabase_anon_key` servent à valider le jeton de
+    # l'appelant. `supabase_service_role_key` sert aux écritures en base : elle
+    # contourne la RLS, ne doit JAMAIS quitter le serveur, et n'a donc aucun
+    # équivalent VITE_ côté frontend.
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    supabase_service_role_key: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def supabase_configure(self) -> bool:
+        """Vrai si les trois variables Supabase sont présentes.
+
+        Le service démarre même sans elles : `/health` doit rester joignable
+        pour diagnostiquer, et une configuration incomplète se signale à
+        l'appel des routes concernées plutôt qu'en refusant de démarrer.
+        """
+        return bool(
+            self.supabase_url.strip()
+            and self.supabase_anon_key.strip()
+            and self.supabase_service_role_key.strip()
+        )
+
+    @property
+    def supabase_base(self) -> str:
+        """URL du projet Supabase, sans barre oblique finale."""
+        return self.supabase_url.strip().rstrip("/")
 
     @property
     def allowed_origins(self) -> list[str]:

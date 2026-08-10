@@ -1,110 +1,190 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
-import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
+import Pastille from "../composants/Pastille.jsx";
+import ZoneChargement from "../composants/ZoneChargement.jsx";
+import { IconeChevronDroit, IconeMembres, IconePlus } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
-import { APP_VERSION, API_URL } from "../config.js";
+import { listerMesChampionnats } from "../lib/championnats.js";
+import { useDonnees } from "../lib/useDonnees.js";
+import { APP_VERSION } from "../config.js";
 
-const ETATS = {
-  verification: { libelle: "Vérification…", couleur: "bg-texte-doux" },
-  enLigne: { libelle: "En ligne", couleur: "bg-accent" },
-  horsLigne: { libelle: "Injoignable", couleur: "bg-primaire" },
-};
+/** Carte de championnat de la maquette 04. */
+function CarteChampionnat({ championnat, rang }) {
+  return (
+    <Link
+      to={`/championnats/${championnat.id}`}
+      className="rounded-carte bg-surface pressable min-h-tactile flex items-center gap-3.5 p-4"
+    >
+      <span
+        aria-hidden="true"
+        className={`flex size-[46px] shrink-0 items-center justify-center rounded-champ text-white ${
+          rang % 2 === 0 ? "bg-primaire" : "bg-accent"
+        }`}
+      >
+        <IconeMembres className="size-[22px]" />
+      </span>
 
-/**
- * Interroge le health check du backend. Sert uniquement à valider que le
- * frontend et FastAPI se parlent — le cold start Railway peut prendre
- * plusieurs secondes au premier appel, d'où l'état de chargement explicite.
- */
-function useSanteApi() {
-  const [etat, setEtat] = useState("verification");
+      <span className="min-w-0 flex-1">
+        <span className="text-corps text-texte block truncate font-medium">
+          {championnat.nom}
+        </span>
+        <span className="text-texte-doux mt-0.5 block text-[12px]">
+          {championnat.nombre_membres}{" "}
+          {championnat.nombre_membres > 1 ? "membres" : "membre"} · Code{" "}
+          {championnat.code_invitation}
+        </span>
+      </span>
 
-  useEffect(() => {
-    const controleur = new AbortController();
-
-    fetch(`${API_URL}/health`, { signal: controleur.signal })
-      .then((reponse) => {
-        if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
-        return reponse.json();
-      })
-      .then(() => setEtat("enLigne"))
-      .catch((erreur) => {
-        if (erreur.name === "AbortError") return;
-        setEtat("horsLigne");
-      });
-
-    return () => controleur.abort();
-  }, []);
-
-  return ETATS[etat];
+      <IconeChevronDroit className="text-texte-doux size-4 shrink-0" />
+    </Link>
+  );
 }
 
-/**
- * Accueil connecté — version d'étape 2.
- *
- * L'écran complet de la maquette 04 (prochain GP, mes championnats) arrive à
- * l'étape 3 : il dépend de données qui n'existent pas encore. On garde ici le
- * strict nécessaire pour vérifier qu'une session tient debout.
- */
+/** Silhouette des cartes pendant le réveil du backend. */
+function SqueletteChampionnats() {
+  return (
+    <div className="flex flex-col gap-2.5">
+      {[0, 1].map((rang) => (
+        <div key={rang} className="rounded-carte bg-surface flex items-center gap-3.5 p-4">
+          <div className="bg-fond size-[46px] shrink-0 rounded-champ" />
+          <div className="flex-1">
+            <div className="bg-fond h-3.5 w-1/2 rounded-full" />
+            <div className="bg-fond mt-2 h-2.5 w-3/4 rounded-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AucunChampionnat() {
+  return (
+    <div className="rounded-carte bg-surface flex flex-col items-center gap-2 px-5 py-8 text-center">
+      <span
+        aria-hidden="true"
+        className="bg-fond text-texte-doux mb-1 flex size-12 items-center justify-center rounded-champ"
+      >
+        <IconeMembres className="size-5" />
+      </span>
+      <p className="text-corps text-texte font-medium">Aucun championnat pour l'instant</p>
+      <p className="text-corps-sm text-texte-doux max-w-[26ch]">
+        Crée le tien et partage son code, ou rejoins celui d'un ami.
+      </p>
+    </div>
+  );
+}
+
+/** Bouton d'action de la grille à deux colonnes de la maquette 04. */
+function Action({ vers, variante, icone, children }) {
+  const tons =
+    variante === "principal" ? "bg-primaire text-white" : "bg-surface text-primaire";
+
+  return (
+    <Link
+      to={vers}
+      className={`rounded-carte-sm pressable min-h-tactile flex items-center justify-center gap-2 px-3 py-4 text-center text-[15px] font-medium ${tons}`}
+    >
+      {icone}
+      {children}
+    </Link>
+  );
+}
+
+/** Maquette 04 — accueil connecté : mes championnats et les deux actions. */
 export default function Accueil() {
-  const { pseudo, deconnecter } = useAuth();
-  const api = useSanteApi();
-  const [erreur, setErreur] = useState(null);
+  const { pseudo, utilisateur, deconnecter } = useAuth();
+  const naviguer = useNavigate();
+
+  // La clé porte l'identifiant du compte : deux personnes qui se relaient sur
+  // le même téléphone ne doivent jamais voir la liste de l'autre, même une
+  // fraction de seconde avant le rafraîchissement.
+  const cle = utilisateur ? `championnats:${utilisateur.id}` : null;
+  const chargeur = useCallback((signal) => listerMesChampionnats(signal), []);
+  const { donnees, chargement, erreur } = useDonnees(cle, chargeur);
+
+  const championnats = donnees ?? [];
   const [sortie, setSortie] = useState(false);
 
   async function seDeconnecter() {
     setSortie(true);
-    setErreur(null);
     const resultat = await deconnecter();
-    // En cas de succès, la redirection est portée par le contexte de session :
-    // le composant est démonté, inutile de retoucher l'état.
-    if (!resultat.ok) {
-      setSortie(false);
-      setErreur(resultat.message);
-    }
+    // En cas de succès la redirection vient du contexte de session : le
+    // composant est démonté, inutile de retoucher l'état.
+    if (!resultat.ok) setSortie(false);
+    else naviguer("/", { replace: true });
   }
 
   return (
     <Ecran direction="avant">
       <div className="flex flex-1 flex-col gap-3">
-        <Bloc rang={1} className="rounded-bloc bg-primaire p-5">
-          <p className="text-label-sm text-white/60 uppercase">Saison 2026</p>
-          <h1 className="text-titre mt-2 text-white">
+        <Bloc rang={1} className="flex items-center justify-between gap-3 py-1">
+          <h1 className="text-titre text-texte min-w-0 truncate">
             {pseudo ? `Salut ${pseudo}` : "Mon Petit Podium"}
           </h1>
+          <Pastille nom={pseudo} graine={utilisateur?.id ?? pseudo} taille="lg" />
+        </Bloc>
+
+        <Bloc rang={2} className="rounded-bloc bg-primaire p-5">
+          <p className="text-label-sm uppercase text-white/60">Saison 2026</p>
+          <p className="text-titre mt-2 text-white">Pronostics F1 entre amis</p>
           <p className="text-corps-sm mt-1 text-white/60">
-            Pronostics Formule 1 entre amis.
+            Les cotes et les Grands Prix arrivent à la prochaine étape.
           </p>
         </Bloc>
 
-        <Bloc
-          rang={2}
-          className="rounded-carte bg-surface flex items-center justify-between p-4"
-        >
-          <span className="text-label text-texte-doux uppercase">Backend</span>
-          <span className="text-corps-sm flex items-center gap-2">
-            <span className={`size-2 rounded-full ${api.couleur}`} />
-            {api.libelle}
-          </span>
+        <Bloc rang={3} className="flex flex-col gap-2.5">
+          <p className="text-label text-texte-doux px-1 pt-1 uppercase">
+            Mes championnats
+          </p>
+
+          {erreur && <Alerte ton="erreur">{erreur}</Alerte>}
+
+          <ZoneChargement chargement={chargement} squelette={<SqueletteChampionnats />}>
+            {championnats.length === 0 ? (
+              <AucunChampionnat />
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {championnats.map((championnat, rang) => (
+                  <CarteChampionnat
+                    key={championnat.id}
+                    championnat={championnat}
+                    rang={rang}
+                  />
+                ))}
+              </div>
+            )}
+          </ZoneChargement>
         </Bloc>
 
         <div className="min-h-3 flex-1" />
 
-        {erreur && <Alerte ton="erreur">{erreur}</Alerte>}
-
-        <Bloc rang={3}>
-          <Bouton
-            variante="secondaire"
-            onClick={seDeconnecter}
-            occupe={sortie}
-            libelleOccupe="Déconnexion…"
+        <Bloc rang={4} className="grid grid-cols-2 gap-2.5">
+          <Action
+            vers="/championnats/creer"
+            variante="principal"
+            icone={<IconePlus className="size-4" />}
           >
-            Se déconnecter
-          </Bouton>
+            Créer
+          </Action>
+          <Action vers="/championnats/rejoindre" variante="secondaire">
+            Rejoindre
+          </Action>
         </Bloc>
       </div>
 
-      <footer className="pt-4 text-center">
+      <footer className="flex flex-col items-center gap-3 pt-5">
+        {/* Provisoire : la déconnexion rejoindra l'onglet Profil quand la barre
+            de navigation basse existera (étape 8). */}
+        <button
+          type="button"
+          onClick={seDeconnecter}
+          disabled={sortie}
+          className="text-texte-doux min-h-tactile pressable -my-2 px-3 py-2 text-[13px] font-medium"
+        >
+          {sortie ? "Déconnexion…" : "Se déconnecter"}
+        </button>
         <span className="text-label-sm text-texte-doux uppercase">
           Version {APP_VERSION}
         </span>

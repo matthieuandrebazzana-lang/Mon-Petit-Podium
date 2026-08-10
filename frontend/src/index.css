@@ -371,6 +371,104 @@
   }
 }
 
+/* — Skeleton loader and reveal (transitions-dev 14) —
+   L'accueil affiche la forme de ses cartes pendant que Railway se réveille,
+   puis fond vers le contenu réel. Un gabarit qui a déjà la bonne silhouette
+   évite le sursaut de mise en page à l'arrivée des données. */
+:root {
+  --pulse-dur: 1000ms;
+  --pulse-count: infinite;
+  --pulse-min: 0.5;
+  --reveal-dur: 400ms;
+  --reveal-blur: 2px;
+  --reveal-ease: ease-in-out;
+}
+
+/* Les deux couches se superposent : le squelette porte la sortie, le contenu
+   l'entrée, sur la même durée — le remplacement se lit comme un seul geste. */
+.t-skel {
+  position: relative;
+}
+.t-skel-skeleton,
+.t-skel-content {
+  position: absolute;
+  inset: 0;
+}
+
+.t-skel-skeleton {
+  z-index: 1;
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity var(--reveal-dur) var(--reveal-ease),
+    filter var(--reveal-dur) var(--reveal-ease);
+}
+.t-skel-content {
+  z-index: 2;
+  opacity: 0;
+  filter: blur(var(--reveal-blur));
+  transition:
+    opacity var(--reveal-dur) var(--reveal-ease),
+    filter var(--reveal-dur) var(--reveal-ease);
+}
+.t-skel.is-revealed .t-skel-skeleton {
+  opacity: 0;
+  filter: blur(var(--reveal-blur));
+}
+.t-skel.is-revealed .t-skel-content {
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* Ajout du projet : une fois révélé, le squelette ne doit plus intercepter le
+   moindre appui, même transparent. */
+.t-skel.is-revealed .t-skel-skeleton {
+  pointer-events: none;
+}
+
+/* Variante du projet — hauteur libre.
+   Le snippet superpose ses deux couches en `absolute`, ce qui suppose un
+   conteneur déjà dimensionné. La liste des championnats n'a pas de hauteur
+   connue d'avance : elle dépend du nombre de championnats. Les deux couches
+   partagent donc une même cellule de grille, le bloc prend la hauteur de la
+   plus haute, et le fondu croisé reste exactement celui du snippet. Le
+   squelette est démonté à la fin de la révélation, sinon il continuerait à
+   réserver sa hauteur. */
+.t-skel--flux {
+  display: grid;
+}
+.t-skel--flux > .t-skel-skeleton,
+.t-skel--flux > .t-skel-content {
+  position: relative;
+  inset: auto;
+  grid-area: 1 / 1;
+}
+
+/* La pulsation vit sur les barres, pas sur le squelette : son opacité doit
+   rester libre pour le fondu croisé ci-dessus. */
+.t-skel-skeleton.is-pulsing > * {
+  animation: t-skel-pulse var(--pulse-dur) ease-in-out var(--pulse-count);
+}
+@keyframes t-skel-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: var(--pulse-min);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-skel-skeleton,
+  .t-skel-content {
+    transition: none !important;
+  }
+  .t-skel-skeleton.is-pulsing > * {
+    animation: none !important;
+  }
+}
+
 /* — Retour tactile (/apple-design) —
    Le retour visuel se déclenche à l'appui, pas au relâchement : attendre le
    clic donne une interface morte. 100ms suffisent à être perçus sans retarder
