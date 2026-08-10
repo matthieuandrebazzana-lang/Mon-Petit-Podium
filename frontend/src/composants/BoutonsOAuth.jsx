@@ -4,6 +4,16 @@ import { IconeApple, IconeGoogle } from "./Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 
 /**
+ * Google et Apple sont **temporairement masqués** tant que les clés OAuth ne
+ * sont pas renseignées dans le tableau de bord Supabase : des boutons qui
+ * échouent systématiquement valent moins que pas de boutons du tout.
+ *
+ * Rien n'est supprimé — repasser ce drapeau à `true` réaffiche le séparateur
+ * et les deux boutons, sans autre modification ailleurs.
+ */
+const OAUTH_ACTIF = false;
+
+/**
  * Séparateur puis Google et Apple, comme sur les maquettes 02 et 03.
  *
  * Les clés OAuth seront renseignées à la main dans le tableau de bord Supabase.
@@ -27,6 +37,11 @@ export default function BoutonsOAuth({ onErreur }) {
     // En cas de succès le navigateur part chez le fournisseur : on laisse
     // volontairement le bouton occupé jusqu'à la redirection.
   }
+
+  // Après les hooks, jamais avant : les règles de React interdisent un retour
+  // anticipé qui les court-circuiterait. Le parent enveloppe l'appel dans un
+  // conteneur `flex gap` — ne rien rendre y referme l'espacement de lui-même.
+  if (!OAUTH_ACTIF) return null;
 
   return (
     <>
