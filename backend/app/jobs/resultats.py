@@ -102,11 +102,16 @@ async def _pronostics_a_noter(gp_id: str) -> list[dict]:
     )
 
 
-async def _cotes_du_gp(gp_id: str) -> dict[str, dict]:
+async def cotes_du_gp(gp_id: str) -> dict[str, dict]:
     """Les cotes figées du GP, indexées par identifiant d'issue.
 
     Ce sont elles qui portent les points : jamais une cote recalculée, toujours
     celle qui était affichée au joueur au moment de sa saisie (règle 4.3).
+
+    Publique depuis la version `0.6.1` : le banc d'essai
+    (`POST /jobs/resultats/{id}/test`) doit lire exactement les mêmes cotes que
+    le job, sinon il validerait le calcul sur d'autres valeurs que celles qui
+    serviront le jour de la course.
     """
     lignes = await selectionner(
         "cotes",
@@ -158,7 +163,7 @@ async def traiter(gp: dict) -> dict:
     rapport["pronostics_a_noter"] = len(pronostics)
 
     if pronostics:
-        cotes = await _cotes_du_gp(gp_id)
+        cotes = await cotes_du_gp(gp_id)
         attributions, en_attente = calcul.calculer(pronostics, cotes, donnees)
 
         ecrit = await appeler_fonction(

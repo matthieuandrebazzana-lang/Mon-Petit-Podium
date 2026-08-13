@@ -873,6 +873,76 @@ Le déclenchement manuel est **synchrone**, contrairement au scraper : c'est la 
 | Sous un vrai `uvicorn` | scheduler démarré et journalisé, premier tour à 30 s, **la panne Supabase sort avec sa trace complète sur la sortie standard** sans casser la boucle |
 | `npm run build` | passe, version `0.6.0` présente dans le bundle |
 
+**Banc d'essai du calcul des points** (version `0.6.1`)
+
+Le GP des Pays-Bas se court le **23 août 2026**. Le calcul de l'étape 6 devait être validé **avant**, pas découvert après : `app/calcul/points.py` reconnaît neuf familles de marchés dont **trois seulement** ont été confrontées à de vrais libellés Unibet, et un marché non reconnu laisse les points à `NULL` en silence jusqu'à ce qu'on relise les logs. Une route de test injecte donc des résultats fictifs et rend le verdict ligne à ligne, sur les **vrais pronostics déjà saisis en base**.
+
+*Route* — `POST /jobs/resultats/{gp_id}/test`, en-tête `X-Admin-Secret`, dans `backend/app/api/routes/resultats.py`. Le secret est vérifié **avant** la configuration Supabase, comme sur les deux autres routes d'administration.
+
+**Elle n'écrit rien, et les trois écritures absentes sont chacune un dégât évité** :
+
+| Écriture du vrai job | Ce qu'elle aurait cassé |
+|---|---|
+| `resultats_gp` | `gp_id` est `unique` : un classement fictif enregistré **empêcherait définitivement** la vraie récupération OpenF1 le jour de la course. |
+| statut → `termine` | Le GP sortirait de la surveillance du scheduler et ne serait **jamais** noté. |
+| `points_gagnes` | `attribuer_points` n'écrit que les `NULL` : un essai les remplirait avec des valeurs inventées **que le vrai job ne corrigerait plus jamais**. |
+
+C'est ce qui rend l'essai reproductible : on le rejoue autant de fois qu'on veut, avec des classements différents. Le champ `points_en_base` de la réponse le prouve — il ne bouge pas.
+
+**Tous** les pronostics du GP sont évalués, y compris ceux qui ont déjà des points. Le filtre `points_gagnes is null` du vrai job est un mécanisme d'idempotence, pas une règle de calcul : ici il masquerait précisément les lignes qu'on veut vérifier.
+
+Le jugement n'est pas réécrit : la route appelle `calcul.points_du_pronostic`, **la fonction même sur laquelle `calculer()` boucle** dans le job, et lit les cotes par `jobs.resultats.cotes_du_gp` (passée de privée à publique pour cela). Ce qui est validé ici est bien ce qui tournera dimanche.
+
+*Corps de la requête — deux formes acceptées.* Le tableau nu de `session_result` documenté :
+
+```bash
+curl -X POST https://<railway>/jobs/resultats/<gp_id>/test \
+  -H "X-Admin-Secret: <valeur>" -H "Content-Type: application/json" \
+  -d '[{"driver_number":12,"position":1,"dnf":false,"dns":false,"dsq":false,
+        "points":25,"number_of_laps":72,"gap_to_leader":0}]'
+```
+
+…ou un objet portant en plus `race_control` et `laps`. Ce n'est pas un supplément gratuit : **safety car, drapeau rouge et meilleur tour sont les marchés annoncés en section 4.4 qu'aucun vrai libellé Unibet n'a jamais confrontés**, et sans ces deux tableaux ils resteraient les seuls impossibles à essayer avant la course. Les lignes acceptent les champs supplémentaires (`extra="allow"`) : une réponse OpenF1 réelle se colle telle quelle.
+
+*Réponse* — par pronostic : `profil_id`, `type`, `id_outcome_unibet`, `marche`, `pilote`, `points` (le potentiel), **`points_gagnes` (le calculé)**, `reussi`, `detail`, `raison` si le marché n'est pas reconnu, et `points_en_base`. Plus un `course` disant ce que le calcul a **compris** des données fictives (vainqueur, classés, abandons, safety car, VSC, drapeau rouge, meilleur tour) : sans lui, un safety car mal orthographié dans le corps donnerait des pronostics ratés sans qu'on sache si c'est le pronostic ou la donnée d'essai qui est en cause.
+
+`points` d'un podium est la **somme des deux cotes**, pas celle de `pilote_1` : c'est la règle tranchée à l'étape 6, et afficher la seule cote du parent montrerait un potentiel deux fois trop faible.
+
+---
+
+*`backend/app/calcul/pilotes.py` — la grille 2026, et le trou qu'elle bouche.*
+
+Unibet nomme ses issues par un libellé de pilote, OpenF1 par un `driver_number`. Le module ne fait pas le rapprochement — c'est `points.py` qui le fait — il fournit **la matière** : qui court en 2026, sous quel numéro, sous quels libellés Unibet. Deux usages : fabriquer l'index de pilotes du banc d'essai sans appeler OpenF1, et **compléter le rapprochement de noms du vrai calcul**.
+
+Ce second usage n'était pas prévu, et il corrige un défaut réel. Les cinq clés dérivées de chaque pilote (nom complet, nom de famille, acronyme, initiale + nom, prénom + nom) couvrent 20 des 22 pilotes. Elles échouent sur deux, relevés sur les **vraies cotes en base** :
+
+- **`AK.Antonelli`** — OpenF1 abrège son prénom en « Kimi », Unibet garde les deux initiales d'« Andrea Kimi ». C'est le **favori du GP à 280 pts** : sans alias, tous les pronostics le désignant seraient restés à `NULL`.
+- **`C.Sainz Jr`** — Unibet suffixe, OpenF1 non.
+
+Les alias passent par la **même mise en concurrence** que les autres clés : un alias qui entrerait en collision avec un pilote existant serait retiré comme n'importe quelle ambiguïté, jamais imposé.
+
+**Le garde-fou de saison est le point à ne pas défaire.** `alias_unibet()` exige le **numéro et le nom de famille**, et ne rend rien s'ils ne concordent pas avec la table. Les numéros sont réattribués d'une année sur l'autre (Norris porte le 1 en 2026, Verstappen l'avait avant) : sans cette vérification, une table périmée collerait les alias d'Antonelli sur le nouveau titulaire du 12. Avec elle, une table périmée ne fait aucun dégât — elle ne rend rien, et le pronostic reste non validé, ce qui se voit dans les logs. **À mettre à jour à chaque saison.**
+
+`_cle()` duplique volontairement `points.normaliser` en deux lignes : `points` importe ce module, l'importer en retour ferait un cycle.
+
+*Écart assumé par rapport à la demande* — elle demandait « une table de correspondance `driver_number` → `id_outcome_unibet` ». **Cette table ne peut pas exister** : `id_outcome_unibet` change à chaque Grand Prix (Antonelli vaut `o701093319` au marché « Vainqueur » du GP Pays-Bas et `o701094802` au marché « Podium » du même GP). Ce qui est statique, c'est `driver_number` → **libellé Unibet** ; l'identifiant d'issue se retrouve ensuite dans `public.cotes`, qui le porte déjà. C'est donc cette table-là qui est écrite, et le second paragraphe de la demande la décrivait exactement ainsi.
+
+*Vérifié* — **83 contrôles passent** contre une doublure Supabase en mémoire, avec les **vraies cotes du GP Pays-Bas 2026** relevées chez Unibet (22 pilotes) et les **vrais numéros OpenF1 2026**.
+
+| Contrôle | Résultat |
+|---|---|
+| Grille | 22 pilotes, index à clés chaînes et de la même forme qu'OpenF1 ; alias servis pour Antonelli et Sainz, aucun pour les 20 autres ; **numéro réattribué → alias refusé**, numéro inconnu → rien |
+| Rapprochement des 16 libellés Unibet réels | tous retrouvés, `AK.Antonelli` et `C.Sainz Jr` compris ; libellé inconnu → `None` ; six écuries dont « Red Bull » → Red Bull Racing, « Haas » → Haas F1 Team, « Audi F1 Team » → Audi |
+| Protection | `401` sans secret et sur mauvais secret (**la signature survit au décorateur**), `404` GP inconnu, `422` identifiant mal formé, `422` classement vide |
+| **Aucune écriture** | ni RPC, ni upsert, ni PATCH après trois essais successifs ; `ecrit_en_base: false` ; `points_en_base` inchangé pour le pronostic déjà noté ; **le filtre `points_gagnes is null` n'est jamais envoyé** |
+| Verdicts | Antonelli vainqueur → 280 pts ; Verstappen vainqueur → **0, jamais NULL** ; podium Antonelli + Norris → **297 = 135 + 162**, identique en ordre inversé ; écurie Mercedes → 215, Red Bull → 0 ; **marché non reconnu → `NULL` avec sa raison nommant le marché** ; compteurs et total justes |
+| Résumé de course | vainqueur, 5 classés, 2 abandons, **Verstappen abandonne ET reste classé 15ᵉ** (le cas Norris/Zandvoort 2025) |
+| Forme étendue | safety car, VSC et drapeau rouge détectés séparément, meilleur tour attribué, verdicts identiques à la forme nue |
+| Reproductibilité | second appel strictement identique ; un autre classement donne un autre verdict (Verstappen 950, Antonelli 0) ; toujours rien d'écrit |
+| Routes existantes | `/health` en `0.6.1`, 14 routes, le vrai job exige toujours son secret, `/championnats/moi` toujours protégée, cotes toujours publiques |
+| Sous un vrai `uvicorn` | route servie, `401` sans secret **avant** le contrôle de configuration, `503` explicite ensuite |
+| `npm run build` | passe, version `0.6.1` présente dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -901,12 +971,20 @@ Ordre d'application, si l'une manque :
   # Synchrone : la réponse porte le compte rendu, dont les pronostics restés
   # sans points. Idempotent, on peut le rejouer sans risque.
   curl -X POST https://<railway>/jobs/resultats/<gp_id> -H "X-Admin-Secret: <valeur>"
+
+  # Version 0.6.1 — banc d'essai : injecte un classement fictif et rend le
+  # verdict du calcul sur les vrais pronostics en base. N'ÉCRIT RIEN.
+  # À utiliser AVANT la course pour valider les marchés jamais confrontés.
+  curl -X POST https://<railway>/jobs/resultats/<gp_id>/test \
+    -H "X-Admin-Secret: <valeur>" -H "Content-Type: application/json" \
+    -d '[{"driver_number":12,"position":1,"dnf":false,"dns":false,
+          "dsq":false,"points":25,"number_of_laps":72,"gap_to_leader":0}]'
   ```
 
 Points non couverts, à traiter le moment venu :
 - **Scraper exercé contre le vrai Supabase** — la ligne réelle observée en version `0.5.1` (voir ci-dessus) montre que l'écriture a eu lieu au moins une fois. Reste à vérifier le contenu de `public.cotes` pour ce GP, et le comportement du scraper sur un GP déjà figé.
 - **Programmation automatique du scraping, et figeage des cotes** — la règle 4.3 veut un scraping le samedi, 2h après les qualifications, puis un figeage des cotes. Aujourd'hui le déclenchement est **manuel** (`POST /scraper/declencher`) et **rien ne fait passer un GP en `cotes_figees`** : le statut existe, la protection qu'il commande est en place et testée, mais aucun code ne l'applique encore. **Le scheduler de l'étape 6 existe désormais** (`app/jobs/resultats.py`, APScheduler dans le `lifespan`) : c'est là qu'un second emploi viendra naturellement se greffer. En attendant, le job de résultats surveille aussi les GP restés `a_venir`, pour ne pas dépendre d'un figeage qui n'a jamais lieu.
-- **Marchés disponibles à J-10** — au moment du développement, Unibet n'exposait que 3 marchés pour le GP Pays-Bas (vainqueur, podium, écurie gagnante). Le noyau annoncé en section 3.1 (top 6, top 10, duels…) n'apparaîtra qu'à l'approche de la course. Le scraper les découvre dynamiquement, donc rien à changer — mais **le jeu de marchés réellement obtenu après les qualifications reste à observer**. C'est le point de vigilance principal de l'étape 6 : `app/calcul/points.py` reconnaît neuf familles de marchés, mais **seules trois ont été confrontées à de vrais libellés Unibet**. Les autres (top N, abandon, safety car, drapeau rouge, meilleur tour) sont écrites d'après la section 4.4. Un marché non reconnu ne fait aucun dégât — le pronostic reste à `NULL` et les logs le disent — mais il faut **relire les avertissements `[points] … laissé(s) sans points` après le premier vrai GP** et compléter `validateur()` en conséquence, puis rejouer `POST /jobs/resultats/{gp_id}`.
+- **Marchés disponibles à J-10** — au moment du développement, Unibet n'exposait que 3 marchés pour le GP Pays-Bas (vainqueur, podium, écurie gagnante). Le noyau annoncé en section 3.1 (top 6, top 10, duels…) n'apparaîtra qu'à l'approche de la course. Le scraper les découvre dynamiquement, donc rien à changer — mais **le jeu de marchés réellement obtenu après les qualifications reste à observer**. C'est le point de vigilance principal de l'étape 6 : `app/calcul/points.py` reconnaît neuf familles de marchés, mais **seules trois ont été confrontées à de vrais libellés Unibet**. Les autres (top N, abandon, safety car, drapeau rouge, meilleur tour) sont écrites d'après la section 4.4. Un marché non reconnu ne fait aucun dégât — le pronostic reste à `NULL` et les logs le disent — mais il faut **relire les avertissements `[points] … laissé(s) sans points` après le premier vrai GP** et compléter `validateur()` en conséquence, puis rejouer `POST /jobs/resultats/{gp_id}`. **Depuis la version `0.6.1`, l'attente n'est plus obligatoire** : `POST /jobs/resultats/{gp_id}/test` confronte le calcul aux vrais pronostics en base sur un classement fictif, sans rien écrire. Dès que les marchés complets apparaissent chez Unibet (après les qualifications), un essai dit immédiatement lesquels restent non reconnus.
 - **Duels entre pilotes, premier abandon, marge de victoire, classement exact** — annoncés en section 4.4, **non implémentés**. Ils demandent chacun une règle explicite (égalités, pilote classé contre pilote abandonné) que le CLAUDE.md pose mais que rien ne code encore. Les cas d'égalité du « premier abandon » sont le point à trancher en premier. En l'état ils tombent dans le filet « marché non reconnu ».
 - **Écran de résultats (maquette 11)** — l'étape 6 est entièrement backend. `GET /grands-prix/{id}/resultats` sert déjà tout ce qu'il faut (classement, pronostics des membres, points gagnés) ; l'écran arrive avec les classements de l'étape 7.
 - **Parcours des championnats exercé contre le vrai Supabase** — le backend a été validé contre une doublure en mémoire et la migration contre un PostgreSQL jetable, mais les deux n'ont jamais tourné ensemble contre le vrai projet.
@@ -924,5 +1002,6 @@ Points non couverts, à traiter le moment venu :
 
 - Schéma de base de données — neuf tables existent : `public.profils`, `public.championnats`, `public.membres_championnat`, `public.grands_prix`, `public.cotes`, `public.favoris`, `public.pronostics`, `public.pronostic_podium`, `public.resultats_gp`. Les points attribués ne sont **pas** une table à part : ils vivent dans la colonne `points_gagnes` de `pronostics` (étape 6). Reste à concevoir le classement cumulé de l'étape 7 — à décider s'il se calcule à la volée par somme des `points_gagnes` ou s'il se matérialise. Les migrations vivent dans `supabase/migrations/`, une par étape, à exécuter à la main dans le SQL Editor.
 - Nommage des routes API — la convention est posée par `/championnats` : nom de domaine au pluriel, sous-chemin `/moi` pour ce qui appartient à l'appelant, verbe explicite pour une action qui n'est pas un CRUD (`/rejoindre`, `/{id}/quitter`, `/declencher`). L'étape 5 y ajoute la ressource imbriquée : `/grands-prix/{id}/favoris`, `/grands-prix/{id}/pronostics`. L'étape 6 y ajoute `/grands-prix/{id}/resultats` et, pour les déclenchements d'administration, le préfixe `/jobs/` : `/jobs/resultats/{id}`.
-- Table statique pilote → nationalité — à créer
+- Table statique pilote → nationalité — à créer. Sa place est **`backend/app/calcul/pilotes.py`**, créé en version `0.6.1` : il porte déjà la grille 2026 (numéro, prénom, nom, acronyme, écurie, alias Unibet) et le garde-fou de saison. Ajouter un champ `nationalite` au `dataclass` suffira, sans nouvelle table ni nouveau fichier à maintenir en parallèle.
+- **Grille des pilotes à mettre à jour chaque saison** — `backend/app/calcul/pilotes.py` décrit 2026. Une table périmée ne fait pas de dégât silencieux (`alias_unibet()` exige que le nom de famille concorde avec le numéro), mais les alias cessent de s'appliquer et les pronostics concernés restent à `NULL`. Les numéros se relisent sur `/drivers` d'OpenF1, les libellés dans `public.cotes`.
 - Composant React `<Voiture />` avec couleurs dynamiques — à créer. Il remplacera la pastille d'initiale de `composants/Pastille.jsx`, provisoire, dans la liste des membres et les cartes.

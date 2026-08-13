@@ -10,6 +10,9 @@ détail :
   l'appartenance au championnat demandé.
 - `POST /jobs/resultats/{id}` écrit en base. Elle est fermée par le secret
   partagé `X-Admin-Secret`, comme `POST /scraper/declencher`.
+- `POST /jobs/resultats/{id}/test` **n'écrit rien du tout** : elle rejoue le
+  calcul sur des résultats fictifs fournis dans le corps de la requête. Même
+  secret, mais aucun effet de bord — c'est un banc d'essai, pas un job.
 
 Les valeurs servies sont toujours des **points** (règle 4.1). `points_fia` fait
 exception et porte son nom pour cette raison : ce sont les points du
@@ -22,7 +25,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.api.deps import (
     exiger_configuration,
@@ -31,6 +34,8 @@ from app.api.deps import (
 )
 from app.api.journal import journaliser_echecs
 from app.api.routes.pronostics import MembrePronostics, exiger_membre
+from app.calcul import points as calcul
+from app.calcul import pilotes as grille
 from app.jobs import resultats as job
 from app.scraper.openf1 import ResultatsIndisponibles
 from app.supabase_client import appeler_fonction, selectionner
@@ -94,6 +99,131 @@ class RapportJob(BaseModel):
     restants: int = 0
     en_attente: list[str] = []
     erreur: str | None = None
+
+
+# --------------------------------------------------------------------------- #
+#  Modèles du banc d'essai
+# --------------------------------------------------------------------------- #
+
+
+class LigneFictive(BaseModel):
+    """Une ligne de `session_result` fabriquée à la main.
+
+    Les champs reprennent ceux de la section 3.2, avec les mêmes pièges assumés :
+    `position` peut être nulle (abandon non classé) **sans** que `dnf` le soit,
+    et l'inverse est vrai aussi — un pilote peut abandonner et rester classé.
+
+    Seul `driver_number` est obligatoire : c'est la seule chose sans laquelle la
+    ligne ne désigne personne. Tout le reste a le défaut le plus neutre.
+
+    `extra="allow"` laisse coller une réponse OpenF1 réelle sans l'élaguer : les
+    champs non déclarés (`duration`, `meeting_key`…) traversent tels quels
+    jusqu'au calcul, qui les ignore ou non selon les validateurs.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    driver_number: int
+    position: int | None = None
+    dnf: bool = False
+    dns: bool = False
+    dsq: bool = False
+    points: float = 0
+    number_of_laps: int = 0
+    # Type mixte assumé (section 3.2) : nombre, chaîne « +1 LAP » ou nul. Aucun
+    # validateur ne le lit aujourd'hui, il est accepté pour que le corps puisse
+    # être copié tel quel depuis OpenF1.
+    gap_to_leader: float | str | None = None
+
+
+class ResultatsFictifs(BaseModel):
+    """Le corps de la requête : un classement fictif, et de quoi l'entourer.
+
+    **Deux formes sont acceptées.** Le tableau nu de `session_result` — la forme
+    documentée, celle qu'on écrit à la main pour tester un vainqueur et un
+    podium — et un objet qui permet en plus de fournir `race_control` et `laps`.
+    La seconde n'est pas un supplément gratuit : les marchés safety car, drapeau
+    rouge et meilleur tour sont les seuls que le CLAUDE.md annonce sans qu'aucun
+    vrai libellé Unibet ne les ait jamais confrontés, et sans ces deux tableaux
+    ils resteraient les seuls impossibles à essayer avant la course.
+    """
+
+    session_result: list[LigneFictive]
+    # Messages de direction de course, au format `/race_control` :
+    # `{"category": "SafetyCar", "message": "SAFETY CAR DEPLOYED"}`, ou
+    # `{"flag": "RED"}`.
+    race_control: list[dict] = []
+    # Meilleurs tours, au format déjà réduit par `openf1._meilleurs_tours` :
+    # `{"driver_number": 12, "lap_duration": 71.2}`.
+    laps: list[dict] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accepter_un_tableau_nu(cls, valeur):
+        """Enveloppe le tableau nu documenté dans la forme complète."""
+        if isinstance(valeur, list):
+            return {"session_result": valeur}
+        return valeur
+
+
+class PronosticTeste(BaseModel):
+    """Le verdict du calcul sur un pronostic, sans qu'il ait été écrit nulle part."""
+
+    pronostic_id: UUID
+    profil_id: UUID
+    type: str
+    id_outcome_unibet: str
+    # Renseignés depuis les cotes figées du GP. Nuls si l'issue n'y est plus.
+    marche: str | None = None
+    pilote: str | None = None
+    # Ce que le pronostic POUVAIT rapporter : la cote figée (règle 4.1).
+    points: int | None = None
+    # Ce qu'il rapporte sur ces résultats fictifs. `null` ne veut pas dire zéro :
+    # il veut dire « le calcul n'a pas su juger », et `raison` dit pourquoi.
+    points_gagnes: int | None = None
+    reussi: bool | None = None
+    detail: str | None = None
+    raison: str | None = None
+    # Ce que la base contient réellement, laissé intact par cet appel. C'est la
+    # preuve vérifiable que le banc d'essai n'a rien écrit : rejouer la requête
+    # rend toujours la même valeur.
+    points_en_base: int | None = None
+
+
+class ResumeCourse(BaseModel):
+    """Ce que le calcul a compris des résultats fictifs.
+
+    Sans ce résumé, un safety car mal orthographié dans le corps de la requête
+    donnerait des pronostics ratés sans qu'on sache si c'est le pronostic ou la
+    donnée d'essai qui est en cause.
+    """
+
+    vainqueur: str | None = None
+    pilotes_classes: int = 0
+    abandons: int = 0
+    safety_car: bool = False
+    virtual_safety_car: bool = False
+    drapeau_rouge: bool = False
+    meilleur_tour: str | None = None
+
+
+class RapportTest(BaseModel):
+    gp: str
+    gp_id: UUID
+    # Toujours `false`, et le champ existe pour le dire à l'appelant plutôt que
+    # de le lui faire déduire de la documentation.
+    ecrit_en_base: bool = False
+    saison_grille: int = grille.SAISON
+    # Numéros présents dans le corps mais absents de `calcul/pilotes.py` : ils
+    # ne seront rapprochés d'aucun libellé Unibet. C'est le premier symptôme
+    # d'une table de pilotes périmée.
+    numeros_inconnus: list[int] = []
+    course: ResumeCourse
+    pronostics: list[PronosticTeste] = []
+    notes: int = 0
+    reussis: int = 0
+    non_valides: int = 0
+    total_points: int = 0
 
 
 # --------------------------------------------------------------------------- #
@@ -224,3 +354,200 @@ async def declencher_resultats(
         ) from erreur
 
     return RapportJob(**rapport)
+
+
+# --------------------------------------------------------------------------- #
+#  Banc d'essai — résultats fictifs, aucune écriture
+# --------------------------------------------------------------------------- #
+
+
+def _lire_le_pari(pronostic: dict, cotes: dict[str, dict]):
+    """Décrit ce sur quoi porte un pronostic : marché, libellé, points possibles.
+
+    Un podium est le seul cas qui demande un traitement à part, et pour la même
+    raison qu'au calcul : il porte **deux** pilotes, il s'affiche « A + B », et
+    ce qu'il peut rapporter est la **somme** des deux cotes (règle tranchée à
+    l'étape 6, ordre-indépendante). Lire la seule cote de `pilote_1` afficherait
+    ici un potentiel deux fois trop faible.
+
+    Les points rendus sont un potentiel, jamais un gain : c'est `points` dans la
+    réponse, à ne pas confondre avec `points_gagnes`.
+    """
+    cote = cotes.get(str(pronostic.get("id_outcome_unibet") or ""))
+    marche = str((cote or {}).get("marche") or "")
+
+    if pronostic.get("type") != "podium":
+        return marche, str((cote or {}).get("pilote") or ""), (cote or {}).get("valeur")
+
+    # PostgREST rend cette relation tantôt en objet, tantôt en tableau d'un
+    # élément selon la version : les deux formes sont acceptées, comme au calcul.
+    detail = pronostic.get("pronostic_podium") or {}
+    if isinstance(detail, list):
+        detail = detail[0] if detail else {}
+
+    deux = [cotes.get(str(detail.get(champ) or "")) for champ in ("pilote_1", "pilote_2")]
+    libelle = " + ".join(str((une or {}).get("pilote") or "?") for une in deux)
+    total = (
+        sum(int(une["valeur"]) for une in deux)
+        if all(une and une.get("valeur") is not None for une in deux)
+        else None
+    )
+    return marche, libelle, total
+
+
+@router.post("/jobs/resultats/{gp_id}/test", response_model=RapportTest)
+@journaliser_echecs(DOMAINE, "Banc d'essai du calcul des points")
+async def tester_resultats(
+    gp_id: UUID,
+    corps: ResultatsFictifs,
+    x_admin_secret: str | None = Header(default=None),
+) -> RapportTest:
+    """Rejoue le calcul des points sur des résultats fictifs, **sans rien écrire**.
+
+    Le GP des Pays-Bas se court le 23 août : le calcul doit être validé avant, et
+    non découvert après. Cette route sert exactement à cela — elle prend les
+    pronostics **réels** déjà saisis en base, les confronte à un classement
+    fabriqué à la main, et rend le verdict ligne à ligne.
+
+    **Trois écritures du vrai job sont volontairement absentes**, et c'est toute
+    la différence entre les deux routes :
+
+    - rien n'est enregistré dans `resultats_gp` — le classement fictif ne doit
+      jamais devenir la vérité de ce Grand Prix, ni empêcher la vraie
+      récupération OpenF1 le jour venu (l'unicité de `gp_id` la bloquerait) ;
+    - le statut du GP n'est pas passé à `termine` — il sortirait de la
+      surveillance du scheduler et la course ne serait jamais notée ;
+    - aucun `points_gagnes` n'est attribué — `attribuer_points` n'écrit que les
+      NULL, un essai les remplirait donc **définitivement** avec des valeurs
+      inventées, que le vrai job ne corrigerait plus jamais.
+
+    C'est ce qui rend l'essai reproductible : on peut le rejouer autant de fois
+    qu'on veut, avec des classements différents, sans jamais polluer les données.
+    `points_en_base` le prouve dans la réponse — il ne bouge pas.
+
+    **Tous** les pronostics du GP sont évalués, y compris ceux qui auraient déjà
+    des points. Le filtre `points_gagnes is null` du vrai job est un mécanisme
+    d'idempotence, pas une règle de calcul : ici il masquerait précisément les
+    lignes qu'on veut vérifier.
+
+    Le jugement lui-même n'est pas réécrit : c'est `calcul.points_du_pronostic`
+    qui est appelé, la fonction sur laquelle `calculer()` boucle dans le vrai
+    job. Ce qui est validé ici est donc bien ce qui tournera dimanche.
+    """
+    exiger_secret(x_admin_secret, DOMAINE)
+    exiger_configuration()
+
+    if not corps.session_result:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Aucune ligne de résultat fournie. Le corps attend un tableau "
+                "`session_result`, ou un objet le contenant."
+            ),
+        )
+
+    gp = await _grand_prix(gp_id)
+
+    # Le classement fictif prend la place de celui d'OpenF1, et l'index des
+    # pilotes vient de `calcul/pilotes.py` au lieu de `/drivers` : c'est la seule
+    # substitution du banc d'essai. Tout ce qui suit est le chemin normal.
+    donnees = {
+        "source": "test",
+        "session_result": [ligne.model_dump() for ligne in corps.session_result],
+        "race_control": corps.race_control,
+        "laps": corps.laps,
+        "pilotes": grille.index_pilotes(),
+    }
+
+    connus = set(grille.PAR_NUMERO)
+    numeros_inconnus = sorted(
+        {ligne.driver_number for ligne in corps.session_result} - connus
+    )
+    if numeros_inconnus:
+        logger.warning(
+            "[%s] Banc d'essai : %d numéro(s) absent(s) de la grille %d (%s). "
+            "Aucun libellé Unibet ne leur sera rapproché.",
+            DOMAINE,
+            len(numeros_inconnus),
+            grille.SAISON,
+            ", ".join(str(numero) for numero in numeros_inconnus),
+        )
+
+    pronostics = await selectionner(
+        "pronostics",
+        {
+            "gp_id": f"eq.{gp_id}",
+            "select": (
+                "id,profil_id,type,id_outcome_unibet,points_gagnes,"
+                "pronostic_podium(pilote_1,pilote_2)"
+            ),
+            "order": "cree_le.asc",
+        },
+    )
+    # Les mêmes cotes figées que le vrai job, lues par la même fonction : ce sont
+    # elles qui portent les points, jamais une cote recalculée (règle 4.3).
+    cotes = await job.cotes_du_gp(str(gp_id))
+
+    course = calcul.analyser(donnees)
+
+    lignes: list[PronosticTeste] = []
+    for pronostic in pronostics:
+        attribution, raison = calcul.points_du_pronostic(pronostic, cotes, course)
+        marche, pilote, potentiel = _lire_le_pari(pronostic, cotes)
+
+        lignes.append(
+            PronosticTeste(
+                pronostic_id=pronostic["id"],
+                profil_id=pronostic["profil_id"],
+                type=str(pronostic.get("type") or ""),
+                id_outcome_unibet=str(pronostic.get("id_outcome_unibet") or ""),
+                marche=marche or None,
+                pilote=pilote or None,
+                points=potentiel,
+                points_gagnes=attribution.points if attribution else None,
+                reussi=attribution.reussi if attribution else None,
+                detail=attribution.detail if attribution else None,
+                raison=raison or None,
+                points_en_base=pronostic.get("points_gagnes"),
+            )
+        )
+
+    tete = course.par_position(1)
+    resume = ResumeCourse(
+        vainqueur=(course.pilotes.get(tete.numero) or {}).get("nom") if tete else None,
+        pilotes_classes=sum(1 for ligne in course.lignes.values() if ligne.classe),
+        abandons=sum(1 for ligne in course.lignes.values() if ligne.abandon),
+        safety_car=course.safety_car,
+        virtual_safety_car=course.virtual_safety_car,
+        drapeau_rouge=course.drapeau_rouge,
+        meilleur_tour=(
+            (course.pilotes.get(course.meilleur_tour) or {}).get("nom")
+            if course.meilleur_tour is not None
+            else None
+        ),
+    )
+
+    notes = [ligne for ligne in lignes if ligne.points_gagnes is not None]
+    rapport = RapportTest(
+        gp=str(gp.get("nom") or gp_id),
+        gp_id=gp_id,
+        numeros_inconnus=numeros_inconnus,
+        course=resume,
+        pronostics=lignes,
+        notes=len(notes),
+        reussis=sum(1 for ligne in notes if ligne.reussi),
+        non_valides=len(lignes) - len(notes),
+        total_points=sum(ligne.points_gagnes or 0 for ligne in notes),
+    )
+
+    logger.info(
+        "[%s] Banc d'essai %s — %d pronostic(s) : %d noté(s) dont %d réussi(s), "
+        "%d non validé(s). Aucune écriture en base.",
+        DOMAINE,
+        rapport.gp,
+        len(lignes),
+        rapport.notes,
+        rapport.reussis,
+        rapport.non_valides,
+    )
+    return rapport

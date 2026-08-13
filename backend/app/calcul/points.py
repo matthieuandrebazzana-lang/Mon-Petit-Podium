@@ -33,6 +33,8 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
+from app.calcul import pilotes as grille
+
 logger = logging.getLogger("uvicorn.error")
 
 # Slugs des marchés obligatoires. Ils doublent les constantes de
@@ -178,6 +180,13 @@ def _indexer_pilotes(course: Course) -> None:
     Une clé revendiquée par deux pilotes est **retirée** au lieu d'être attribuée
     au premier venu : mieux vaut ne pas valider un pronostic que le valider sur
     le mauvais pilote.
+
+    Aux cinq clés dérivées s'ajoutent les **alias de `calcul/pilotes.py`**, pour
+    les libellés qu'aucune règle ne peut produire : Unibet écrit
+    « AK.Antonelli » là où OpenF1 dit « Kimi Antonelli », et « C.Sainz Jr » là où
+    il dit « Carlos Sainz ». Ces alias passent par la même mise en concurrence
+    que les autres clés : un alias qui entrerait en collision avec un pilote
+    existant serait retiré comme n'importe quelle autre ambiguïté, jamais imposé.
     """
     revendications: dict[str, set[int]] = {}
 
@@ -190,6 +199,7 @@ def _indexer_pilotes(course: Course) -> None:
             pilote.get("acronyme"),  # « VER »
             f"{prenom[:1]}{famille}" if prenom and famille else "",  # « M.Verstappen »
             f"{prenom} {famille}" if prenom and famille else "",
+            *grille.alias_unibet(numero, famille),
         ]
         for candidat in candidats:
             cle = normaliser(candidat)
