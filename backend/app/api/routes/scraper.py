@@ -16,7 +16,6 @@ des entiers. Rien à l'étage du frontend n'a à diviser par 100.
 
 import asyncio
 import logging
-import secrets
 from datetime import datetime
 from uuid import UUID
 
@@ -24,8 +23,7 @@ from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 
 from app.api import journal
-from app.api.deps import exiger_configuration
-from app.config import get_settings
+from app.api.deps import exiger_configuration, exiger_secret
 from app.scraper.unibet import scraper_en_tache_de_fond
 from app.supabase_client import appeler_fonction, selectionner
 
@@ -80,38 +78,6 @@ def journaliser_echecs(contexte: str):
     return journal.journaliser_echecs(DOMAINE, contexte)
 
 
-def exiger_secret(fourni: str | None) -> None:
-    """Refuse l'appel si l'en-tête `X-Admin-Secret` ne correspond pas.
-
-    La comparaison passe par `secrets.compare_digest`, à temps constant : un
-    `==` sur des chaînes s'arrête au premier caractère qui diffère, et le temps
-    de réponse laisse alors deviner le secret caractère par caractère.
-
-    Secret non configuré : la route refuse tout le monde. S'ouvrir à tous parce
-    qu'aucune valeur n'est définie serait exactement le mauvais sens du défaut.
-    """
-    parametres = get_settings()
-
-    if not parametres.admin_configure:
-        logger.error(
-            "[scraper-api] Déclenchement refusé : ADMIN_SECRET n'est pas défini "
-            "sur le serveur."
-        )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Le déclenchement du scraper n'est pas configuré (ADMIN_SECRET absent).",
-        )
-
-    if not fourni or not secrets.compare_digest(
-        fourni.strip(), parametres.admin_secret.strip()
-    ):
-        logger.warning("[scraper-api] Déclenchement refusé : secret invalide ou absent.")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Secret d'administration invalide ou absent.",
-        )
-
-
 @router.post(
     "/scraper/declencher",
     response_model=Lancement,
@@ -130,7 +96,7 @@ async def declencher(
     `202` plutôt que `200` : la réponse dit que le travail est accepté, pas
     qu'il est fait.
     """
-    exiger_secret(x_admin_secret)
+    exiger_secret(x_admin_secret, DOMAINE)
 
     # Le secret d'abord, la configuration ensuite : répondre « Supabase n'est
     # pas configuré » à un appelant qui n'a pas donné le bon secret lui

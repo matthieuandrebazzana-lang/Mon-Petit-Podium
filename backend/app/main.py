@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.config import VERSION, get_settings
+from app.jobs import resultats as job_resultats
 from app.supabase_client import client as client_supabase
 from app.supabase_client import fermer_client
 
@@ -25,9 +26,25 @@ async def cycle_de_vie(_: FastAPI):
     la boucle d'événements qui l'a vu naître, celle de l'application est la
     seule qui vive aussi longtemps que lui. Il est refermé proprement à l'arrêt
     pour ne pas laisser de connexion en suspens lors d'un redéploiement Railway.
+
+    Le scheduler de l'étape 6 est démarré ici pour la même raison : APScheduler
+    en mode asyncio s'attache lui aussi à la boucle courante. Il n'est **pas**
+    démarré sans configuration Supabase — il ne pourrait rien lire, et
+    journaliserait une panne toutes les cinq minutes en noyant les logs Railway
+    là où un unique avertissement au démarrage dit déjà tout.
     """
     client_supabase()
+
+    if settings.supabase_configure:
+        job_resultats.demarrer()
+    else:
+        logger.warning(
+            "[resultats] Surveillance non démarrée : Supabase n'est pas configuré."
+        )
+
     yield
+
+    job_resultats.arreter()
     await fermer_client()
 
 

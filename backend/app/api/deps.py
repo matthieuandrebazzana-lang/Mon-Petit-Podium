@@ -1,6 +1,7 @@
 """Dépendances communes aux routes protégées."""
 
 import logging
+import secrets
 
 from fastapi import Depends, Header, HTTPException, status
 
@@ -81,3 +82,59 @@ async def utilisateur_courant(
         )
 
     return identifiant
+
+
+async def utilisateur_optionnel(
+    authorization: str | None = Header(default=None),
+) -> str | None:
+    """Identifie l'appelant s'il présente un jeton, sans l'exiger.
+
+    Sert aux routes **mixtes** : le résultat d'une course est public, la liste
+    des pronostics de ses membres ne l'est pas. Une seule route sert les deux,
+    et c'est son propre code qui exige une identité au moment où il en a besoin.
+
+    Un en-tête absent rend `None`. Un en-tête **présent mais invalide** rend un
+    `401` comme `utilisateur_courant` : accepter en silence un jeton expiré
+    reviendrait à servir la partie publique à quelqu'un qui se croit connecté,
+    et à lui cacher ses championnats sans rien lui dire.
+    """
+    if not (authorization or "").strip():
+        return None
+
+    exiger_configuration()
+    return await utilisateur_courant(authorization=authorization)
+
+
+def exiger_secret(fourni: str | None, domaine: str) -> None:
+    """Refuse l'appel si l'en-tête `X-Admin-Secret` ne correspond pas.
+
+    Partagé depuis l'étape 6 entre le déclenchement du scraper et celui du job
+    de résultats. Deux points à ne jamais défaire :
+
+    - la comparaison passe par `secrets.compare_digest`, **à temps constant**.
+      Un `==` sur des chaînes s'arrête au premier caractère qui diffère, et le
+      temps de réponse laisse alors deviner le secret caractère par caractère ;
+    - **secret non configuré ferme la route**, il ne l'ouvre pas. S'ouvrir à
+      tous parce qu'aucune valeur n'est définie serait exactement le mauvais
+      sens du défaut — ces routes écrivent en base.
+    """
+    parametres = get_settings()
+
+    if not parametres.admin_configure:
+        logger.error(
+            "[%s] Déclenchement refusé : ADMIN_SECRET n'est pas défini sur le serveur.",
+            domaine,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Le déclenchement n'est pas configuré (ADMIN_SECRET absent).",
+        )
+
+    if not fourni or not secrets.compare_digest(
+        fourni.strip(), parametres.admin_secret.strip()
+    ):
+        logger.warning("[%s] Déclenchement refusé : secret invalide ou absent.", domaine)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Secret d'administration invalide ou absent.",
+        )

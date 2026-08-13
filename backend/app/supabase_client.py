@@ -194,6 +194,26 @@ async def upserter(table: str, lignes: list[dict], sur_conflit: str) -> list[dic
     return reponse.json()
 
 
+async def mettre_a_jour(
+    table: str, parametres: dict[str, str], valeurs: dict
+) -> list[dict]:
+    """Modifie les lignes filtrées et renvoie celles qui l'ont été.
+
+    `return=representation` sert ici de preuve : une liste vide dit que le
+    filtre n'a touché aucune ligne, ce qui distingue « le GP n'existe pas » de
+    « le GP est passé à `termine` ».
+    """
+    reponse = await _appeler(
+        "PATCH",
+        f"/{table}",
+        params=parametres,
+        json=valeurs,
+        headers={"Prefer": "return=representation"},
+    )
+    _verifier(reponse)
+    return reponse.json()
+
+
 async def supprimer(table: str, parametres: dict[str, str]) -> list[dict]:
     """Supprime et renvoie les lignes supprimées.
 

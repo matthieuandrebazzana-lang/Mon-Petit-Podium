@@ -781,15 +781,107 @@ Trois points de mise en œuvre à ne pas défaire :
 
 `BlocProchainGp` est désormais **exporté nommément** depuis `Accueil.jsx` (l'export par défaut de l'écran est inchangé) : sans cela, le rendre hors navigateur imposait de monter `AuthProvider`, dont la session n'est résolue que dans un effet — jamais exécuté en rendu serveur.
 
+---
+
+**Étape 6 — Résultats OpenF1 et calcul des points** (version `0.6.0`)
+
+Récupération des résultats, validation des pronostics, attribution des points, job automatique. Une migration, trois modules, deux routes. **Étape entièrement backend** : l'écran de résultats (maquette 11) relève de l'étape 7, avec les classements.
+
+*Trois écarts entre la section 3.2 et ce qu'OpenF1 rend aujourd'hui.* Constatés en interrogeant l'API, ils expliquent l'essentiel du code, et **la section 3.2 n'a pas été réécrite** : elle reste le cahier des charges.
+
+1. **On interroge par `session_key`, jamais par `meeting_key`.** La demande disait « appeler `/session_result` avec le `meeting_key` du GP ». Un *meeting* est un week-end entier : `?meeting_key=1264` rend les cinq sessions mélangées — essais, qualifications, course — donc plusieurs lignes par pilote et un classement qui n'a aucun sens. Pire, la ligne de qualification porte un `gap_to_leader` de type **liste** (`[0.0, 0.0, 0.0]`, un temps par segment Q1/Q2/Q3), **un quatrième type que la section 3.2 ne mentionne pas** et qui disparaît dès qu'on filtre sur la session de course.
+
+2. **`dnf: true` n'implique pas `position: null`.** La section 3.2 affirme que les pilotes abandonnés ont une position nulle. C'est vrai des abandons précoces, faux de ceux qui restent classés : au GP des Pays-Bas 2025, **Norris abandonne au 64ᵉ des 72 tours et finit 18ᵉ**, `dnf: true` et `position: 18`. Les deux champs sont donc lus indépendamment — un « top 10 » se juge sur la position, un « abandon » sur `dnf`, et l'un n'annule jamais l'autre. Un test le vérifie sur les vraies données.
+
+3. **OpenF1 limite à 3 requêtes par seconde** et répond `429` au-delà. Une récupération en enchaîne six : sans pause, les trois dernières étaient refusées et le job repassait toutes les cinq minutes sur le même mur. `_appeler` espace les appels de 0,4 s et réessaie un `429` avec une attente croissante.
+
+*Le rapprochement GP ↔ course OpenF1 se fait sur la DATE, jamais sur le nom.* Unibet écrit « GP Pays Bas », OpenF1 « Dutch Grand Prix » : aucune correspondance textuelle ne tiendrait sur une saison, et une table de correspondance codée en dur figerait le calendrier — exactement ce que la section 3.1 interdit. `session_de_course()` prend la session `Race` de l'année dont `date_start` est la plus proche, et **refuse au-delà de 36 heures d'écart** : mieux vaut ne pas noter un GP que le noter sur les résultats d'un autre.
+
+*Schéma* — `supabase/migrations/20260813205200_resultats_points.sql`, **à exécuter à la main dans le SQL Editor de Supabase**, après les cinq précédentes. Idempotente.
+
+`points_gagnes` (integer, nullable) sur `pronostics` et sur `pronostic_podium`, plus une contrainte `check (>= 0)` (règle 4.1 : jamais de points négatifs). **Trois états, et le troisième est le seul qui demande une convention :**
+
+| Valeur | Sens |
+|---|---|
+| `NULL` | résultat inconnu, **ou marché que le calcul n'a pas su valider** |
+| `0` | pronostic raté |
+| `> 0` | pronostic réussi |
+
+**`NULL` et `0` ne doivent jamais être confondus, et c'est la décision structurante de l'étape.** Un marché que le code ne sait pas juger reste à `NULL` au lieu d'être mis à `0` : marquer « raté » un pronostic qu'on n'a pas su valider volerait le joueur en silence, et rien à l'écran ne permettrait de s'en apercevoir. Les marchés Unibet varient d'un GP à l'autre (section 3.1) — ce cas n'est pas une hypothèse d'école. `NULL` se voit dans les logs, s'affiche « en attente », et se rattrape par un second passage.
+
+**La colonne de `pronostic_podium` est redondante** avec celle du parent, et c'est assumé : elle était demandée pour que le détail d'un podium se suffise à lui-même. La redondance est tenue **par la base et non par une convention** — `attribuer_points` la dérive systématiquement de la colonne parente, dans la même transaction. Ne jamais l'écrire depuis le code applicatif, elle divergerait au premier oubli.
+
+`public.resultats_gp` : `id`, `gp_id` (unique, cascade), `recupere_le`, `donnees_brutes` (jsonb). Lecture publique comme `grands_prix` et `cotes`, aucune politique d'écriture, aucun droit d'écriture pour `anon` ni `authenticated` — réécrire un résultat de course, c'est réécrire le classement. Un index partiel `pronostics_a_calculer_idx ... where points_gagnes is null` sert la seule requête du job et se vide de lui-même à mesure que les points sont attribués.
+
+**`donnees_brutes` n'est pas un cache de confort** : c'est ce qui permet de rejouer le calcul **sans rappeler l'API**, donc de corriger un validateur ou d'en ajouter un pour un marché resté à `NULL`, des semaines après la course. Un seul écart au « stocker tel quel » demandé : **`/laps` est réduit au meilleur tour de chaque pilote**. La réponse complète pèse 654 Ko par GP — une ligne par pilote et par tour — à retransporter à chaque lecture. Seul le meilleur tour sert (règle 4.4). Un index `pilotes` (`{numéro → nom, écurie}`) est ajouté au même endroit : sans lui, le SQL du classement parcourrait le tableau `drivers` à chaque ligne.
+
+*Trois étages d'idempotence*, chacun couvrant ce que les autres ne couvrent pas (section 9) :
+
+1. **La récupération** — `resultats_gp.gp_id` est `unique`. Une ligne existante ⇒ OpenF1 n'est pas rappelée, le calcul est rejoué sur le JSON conservé.
+2. **L'attribution** — `public.attribuer_points` n'écrit **que** les pronostics dont `points_gagnes` est encore `NULL`. Appelée dix fois avec des valeurs différentes, elle n'attribue rien deux fois. **C'est la base qui porte la garantie, pas le code appelant.** Un rattrapage ultérieur ne remplit que les `NULL` restants.
+3. **La surveillance** — un GP passé à `termine` sort du champ de la boucle.
+
+`attribuer_points` est réservée à `service_role` : ouverte à `authenticated`, elle laisserait n'importe qui s'attribuer le score de son choix. **C'est la fonction la plus sensible du projet.** Elle refuse aussi de noter un pronostic qui n'appartient pas au GP annoncé.
+
+*Récupération* — `backend/app/scraper/openf1.py`. Le module ne fait que **récupérer et conserver** ; il ne juge aucun pronostic. `ResultatsIndisponibles` est distinguée d'une panne : c'est l'état normal dans l'heure et demie qui suit un départ, et le signal que le job attend pour réessayer. Un classement dont **aucune** ligne n'a de position est traité comme indisponible — OpenF1 publie parfois les lignes avant de les remplir, et noter tout le monde perdant serait le pire moment pour se tromper.
+
+*Calcul* — `backend/app/calcul/points.py`. Il travaille **uniquement** sur le JSON conservé, jamais sur l'API.
+
+Le **rapprochement des noms** est le point le plus fragile, et il est isolé dans `Course.pilote_du_libelle`. Unibet écrit « M.Verstappen », OpenF1 rend un `driver_number`. Cinq clés sont indexées par pilote (nom complet, nom de famille, acronyme, initiale + nom, prénom + nom). **Une clé revendiquée par deux pilotes est retirée de l'index** plutôt qu'attribuée au premier venu : deux pilotes de même nom de famille rendraient « Verstappen » ambigu, et le pronostic reste non validé au lieu d'être attribué au mauvais.
+
+Le **safety car** est le seul point du système qui repose sur du parsing de texte, et le CLAUDE.md le signale comme tel. Deux précautions : le test « VIRTUAL » passe **avant** celui du safety car ordinaire (la chaîne « SAFETY CAR » est contenue dans « VIRTUAL SAFETY CAR ») ; et **seuls les messages `DEPLOYED` comptent** — la séquence complète est « DEPLOYED », « IN THIS LAP », « ENDING », et compter les trois ferait croire à trois interventions. Tout message de catégorie `SafetyCar` non reconnu est journalisé.
+
+**Marchés reconnus** : vainqueur, podium, top N (rang lu dans le nom), écurie gagnante, abandon, safety car, safety car virtuel, drapeau rouge, meilleur tour. Seuls « vainqueur », « podium » et « ecurie-vainqueur » ont été **observés en vrai** — Unibet n'ouvre les marchés complets qu'à l'approche de la course. Les autres reconnaissances sont écrites d'après les libellés de la section 4.4 et **restent à confronter aux vrais marchés**. C'est exactement pour cela qu'un marché non reconnu laisse le pronostic à `NULL`. « premier-abandon » est volontairement **non reconnu** tant que la règle d'égalité de la section 4.4 n'est pas écrite : il demande de savoir *qui* a abandonné le premier, pas *si* un pilote a abandonné.
+
+*Ce que rapporte un podium réussi : **la somme des deux cotes**.* La demande disait « points_gagnes = valeur de la cote » sans dire laquelle. Le schéma de l'étape 5 pose qu'il n'y a **aucun ordre** entre `pilote_1` et `pilote_2` ; payer la seule cote de `pilote_1` ferait donc rapporter deux montants différents au même pari selon l'ordre de saisie (280 ou 350 pour le même couple de pilotes). **Tranché en faveur de la somme**, ordre-indépendante. Un test vérifie que l'inversion des deux pilotes donne le même total. Les deux pilotes doivent être sur le podium : un seul des deux ne rapporte rien — ce n'est pas un demi-pronostic, c'est un pronostic raté.
+
+*Job* — `backend/app/jobs/resultats.py`, scheduler APScheduler (`AsyncIOScheduler`, ajouté à `requirements.txt`) démarré dans le `lifespan` de FastAPI. Aucun processus ni thread supplémentaire, ce qui compte sur le plan gratuit. Il n'est **pas** démarré sans configuration Supabase : il journaliserait une panne toutes les cinq minutes en noyant les logs Railway, là où un avertissement au démarrage dit déjà tout.
+
+La fenêtre de la règle 4.3 est calculée à partir de `date_course`, **sans état conservé nulle part** : un GP est à traiter entre `départ + 1h30` et `départ + 1h30 + 3h`. Un compteur de tentatives en base dirait la même chose au prix d'une colonne et d'une écriture par essai, et se désynchroniserait au premier redéploiement. Au-delà, une alerte nommant le GP et donnant la commande de rattrapage est journalisée **une seule fois** (garde-fou en mémoire ; une alerte de plus après un redéploiement est sans gravité).
+
+**Écart assumé sur les statuts surveillés.** La demande disait « les GP en statut `cotes_figees` ». Le job surveille aussi **`a_venir`**, et c'est délibéré : **aujourd'hui rien ne fait passer un GP en `cotes_figees`** (voir « Reste à faire »), et s'en tenir à la lettre rendrait le job inopérant en pratique. Une course dont l'heure de départ est passée de 1h30 est terminée, que ses cotes aient été figées ou non.
+
+Le GP passe à `termine` **même s'il reste des pronostics sans points** : la course est courue, et le laisser dans la boucle ferait rappeler OpenF1 toutes les cinq minutes pour rien. Les `NULL` restants sont rattrapables par un déclenchement manuel, une fois le validateur manquant écrit.
+
+**Un seul processus doit porter ce scheduler.** Sur le plan gratuit de Railway le service tourne en un exemplaire, c'est le cas aujourd'hui. Le jour où il passe à plusieurs instances, deux schedulers tourneront en parallèle : la base empêcherait la double attribution (étage 2), mais pas les appels OpenF1 en double. Il faudra alors un `pg_try_advisory_lock` ou un worker dédié.
+
+*Routes* — `backend/app/api/routes/resultats.py`.
+
+| Route | Comportement |
+|---|---|
+| `GET /grands-prix/{id}/resultats` | **Publique** pour le classement. Avec `?championnat_id=`, exige un jeton **et** l'appartenance. `disponible: false` tant que la course n'est pas récupérée — jamais un `404`, qui ferait croire que le GP n'existe pas. |
+| `POST /jobs/resultats/{id}` | En-tête `X-Admin-Secret`. **Synchrone**, avec le compte rendu complet. `425 Too Early` si les résultats ne sont pas publiés, `404` si le GP est inconnu. |
+
+**Écart assumé sur la route de consultation, et c'est le point important.** Elle devait être « publique » et rendre « pour chaque membre du championnat ses pronostics ». Les deux ensemble sont contradictoires : la route ne reçoit aucun championnat par défaut, et surtout la politique RLS de l'étape 5 réserve la lecture des pronostics aux membres des championnats partagés. Une route publique qui les servirait ouvrirait à quiconque devine un identifiant les pronostics de n'importe quel championnat — elle contournerait, depuis le backend et avec la clé de service, **la protection même que l'étape 5 a mise en place**. Le partage retenu : classement public, pronostics des membres sur `?championnat_id=` avec jeton et appartenance vérifiée.
+
+Le déclenchement manuel est **synchrone**, contrairement au scraper : c'est la route des tests et des interventions manuelles, et savoir combien de pronostics ont été notés — surtout lesquels sont restés en attente — est tout l'intérêt de l'appel. Il ignore la fenêtre horaire, **jamais l'idempotence**.
+
+*Deux mises en commun* — `exiger_secret` vivait dans `routes/scraper.py` ; elle passe dans `api/deps.py` avec le domaine en paramètre, le job de résultats en ayant besoin aussi. Comportement inchangé, `secrets.compare_digest` et secret absent ⇒ route fermée compris. `utilisateur_optionnel` y est ajouté pour les routes mixtes : en-tête absent ⇒ `None`, en-tête **présent mais invalide** ⇒ `401` — accepter en silence un jeton expiré servirait la partie publique à quelqu'un qui se croit connecté. `mettre_a_jour` (PATCH) est ajouté à `supabase_client.py`.
+
+`public.pronostics_du_joueur` est remplacée pour porter `points_gagnes` ; `pronostics_du_championnat` en hérite sans être touchée, comme les routes de l'étape 5. `PronosticServi` gagne le champ correspondant. **`points` reste ce que le pronostic PEUT rapporter (la cote), `points_gagnes` ce qu'il a rapporté** — les confondre ferait afficher un score avant la course.
+
+*Vérifié* — **188 contrôles passent**, dont 61 contre les **vraies données du GP des Pays-Bas 2025**.
+
+| Contrôle | Résultat |
+|---|---|
+| Calcul contre les vrais résultats OpenF1 (Zandvoort 2025) | **47 contrôles** — Piastri vainqueur devant Verstappen et Hadjar ; **Norris abandonne ET reste classé 18ᵉ** ; Leclerc abandonne sans position ; safety car et VSC détectés ; rapprochement de « M.Verstappen », « Verstappen », « Max Verstappen », « VER », « K.Antonelli », « Red Bull » → « Red Bull Racing » ; nom inconnu → `None` ; vainqueur, podium, top 6, top 10, écurie, abandon, safety car, drapeau rouge notés juste ; **marché inconnu non noté, avec sa raison** ; podium ordre-indépendant |
+| Migration sur PostgreSQL 16 jetable (Docker), les six dans l'ordre | **53 contrôles** — structure, points négatifs refusés, un seul jeu de résultats par GP, index partiel ; **le `0` d'un raté n'est jamais réécrit** (le cas critique de l'idempotence), rattrapage d'un `NULL` sans toucher au reste, un autre GP ne peut pas noter ces pronostics, détail du podium dérivé du parent ; classement trié avec les abandons non classés en fin et les abandons classés à leur rang ; RLS, une seule politique (SELECT), `attribuer_points` refusée à `anon` et `authenticated` **sous leur vraie identité** |
+| Rejeu des six migrations sur base peuplée | empreinte des pronostics, résultats bruts, points du podium et statut du GP **identiques** ; contraintes non dupliquées |
+| Routes contre une doublure Supabase | **47 contrôles** — classement public sans jeton, `disponible: false` sans résultat, `404` GP inconnu, `422` identifiant mal formé ; `401` sans jeton et `403` non-membre sur `?championnat_id=`, `401` sur jeton invalide, `points_gagnes` porté jusqu'au client ; `401` sans secret et sur mauvais secret, `503` si `ADMIN_SECRET` absent, **secret vérifié avant la configuration Supabase**, `425` si les résultats ne sont pas publiés, `422` typé sur panne inattendue ; **OpenF1 n'est appelée qu'une fois**, le second déclenchement rejoue le JSON conservé ; `/health` en `0.6.0`, 13 routes, étapes 3/4/5 toujours protégées, cotes toujours publiques, préflight CORS |
+| Fenêtre horaire et scheduler | **23 contrôles** — pas traité à 30 min ni à 1h29, traité à 1h31 et à 4h, plus traité à 5h ; **alerte émise une seule fois**, nommant le GP et donnant la commande de rattrapage ; `termine` hors du champ, `a_venir` et `cotes_figees` traités ; **l'échec d'un GP n'emporte pas le suivant** ; GP sans date ignoré ; scheduler démarré, un seul emploi, second démarrage sans doublon, arrêt idempotent |
+| Bout en bout : vraies données OpenF1 → calcul Python → vraie base | **14 contrôles** — 5 pronostics lus comme le job les lit, 4 notés et 1 laissé à `NULL`, écriture par la **vraie** fonction SQL, points vérifiés ligne à ligne en base, second passage complet à 0 attribué et total inchangé |
+| Sous un vrai `uvicorn` | scheduler démarré et journalisé, premier tour à 30 s, **la panne Supabase sort avec sa trace complète sur la sortie standard** sans casser la boucle |
+| `npm run build` | passe, version `0.6.0` présente dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
 
 ### Reste à faire
 
-Les étapes 6 à 9 de l'ordre de développement de la section 7.
+Les étapes 7 à 9 de l'ordre de développement de la section 7.
 
-**Migrations à appliquer** — cette liste est à revérifier. Au cours de la version `0.5.1`, une lecture partie par erreur vers le **vrai** projet Supabase (doublure de test mal branchée) a rendu une ligne réelle de `public.grands_prix` : « GP Pays Bas », `2026-08-23T13:00:00+00:00`, statut `a_venir` — exactement ce que le scraper de l'étape 4 avait produit en local. **La migration 3 est donc appliquée et le scraper a bel et bien écrit en base**, ce qui contredit la mention ci-dessous. L'état des quatre autres n'a pas été observé. À vérifier dans le SQL Editor avant de rejouer quoi que ce soit — les cinq migrations sont idempotentes, les rejouer ne casse rien.
+**Migrations à appliquer** — cette liste est à revérifier. Au cours de la version `0.5.1`, une lecture partie par erreur vers le **vrai** projet Supabase (doublure de test mal branchée) a rendu une ligne réelle de `public.grands_prix` : « GP Pays Bas », `2026-08-23T13:00:00+00:00`, statut `a_venir` — exactement ce que le scraper de l'étape 4 avait produit en local. **La migration 3 est donc appliquée et le scraper a bel et bien écrit en base**, ce qui contredit la mention ci-dessous. L'état des autres n'a pas été observé. À vérifier dans le SQL Editor avant de rejouer quoi que ce soit — les six migrations sont idempotentes, les rejouer ne casse rien.
 
 Ordre d'application, si l'une manque :
 1. `supabase/migrations/20260809191018_profils_pseudo_unique.sql` — sans elle, aucun pseudo n'est unique et la liste des membres affiche « Pilote » partout.
@@ -797,23 +889,32 @@ Ordre d'application, si l'une manque :
 3. `supabase/migrations/20260813174500_grands_prix_cotes.sql` — sans elle, le scraper découvre et lit correctement les cotes chez Unibet mais échoue à l'écriture, et les routes `/scraper/cotes` et `/grands-prix/{id}/cotes` répondent `422` en portant `42P01`.
 4. `supabase/migrations/20260813182331_createur_nullable_championnat_vide.sql` — sans elle, supprimer un compte ayant créé un championnat échoue par contrainte de clé étrangère, et un championnat quitté par son dernier membre reste en base. **Elle suppose la 2 déjà appliquée** : elle modifie `public.championnats`, elle ne la crée pas.
 5. `supabase/migrations/20260813183636_favoris_pronostics.sql` — sans elle, aucun écran de l'étape 5 ne fonctionne, et **`DELETE /championnats/{id}/quitter` échoue aussi** : il appelle désormais `quitter_championnat`. **Elle suppose les 2, 3 et 4 déjà appliquées** : elle référence `membres_championnat`, `grands_prix`, `cotes` et réutilise `est_membre` et `marquer_modification`.
+6. `supabase/migrations/20260813205200_resultats_points.sql` — sans elle, aucun point n'est jamais attribué : le job de résultats échoue en portant `42P01`, `GET /grands-prix/{id}/resultats` aussi, et `POST /jobs/resultats/{id}` de même. **Elle suppose les 3 et 5 déjà appliquées** : elle modifie `pronostics` et `pronostic_podium`, référence `grands_prix`, et remplace `pronostics_du_joueur`.
 
 **Variables d'environnement du backend** — à définir sur Railway :
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Sans elles, `/championnats` et `POST /scraper/declencher` répondent `503` avec un message explicite. La clé de service ne doit jamais être exposée au frontend ni committée.
-- **`ADMIN_SECRET`** — chaîne libre, choisie par toi, à garder secrète. C'est la valeur attendue dans l'en-tête `X-Admin-Secret` de `POST /scraper/declencher`. **Tant qu'elle n'est pas définie, la route refuse tout le monde** (`503`) : une variable absente ne doit jamais valoir accès libre. Déclenchement type :
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Sans elles, `/championnats` et `POST /scraper/declencher` répondent `503` avec un message explicite, et **le scheduler de l'étape 6 ne démarre pas du tout** (il le journalise au démarrage). La clé de service ne doit jamais être exposée au frontend ni committée.
+- **`ADMIN_SECRET`** — chaîne libre, choisie par toi, à garder secrète. C'est la valeur attendue dans l'en-tête `X-Admin-Secret` de `POST /scraper/declencher` **et de `POST /jobs/resultats/{gp_id}`**. **Tant qu'elle n'est pas définie, les deux routes refusent tout le monde** (`503`) : une variable absente ne doit jamais valoir accès libre. Déclenchement type :
   ```
   curl -X POST https://<railway>/scraper/declencher -H "X-Admin-Secret: <valeur>"
+
+  # Étape 6 — force le traitement d'un GP : résultats, points, clôture.
+  # Synchrone : la réponse porte le compte rendu, dont les pronostics restés
+  # sans points. Idempotent, on peut le rejouer sans risque.
+  curl -X POST https://<railway>/jobs/resultats/<gp_id> -H "X-Admin-Secret: <valeur>"
   ```
 
 Points non couverts, à traiter le moment venu :
 - **Scraper exercé contre le vrai Supabase** — la ligne réelle observée en version `0.5.1` (voir ci-dessus) montre que l'écriture a eu lieu au moins une fois. Reste à vérifier le contenu de `public.cotes` pour ce GP, et le comportement du scraper sur un GP déjà figé.
-- **Programmation automatique du scraping** — la règle 4.3 veut un scraping le samedi, 2h après les qualifications, puis un figeage des cotes. Aujourd'hui le déclenchement est **manuel** (`POST /scraper/declencher`) et **rien ne fait passer un GP en `cotes_figees`** : le statut existe, la protection qu'il commande est en place et testée, mais aucun code ne l'applique encore. À traiter avec les cron jobs de l'étape 6.
-- **Marchés disponibles à J-10** — au moment du développement, Unibet n'exposait que 3 marchés pour le GP Pays-Bas (vainqueur, podium, écurie gagnante). Le noyau annoncé en section 3.1 (top 6, top 10, duels…) n'apparaîtra qu'à l'approche de la course. Le scraper les découvre dynamiquement, donc rien à changer — mais **le jeu de marchés réellement obtenu après les qualifications reste à observer**, notamment pour l'étape 6 qui devra savoir valider chacun d'eux.
+- **Programmation automatique du scraping, et figeage des cotes** — la règle 4.3 veut un scraping le samedi, 2h après les qualifications, puis un figeage des cotes. Aujourd'hui le déclenchement est **manuel** (`POST /scraper/declencher`) et **rien ne fait passer un GP en `cotes_figees`** : le statut existe, la protection qu'il commande est en place et testée, mais aucun code ne l'applique encore. **Le scheduler de l'étape 6 existe désormais** (`app/jobs/resultats.py`, APScheduler dans le `lifespan`) : c'est là qu'un second emploi viendra naturellement se greffer. En attendant, le job de résultats surveille aussi les GP restés `a_venir`, pour ne pas dépendre d'un figeage qui n'a jamais lieu.
+- **Marchés disponibles à J-10** — au moment du développement, Unibet n'exposait que 3 marchés pour le GP Pays-Bas (vainqueur, podium, écurie gagnante). Le noyau annoncé en section 3.1 (top 6, top 10, duels…) n'apparaîtra qu'à l'approche de la course. Le scraper les découvre dynamiquement, donc rien à changer — mais **le jeu de marchés réellement obtenu après les qualifications reste à observer**. C'est le point de vigilance principal de l'étape 6 : `app/calcul/points.py` reconnaît neuf familles de marchés, mais **seules trois ont été confrontées à de vrais libellés Unibet**. Les autres (top N, abandon, safety car, drapeau rouge, meilleur tour) sont écrites d'après la section 4.4. Un marché non reconnu ne fait aucun dégât — le pronostic reste à `NULL` et les logs le disent — mais il faut **relire les avertissements `[points] … laissé(s) sans points` après le premier vrai GP** et compléter `validateur()` en conséquence, puis rejouer `POST /jobs/resultats/{gp_id}`.
+- **Duels entre pilotes, premier abandon, marge de victoire, classement exact** — annoncés en section 4.4, **non implémentés**. Ils demandent chacun une règle explicite (égalités, pilote classé contre pilote abandonné) que le CLAUDE.md pose mais que rien ne code encore. Les cas d'égalité du « premier abandon » sont le point à trancher en premier. En l'état ils tombent dans le filet « marché non reconnu ».
+- **Écran de résultats (maquette 11)** — l'étape 6 est entièrement backend. `GET /grands-prix/{id}/resultats` sert déjà tout ce qu'il faut (classement, pronostics des membres, points gagnés) ; l'écran arrive avec les classements de l'étape 7.
 - **Parcours des championnats exercé contre le vrai Supabase** — le backend a été validé contre une doublure en mémoire et la migration contre un PostgreSQL jetable, mais les deux n'ont jamais tourné ensemble contre le vrai projet.
 - **Messages techniques des routes `/championnats`, `/scraper` et `/grands-prix`** — depuis la version `0.3.1`, une panne renvoie sa cause en clair (en anglais) jusque dans l'interface, et le mécanisme est partagé par les trois domaines depuis l'étape 5. C'est délibéré, le temps de la mise en service. Une fois le parcours exercé contre le vrai Supabase, remettre des messages en français dans `journal.echec_lisible` et garder la cause dans les seuls logs.
 - **Effacement des pronostics au départ d'un championnat** — tranché à l'étape 5 : ils ne sont effacés que si le joueur ne fait plus partie d'aucun championnat, parce qu'un pronostic compte dans tous ses championnats à la fois. **Si le comportement voulu est autre**, c'est `public.quitter_championnat` qu'il faut reprendre, et rien d'autre.
-- **Pronostics d'un GP annulé ou reporté** — la règle 4.7 veut que les pronostics enregistrés soient **effacés**. Rien ne le fait aujourd'hui : le statut `annule` n'existe pas dans la contrainte `check` de `grands_prix`, et aucun code ne l'applique. À traiter avec les cron jobs de l'étape 6, en même temps que le passage en `cotes_figees`.
-- **Marchés obligatoires liés au nom Unibet** — le vainqueur et le podium sont reconnus par les slugs `vainqueur` et `podium`, en dur dans `backend/app/api/routes/pronostics.py` **et** dans `frontend/src/lib/pronostics.js`. Si Unibet renomme un de ces marchés, la saisie s'arrête proprement en le disant, mais **les deux constantes doivent être corrigées ensemble**.
+- **Pronostics d'un GP annulé ou reporté** — la règle 4.7 veut que les pronostics enregistrés soient **effacés**. Rien ne le fait aujourd'hui : le statut `annule` n'existe pas dans la contrainte `check` de `grands_prix`, et aucun code ne l'applique. L'étape 6 apporte un demi-pas : **OpenF1 expose `is_cancelled` sur ses sessions**, et `session_de_course()` le **journalise** quand il vaut vrai — le cas se verra dans les logs au lieu de passer pour une course sans résultat. Il reste à ajouter le statut, l'effacement, et la reprise après report.
+- **Marchés obligatoires liés au nom Unibet** — le vainqueur et le podium sont reconnus par les slugs `vainqueur` et `podium`, en dur à **trois** endroits depuis l'étape 6 : `backend/app/api/routes/pronostics.py`, `backend/app/calcul/points.py` et `frontend/src/lib/pronostics.js`. Si Unibet renomme un de ces marchés, la saisie s'arrête proprement en le disant, mais **les trois constantes doivent être corrigées ensemble**.
+- **Scheduler et instances multiples** — le job de résultats suppose **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers : la base empêche la double attribution, mais pas les appels OpenF1 en double. Ajouter alors un `pg_try_advisory_lock` dans `surveiller()`, ou sortir le job dans un worker dédié.
 - **Test sur iPhone réel** — toujours pas fait. Le rendu n'a été validé qu'en navigateur de bureau. À faire avant de considérer les contraintes iOS comme acquises.
 - **Parcours d'authentification testé de bout en bout** — le code est en place et compile, mais inscription, confirmation par email, connexion et réinitialisation n'ont pas encore été exercées contre le vrai projet Supabase.
 - **Clés OAuth Google et Apple** — à renseigner dans le tableau de bord Supabase. Ajouter aussi les URL de redirection autorisées : `https://mon-petit-podium.vercel.app/accueil`, `.../nouveau-mot-de-passe` et leurs équivalents `http://localhost:5173`. **Les boutons sont masqués depuis la version `0.2.2`** : une fois les clés en place, repasser `OAUTH_ACTIF` à `true` dans `frontend/src/composants/BoutonsOAuth.jsx`.
@@ -821,7 +922,7 @@ Points non couverts, à traiter le moment venu :
 
 ### Décisions validées mais non encore implémentées
 
-- Schéma de base de données — huit tables existent : `public.profils`, `public.championnats`, `public.membres_championnat`, `public.grands_prix`, `public.cotes`, `public.favoris`, `public.pronostics`, `public.pronostic_podium`. Restent à concevoir celles des résultats et des points attribués (étape 6). Les migrations vivent dans `supabase/migrations/`, une par étape, à exécuter à la main dans le SQL Editor.
-- Nommage des routes API — la convention est posée par `/championnats` : nom de domaine au pluriel, sous-chemin `/moi` pour ce qui appartient à l'appelant, verbe explicite pour une action qui n'est pas un CRUD (`/rejoindre`, `/{id}/quitter`, `/declencher`). L'étape 5 y ajoute la ressource imbriquée : `/grands-prix/{id}/favoris`, `/grands-prix/{id}/pronostics`.
+- Schéma de base de données — neuf tables existent : `public.profils`, `public.championnats`, `public.membres_championnat`, `public.grands_prix`, `public.cotes`, `public.favoris`, `public.pronostics`, `public.pronostic_podium`, `public.resultats_gp`. Les points attribués ne sont **pas** une table à part : ils vivent dans la colonne `points_gagnes` de `pronostics` (étape 6). Reste à concevoir le classement cumulé de l'étape 7 — à décider s'il se calcule à la volée par somme des `points_gagnes` ou s'il se matérialise. Les migrations vivent dans `supabase/migrations/`, une par étape, à exécuter à la main dans le SQL Editor.
+- Nommage des routes API — la convention est posée par `/championnats` : nom de domaine au pluriel, sous-chemin `/moi` pour ce qui appartient à l'appelant, verbe explicite pour une action qui n'est pas un CRUD (`/rejoindre`, `/{id}/quitter`, `/declencher`). L'étape 5 y ajoute la ressource imbriquée : `/grands-prix/{id}/favoris`, `/grands-prix/{id}/pronostics`. L'étape 6 y ajoute `/grands-prix/{id}/resultats` et, pour les déclenchements d'administration, le préfixe `/jobs/` : `/jobs/resultats/{id}`.
 - Table statique pilote → nationalité — à créer
 - Composant React `<Voiture />` avec couleurs dynamiques — à créer. Il remplacera la pastille d'initiale de `composants/Pastille.jsx`, provisoire, dans la liste des membres et les cartes.

@@ -9,3 +9,7 @@ httpx>=0.28,<1.0
 # les horaires Unibet (heure de Paris) en UTC : sans ce paquet, il planterait
 # sur Railway alors qu'il passe en local.
 tzdata>=2025.1
+# Scheduler du job de résultats (étape 6). `AsyncIOScheduler` s'attache à la
+# boucle d'événements de FastAPI : aucun processus ni thread supplémentaire, ce
+# qui compte sur le plan gratuit de Railway.
+APScheduler>=3.11,<4.0

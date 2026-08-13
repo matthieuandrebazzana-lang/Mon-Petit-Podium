@@ -122,7 +122,12 @@ class PronosticServi(BaseModel):
     pilote: str | None = None
     marche: str | None = None
     libelle: str | None = None
+    # Ce que le pronostic PEUT rapporter : la cote figée au scraping (règle 4.1).
     points: int | None = None
+    # Ce qu'il a rapporté (étape 6). `None` tant que la course n'est pas jugée,
+    # `0` si le pronostic est raté. Ne jamais confondre les deux : afficher `0`
+    # avant la course annoncerait un échec qui n'a pas eu lieu.
+    points_gagnes: int | None = None
     podium: PodiumServi | None = None
 
 
