@@ -1,9 +1,14 @@
 """Dépendances communes aux routes protégées."""
 
+import logging
+
 from fastapi import Depends, Header, HTTPException, status
 
 from app.config import get_settings
 from app.supabase_client import ErreurSupabase, identifiant_du_jeton
+
+# Même logger que les routes : sous Railway, seul `uvicorn.error` a un handler.
+logger = logging.getLogger("uvicorn.error")
 
 SERVICE_INDISPONIBLE = (
     "Le serveur n'est pas relié à sa base de données. "
@@ -15,6 +20,12 @@ SERVICE_INDISPONIBLE = (
 def exiger_configuration() -> None:
     """Sans clés Supabase, mieux vaut un message explicite qu'une erreur 500."""
     if not get_settings().supabase_configure:
+        # Déjà signalé au démarrage, mais un log daté du refus dit quelle
+        # requête a échoué et à quel moment — l'avertissement de démarrage est
+        # loin dans l'historique Railway au moment où le problème se voit.
+        logger.error(
+            "Appel refusé faute de configuration Supabase : %s", SERVICE_INDISPONIBLE
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=SERVICE_INDISPONIBLE,
@@ -43,8 +54,23 @@ async def utilisateur_courant(
     try:
         identifiant = await identifiant_du_jeton(jeton.strip())
     except ErreurSupabase as erreur:
+        # Cette dépendance s'exécute AVANT le handler : son échec échappe à
+        # l'enrobage de `journaliser_echecs`. Sans ce log, une panne du service
+        # d'authentification resterait la panne la moins visible de toutes,
+        # alors qu'elle bloque les quatre routes à la fois.
+        logger.exception(
+            "[auth] Validation du jeton impossible — %s (statut %s)",
+            erreur.message,
+            erreur.statut,
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=erreur.message
+        ) from erreur
+    except Exception as erreur:  # noqa: BLE001 — sinon la panne sort en 500 muet
+        logger.exception("[auth] Erreur inattendue à la validation du jeton")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Validation du jeton — {type(erreur).__name__}: {erreur}",
         ) from erreur
 
     if not identifiant:

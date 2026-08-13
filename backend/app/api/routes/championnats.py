@@ -5,10 +5,12 @@ sans jeton Supabase valide, et son résultat est la seule source d'identité.
 Le corps de la requête ne dit jamais qui est l'appelant.
 """
 
+import logging
 import re
 import secrets
 import string
 from datetime import datetime
+from functools import wraps
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -25,6 +27,11 @@ from app.supabase_client import (
 
 router = APIRouter(prefix="/championnats", tags=["championnats"])
 
+# Logger d'uvicorn : sous Railway, c'est le seul qui dispose d'un handler. Un
+# logger maison (`logging.getLogger(__name__)`) écrirait dans le vide, et le
+# diagnostic se ferait de nouveau à l'aveugle.
+logger = logging.getLogger("uvicorn.error")
+
 # Code d'invitation : 6 caractères alphanumériques majuscules, sans séparateur
 # (règle métier 4.5). Le même motif est répliqué en contrainte `check` sur la
 # table : ni le frontend ni le backend ne peuvent y déroger.
@@ -39,6 +46,75 @@ TENTATIVES_CODE = 5
 
 # Code d'erreur PostgreSQL d'une violation de contrainte d'unicité.
 VIOLATION_UNICITE = "23505"
+
+
+def _technique(erreur: BaseException) -> str:
+    """Décrit une exception en une ligne, sans rien perdre de ce qui identifie la panne.
+
+    Pour un échec Supabase, le message de PostgREST seul ne suffit pas : le code
+    (`42P01` table absente, `42501` droits, `23505` doublon…) et le statut HTTP
+    disent souvent à eux seuls ce qui manque. Pour tout le reste, le nom de la
+    classe distingue une panne réseau d'une clé absente dans un dictionnaire.
+    """
+    if isinstance(erreur, ErreurSupabase):
+        morceaux = [erreur.message or "Erreur Supabase."]
+        if erreur.code:
+            morceaux.append(f"code {erreur.code}")
+        if erreur.statut:
+            morceaux.append(f"statut {erreur.statut}")
+        return " · ".join(morceaux)
+    return f"{type(erreur).__name__}: {erreur}"
+
+
+def echec_lisible(contexte: str, erreur: BaseException) -> HTTPException:
+    """Journalise une panne avec sa trace, et la renvoie en clair à l'appelant.
+
+    **Mesure de diagnostic, temporaire.** Un `502` opaque ne dit rien : ni les
+    logs Railway ni le frontend ne portaient jusqu'ici la cause réelle. Le
+    `422` retenu ici n'a rien d'une erreur de validation, mais c'est le seul
+    statut que `lib/api.js` affiche déjà tel quel côté frontend, et qui ne se
+    confond ni avec le `503` d'une configuration absente ni avec le `500` d'un
+    plantage non capturé.
+
+    À appeler **depuis un bloc `except`** : `logger.exception` n'a de trace à
+    joindre que là.
+    """
+    detail = _technique(erreur)
+    logger.exception("[championnats] %s — %s", contexte, detail)
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=f"{contexte} — {detail}",
+    )
+
+
+def journaliser_echecs(contexte: str):
+    """Enrobe un handler pour qu'aucune exception ne sorte sans être journalisée.
+
+    Les `HTTPException` traversent intactes : ce sont les réponses voulues par
+    la logique métier (`404` code inconnu, `409` déjà membre, `503` sans clés
+    Supabase), pas des pannes. Tout le reste — panne réseau, table absente,
+    clé manquante dans une réponse, bug — était jusqu'ici rendu par Railway en
+    `502` sans une ligne de log ; il ressort maintenant en clair, avec sa trace.
+
+    `functools.wraps` n'est pas cosmétique : FastAPI lit la signature du
+    handler pour construire ses dépendances et son modèle de réponse, et
+    `inspect.signature` suit `__wrapped__`. Sans lui, la route recevrait
+    `(*args, **kwargs)` et perdrait `Depends(utilisateur_courant)`.
+    """
+
+    def decorateur(handler):
+        @wraps(handler)
+        async def enveloppe(*args, **kwargs):
+            try:
+                return await handler(*args, **kwargs)
+            except HTTPException:
+                raise
+            except Exception as erreur:  # noqa: BLE001 — c'est tout l'objet
+                raise echec_lisible(contexte, erreur) from erreur
+
+        return enveloppe
+
+    return decorateur
 
 
 class CreationChampionnat(BaseModel):
@@ -109,6 +185,7 @@ def en_championnat(ligne: dict, utilisateur: str, nombre_membres: int) -> Champi
 
 
 @router.post("", response_model=Championnat, status_code=status.HTTP_201_CREATED)
+@journaliser_echecs("Création du championnat")
 async def creer(
     corps: CreationChampionnat,
     utilisateur: str = Depends(utilisateur_courant),
@@ -135,10 +212,7 @@ async def creer(
             # erreur remonte telle quelle, sans consommer de tentative.
             if erreur.code == VIOLATION_UNICITE and tentative < TENTATIVES_CODE - 1:
                 continue
-            raise HTTPException(
-                status_code=erreur.statut if erreur.statut >= 500 else 502,
-                detail="La création du championnat a échoué. Réessaie.",
-            ) from erreur
+            raise echec_lisible("Création du championnat", erreur) from erreur
 
         return en_championnat(ligne, utilisateur, nombre_membres=1)
 
@@ -149,6 +223,7 @@ async def creer(
 
 
 @router.get("/moi", response_model=list[Championnat])
+@journaliser_echecs("Chargement de tes championnats")
 async def mes_championnats(
     utilisateur: str = Depends(utilisateur_courant),
 ) -> list[Championnat]:
@@ -156,10 +231,7 @@ async def mes_championnats(
     try:
         lignes = await appeler_fonction("mes_championnats", {"p_profil": utilisateur})
     except ErreurSupabase as erreur:
-        raise HTTPException(
-            status_code=erreur.statut if erreur.statut >= 500 else 502,
-            detail="Impossible de charger tes championnats.",
-        ) from erreur
+        raise echec_lisible("Chargement de tes championnats", erreur) from erreur
 
     return [
         en_championnat(ligne, utilisateur, nombre_membres=ligne["nombre_membres"])
@@ -168,6 +240,7 @@ async def mes_championnats(
 
 
 @router.post("/rejoindre", response_model=Championnat)
+@journaliser_echecs("Adhésion au championnat")
 async def rejoindre(
     corps: Adhesion,
     utilisateur: str = Depends(utilisateur_courant),
@@ -186,10 +259,7 @@ async def rejoindre(
             {"code_invitation": f"eq.{code}", "select": "*", "limit": "1"},
         )
     except ErreurSupabase as erreur:
-        raise HTTPException(
-            status_code=erreur.statut if erreur.statut >= 500 else 502,
-            detail="Impossible de vérifier ce code. Réessaie.",
-        ) from erreur
+        raise echec_lisible("Vérification du code d'invitation", erreur) from erreur
 
     if not trouves:
         raise HTTPException(
@@ -213,10 +283,7 @@ async def rejoindre(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Tu fais déjà partie de ce championnat.",
             ) from erreur
-        raise HTTPException(
-            status_code=erreur.statut if erreur.statut >= 500 else 502,
-            detail="Impossible de rejoindre ce championnat. Réessaie.",
-        ) from erreur
+        raise echec_lisible("Adhésion au championnat", erreur) from erreur
 
     return en_championnat(
         championnat, utilisateur, nombre_membres=await compter_membres(championnat["id"])
@@ -224,6 +291,7 @@ async def rejoindre(
 
 
 @router.delete("/{championnat_id}/quitter", status_code=status.HTTP_204_NO_CONTENT)
+@journaliser_echecs("Départ du championnat")
 async def quitter(
     championnat_id: UUID,
     utilisateur: str = Depends(utilisateur_courant),
@@ -243,10 +311,7 @@ async def quitter(
             },
         )
     except ErreurSupabase as erreur:
-        raise HTTPException(
-            status_code=erreur.statut if erreur.statut >= 500 else 502,
-            detail="Impossible de quitter ce championnat. Réessaie.",
-        ) from erreur
+        raise echec_lisible("Départ du championnat", erreur) from erreur
 
     if not supprimees:
         raise HTTPException(
