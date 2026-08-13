@@ -168,6 +168,32 @@ async def inserer(table: str, ligne: dict) -> list[dict]:
     return reponse.json()
 
 
+async def upserter(table: str, lignes: list[dict], sur_conflit: str) -> list[dict]:
+    """Insère des lignes, ou met à jour celles qui existent déjà.
+
+    `sur_conflit` nomme la ou les colonnes portant la contrainte d'unicité,
+    séparées par des virgules. PostgREST traduit l'ensemble en un seul
+    `insert … on conflict … do update` : c'est ce qui rend le scraper
+    idempotent, là où un `insert` nu échouerait au deuxième passage et où un
+    `delete` suivi d'un `insert` laisserait le GP sans aucune cote pendant un
+    court instant — et définitivement si l'insertion échouait.
+
+    Une liste vide n'appelle pas Supabase : PostgREST refuse un corps vide.
+    """
+    if not lignes:
+        return []
+
+    reponse = await _appeler(
+        "POST",
+        f"/{table}",
+        json=lignes,
+        params={"on_conflict": sur_conflit},
+        headers={"Prefer": "resolution=merge-duplicates,return=representation"},
+    )
+    _verifier(reponse)
+    return reponse.json()
+
+
 async def supprimer(table: str, parametres: dict[str, str]) -> list[dict]:
     """Supprime et renvoie les lignes supprimées.
 

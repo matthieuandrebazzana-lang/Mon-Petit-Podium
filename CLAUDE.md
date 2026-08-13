@@ -520,21 +520,105 @@ Le générateur de code écarte les caractères non conformes du jeton plutôt q
 
 *Vérifié en local* : **41 contrôles passent** contre des doublures Supabase en mémoire — les quatre routes servent toujours leur chemin nominal (`201`, `200`, `200`, `204`), `401` sans jeton (preuve que la signature survit au décorateur), les cinq réponses métier traversent intactes avec leur message, une table absente sort en `422` portant `42P01` et sa trace, une base injoignable sort en clair, un `KeyError`, un `RuntimeError` et un `ValueError` sortent en `422` typé au lieu d'un `500` muet, les deux pannes de la dépendance d'authentification sortent en `503` journalisé, le refus faute de clés est tracé, et `/health` comme le préflight CORS sont inchangés. Vérifié aussi sous un vrai `uvicorn`, Supabase pointé sur un port mort : la **trace complète apparaît sur la sortie standard**, exactement ce que Railway affichera. `npm run build` passe.
 
+---
+
+**Étape 4 — Scraper Unibet** (version `0.4.0`)
+
+Découverte des GP, extraction des marchés et cotes, stockage. Deux tables, trois routes, un module de scraping. **Vérifié contre les vraies données du GP Pays-Bas** (23 août 2026) : 3 marchés, 55 cotes.
+
+*Trois écarts entre la section 3.1 et ce qu'Unibet fait aujourd'hui.* Ils ont été constatés en interrogeant l'API, ils expliquent l'essentiel du code, et **la section 3.1 n'a pas été réécrite** : elle reste le cahier des charges, ce paragraphe dit ce que la réalité y oppose.
+
+1. **L'API exige un jeton.** `/lvs-api/...` répond `401 {"message":"Missing X-LVS-HSToken"}` sans en-tête `X-LVS-HSToken`. Le CLAUDE.md annonçait « sans authentification et sans cookie obligatoire » : c'est toujours vrai au sens où aucun compte n'est nécessaire, mais l'en-tête, lui, l'est. Le jeton est déposé en clair dans la configuration de n'importe quelle page de paris (clés `pselNonExpiringHsToken` et `hsToken`, les deux acceptées) ; `jeton()` va le lire sur `/paris-formule-1`. Il est relu à chaque scraping, jamais stocké : il change à chaque déploiement d'Unibet. **La page d'accueil du site répond 403** aux clients non navigateur, pas celle de la Formule 1 — d'où ce choix de page.
+
+2. **`price` est une chaîne à la française** (« 2,80 »), pas un nombre. Un `float(price)` lève, un `price * 100` concatène. `en_points()` est le seul endroit qui traite le cas. Cross-contrôle rassurant : Unibet expose aussi un champ `sort` qui vaut exactement `round(price × 100)` — vérifié sur les 44 cotes du nœud racine, zéro écart. Il n'est pas utilisé (rien ne le documente comme tel), mais il confirme que la règle 4.1 tombe juste sur leurs propres arrondis.
+
+3. **L'API ne rend qu'un seul marché par événement** — le marché vedette, « Vainqueur ». L'événement annonce pourtant `count: 3`. Aucun paramètre ne la fait céder : `includeAllMarkets`, `marketTypeDisplayGroupId`, `groupId`, `allMarkets`, `topMarketOnly` ont tous été essayés, sans le moindre effet ; il n'existe aucun endpoint JSON par événement (`/lvs-api/event/...` et une dizaine de variantes répondent 500), et `next/200` est refusé. **Les marchés complets ne sont exposés que par la page de l'événement**, rendue côté serveur. Cette page embarque ses données dans une balise `<script id="serverApp-state" type="application/json">` — l'état Angular du rendu serveur. `marches()` lit ce bloc : **c'est du JSON, avec les mêmes champs que l'API, pas du HTML.** Aucune balise n'est interprétée, rien ne dépend d'une classe CSS.
+
+*Conséquence : l'URL de la page d'événement doit être exacte.* Elle s'écrit `/paris-formule-1/{catégorie}/{gp}/{id-numérique}/course`, et **le moindre écart de slug renvoie 404** — un identifiant numérique seul ne suffit pas, un slug approximatif non plus (vérifié). `slug()` reproduit donc la fonction du site, retrouvée dans son bundle : minuscules, accents ramenés à la lettre de base, tout le reste en tirets, tirets fondus et rognés. « GP Pays Bas » → `gp-pays-bas`.
+
+*Schéma* — `supabase/migrations/20260813174500_grands_prix_cotes.sql`, **à exécuter à la main dans le SQL Editor de Supabase**, comme les deux précédentes. Idempotente.
+
+`public.grands_prix` : `id`, `id_unibet` (unique), `nom`, `date_course`, `statut`, `cree_le`. `id_unibet` est la clé de rapprochement du scraper — jamais le nom, dont l'orthographe bouge (« GP Pays Bas » aujourd'hui, « GP Pays-Bas » demain). Le statut est une contrainte `check` (`a_venir`, `cotes_figees`, `termine`) plutôt qu'un type `enum` : ajouter une valeur à un enum est une migration à part entière, et les états d'un week-end ne sont pas encore tous arrêtés.
+
+`public.cotes` : `id`, `gp_id` (cascade), `marche`, `libelle_marche`, `pilote`, `valeur`, `id_outcome_unibet`, `cree_le`. **Deux écarts assumés par rapport aux colonnes demandées** :
+- `id_outcome_unibet` est **`not null`**, alors que rien ne l'imposait. C'est ce qui fait tenir l'idempotence : sous PostgreSQL, deux `NULL` sont distincts, et un index unique sur une colonne nullable n'empêcherait plus rien. Une issue sans identifiant est ignorée plutôt qu'insérée.
+- **`libelle_marche` est ajouté.** `marche` porte le slug (`ecurie-vainqueur`), qui sert de clé de regroupement ; sans le libellé d'origine, l'interface devrait le reconstituer et afficherait « Ecurie vainqueur » au mieux, « Top x » au pire. Le bookmaker est la seule source légitime du nom d'un marché.
+
+Index unique sur `(gp_id, id_outcome_unibet)` — c'est lui, et lui seul, qui porte l'idempotence. Second index sur `(gp_id, marche)` : le tableau des cotes de l'étape 5 lit toujours « toutes les cotes d'un GP, groupées par marché ».
+
+*RLS* — **lecture ouverte à tous, `anon` compris** : les cotes ne sont un secret pour personne, elles sont affichées telles quelles chez le bookmaker, et la landing pourra annoncer le prochain GP sans session ouverte. Aucune politique d'écriture n'est créée, et c'est le point important : sous RLS, ce qu'aucune politique n'autorise est refusé. Aucun droit d'écriture n'est accordé non plus à `anon` ni `authenticated` — double verrou, l'un antérieur à l'autre. `service_role` contourne la RLS et reste seul à écrire.
+
+`cotes_du_grand_prix(uuid)` renvoie les cotes déjà groupées par marché, en JSON. Regrouper en base évite de transporter une cinquantaine de lignes par GP pour les réassembler en Python. Elle est **`security invoker`**, contrairement aux fonctions de l'étape 3 : elle lit sous l'identité de l'appelant, donc sous les politiques ci-dessus, et n'ouvre aucun accès que la RLS n'accorde déjà.
+
+*Le scraper* — `backend/app/scraper/unibet.py`. Rien n'est codé en dur, ni la liste des GP, ni celle des marchés : le nœud racine est interrogé, ce qu'il rend est traité.
+
+**Le nœud racine ne rend pas que des GP.** Il rend aussi « Championnat du monde », au même rang et avec le même `tag: "League"` — le vainqueur du championnat, daté d'un 6 décembre de convenance. L'enregistrer créerait un faux Grand Prix, qui deviendrait le « prochain GP » de l'accueil. Le filtre retenu ne porte pas sur le nom du championnat mais sur l'événement : **seuls les événements dont le libellé donne le slug `course` sont retenus.** Le tri est sémantiquement juste (c'est la course que valide l'étape 6, pas les qualifications ni le sprint) et il écarte le championnat sans avoir à le nommer. `eType` ne sert à rien ici : il vaut `R` pour les deux. **Tout événement écarté est journalisé avec son libellé** — si Unibet renomme « Course », les logs le diront au lieu de laisser le scraper ne rien trouver en silence.
+
+**Les horaires d'Unibet sont en heure de Paris**, sans que rien ne le dise : `start` vaut « 2608231500 » (AAMMJJHHMM) pour un départ annoncé à 15h00, soit 13h00 UTC. Les stocker tels quels décalerait d'une à deux heures toute la programmation de l'étape 6 (fermeture 5 min avant le départ, résultats 1h30 après). La conversion est faite au scraping ; `date_course` est en UTC.
+
+**Un GP figé n'est jamais réécrit.** Avant d'écrire, le scraper lit le statut : `cotes_figees` ou `termine`, il enregistre le GP et **s'arrête là**, en journalisant combien de cotes il a ignorées. C'est la règle 4.3 — après les qualifications, tout le monde pronostique sur les mêmes cotes, et un scraping tardif ne doit pas les faire bouger sous les pronostics déjà saisis. Le statut n'est jamais transmis à l'upsert non plus : le préciser remettrait à `a_venir` un GP figé à chaque passage.
+
+**L'échec d'un GP n'emporte pas les autres.** Chacun est traité pour lui-même ; celui qui échoue est journalisé, abandonné, et **rien n'est écrit pour lui** — ses cotes déjà en base restent intactes. Le compte rendu porte les réussites comme les échecs. Une issue illisible est ignorée sans emporter son marché ; un marché entier illisible fait échouer le GP plutôt que d'enregistrer des cotes fausses.
+
+`upserter()` est ajouté à `supabase_client.py` : un `insert … on conflict … do update` via PostgREST. Un `insert` nu échouerait au deuxième passage ; un `delete` suivi d'un `insert` laisserait le GP sans aucune cote pendant un instant, et définitivement si l'insertion échouait.
+
+*Routes* — `backend/app/api/routes/scraper.py`.
+
+| Route | Comportement |
+|---|---|
+| `POST /scraper/declencher` | En-tête `X-Admin-Secret`. Lance le scraping en tâche de fond et rend `202 {"statut":"lance"}` sans attendre. Le compte rendu part dans les logs Railway. |
+| `GET /scraper/cotes` | **Publique.** Toutes les cotes en base, groupées par GP puis par marché. |
+| `GET /grands-prix/{id}/cotes` | **Publique.** Les cotes d'un GP, groupées par marché. `404` si le GP n'existe pas. |
+
+**Trois points de mise en œuvre à ne pas défaire :**
+1. La comparaison du secret passe par `secrets.compare_digest`, **à temps constant**. Un `==` sur des chaînes s'arrête au premier caractère qui diffère, et le temps de réponse laisse alors deviner le secret caractère par caractère.
+2. **`ADMIN_SECRET` non défini ferme la route** (`503`), il ne l'ouvre pas. Le défaut d'une variable absente ne doit jamais être l'accès libre.
+3. Les tâches lancées sont gardées dans un `set` le temps de leur exécution. Sans référence forte, asyncio est en droit de ramasser une tâche en cours, et le scraping s'arrêterait au milieu sans un mot.
+
+Le secret est vérifié **avant** la configuration Supabase : répondre « Supabase n'est pas configuré » à qui n'a pas donné le bon secret lui apprendrait quelque chose sur l'état du serveur pour rien. La configuration est vérifiée ensuite, pour ne pas aller solliciter Unibet en pure perte.
+
+`journaliser_echecs` reprend le décorateur de la version `0.3.1`, avec `functools.wraps` pour la même raison exactement : sans lui, `POST /scraper/declencher` **perdrait son en-tête `X-Admin-Secret` et s'ouvrirait à tous**. Un contrôle du jeu de tests couvre ce cas.
+
+*`tzdata` est ajouté à `requirements.txt`* — et ce n'est pas décoratif. `ZoneInfo("Europe/Paris")` lit la base de fuseaux du système ; macOS en a une, beaucoup d'images Linux minces n'en ont aucune, et le scraper planterait sur Railway alors qu'il passe en local.
+
+*Vérifié* :
+
+| Contrôle | Résultat |
+|---|---|
+| Scraping réel du GP Pays-Bas | **3 marchés, 55 cotes** — Vainqueur (22), Podium (22), Ecurie Vainqueur (11). Date : 15h00 Paris → `2026-08-23T13:00:00Z`. Championnat du monde écarté et journalisé. |
+| Migration sur PostgreSQL 16 jetable (Docker) | **30 contrôles** — structure, `not null` sur `id_outcome_unibet`, statut hors liste refusé, unicité de `id_unibet`, doublon `(gp_id, id_outcome)` refusé, `valeur` nulle refusée, clé étrangère, upsert qui met à jour sans dupliquer, cascade, regroupement par marché, RLS active, une seule politique (SELECT) par table, droits |
+| RLS sous les vraies identités | `anon` lit ; `authenticated` ne peut ni insérer ni modifier une cote (`42501`) ; `anon` ne peut pas supprimer de GP ; `service_role` écrit ; `cotes_du_grand_prix` s'appelle sans être connecté |
+| Rejeu de la migration | aucune erreur, aucune donnée modifiée |
+| Idempotence, contre le vrai Unibet | **21 contrôles** — deuxième scraping : 55 cotes avant, 55 après, mêmes issues mises à jour et non recréées ; GP `cotes_figees` puis `termine` : **aucune cote réécrite**, 0 enregistrée, statut jamais remis à `a_venir` |
+| Pannes | **25 contrôles** — page F1 en 403, page sans jeton, réseau coupé, jeton refusé par l'API, réponse non JSON, `items` vide, nœud ne contenant que le championnat, événement renommé, page d'événement en 404, page sans bloc SSR, bloc SSR cassé, aucun événement, toutes les cotes illisibles ; une issue illisible n'emporte pas son marché ; un GP en échec n'empêche pas l'autre d'être enregistré ; la tâche de fond n'avale rien en silence ; l'upsert part bien avec `on_conflict` et `merge-duplicates`, et n'appelle pas Supabase pour une liste vide |
+| Routes contre une doublure Supabase | **30 contrôles** — `401` sans en-tête et sur secret erroné, `202` sur secret correct (casse et espaces tolérés), `503` si `ADMIN_SECRET` absent, la signature survit au décorateur, lecture publique sans jeton, marchés groupés, points servis tels quels, `404` sur GP inconnu, `422` sur identifiant mal formé, table absente rendue avec `42P01`, panne inattendue typée au lieu d'un `500` muet, `/health` en `0.4.0`, préflight CORS, routes championnats toujours protégées |
+| Sous un vrai `uvicorn` | Les 8 routes sont servies. Déclenchement réel, Supabase absent : le scraping va au bout côté Unibet et **la panne d'écriture sort avec sa trace complète sur la sortie standard** — exactement ce que Railway affichera. |
+| `npm run build` | passe |
+
 ### Bugs connus
 
 *(Aucun.)*
 
 ### Reste à faire
 
-Les étapes 4 à 9 de l'ordre de développement de la section 7.
+Les étapes 5 à 9 de l'ordre de développement de la section 7.
 
-**Migrations à appliquer** — **aucune des deux migrations n'a encore été exécutée** sur le projet Supabase, dans cet ordre :
+**Migrations à appliquer** — **aucune des trois migrations n'a encore été exécutée** sur le projet Supabase, dans cet ordre :
 1. `supabase/migrations/20260809191018_profils_pseudo_unique.sql` — sans elle, aucun pseudo n'est unique et la liste des membres affiche « Pilote » partout.
 2. `supabase/migrations/20260810163435_championnats.sql` — sans elle, toutes les routes `/championnats` échouent.
+3. `supabase/migrations/20260813174500_grands_prix_cotes.sql` — sans elle, le scraper découvre et lit correctement les cotes chez Unibet mais échoue à l'écriture, et les routes `/scraper/cotes` et `/grands-prix/{id}/cotes` répondent `422` en portant `42P01`.
 
-**Variables Supabase du backend** — `SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` **restent à définir sur Railway**. Sans elles, les routes `/championnats` répondent `503` avec un message explicite. La clé de service ne doit jamais être exposée au frontend ni committée.
+**Variables d'environnement du backend** — à définir sur Railway :
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Sans elles, `/championnats` et `POST /scraper/declencher` répondent `503` avec un message explicite. La clé de service ne doit jamais être exposée au frontend ni committée.
+- **`ADMIN_SECRET`** — chaîne libre, choisie par toi, à garder secrète. C'est la valeur attendue dans l'en-tête `X-Admin-Secret` de `POST /scraper/declencher`. **Tant qu'elle n'est pas définie, la route refuse tout le monde** (`503`) : une variable absente ne doit jamais valoir accès libre. Déclenchement type :
+  ```
+  curl -X POST https://<railway>/scraper/declencher -H "X-Admin-Secret: <valeur>"
+  ```
 
 Points non couverts, à traiter le moment venu :
+- **Scraper exercé contre le vrai Supabase** — le scraping a été vérifié de bout en bout contre le vrai Unibet, et la migration contre un PostgreSQL jetable, mais **jamais les deux ensemble** : l'écriture réelle en base n'a pas encore eu lieu. C'est le premier essai à faire une fois la migration appliquée et les variables posées sur Railway.
+- **Programmation automatique du scraping** — la règle 4.3 veut un scraping le samedi, 2h après les qualifications, puis un figeage des cotes. Aujourd'hui le déclenchement est **manuel** (`POST /scraper/declencher`) et **rien ne fait passer un GP en `cotes_figees`** : le statut existe, la protection qu'il commande est en place et testée, mais aucun code ne l'applique encore. À traiter avec les cron jobs de l'étape 6.
+- **Marchés disponibles à J-10** — au moment du développement, Unibet n'exposait que 3 marchés pour le GP Pays-Bas (vainqueur, podium, écurie gagnante). Le noyau annoncé en section 3.1 (top 6, top 10, duels…) n'apparaîtra qu'à l'approche de la course. Le scraper les découvre dynamiquement, donc rien à changer — mais **le jeu de marchés réellement obtenu après les qualifications reste à observer**, notamment pour l'étape 6 qui devra savoir valider chacun d'eux.
 - **Parcours des championnats exercé contre le vrai Supabase** — le backend a été validé contre une doublure en mémoire et la migration contre un PostgreSQL jetable, mais les deux n'ont jamais tourné ensemble contre le vrai projet.
 - **Messages techniques des routes `/championnats`** — depuis la version `0.3.1`, une panne renvoie sa cause en clair (en anglais) jusque dans l'interface. C'est délibéré, le temps de la mise en service. Une fois le parcours exercé contre le vrai Supabase, remettre des messages en français dans `echec_lisible` et garder la cause dans les seuls logs.
 - **Suppression d'un compte ayant créé un championnat** — échoue aujourd'hui par contrainte de clé étrangère, faute de règle métier. À trancher : transférer la propriété au plus ancien membre, ou anonymiser `cree_par`.
@@ -546,7 +630,7 @@ Points non couverts, à traiter le moment venu :
 
 ### Décisions validées mais non encore implémentées
 
-- Schéma de base de données — trois tables existent : `public.profils`, `public.championnats`, `public.membres_championnat`. Restent à concevoir celles des cotes, des pronostics et des résultats. Les migrations vivent dans `supabase/migrations/`, une par étape, à exécuter à la main dans le SQL Editor.
-- Nommage des routes API — la convention est posée par `/championnats` : nom de domaine au pluriel, sous-chemin `/moi` pour ce qui appartient à l'appelant, verbe explicite pour une action qui n'est pas un CRUD (`/rejoindre`, `/{id}/quitter`).
+- Schéma de base de données — cinq tables existent : `public.profils`, `public.championnats`, `public.membres_championnat`, `public.grands_prix`, `public.cotes`. Restent à concevoir celles des pronostics et des résultats. Les migrations vivent dans `supabase/migrations/`, une par étape, à exécuter à la main dans le SQL Editor.
+- Nommage des routes API — la convention est posée par `/championnats` : nom de domaine au pluriel, sous-chemin `/moi` pour ce qui appartient à l'appelant, verbe explicite pour une action qui n'est pas un CRUD (`/rejoindre`, `/{id}/quitter`, `/declencher`).
 - Table statique pilote → nationalité — à créer
 - Composant React `<Voiture />` avec couleurs dynamiques — à créer. Il remplacera la pastille d'initiale de `composants/Pastille.jsx`, provisoire, dans la liste des membres et les cartes.

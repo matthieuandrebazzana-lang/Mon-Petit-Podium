@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Version de l'API, alignée sur celle du frontend.
 # À incrémenter à chaque commit qui modifie l'application.
-VERSION = "0.3.1"
+VERSION = "0.4.0"
 
 # Toujours autorisées : le serveur de dev Vite, pour ne jamais casser le local.
 ORIGINES_LOCALES = [
@@ -68,6 +68,18 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
+
+    # — Déclenchement du scraper —
+    # Secret partagé attendu dans l'en-tête `X-Admin-Secret` de
+    # POST /scraper/declencher. Vide par défaut, et c'est délibéré : sans valeur
+    # définie, la route refuse tout le monde plutôt que de s'ouvrir à tous.
+    # Le scraping écrit en base ; une route d'administration ouverte serait le
+    # moyen le plus simple de faire tourner le scraper en boucle depuis dehors.
+    admin_secret: str = ""
+
+    @property
+    def admin_configure(self) -> bool:
+        return bool(self.admin_secret.strip())
 
     @property
     def is_production(self) -> bool:
