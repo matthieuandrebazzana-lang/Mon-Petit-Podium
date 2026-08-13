@@ -129,7 +129,11 @@ class Championnat(BaseModel):
     id: UUID
     nom: str
     code_invitation: str
-    cree_par: UUID
+    # Nullable depuis la migration `20260813182331` : supprimer un compte ne
+    # dissout plus les championnats qu'il a créés, ils lui survivent sans
+    # créateur. Un `UUID` strict ferait échouer la validation de la réponse —
+    # donc un 500 sur toute la liste — dès qu'un seul championnat est orphelin.
+    cree_par: UUID | None
     cree_le: datetime
     nombre_membres: int
     # Calculé ici plutôt que déduit côté frontend : la comparaison porte sur
@@ -180,7 +184,8 @@ def en_championnat(ligne: dict, utilisateur: str, nombre_membres: int) -> Champi
         cree_par=ligne["cree_par"],
         cree_le=ligne["cree_le"],
         nombre_membres=nombre_membres,
-        est_createur=str(ligne["cree_par"]) == utilisateur,
+        est_createur=ligne["cree_par"] is not None
+        and str(ligne["cree_par"]) == utilisateur,
     )
 
 

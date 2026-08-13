@@ -595,6 +595,53 @@ Le secret est vérifié **avant** la configuration Supabase : répondre « Supab
 | Sous un vrai `uvicorn` | Les 8 routes sont servies. Déclenchement réel, Supabase absent : le scraping va au bout côté Unibet et **la panne d'écriture sort avec sa trace complète sur la sortie standard** — exactement ce que Railway affichera. |
 | `npm run build` | passe |
 
+---
+
+**Créateur supprimé et championnat vide** (version `0.4.1`)
+
+Deux règles laissées ouvertes par l'étape 3 sont tranchées. Elles vivent **entièrement en base** : un `alter table` et un trigger, aucune logique applicative.
+
+*Migration* — `supabase/migrations/20260813182331_createur_nullable_championnat_vide.sql`, **à exécuter à la main dans le SQL Editor de Supabase**, après les trois précédentes. Idempotente.
+
+**1. Le championnat survit à son créateur.** `cree_par` devient nullable et sa clé étrangère passe en `on delete set null`. Supprimer un compte n'échoue plus par contrainte : le championnat reste, sans créateur. L'ancienne règle — un RESTRICT implicite, faute de clause `on delete` — était un garde-fou volontaire en attendant cette décision, pas un oubli.
+
+L'ordre des deux opérations n'est pas indifférent : `on delete set null` sur une colonne restée `not null` est **accepté à la création de la contrainte** et n'échoue qu'à la suppression du compte, des mois plus tard. Le `not null` est donc levé en premier.
+
+La contrainte de clé étrangère avait été posée en ligne (`references auth.users`) et porte un nom attribué par PostgreSQL. La migration ne le suppose pas : elle retrouve la contrainte **par la colonne qu'elle porte**, et laisse en place celle qui a déjà la bonne règle (`confdeltype = 'n'`). C'est ce qui la rend rejouable sans rien reconstruire.
+
+**2. Un championnat vidé de ses membres est supprimé.** Trigger `membres_championnat_supprime_vide`, `after delete ... for each row` sur `membres_championnat` : si plus aucune ligne ne reste pour ce `championnat_id`, le championnat est effacé. Jusqu'ici il devenait un fantôme — invisible de tous, puisque la lecture exige d'en être membre, mais toujours rejoignable par son code.
+
+Quatre points de mise en œuvre à ne pas défaire :
+- **`security definer`** est indispensable. Le trigger s'exécute sous l'identité de celui qui quitte le championnat, et la politique « Seul le createur supprime » l'empêcherait d'en effacer la ligne — le dernier membre d'un championnat n'en est pas toujours le créateur. La fonction appartient au rôle qui joue la migration, propriétaire des tables, donc non soumis à la RLS. Elle n'ouvre aucun droit nouveau : elle ne supprime qu'un championnat déjà vide, et seulement en réaction à un départ.
+- **`after`, jamais `before`** : un trigger `before` compterait les membres avant le retrait de la ligne, le dernier départ trouverait toujours quelqu'un, et rien ne serait jamais supprimé.
+- **`for each row`** : une suppression peut porter sur plusieurs championnats à la fois (compte supprimé, membre de plusieurs championnats). Chacun doit être jugé pour lui-même.
+- **Aucun garde-fou `pg_trigger_depth()`** : la suppression d'un compte fait cascader `membres_championnat` puis déclenche ce trigger au niveau 1 — le brider sur la profondeur empêcherait précisément le cas qui l'a motivé. La récursion s'arrête d'elle-même : supprimer le championnat cascade ses membres, le trigger se redéclenche, et son `delete` ne trouve plus la ligne, déjà effacée par la commande en cours.
+
+*Reprise de l'existant* — les championnats déjà sans membre au moment de la migration sont effacés une fois, à la main, avec le compte journalisé en `notice`.
+
+*Conséquence côté RLS, assumée* — sur un championnat orphelin, `cree_par` vaut NULL, la politique « Seul le createur supprime » ne vaut jamais vrai, et plus personne ne peut le supprimer depuis le frontend. C'est le comportement voulu : un membre ordinaire n'a pas à emporter le championnat des autres. Le championnat disparaîtra de lui-même au départ du dernier membre.
+
+*La seule ligne de code applicative touchée, et pourquoi elle l'est* — le modèle de réponse `Championnat` de `backend/app/api/routes/championnats.py` déclarait `cree_par: UUID`. Un championnat orphelin aurait fait échouer la validation de la réponse, donc rendu **toute** la liste `GET /championnats/moi` en `500`. Le champ passe à `UUID | None`, et `est_createur` teste explicitement le NULL au lieu de se reposer sur le fait que `str(None)` ne ressemble à aucun identifiant. Côté frontend, rien à changer : `membre.id === donnees.cree_par` vaut simplement `false` et l'étiquette « Créateur » ne s'affiche plus — ce qui est exact, il n'y en a plus.
+
+*Vérifié sur PostgreSQL 16 jetable (Docker), avec doublure du schéma `auth`* :
+
+| Contrôle | Résultat |
+|---|---|
+| État antérieur reconstitué puis migration appliquée | **16 contrôles passent** |
+| Structure | `cree_par` nullable, clé étrangère unique en `on delete set null`, trigger bien `AFTER DELETE FOR EACH ROW`, fonction `security definer` et non appelable par `public`, `anon` ni `authenticated` |
+| Référence avant migration | la suppression du créateur échoue bien en `foreign_key_violation` — l'ancien comportement est celui qu'on corrige |
+| Suppression du créateur | championnat conservé, `cree_par` à NULL, adhésion du compte cascadée, membres restants intacts ; un championnat dont il n'était pas membre n'est pas touché |
+| Reprise de l'existant | le championnat sans membre antérieur est effacé, les autres restent |
+| Départ d'un membre non final | championnat conservé |
+| Départ du dernier membre, **sous l'identité `authenticated` d'un non-créateur** | championnat supprimé — preuve que le `security definer` fait bien son office là où la RLS refuserait |
+| Suppression directe du championnat | membres cascadés, trigger redéclenché, aucune récursion infinie |
+| Compte membre de deux championnats, supprimé | l'un est effacé (vidé), l'autre survit en orphelin |
+| Parcours de l'étape 3 | `creer_championnat` intacte ; son créateur seul quitte → championnat supprimé ; un membre lit toujours son championnat orphelin sous RLS ; `mes_championnats` le sert sans broncher |
+| Rejeu de la migration corrective sur base peuplée | **aucune notice, aucune erreur, données inchangées** — la clé étrangère n'est ni retirée ni recréée |
+| Rejeu de la migration de l'étape 3 par-dessus | ne restaure ni le `not null` ni l'ancienne règle de suppression |
+| Modèle de réponse backend | un championnat à `cree_par` NULL se sérialise, `est_createur` vaut `false` ; le cas nominal reste `true` |
+| `npm run build` | passe, version `0.4.1` présente dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -603,10 +650,11 @@ Le secret est vérifié **avant** la configuration Supabase : répondre « Supab
 
 Les étapes 5 à 9 de l'ordre de développement de la section 7.
 
-**Migrations à appliquer** — **aucune des trois migrations n'a encore été exécutée** sur le projet Supabase, dans cet ordre :
+**Migrations à appliquer** — **aucune des quatre migrations n'a encore été exécutée** sur le projet Supabase, dans cet ordre :
 1. `supabase/migrations/20260809191018_profils_pseudo_unique.sql` — sans elle, aucun pseudo n'est unique et la liste des membres affiche « Pilote » partout.
 2. `supabase/migrations/20260810163435_championnats.sql` — sans elle, toutes les routes `/championnats` échouent.
 3. `supabase/migrations/20260813174500_grands_prix_cotes.sql` — sans elle, le scraper découvre et lit correctement les cotes chez Unibet mais échoue à l'écriture, et les routes `/scraper/cotes` et `/grands-prix/{id}/cotes` répondent `422` en portant `42P01`.
+4. `supabase/migrations/20260813182331_createur_nullable_championnat_vide.sql` — sans elle, supprimer un compte ayant créé un championnat échoue par contrainte de clé étrangère, et un championnat quitté par son dernier membre reste en base. **Elle suppose la 2 déjà appliquée** : elle modifie `public.championnats`, elle ne la crée pas.
 
 **Variables d'environnement du backend** — à définir sur Railway :
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Sans elles, `/championnats` et `POST /scraper/declencher` répondent `503` avec un message explicite. La clé de service ne doit jamais être exposée au frontend ni committée.
@@ -621,8 +669,7 @@ Points non couverts, à traiter le moment venu :
 - **Marchés disponibles à J-10** — au moment du développement, Unibet n'exposait que 3 marchés pour le GP Pays-Bas (vainqueur, podium, écurie gagnante). Le noyau annoncé en section 3.1 (top 6, top 10, duels…) n'apparaîtra qu'à l'approche de la course. Le scraper les découvre dynamiquement, donc rien à changer — mais **le jeu de marchés réellement obtenu après les qualifications reste à observer**, notamment pour l'étape 6 qui devra savoir valider chacun d'eux.
 - **Parcours des championnats exercé contre le vrai Supabase** — le backend a été validé contre une doublure en mémoire et la migration contre un PostgreSQL jetable, mais les deux n'ont jamais tourné ensemble contre le vrai projet.
 - **Messages techniques des routes `/championnats`** — depuis la version `0.3.1`, une panne renvoie sa cause en clair (en anglais) jusque dans l'interface. C'est délibéré, le temps de la mise en service. Une fois le parcours exercé contre le vrai Supabase, remettre des messages en français dans `echec_lisible` et garder la cause dans les seuls logs.
-- **Suppression d'un compte ayant créé un championnat** — échoue aujourd'hui par contrainte de clé étrangère, faute de règle métier. À trancher : transférer la propriété au plus ancien membre, ou anonymiser `cree_par`.
-- **Championnat vide** — rien ne le supprime quand son dernier membre part. Il reste en base, inaccessible mais rejoignable par son code.
+- **Pronostics d'un membre qui quitte un championnat** — le `TODO` de `DELETE /championnats/{id}/quitter` reste ouvert (table absente jusqu'à l'étape 5). À traiter avec elle : la suppression devra se faire dans la même transaction que le retrait, et le trigger `membres_championnat_supprime_vide` supprimera le championnat derrière, cotes et pronostics compris par cascade — l'ordre des clés étrangères devra être vérifié à ce moment-là.
 - **Test sur iPhone réel** — toujours pas fait. Le rendu n'a été validé qu'en navigateur de bureau. À faire avant de considérer les contraintes iOS comme acquises.
 - **Parcours d'authentification testé de bout en bout** — le code est en place et compile, mais inscription, confirmation par email, connexion et réinitialisation n'ont pas encore été exercées contre le vrai projet Supabase.
 - **Clés OAuth Google et Apple** — à renseigner dans le tableau de bord Supabase. Ajouter aussi les URL de redirection autorisées : `https://mon-petit-podium.vercel.app/accueil`, `.../nouveau-mot-de-passe` et leurs équivalents `http://localhost:5173`. **Les boutons sont masqués depuis la version `0.2.2`** : une fois les clés en place, repasser `OAUTH_ACTIF` à `true` dans `frontend/src/composants/BoutonsOAuth.jsx`.
