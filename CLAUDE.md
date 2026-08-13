@@ -642,19 +642,123 @@ Quatre points de mise en œuvre à ne pas défaire :
 | Modèle de réponse backend | un championnat à `cree_par` NULL se sérialise, `est_createur` vaut `false` ; le cas nominal reste `true` |
 | `npm run build` | passe, version `0.4.1` présente dans le bundle |
 
+---
+
+**Étape 5 — Pronostics** (version `0.5.0`)
+
+Tableau des cotes, favoris, saisie, modification, récapitulatif. Trois tables, quatre routes d'API, trois écrans — plus le bloc « Prochain GP » de l'accueil et le `TODO` de l'étape 3 refermé.
+
+*Schéma* — `supabase/migrations/20260813183636_favoris_pronostics.sql`, **à exécuter à la main dans le SQL Editor de Supabase**, après les quatre précédentes. Idempotente.
+
+`public.favoris` : clé primaire `(profil_id, gp_id, id_outcome_unibet)`, cascade sur les deux références. **La cote n'est pas référencée par une clé étrangère vers `public.cotes`, et c'est délibéré** : le scraper réécrit les cotes tant qu'elles ne sont pas figées, et une issue qu'Unibet retire ferait alors échouer son upsert, ou emporterait les favoris des joueurs par cascade. Le rapprochement se fait à la lecture, sur `(gp_id, id_outcome_unibet)` ; un favori orphelin est servi sans points plutôt qu'effacé. Une colonne `cree_le` est ajoutée au strict nécessaire : la rangée « MES FAVORIS » de la maquette 08 se lit dans l'ordre où le joueur a épinglé, pas dans celui que PostgreSQL décide.
+
+`public.pronostics` : `id`, `profil_id`, `gp_id`, `id_outcome_unibet`, `type` (contrainte `check` sur `vainqueur | podium | bonus`), `cree_le`, `modifie_le`.
+
+**L'unicité demandée ne peut pas s'écrire telle quelle.** Un index unique sur `(profil_id, gp_id, type)` interdirait aussi d'avoir plus d'un bonus, alors que la règle 4.2 en demande trois. Trois index **partiels** disent exactement ce qui était voulu :
+- `(profil_id, gp_id) where type = 'vainqueur'` — un seul vainqueur par GP ;
+- `(profil_id, gp_id) where type = 'podium'` — un seul podium, son détail vivant dans la table dédiée ;
+- `(profil_id, gp_id, id_outcome_unibet) where type = 'bonus'` — trois bonus, mais trois **cotes différentes** : sans lui, un joueur miserait trois fois la même issue et triplerait ses points sur un seul événement.
+
+Le maximum de trois bonus ne peut pas s'écrire en `check` — la contrainte porte sur plusieurs lignes. Un trigger `pronostics_max_trois_bonus` le fait respecter quel que soit le chemin d'écriture.
+
+`public.pronostic_podium` : `pronostic_id` (clé primaire, cascade), `pilote_1`, `pilote_2`, avec un `check` interdisant deux fois le même pilote — miser deux fois le même reviendrait à ne remplir qu'une moitié du pronostic tout en encaissant deux fois la cote. **Aucun ordre entre les deux** : la validation de l'étape 6 demandera « ces deux pilotes sont-ils sur le podium ? », jamais « lequel devant ».
+
+*La redondance du podium, et comment elle est tenue* — `pronostics.id_outcome_unibet` est `not null` ; pour un podium, il faut bien y mettre quelque chose. Il porte `pilote_1`, et `pronostic_podium` fait foi. Plutôt que de laisser cet accord à une convention, le trigger `pronostic_podium_coherent` en fait un invariant vérifié : il refuse un détail dont `pilote_1` diverge de l'issue du parent, et refuse d'accrocher un détail de podium à un pronostic qui n'en est pas un.
+
+*RLS* — `public.est_membre(uuid)` de l'étape 3 est **réutilisée telle quelle**, et c'est elle qui casse la récursion. La politique de lecture des pronostics s'écrit « les miens, ou ceux d'un membre d'un championnat que je partage » ; sa sous-requête porte sur `membres_championnat`, dont la propre politique appelle `est_membre` — une fonction `security definer`, qui lit sans repasser par les politiques. **Ne jamais y réinsérer la sous-requête littérale** : PostgreSQL refuserait la requête entière (`42P17`). Le premier terme n'est pas redondant : un joueur qui n'appartient encore à aucun championnat doit pouvoir relire ses propres pronostics.
+
+`pronostic_podium` **ne redit pas** la condition : sa politique de lecture ne teste que l'existence du pronostic parent, et cette sous-requête est elle-même filtrée par la politique ci-dessus. Écrire la règle une seconde fois créerait deux textes à maintenir en parallèle.
+
+Les **favoris sont strictement privés**, une seule politique pour toutes les opérations. Ce sont les brouillons d'un joueur : la maquette 08 les intitule « MES FAVORIS », et les laisser lire reviendrait à annoncer ses pronostics avant de les avoir saisis.
+
+*Quatre fonctions réservées au backend* (révoquées pour `public`, `anon` et `authenticated`, accordées au seul `service_role`) :
+
+| Fonction | Rôle |
+|---|---|
+| `enregistrer_pronostics(...)` | Efface le jeu précédent et écrit le nouveau **dans une seule transaction**. Revérifie la fermeture et lève `PT423`. |
+| `pronostics_du_joueur(profil, gp)` | Les pronostics d'un joueur, déjà rapprochés des cotes : pilote, marché, points. `left join` — une issue retirée depuis la saisie laisse le pronostic visible, sans points. |
+| `pronostics_du_championnat(championnat, gp)` | Tous les membres, y compris ceux qui n'ont pas joué (liste vide), triés par `rejoint_le`. |
+| `quitter_championnat(profil, championnat)` | Le retrait et l'effacement des pronostics, atomiques. |
+
+`public.pronostics_fermes(uuid)` est `security invoker` et exécutable par `authenticated` : elle ne lit que `grands_prix`, déjà public.
+
+*Le `TODO` de l'étape 3, et l'écart assumé* — il demandait d'effacer les pronostics du membre qui quitte un championnat, « dans la même transaction que le retrait ». D'où la fonction. **Mais les pronostics ne sont pas rattachés à un championnat** : un joueur remplit **un** pronostic par Grand Prix, qui compte dans **tous** ses championnats à la fois. Les effacer au départ d'un seul détruirait son classement dans les autres. Ils ne sont donc effacés que **lorsqu'il ne lui reste aucune adhésion** — l'intention du TODO (aucun pronostic orphelin ne survit à un départ) sans le dommage collatéral. Si cette lecture ne convient pas, c'est le seul point de l'étape à revoir. `DELETE /championnats/{id}/quitter` appelle désormais la fonction au lieu d'un `delete` REST ; ses statuts (`204`, `404`) sont inchangés.
+
+*Backend* — `backend/app/api/routes/pronostics.py`, quatre routes, toutes protégées.
+
+| Route | Comportement |
+|---|---|
+| `POST /grands-prix/{gp_id}/favoris` | Bascule. Retourne `{favori: true/false}`. `422` si l'issue n'existe pas pour ce GP. |
+| `GET /grands-prix/{gp_id}/favoris` | Favoris de l'appelant, enrichis (pilote, marché, points), dans l'ordre d'épinglage. |
+| `POST /grands-prix/{gp_id}/pronostics` | Remplace le jeu complet. `423` si la fermeture est passée. |
+| `GET /grands-prix/{gp_id}/pronostics/championnat/{championnat_id}` | Pronostics de tous les membres. `403` si le demandeur n'est pas membre. |
+
+`GET /grands-prix/{id}/cotes` **existait déjà** depuis l'étape 4 et reste dans `routes/scraper.py`, où elle est publique. Elle n'est pas redéfinie : deux handlers sur un même chemin, et c'est le premier routeur monté qui gagne, silencieusement.
+
+**La bascule d'un favori est une suppression puis, si rien n'a été supprimé, une insertion.** Lire d'abord pour décider ensuite laisserait deux appuis rapprochés se croiser et retomber du même côté ; ici c'est la base qui tranche, et la clé primaire qui arbitre l'insertion concurrente — un `23505` signifie « l'autre a gagné la course, la cote est bien en favori », donc l'état demandé, pas une erreur.
+
+**Le contrôle des marchés est strict, et c'est un choix.** Le vainqueur doit venir du marché `vainqueur`, les deux pilotes du podium du marché `podium`. Un pronostic « vainqueur » désignant en réalité une écurie serait impossible à valider à l'étape 6, et le joueur ne le découvrirait qu'après la course. Si Unibet renomme ces marchés, la saisie est refusée franchement, avec un message qui nomme le marché attendu, et l'écran de saisie affiche « Pronostics indisponibles » au lieu de proposer des choix invalides. Les constantes sont côté backend (`MARCHE_VAINQUEUR`, `MARCHE_PODIUM`) **et** côté frontend (`lib/pronostics.js`) : elles doivent bouger ensemble.
+
+**Trois bonus est un maximum, pas un quota** — la maquette 09 écrit « sur 3 max » et son bouton de validation reste actif. Zéro, un ou deux bonus sont acceptés : le joueur peut enregistrer ses obligatoires et compléter plus tard, jusqu'à la fermeture. Le contrôle « les bonus sont dans les favoris » (règle 4.2) est fait par la route, pas en base, pour pouvoir **nommer la cote fautive** : « ce pronostic n'est pas dans tes favoris » sans dire lequel n'aide personne.
+
+**La fermeture est vérifiée deux fois, et ce n'est pas une redondance.** La route refuse en `423` avant même de solliciter la base ; la fonction la revérifie au moment d'écrire. Entre les deux, quelques dizaines de millisecondes passent — et c'est précisément à cinq minutes du départ que la course aux dernières secondes a lieu. C'est la vérification en base qui fait foi ; celle de la route évite un aller-retour inutile et donne le message. **Un GP dont l'heure de départ est inconnue reste ouvert**, aux trois étages (base, backend, frontend) : refuser tout le monde parce qu'Unibet n'a pas annoncé l'horaire serait le mauvais sens du doute.
+
+*`journaliser_echecs` est mis en commun* — le décorateur de la version `0.3.1` existait en deux copies au moment d'en écrire une troisième. Elles sont réunies dans `backend/app/api/journal.py`, avec un préfixe de domaine en paramètre (`[championnats]`, `[scraper-api]`, `[pronostics]`). **Comportement inchangé**, y compris `functools.wraps` et pour la même raison : sans lui, les routes perdraient `Depends(utilisateur_courant)` et l'en-tête `X-Admin-Secret`, et s'ouvriraient à tous. Deux contrôles du jeu de tests couvrent ce cas.
+
+*Frontend* — trois écrans, `frontend/src/lib/pronostics.js` (accès aux données), `lib/format.js` (points, dates, compte à rebours), `lib/useFermeture.js`, et trois composants : `Onglets`, `EtoileFavori`, `Compteur`.
+
+Les **deux chemins de données** de l'étape 3 restent en vigueur. Écritures par FastAPI. Lectures directes à Supabase là où la RLS décrit exactement le cas : le **prochain GP** de l'accueil (politique de lecture publique de l'étape 4) et les **pronostics du joueur** (politique de l'étape 5). L'accueil est le premier écran de l'app : lui faire attendre le réveil de Railway pour afficher son bloc principal serait le pire endroit où payer ce délai. Le tableau des cotes, lui, passe par l'API — elle sert les cotes déjà groupées par marché, et l'écran doit de toute façon l'appeler pour les favoris.
+
+**`lib/format.js` est le seul endroit qui habille un nombre de points** (règle 4.1). Les maquettes 08 et 09 écrivent « ×2,80 » dans leurs cases de cote : le CLAUDE.md gagne, l'interface affiche « 280 pts ». Trois contrôles du jeu de tests vérifient qu'aucun « ×N » ne sort des trois écrans.
+
+*Écarts assumés par rapport aux maquettes* :
+1. **« ×2,80 » → « 280 pts »** (maquettes 08 et 09), règle 4.1. Sans exception.
+2. **Onglets de marchés (08)** — la maquette dessine des pastilles blanches séparées dont l'active devient rouge d'un coup. Elles partagent ici une piste blanche continue, et c'est la pastille rouge qui glisse de l'une à l'autre. Une pastille ne peut pas glisser derrière des fonds opaques ; et c'est le contrôle segmenté que reconnaît immédiatement quelqu'un qui vient d'iOS. Aucune couleur, aucun rayon, aucune graisse ne change.
+3. **Sélection d'un pilote (09)** — la maquette montre un emplacement vide avec un chevron, sans dire ce qu'il ouvre. C'est un accordéon qui déplie la liste des cotes du marché sous l'emplacement, plutôt qu'une feuille modale : le joueur garde ses autres choix sous les yeux, et le geste de retour ne se fait pas voler par une couche qui s'interpose.
+4. **Total potentiel (10)** — ajouté sous les pronostics, absent de la maquette. C'est la question que tout le monde se pose devant un récapitulatif, et la règle 4.1 la rend calculable.
+5. **Bloc de confirmation (10)** — « Pronos enregistrés ! » n'est écrit qu'au retour de l'écran de saisie. Arrivé à froid sur le récapitulatif, l'écran dit « Tes pronos sont en place » : rien ne vient d'être enregistré, le célébrer serait faux.
+6. **Barre de navigation basse** — toujours pas codée, deux de ses quatre onglets n'ayant pas encore d'écran.
+
+*Apport d'/apple-design* — zones tactiles de 44px sur l'étoile de favori et les lignes de bonus, absorbées par des marges négatives pour que l'étoile reste calée sur la ligne de la cote (sans elles, chaque rangée gagnerait 26px) ; retour tactile à l'appui sur toutes les lignes sélectionnables ; **le bouton de validation reste actif même quand la saisie est incomplète** — un bouton grisé ne dit pas ce qui manque, l'appui pose le message juste au-dessus ; le marché choisi au bord de l'écran revient sous les yeux (`scrollIntoView` centré) ; et `prefers-reduced-motion` couvre les quatre transitions ajoutées.
+
+*Mouvement* — quatre transitions de plus, avec leurs jetons, dans `index.css` : *tabs sliding* (16) pour les onglets de marchés, *accordion expand* (21) pour le sélecteur de pilote, *icon swap* (09) pour l'étoile de favori, *number pop-in* (02) pour le compteur de bonus. Deux points à ne pas défaire : le chevron de l'accordéon **bascule** (`scaleY(-1)`) au lieu de morpher son tracé — l'interpolation CSS de `d:` n'existe que sous Chromium, et cette app vise Safari iOS ; et la pastille des onglets doit être **posée sans transition** au premier rendu, sinon elle traverse l'écran depuis `translateX(0)` et une largeur nulle à chaque arrivée.
+
+*Accueil* — le bloc rouge annonce le prochain GP, sa date, la fermeture, et mène au tableau des cotes. Le GP retenu est celui en statut `a_venir` à la `date_course` la plus proche ; `nullsFirst: false` n'est pas cosmétique, un GP sans horaire annoncé passerait sinon devant tous les autres. Aucun GP en base est un état normal tant que le scraper n'a pas tourné : le bloc garde sa place et l'explique. Une fois la fermeture passée, le bouton mène au récapitulatif au lieu des cotes.
+
+*Vérifié* :
+
+| Contrôle | Résultat |
+|---|---|
+| Migration sur PostgreSQL 16 jetable (Docker), les cinq migrations dans l'ordre, avec doublure du schéma `auth` | **70 contrôles passent** |
+| Structure et contraintes | clé primaire des favoris, `check` sur le type, cascade du détail de podium, les trois index partiels, trigger `modifie_le` |
+| Fermeture (règle 4.3) | ouvert à 3 jours, fermé à 2 minutes, **ouvert si la date est inconnue** |
+| Enregistrement | 4 lignes écrites, détail du podium, points remontés des cotes, ordre vainqueur → podium → bonus, réenregistrement qui **remplace** sans dupliquer |
+| Refus | GP fermé (`PT423`) **sans que rien n'ait été écrit malgré le `delete` initial**, quatre bonus (`PT403`) sans laisser de pronostic partiel, podium en double, type hors liste, deux vainqueurs, deux fois le même bonus, détail de podium sur un pronostic de type vainqueur, `pilote_1` divergent du parent |
+| RLS sous trois identités | Alice lit les siens et ceux de Bob (même championnat), **ne voit rien de Carol** (autre championnat) ni ses détails de podium ; les favoris de Bob lui restent invisibles ; elle ne peut ni écrire, ni supprimer, ni réattribuer au nom d'un autre ; les quatre fonctions réservées lui sont refusées (`42501`) ; **aucune récursion `42P17`** |
+| Départ d'un championnat | sur deux championnats : **les pronostics survivent** ; sur le dernier : pronostics et favoris effacés, détail du podium cascadé, ceux d'Alice intacts ; non-membre : `false`, rien d'effacé ; dernier membre : championnat supprimé par le trigger de la migration précédente |
+| Cascades | suppression du GP et suppression du compte emportent pronostics, favoris et détails de podium |
+| Rejeu des cinq migrations sur base peuplée | aucune erreur, **empreinte des pronostics identique avant et après** |
+| Routes contre une doublure Supabase (auth + PostgREST en mémoire) | **49 contrôles passent** — `401` sans jeton et sur jeton inconnu pour les quatre routes (preuve que la signature survit au décorateur), en-tête sans `Bearer` ; bascule dans les deux sens, cote inexistante, GP inconnu, insertion concurrente rendue comme un ajout, favoris enrichis, ordonnés, cloisonnés entre comptes, favori dont la cote a disparu ; enregistrement nominal, zéro bonus accepté, identité prise dans le jeton et non dans le corps ; `423` avant appel et `423` gagné de vitesse en base, GP sans date ouvert, bonus hors favoris nommant la cote, podium en double, bonus en double, quatrième bonus, vainqueur et podium hors marché ; membres du championnat servis y compris sans pronostic, `403` pour un non-membre **vérifié avant l'existence du GP** ; départ atomique, effacement conditionné à la dernière adhésion ; table absente rendue avec `42P01`, panne inattendue typée, identifiant mal formé ; `/health` en `0.5.0`, cotes publiques sans jeton, routes des étapes 3 et 4 toujours protégées, préflight CORS |
+| Rendu des écrans hors navigateur (`react-dom/server`, cache localStorage pré-rempli) | **66 contrôles passent** — mise en forme des points et du compte à rebours, index des cotes, organisation des pronostics (jointure PostgREST en objet **comme en tableau**, cote retirée) ; les quatre écrans se rendent sans lever, avec leurs vraies données ; **aucun « ×N » nulle part** ; GP fermé : étoiles retirées, saisie en lecture seule, plus de bouton « Modifier » ; états vides : aucun marché, aucun favori, marchés obligatoires absents, aucun pronostic, aucun GP en base ; l'accueil mène aux cotes quand c'est ouvert, au récapitulatif quand c'est fermé |
+| Sous un vrai `uvicorn`, sans Supabase | les **11 routes** sont servies, `/health` en `0.5.0`, les pannes sortent avec leur trace complète sur la sortie standard |
+| `npm run build` | passe, 107 modules |
+
+**Un défaut trouvé et corrigé par ces contrôles** : le marché affiché dans le tableau des cotes était posé par un `useEffect`. Une première image se rendait donc sans aucune cote, puis la liste apparaissait d'un coup — un sursaut à chaque arrivée sur l'écran, y compris quand le cache avait déjà tout. Seul le choix explicite du joueur est désormais mémorisé ; le marché affiché s'en déduit, avec le premier pour défaut.
+
 ### Bugs connus
 
 *(Aucun.)*
 
 ### Reste à faire
 
-Les étapes 5 à 9 de l'ordre de développement de la section 7.
+Les étapes 6 à 9 de l'ordre de développement de la section 7.
 
-**Migrations à appliquer** — **aucune des quatre migrations n'a encore été exécutée** sur le projet Supabase, dans cet ordre :
+**Migrations à appliquer** — **aucune des cinq migrations n'a encore été exécutée** sur le projet Supabase, dans cet ordre :
 1. `supabase/migrations/20260809191018_profils_pseudo_unique.sql` — sans elle, aucun pseudo n'est unique et la liste des membres affiche « Pilote » partout.
 2. `supabase/migrations/20260810163435_championnats.sql` — sans elle, toutes les routes `/championnats` échouent.
 3. `supabase/migrations/20260813174500_grands_prix_cotes.sql` — sans elle, le scraper découvre et lit correctement les cotes chez Unibet mais échoue à l'écriture, et les routes `/scraper/cotes` et `/grands-prix/{id}/cotes` répondent `422` en portant `42P01`.
 4. `supabase/migrations/20260813182331_createur_nullable_championnat_vide.sql` — sans elle, supprimer un compte ayant créé un championnat échoue par contrainte de clé étrangère, et un championnat quitté par son dernier membre reste en base. **Elle suppose la 2 déjà appliquée** : elle modifie `public.championnats`, elle ne la crée pas.
+5. `supabase/migrations/20260813183636_favoris_pronostics.sql` — sans elle, aucun écran de l'étape 5 ne fonctionne, et **`DELETE /championnats/{id}/quitter` échoue aussi** : il appelle désormais `quitter_championnat`. **Elle suppose les 2, 3 et 4 déjà appliquées** : elle référence `membres_championnat`, `grands_prix`, `cotes` et réutilise `est_membre` et `marquer_modification`.
 
 **Variables d'environnement du backend** — à définir sur Railway :
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Sans elles, `/championnats` et `POST /scraper/declencher` répondent `503` avec un message explicite. La clé de service ne doit jamais être exposée au frontend ni committée.
@@ -668,8 +772,10 @@ Points non couverts, à traiter le moment venu :
 - **Programmation automatique du scraping** — la règle 4.3 veut un scraping le samedi, 2h après les qualifications, puis un figeage des cotes. Aujourd'hui le déclenchement est **manuel** (`POST /scraper/declencher`) et **rien ne fait passer un GP en `cotes_figees`** : le statut existe, la protection qu'il commande est en place et testée, mais aucun code ne l'applique encore. À traiter avec les cron jobs de l'étape 6.
 - **Marchés disponibles à J-10** — au moment du développement, Unibet n'exposait que 3 marchés pour le GP Pays-Bas (vainqueur, podium, écurie gagnante). Le noyau annoncé en section 3.1 (top 6, top 10, duels…) n'apparaîtra qu'à l'approche de la course. Le scraper les découvre dynamiquement, donc rien à changer — mais **le jeu de marchés réellement obtenu après les qualifications reste à observer**, notamment pour l'étape 6 qui devra savoir valider chacun d'eux.
 - **Parcours des championnats exercé contre le vrai Supabase** — le backend a été validé contre une doublure en mémoire et la migration contre un PostgreSQL jetable, mais les deux n'ont jamais tourné ensemble contre le vrai projet.
-- **Messages techniques des routes `/championnats`** — depuis la version `0.3.1`, une panne renvoie sa cause en clair (en anglais) jusque dans l'interface. C'est délibéré, le temps de la mise en service. Une fois le parcours exercé contre le vrai Supabase, remettre des messages en français dans `echec_lisible` et garder la cause dans les seuls logs.
-- **Pronostics d'un membre qui quitte un championnat** — le `TODO` de `DELETE /championnats/{id}/quitter` reste ouvert (table absente jusqu'à l'étape 5). À traiter avec elle : la suppression devra se faire dans la même transaction que le retrait, et le trigger `membres_championnat_supprime_vide` supprimera le championnat derrière, cotes et pronostics compris par cascade — l'ordre des clés étrangères devra être vérifié à ce moment-là.
+- **Messages techniques des routes `/championnats`, `/scraper` et `/grands-prix`** — depuis la version `0.3.1`, une panne renvoie sa cause en clair (en anglais) jusque dans l'interface, et le mécanisme est partagé par les trois domaines depuis l'étape 5. C'est délibéré, le temps de la mise en service. Une fois le parcours exercé contre le vrai Supabase, remettre des messages en français dans `journal.echec_lisible` et garder la cause dans les seuls logs.
+- **Effacement des pronostics au départ d'un championnat** — tranché à l'étape 5 : ils ne sont effacés que si le joueur ne fait plus partie d'aucun championnat, parce qu'un pronostic compte dans tous ses championnats à la fois. **Si le comportement voulu est autre**, c'est `public.quitter_championnat` qu'il faut reprendre, et rien d'autre.
+- **Pronostics d'un GP annulé ou reporté** — la règle 4.7 veut que les pronostics enregistrés soient **effacés**. Rien ne le fait aujourd'hui : le statut `annule` n'existe pas dans la contrainte `check` de `grands_prix`, et aucun code ne l'applique. À traiter avec les cron jobs de l'étape 6, en même temps que le passage en `cotes_figees`.
+- **Marchés obligatoires liés au nom Unibet** — le vainqueur et le podium sont reconnus par les slugs `vainqueur` et `podium`, en dur dans `backend/app/api/routes/pronostics.py` **et** dans `frontend/src/lib/pronostics.js`. Si Unibet renomme un de ces marchés, la saisie s'arrête proprement en le disant, mais **les deux constantes doivent être corrigées ensemble**.
 - **Test sur iPhone réel** — toujours pas fait. Le rendu n'a été validé qu'en navigateur de bureau. À faire avant de considérer les contraintes iOS comme acquises.
 - **Parcours d'authentification testé de bout en bout** — le code est en place et compile, mais inscription, confirmation par email, connexion et réinitialisation n'ont pas encore été exercées contre le vrai projet Supabase.
 - **Clés OAuth Google et Apple** — à renseigner dans le tableau de bord Supabase. Ajouter aussi les URL de redirection autorisées : `https://mon-petit-podium.vercel.app/accueil`, `.../nouveau-mot-de-passe` et leurs équivalents `http://localhost:5173`. **Les boutons sont masqués depuis la version `0.2.2`** : une fois les clés en place, repasser `OAUTH_ACTIF` à `true` dans `frontend/src/composants/BoutonsOAuth.jsx`.
@@ -677,7 +783,7 @@ Points non couverts, à traiter le moment venu :
 
 ### Décisions validées mais non encore implémentées
 
-- Schéma de base de données — cinq tables existent : `public.profils`, `public.championnats`, `public.membres_championnat`, `public.grands_prix`, `public.cotes`. Restent à concevoir celles des pronostics et des résultats. Les migrations vivent dans `supabase/migrations/`, une par étape, à exécuter à la main dans le SQL Editor.
-- Nommage des routes API — la convention est posée par `/championnats` : nom de domaine au pluriel, sous-chemin `/moi` pour ce qui appartient à l'appelant, verbe explicite pour une action qui n'est pas un CRUD (`/rejoindre`, `/{id}/quitter`, `/declencher`).
+- Schéma de base de données — huit tables existent : `public.profils`, `public.championnats`, `public.membres_championnat`, `public.grands_prix`, `public.cotes`, `public.favoris`, `public.pronostics`, `public.pronostic_podium`. Restent à concevoir celles des résultats et des points attribués (étape 6). Les migrations vivent dans `supabase/migrations/`, une par étape, à exécuter à la main dans le SQL Editor.
+- Nommage des routes API — la convention est posée par `/championnats` : nom de domaine au pluriel, sous-chemin `/moi` pour ce qui appartient à l'appelant, verbe explicite pour une action qui n'est pas un CRUD (`/rejoindre`, `/{id}/quitter`, `/declencher`). L'étape 5 y ajoute la ressource imbriquée : `/grands-prix/{id}/favoris`, `/grands-prix/{id}/pronostics`.
 - Table statique pilote → nationalité — à créer
 - Composant React `<Voiture />` avec couleurs dynamiques — à créer. Il remplacera la pastille d'initiale de `composants/Pastille.jsx`, provisoire, dans la liste des membres et les cartes.

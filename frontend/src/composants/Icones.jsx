@@ -95,6 +95,55 @@ export function IconeSortie(props) {
   );
 }
 
+/* Étoile de favori, reprise de la maquette 08. Deux variantes dans le même
+   tracé : `pleine` remplit le contour au lieu de le dessiner seul. */
+export function IconeEtoile({ pleine = false, ...props }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill={pleine ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
+}
+
+/* Horloge du bloc de fermeture, maquette 09. */
+export function IconeHorloge(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+/* Chevron du sélecteur qui se déplie. Le viewBox 16×16 et ce tracé viennent
+   du snippet d'accordéon de transitions-dev : la bascule `scaleY(-1)` du CSS
+   suppose exactement cette géométrie. Ne pas le remplacer par
+   `IconeChevronDroit` pivoté. */
+export function IconeChevronAccordeon(props) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M4 6.5L8 10.5L12 6.5" />
+    </svg>
+  );
+}
+
 export function IconeGoogle(props) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>

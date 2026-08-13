@@ -5,32 +5,43 @@ sans jeton Supabase valide, et son résultat est la seule source d'identité.
 Le corps de la requête ne dit jamais qui est l'appelant.
 """
 
-import logging
 import re
 import secrets
 import string
 from datetime import datetime
-from functools import wraps
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
+from app.api import journal
 from app.api.deps import utilisateur_courant
 from app.supabase_client import (
     ErreurSupabase,
     appeler_fonction,
     inserer,
     selectionner,
-    supprimer,
 )
 
 router = APIRouter(prefix="/championnats", tags=["championnats"])
 
-# Logger d'uvicorn : sous Railway, c'est le seul qui dispose d'un handler. Un
-# logger maison (`logging.getLogger(__name__)`) écrirait dans le vide, et le
-# diagnostic se ferait de nouveau à l'aveugle.
-logger = logging.getLogger("uvicorn.error")
+DOMAINE = "championnats"
+
+
+def echec_lisible(contexte: str, erreur: BaseException) -> HTTPException:
+    """Journalise une panne avec sa trace, et la renvoie en clair à l'appelant.
+
+    Le mécanisme, ses raisons et le choix du `422` sont documentés dans
+    `app/api/journal.py` — il est partagé avec le scraper et les pronostics
+    depuis l'étape 5. À appeler depuis un bloc `except`.
+    """
+    return journal.echec_lisible(DOMAINE, contexte, erreur)
+
+
+def journaliser_echecs(contexte: str):
+    """Enrobe un handler pour qu'aucune exception ne sorte sans être journalisée."""
+    return journal.journaliser_echecs(DOMAINE, contexte)
+
 
 # Code d'invitation : 6 caractères alphanumériques majuscules, sans séparateur
 # (règle métier 4.5). Le même motif est répliqué en contrainte `check` sur la
@@ -46,75 +57,6 @@ TENTATIVES_CODE = 5
 
 # Code d'erreur PostgreSQL d'une violation de contrainte d'unicité.
 VIOLATION_UNICITE = "23505"
-
-
-def _technique(erreur: BaseException) -> str:
-    """Décrit une exception en une ligne, sans rien perdre de ce qui identifie la panne.
-
-    Pour un échec Supabase, le message de PostgREST seul ne suffit pas : le code
-    (`42P01` table absente, `42501` droits, `23505` doublon…) et le statut HTTP
-    disent souvent à eux seuls ce qui manque. Pour tout le reste, le nom de la
-    classe distingue une panne réseau d'une clé absente dans un dictionnaire.
-    """
-    if isinstance(erreur, ErreurSupabase):
-        morceaux = [erreur.message or "Erreur Supabase."]
-        if erreur.code:
-            morceaux.append(f"code {erreur.code}")
-        if erreur.statut:
-            morceaux.append(f"statut {erreur.statut}")
-        return " · ".join(morceaux)
-    return f"{type(erreur).__name__}: {erreur}"
-
-
-def echec_lisible(contexte: str, erreur: BaseException) -> HTTPException:
-    """Journalise une panne avec sa trace, et la renvoie en clair à l'appelant.
-
-    **Mesure de diagnostic, temporaire.** Un `502` opaque ne dit rien : ni les
-    logs Railway ni le frontend ne portaient jusqu'ici la cause réelle. Le
-    `422` retenu ici n'a rien d'une erreur de validation, mais c'est le seul
-    statut que `lib/api.js` affiche déjà tel quel côté frontend, et qui ne se
-    confond ni avec le `503` d'une configuration absente ni avec le `500` d'un
-    plantage non capturé.
-
-    À appeler **depuis un bloc `except`** : `logger.exception` n'a de trace à
-    joindre que là.
-    """
-    detail = _technique(erreur)
-    logger.exception("[championnats] %s — %s", contexte, detail)
-    return HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        detail=f"{contexte} — {detail}",
-    )
-
-
-def journaliser_echecs(contexte: str):
-    """Enrobe un handler pour qu'aucune exception ne sorte sans être journalisée.
-
-    Les `HTTPException` traversent intactes : ce sont les réponses voulues par
-    la logique métier (`404` code inconnu, `409` déjà membre, `503` sans clés
-    Supabase), pas des pannes. Tout le reste — panne réseau, table absente,
-    clé manquante dans une réponse, bug — était jusqu'ici rendu par Railway en
-    `502` sans une ligne de log ; il ressort maintenant en clair, avec sa trace.
-
-    `functools.wraps` n'est pas cosmétique : FastAPI lit la signature du
-    handler pour construire ses dépendances et son modèle de réponse, et
-    `inspect.signature` suit `__wrapped__`. Sans lui, la route recevrait
-    `(*args, **kwargs)` et perdrait `Depends(utilisateur_courant)`.
-    """
-
-    def decorateur(handler):
-        @wraps(handler)
-        async def enveloppe(*args, **kwargs):
-            try:
-                return await handler(*args, **kwargs)
-            except HTTPException:
-                raise
-            except Exception as erreur:  # noqa: BLE001 — c'est tout l'objet
-                raise echec_lisible(contexte, erreur) from erreur
-
-        return enveloppe
-
-    return decorateur
 
 
 class CreationChampionnat(BaseModel):
@@ -301,33 +243,36 @@ async def quitter(
     championnat_id: UUID,
     utilisateur: str = Depends(utilisateur_courant),
 ) -> Response:
-    """Retire l'appelant du championnat.
+    """Retire l'appelant du championnat, et efface ses pronostics s'il ne lui
+    reste plus aucune adhésion.
 
     Le créateur peut partir comme n'importe quel membre : le championnat lui
-    survit. Rien ne le supprime, y compris s'il devient vide — c'est une
-    décision de l'étape 3, pas un oubli.
+    survit, sans créateur (migration `20260813182331`). S'il ne reste plus
+    personne, le trigger `membres_championnat_supprime_vide` l'efface.
+
+    Le retrait et l'effacement des pronostics se font dans **une seule
+    transaction**, côté base : c'est ce qu'exigeait le `TODO` de l'étape 3, sans
+    quoi un départ interrompu laisserait des pronostics orphelins qui
+    continueraient d'alimenter le classement.
+
+    **Les pronostics ne sont effacés que si le joueur ne fait plus partie
+    d'aucun championnat.** Un pronostic n'appartient pas à un championnat : le
+    joueur en remplit un par Grand Prix, qui compte dans tous ses championnats à
+    la fois. Les effacer au départ d'un seul détruirait son classement dans les
+    autres.
     """
     try:
-        supprimees = await supprimer(
-            "membres_championnat",
-            {
-                "championnat_id": f"eq.{championnat_id}",
-                "profil_id": f"eq.{utilisateur}",
-            },
+        retire = await appeler_fonction(
+            "quitter_championnat",
+            {"p_profil": utilisateur, "p_championnat": str(championnat_id)},
         )
     except ErreurSupabase as erreur:
         raise echec_lisible("Départ du championnat", erreur) from erreur
 
-    if not supprimees:
+    if not retire:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tu ne fais pas partie de ce championnat.",
         )
-
-    # TODO(étape 5) — effacer ici les pronostics de ce membre dans ce
-    # championnat. La table `pronostics` n'existe pas encore ; quand elle
-    # existera, sa suppression devra se faire dans la même transaction que le
-    # retrait ci-dessus, sans quoi un départ interrompu laisserait des
-    # pronostics orphelins qui continueraient d'alimenter le classement.
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

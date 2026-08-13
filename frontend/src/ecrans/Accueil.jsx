@@ -7,8 +7,79 @@ import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { IconeChevronDroit, IconeMembres, IconePlus } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { listerMesChampionnats } from "../lib/championnats.js";
+import { chargerProchainGp } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
+import { formaterDepart } from "../lib/format.js";
+import { useFermeture } from "../lib/useFermeture.js";
 import { APP_VERSION } from "../config.js";
+
+/**
+ * Bloc rouge « PROCHAIN GP » de la maquette 04.
+ *
+ * Le GP est lu **directement dans Supabase**, sous la politique de lecture
+ * publique de l'étape 4, et non par l'API : l'accueil est le premier écran de
+ * l'app, et lui faire attendre le réveil de Railway pour afficher son bloc
+ * principal serait le pire endroit où payer ce délai.
+ *
+ * La clé de cache ne porte pas l'identifiant du compte, contrairement à celle
+ * des championnats : le prochain Grand Prix est le même pour tout le monde.
+ */
+function BlocProchainGp() {
+  const chargeur = useCallback((signal) => chargerProchainGp(signal), []);
+  const { donnees: gp, chargement } = useDonnees("gp:prochain", chargeur);
+  const etat = useFermeture(gp?.date_course);
+
+  if (chargement && !gp) {
+    return (
+      <div className="rounded-bloc bg-primaire h-[150px] animate-pulse opacity-60" />
+    );
+  }
+
+  // Aucun GP en base : le scraper n'a pas encore tourné, ou la saison est
+  // terminée. Le bloc garde sa place dans la composition plutôt que de laisser
+  // l'accueil s'effondrer d'un cran à chaque intersaison.
+  if (!gp) {
+    return (
+      <div className="rounded-bloc bg-primaire p-5">
+        <p className="text-label-sm uppercase text-white/60">Saison 2026</p>
+        <p className="text-titre mt-2 text-white">Pronostics F1 entre amis</p>
+        <p className="text-corps-sm mt-1 text-white/60">
+          Aucun Grand Prix ouvert aux pronostics pour l'instant. Les cotes sont
+          relevées le samedi, après les qualifications.
+        </p>
+      </div>
+    );
+  }
+
+  const depart = formaterDepart(gp.date_course);
+
+  return (
+    <div className="rounded-bloc bg-primaire p-5">
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <span className="text-label-sm rounded-full bg-white/20 px-2.5 py-1 text-white uppercase">
+          Prochain GP
+        </span>
+        <span className="shrink-0 text-[11px] text-white/60">{depart.courte}</span>
+      </div>
+
+      <p className="truncate text-[22px] font-medium text-white">{gp.nom}</p>
+      <p className="mb-4 text-[12px] text-white/60">
+        {etat.ferme
+          ? "Pronostics fermés"
+          : etat.texte
+            ? `Pronos ouverts · Fermeture dans ${etat.texte}`
+            : "Pronos ouverts"}
+      </p>
+
+      <Link
+        to={`/grands-prix/${gp.id}/${etat.ferme ? "recap" : "cotes"}`}
+        className="rounded-champ bg-surface text-primaire pressable min-h-tactile flex items-center justify-center px-4 text-center text-[14px] font-medium"
+      >
+        {etat.ferme ? "Voir mes pronos" : "Pronostiquer"}
+      </Link>
+    </div>
+  );
+}
 
 /** Carte de championnat de la maquette 04. */
 function CarteChampionnat({ championnat, rang }) {
@@ -126,12 +197,8 @@ export default function Accueil() {
           <Pastille nom={pseudo} graine={utilisateur?.id ?? pseudo} taille="lg" />
         </Bloc>
 
-        <Bloc rang={2} className="rounded-bloc bg-primaire p-5">
-          <p className="text-label-sm uppercase text-white/60">Saison 2026</p>
-          <p className="text-titre mt-2 text-white">Pronostics F1 entre amis</p>
-          <p className="text-corps-sm mt-1 text-white/60">
-            Les cotes et les Grands Prix arrivent à la prochaine étape.
-          </p>
+        <Bloc rang={2}>
+          <BlocProchainGp />
         </Bloc>
 
         <Bloc rang={3} className="flex flex-col gap-2.5">

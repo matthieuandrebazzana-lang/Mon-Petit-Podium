@@ -18,18 +18,20 @@ import asyncio
 import logging
 import secrets
 from datetime import datetime
-from functools import wraps
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 
+from app.api import journal
 from app.api.deps import exiger_configuration
 from app.config import get_settings
 from app.scraper.unibet import scraper_en_tache_de_fond
-from app.supabase_client import ErreurSupabase, appeler_fonction, selectionner
+from app.supabase_client import appeler_fonction, selectionner
 
 router = APIRouter(tags=["scraper"])
+
+DOMAINE = "scraper-api"
 
 # Comme ailleurs dans le backend : sous Railway, `uvicorn.error` est le seul
 # logger doté d'un handler.
@@ -70,42 +72,12 @@ class GrandPrixServi(BaseModel):
 def journaliser_echecs(contexte: str):
     """Aucune panne ne sort d'ici sans laisser de trace dans les logs.
 
-    Même principe et mêmes raisons que dans `routes/championnats.py` (version
-    0.3.1) : les `HTTPException` traversent intactes, ce sont des réponses
-    voulues ; tout le reste est journalisé avec sa trace puis rendu en `422`
-    portant sa cause, plutôt qu'en `502` muet.
-
-    `functools.wraps` est indispensable : FastAPI lit la signature du handler
-    pour construire ses paramètres, et `inspect.signature` suit `__wrapped__`.
-    Sans lui, `POST /scraper/declencher` perdrait son en-tête `X-Admin-Secret`
-    et s'ouvrirait à tous.
+    Le décorateur est partagé depuis l'étape 5 : voir `app/api/journal.py` pour
+    le mécanisme, le rôle de `functools.wraps` — sans lui,
+    `POST /scraper/declencher` perdrait son en-tête `X-Admin-Secret` et
+    s'ouvrirait à tous — et le choix du `422`.
     """
-
-    def decorateur(handler):
-        @wraps(handler)
-        async def enveloppe(*args, **kwargs):
-            try:
-                return await handler(*args, **kwargs)
-            except HTTPException:
-                raise
-            except ErreurSupabase as erreur:
-                logger.exception("[scraper-api] %s — %s", contexte, erreur.message)
-                detail = f"{contexte} — {erreur.message}"
-                if erreur.code:
-                    detail += f" · code {erreur.code}"
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail
-                ) from erreur
-            except Exception as erreur:  # noqa: BLE001 — c'est tout l'objet
-                logger.exception("[scraper-api] %s", contexte)
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail=f"{contexte} — {type(erreur).__name__}: {erreur}",
-                ) from erreur
-
-        return enveloppe
-
-    return decorateur
+    return journal.journaliser_echecs(DOMAINE, contexte)
 
 
 def exiger_secret(fourni: str | None) -> None:

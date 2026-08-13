@@ -469,6 +469,177 @@
   }
 }
 
+/* — Tabs sliding (transitions-dev 16) —
+   Les onglets de marchés de la maquette 08. Le snippet d'origine porte ses
+   propres couleurs ; elles sont remplacées par celles de la section 5, seul
+   le mouvement est repris. La piste et la pastille prennent le rayon des
+   petits éléments du design system plutôt que le `48px` du snippet. */
+:root {
+  --tabs-dur: 250ms;
+  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-tabs {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+}
+.t-tab {
+  position: relative;
+  z-index: 1;
+  transition: color var(--tabs-dur) var(--tabs-ease);
+}
+
+/* Largeur et position sont écrites en ligne par le composant : la transition
+   interpole alors entre les deux mesures. */
+.t-tabs-pill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: 0;
+  transform: translateX(0);
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease);
+  will-change: transform, width;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* — Accordion expand (transitions-dev 21) —
+   Le sélecteur de pilote de la maquette 09 : la liste des cotes du marché se
+   déplie sous l'emplacement à remplir. `grid-template-rows: 0fr → 1fr` évite
+   toute mesure de hauteur en JS, ce qui compte ici : le nombre de pilotes
+   change d'un marché à l'autre. Le rembourrage vit sur `-inner`, jamais sur
+   la piste — sur `0fr`, il laisserait une bande résiduelle. */
+:root {
+  --acc-expand: 250ms;
+  --acc-collapse: 250ms;
+  --acc-chevron: 250ms;
+  --acc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-acc-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--acc-collapse) var(--acc-ease);
+}
+.t-acc[data-open="true"] .t-acc-panel {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--acc-expand) var(--acc-ease);
+}
+.t-acc-panel-inner {
+  overflow: hidden;
+  opacity: 0;
+  filter: blur(2px);
+  transition:
+    opacity var(--acc-collapse) var(--acc-ease),
+    filter var(--acc-collapse) var(--acc-ease);
+}
+.t-acc[data-open="true"] .t-acc-panel-inner {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity var(--acc-expand) var(--acc-ease),
+    filter var(--acc-expand) var(--acc-ease);
+}
+/* Le chevron bascule verticalement plutôt que de morpher son tracé :
+   l'interpolation CSS de `d:` n'existe que sous Chromium, et cette app vise
+   Safari iOS. Le retournement passe par une ligne plate au milieu, exactement
+   comme le morph. `non-scaling-stroke` garde l'épaisseur constante pendant
+   l'écrasement. */
+.t-acc-chevron {
+  display: inline-flex;
+  transform: scaleY(1);
+  transform-origin: center;
+  transition: transform var(--acc-chevron) var(--acc-ease);
+}
+.t-acc-chevron path {
+  vector-effect: non-scaling-stroke;
+}
+.t-acc[data-open="true"] .t-acc-chevron {
+  transform: scaleY(-1);
+}
+
+/* — Icon swap (transitions-dev 09) —
+   L'étoile de favori : contour ↔ pleine, dans le même emplacement. Les deux
+   icônes restent montées et partagent une cellule de grille. */
+:root {
+  --icon-swap-dur: 250ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-start-scale: 0.25;
+  --icon-swap-ease: ease-in-out;
+}
+
+.t-icon-swap {
+  position: relative;
+  display: inline-grid;
+}
+.t-icon-swap .t-icon {
+  grid-area: 1 / 1;
+  transition:
+    opacity var(--icon-swap-dur) var(--icon-swap-ease),
+    filter var(--icon-swap-dur) var(--icon-swap-ease),
+    transform var(--icon-swap-dur) var(--icon-swap-ease);
+  will-change: opacity, filter, transform;
+}
+.t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
+  opacity: 1;
+  filter: blur(0);
+  transform: scale(1);
+}
+.t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+  opacity: 0;
+  filter: blur(var(--icon-swap-blur));
+  transform: scale(var(--icon-swap-start-scale));
+}
+
+/* — Number pop-in (transitions-dev 02) —
+   Le compteur de bonus « 1 sélectionné sur 3 max » : le chiffre remonte,
+   flouté, à chaque changement. Un seul caractère ici, donc pas de
+   `data-stagger` — il n'a personne derrière qui décaler. */
+:root {
+  --digit-dur: 500ms;
+  --digit-distance: 8px;
+  --digit-blur: 2px;
+  --digit-ease: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --digit-dir-x: 0;
+  --digit-dir-y: 1;
+}
+
+@keyframes t-digit-pop-in {
+  0% {
+    transform: translate(
+      calc(var(--digit-distance) * var(--digit-dir-x)),
+      calc(var(--digit-distance) * var(--digit-dir-y))
+    );
+    opacity: 0;
+    filter: blur(var(--digit-blur));
+  }
+  100% {
+    transform: translate(0, 0);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.t-digit-group {
+  display: inline-flex;
+  align-items: baseline;
+}
+.t-digit {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+}
+.t-digit-group.is-animating .t-digit {
+  animation: t-digit-pop-in var(--digit-dur) var(--digit-ease) both;
+}
+
 /* — Retour tactile (/apple-design) —
    Le retour visuel se déclenche à l'appui, pas au relâchement : attendre le
    clic donne une interface morte. 100ms suffisent à être perçus sans retarder
@@ -484,7 +655,13 @@
   .t-stagger-line,
   .t-text-swap,
   .t-error-msg,
-  .t-input {
+  .t-input,
+  .t-tabs-pill,
+  .t-tab,
+  .t-acc-panel,
+  .t-acc-panel-inner,
+  .t-acc-chevron,
+  .t-icon-swap .t-icon {
     transition: none !important;
   }
   .t-input,
@@ -495,7 +672,8 @@
   .pressable {
     transition: none !important;
   }
-  .t-shimmer::before {
+  .t-shimmer::before,
+  .t-digit-group .t-digit {
     animation: none !important;
   }
 }

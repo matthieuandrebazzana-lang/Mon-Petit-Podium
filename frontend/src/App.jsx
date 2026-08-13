@@ -11,6 +11,9 @@ import Accueil from "./ecrans/Accueil.jsx";
 import CreerChampionnat from "./ecrans/CreerChampionnat.jsx";
 import RejoindreChampionnat from "./ecrans/RejoindreChampionnat.jsx";
 import Championnat from "./ecrans/Championnat.jsx";
+import Cotes from "./ecrans/Cotes.jsx";
+import Pronostics from "./ecrans/Pronostics.jsx";
+import RecapPronostics from "./ecrans/RecapPronostics.jsx";
 
 /** Configuration absente : mieux vaut le dire que servir une page blanche. */
 function EcranConfiguration({ message }) {
@@ -49,6 +52,13 @@ export default function App() {
         <Route path="/championnats/creer" element={<CreerChampionnat />} />
         <Route path="/championnats/rejoindre" element={<RejoindreChampionnat />} />
         <Route path="/championnats/:id" element={<Championnat />} />
+
+        {/* Parcours de pronostics, maquettes 08 → 09 → 10. Les trois écrans
+            partagent l'identifiant du Grand Prix : la lecture des cotes est
+            publique, mais les favoris et les pronostics sont nominatifs. */}
+        <Route path="/grands-prix/:gpId/cotes" element={<Cotes />} />
+        <Route path="/grands-prix/:gpId/pronostics" element={<Pronostics />} />
+        <Route path="/grands-prix/:gpId/recap" element={<RecapPronostics />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
