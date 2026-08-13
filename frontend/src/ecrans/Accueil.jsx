@@ -4,10 +4,11 @@ import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import TexteEchange from "../composants/TexteEchange.jsx";
 import { IconeChevronDroit, IconeMembres, IconePlus } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { listerMesChampionnats } from "../lib/championnats.js";
-import { chargerProchainGp } from "../lib/pronostics.js";
+import { chargerAccueilGp, cleAccueilGp } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import { formaterDepart } from "../lib/format.js";
 import { useFermeture } from "../lib/useFermeture.js";
@@ -16,17 +17,27 @@ import { APP_VERSION } from "../config.js";
 /**
  * Bloc rouge « PROCHAIN GP » de la maquette 04.
  *
- * Le GP est lu **directement dans Supabase**, sous la politique de lecture
- * publique de l'étape 4, et non par l'API : l'accueil est le premier écran de
- * l'app, et lui faire attendre le réveil de Railway pour afficher son bloc
- * principal serait le pire endroit où payer ce délai.
+ * Le GP et les pronostics du joueur sont lus **directement dans Supabase**,
+ * sous les politiques de lecture des étapes 4 et 5, et non par l'API :
+ * l'accueil est le premier écran de l'app, et lui faire attendre le réveil de
+ * Railway pour afficher son bloc principal serait le pire endroit où payer ce
+ * délai. Les deux lectures partagent le même passage dans le cache
+ * *stale-while-revalidate* — aucun appel réseau supplémentaire ne bloque
+ * l'affichage.
  *
- * La clé de cache ne porte pas l'identifiant du compte, contrairement à celle
- * des championnats : le prochain Grand Prix est le même pour tout le monde.
+ * **La clé de cache porte l'identifiant du compte.** Le prochain Grand Prix est
+ * le même pour tout le monde, mais l'état des pronostics ne l'est pas : deux
+ * personnes qui se relaient sur le même téléphone ne doivent jamais hériter du
+ * bouton de l'autre, fût-ce le temps d'un rafraîchissement.
  */
-function BlocProchainGp() {
-  const chargeur = useCallback((signal) => chargerProchainGp(signal), []);
-  const { donnees: gp, chargement } = useDonnees("gp:prochain", chargeur);
+export function BlocProchainGp({ profilId }) {
+  const chargeur = useCallback((signal) => chargerAccueilGp(profilId, signal), [profilId]);
+  const { donnees, chargement } = useDonnees(
+    profilId ? cleAccueilGp(profilId) : null,
+    chargeur,
+  );
+
+  const gp = donnees?.gp ?? null;
   const etat = useFermeture(gp?.date_course);
 
   if (chargement && !gp) {
@@ -53,6 +64,15 @@ function BlocProchainGp() {
 
   const depart = formaterDepart(gp.date_course);
 
+  // Deux destinations pour un même bouton (maquette 08 ou maquette 10) : le
+  // joueur qui a déjà validé ses pronostics veut les revoir, pas repartir du
+  // tableau des cotes. Une fois la fermeture passée, le récapitulatif est de
+  // toute façon le seul écran qui ait encore quelque chose à dire.
+  //
+  // Le libellé suit la destination plutôt que l'inverse : « Pronostiquer » sur
+  // un bouton qui ouvre un récapitulatif serait une promesse fausse.
+  const versRecap = etat.ferme || donnees?.aPronostique === true;
+
   return (
     <div className="rounded-bloc bg-primaire p-5">
       <div className="mb-2.5 flex items-center justify-between gap-3">
@@ -72,10 +92,14 @@ function BlocProchainGp() {
       </p>
 
       <Link
-        to={`/grands-prix/${gp.id}/${etat.ferme ? "recap" : "cotes"}`}
+        to={`/grands-prix/${gp.id}/${versRecap ? "recap" : "cotes"}`}
         className="rounded-champ bg-surface text-primaire pressable min-h-tactile flex items-center justify-center px-4 text-center text-[14px] font-medium"
       >
-        {etat.ferme ? "Voir mes pronos" : "Pronostiquer"}
+        {/* Le cache peut avoir servi l'état d'avant la dernière validation : le
+            libellé change alors sous les yeux du joueur, une fois la lecture
+            fraîche revenue. TexteEchange (transitions-dev 04) le remplace en
+            place plutôt que de le laisser clignoter. */}
+        <TexteEchange valeur={versRecap ? "Voir mes pronos" : "Pronostiquer"} />
       </Link>
     </div>
   );
@@ -198,7 +222,7 @@ export default function Accueil() {
         </Bloc>
 
         <Bloc rang={2}>
-          <BlocProchainGp />
+          <BlocProchainGp profilId={utilisateur?.id ?? null} />
         </Bloc>
 
         <Bloc rang={3} className="flex flex-col gap-2.5">

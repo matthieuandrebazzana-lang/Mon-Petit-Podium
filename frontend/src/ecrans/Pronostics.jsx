@@ -17,6 +17,7 @@ import {
   MARCHE_PODIUM,
   MARCHE_VAINQUEUR,
   chargerSaisie,
+  cleAccueilGp,
   enregistrerPronostics,
   indexerCotes,
   marcheDe,
@@ -284,7 +285,14 @@ export default function Pronostics() {
     }
 
     if (cle) oublierCache(cle);
-    if (utilisateur) oublierCache(`recap:${utilisateur.id}:${gpId}`);
+    if (utilisateur) {
+      oublierCache(`recap:${utilisateur.id}:${gpId}`);
+      // Le bloc « Prochain GP » de l'accueil décide de sa destination sur
+      // l'existence de ces pronostics : sans cet oubli, un retour immédiat sur
+      // l'accueil proposerait encore « Pronostiquer » le temps du
+      // rafraîchissement, juste après une validation.
+      oublierCache(cleAccueilGp(utilisateur.id));
+    }
     naviguer(`/grands-prix/${gpId}/recap`, { state: { enregistre: true } });
   }
 

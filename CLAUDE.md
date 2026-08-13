@@ -745,6 +745,42 @@ Les **deux chemins de données** de l'étape 3 restent en vigueur. Écritures pa
 
 **Un défaut trouvé et corrigé par ces contrôles** : le marché affiché dans le tableau des cotes était posé par un `useEffect`. Une première image se rendait donc sans aucune cote, puis la liste apparaissait d'un coup — un sursaut à chaque arrivée sur l'écran, y compris quand le cache avait déjà tout. Seul le choix explicite du joueur est désormais mémorisé ; le marché affiché s'en déduit, avec le premier pour défaut.
 
+---
+
+**Destination du bouton du bloc « Prochain GP »** (version `0.5.1`)
+
+Le bouton du bloc rouge de l'accueil mène désormais à **deux écrans selon l'état du joueur** : le tableau des cotes (maquette 08) tant qu'aucun pronostic n'est enregistré pour ce GP, le récapitulatif (maquette 10) dès qu'il y en a un. Le comportement antérieur — récapitulatif une fois la fermeture passée — est conservé tel quel.
+
+*Écart assumé sur la source de données* — la demande disait d'appeler `GET /grands-prix/{gp_id}/pronostics`. **Cette route n'existe pas** : l'étape 5 expose `POST /grands-prix/{gp_id}/pronostics` (enregistrement) et `GET /grands-prix/{gp_id}/pronostics/championnat/{championnat_id}` (tous les membres), jamais un GET des seuls pronostics de l'appelant. Le frontend les lit déjà **directement dans Supabase** via `chargerMesPronostics`, sous la politique RLS « les miens, ou ceux d'un membre d'un championnat que je partage ». C'est ce chemin qui est réutilisé, et non une nouvelle route :
+- l'accueil lit déjà le prochain GP en direct **précisément** pour ne pas payer le réveil de Railway sur le premier écran de l'app — y ajouter un aller-retour Railway aurait annulé ce choix ;
+- une route servant un cas déjà couvert par la RLS aurait été du code mort côté backend.
+
+**Aucun code backend n'est touché**, `backend/app/config.py` reste donc en `0.5.0` : faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'à la version `0.2.2`).
+
+*Ce qui change* — `chargerAccueilGp(profilId, signal)` dans `frontend/src/lib/pronostics.js` remplace l'appel direct à `chargerProchainGp` dans le bloc. Les deux lectures sont **enchaînées et non parallèles** (l'identifiant du GP n'existe qu'une fois la première revenue), et passent dans le **même passage du cache *stale-while-revalidate*** : aucun appel réseau supplémentaire ne bloque l'affichage, et l'état connu est servi immédiatement au lancement.
+
+Trois points de mise en œuvre à ne pas défaire :
+
+1. **L'échec de la lecture des pronostics n'emporte pas celle du GP.** Le bloc reste affiché et la destination retombe sur les cotes. C'est le bon sens du doute : l'écran de saisie sait retrouver seul les pronostics déjà enregistrés, alors qu'un récapitulatif vide serait un cul-de-sac.
+2. **La clé de cache porte l'identifiant du compte** — `accueil-gp:{profil}`, au lieu de `gp:prochain`. Le prochain Grand Prix est le même pour tout le monde, l'état des pronostics ne l'est pas : deux personnes qui se relaient sur le même téléphone ne doivent jamais hériter du bouton de l'autre. C'est la règle déjà posée à l'étape 3 pour la liste des championnats.
+3. **La clé est fabriquée par `cleAccueilGp(profilId)`, exportée**, et non écrite en dur à ses deux points d'usage (l'accueil la lit, `Pronostics.jsx` l'oublie après une validation réussie). Deux chaînes en dur auraient divergé au premier renommage, avec un symptôme discret : un bouton proposant encore « Pronostiquer » juste après l'enregistrement.
+
+*Le libellé suit la destination* — « Pronostiquer » quand il reste à saisir, « Voir mes pronos » quand le bouton ouvre le récapitulatif. Un bouton nommé « Pronostiquer » qui débouche sur un récapitulatif serait une promesse fausse, et l'écran d'arrivée porte déjà son propre bouton « Modifier ». Le changement de libellé passe par `TexteEchange` (transitions-dev 04, déjà installé) : le cache peut avoir servi l'état d'avant la dernière validation, le libellé se remplace alors en place au lieu de clignoter.
+
+*Apport d'/apple-design* — le bouton conserve sa zone tactile de 44px et son retour à l'appui. Le point traité ici relève du **wayfinding** : un même bouton mène à deux écrans, son libellé doit dire lequel. Le squelette du bloc reste affiché tant que la lecture n'a rien rendu, plutôt que d'afficher une destination devinée puis corrigée.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server`), Supabase doublé, cache localStorage pré-rempli : **26 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| `chargerAccueilGp` | GP + pronostics → destination récap ; GP sans pronostic → cotes ; **échec de la lecture des pronostics → le bloc tient debout, GP servi, destination cotes** ; échec de la lecture du GP → échec remonté ; aucun GP en base → `gp: null` sans erreur et **aucune lecture de pronostics inutile** ; session non résolue → cotes |
+| Rendu du bloc | GP ouvert sans pronostic → `/cotes` et « Pronostiquer » ; GP ouvert avec pronostics → `/recap` et « Voir mes pronos » ; **GP fermé → `/recap` dans les deux cas** (comportement antérieur conservé) ; GP sans horaire annoncé → reste ouvert, destination selon l'état ; aucun GP → bloc de repli sans lien ; libellé bien porté par `TexteEchange` |
+| Cloisonnement | le cache d'un compte ne fuit pas vers l'autre ; compte sans cache → silhouette, aucune destination devinée |
+| Clé partagée | l'accueil et l'écran de saisie fabriquent la même clé, et l'oubli après validation vide bien le bon cache |
+| `npm run build` | passe, version `0.5.1` présente dans le bundle |
+
+`BlocProchainGp` est désormais **exporté nommément** depuis `Accueil.jsx` (l'export par défaut de l'écran est inchangé) : sans cela, le rendre hors navigateur imposait de monter `AuthProvider`, dont la session n'est résolue que dans un effet — jamais exécuté en rendu serveur.
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -753,7 +789,9 @@ Les **deux chemins de données** de l'étape 3 restent en vigueur. Écritures pa
 
 Les étapes 6 à 9 de l'ordre de développement de la section 7.
 
-**Migrations à appliquer** — **aucune des cinq migrations n'a encore été exécutée** sur le projet Supabase, dans cet ordre :
+**Migrations à appliquer** — cette liste est à revérifier. Au cours de la version `0.5.1`, une lecture partie par erreur vers le **vrai** projet Supabase (doublure de test mal branchée) a rendu une ligne réelle de `public.grands_prix` : « GP Pays Bas », `2026-08-23T13:00:00+00:00`, statut `a_venir` — exactement ce que le scraper de l'étape 4 avait produit en local. **La migration 3 est donc appliquée et le scraper a bel et bien écrit en base**, ce qui contredit la mention ci-dessous. L'état des quatre autres n'a pas été observé. À vérifier dans le SQL Editor avant de rejouer quoi que ce soit — les cinq migrations sont idempotentes, les rejouer ne casse rien.
+
+Ordre d'application, si l'une manque :
 1. `supabase/migrations/20260809191018_profils_pseudo_unique.sql` — sans elle, aucun pseudo n'est unique et la liste des membres affiche « Pilote » partout.
 2. `supabase/migrations/20260810163435_championnats.sql` — sans elle, toutes les routes `/championnats` échouent.
 3. `supabase/migrations/20260813174500_grands_prix_cotes.sql` — sans elle, le scraper découvre et lit correctement les cotes chez Unibet mais échoue à l'écriture, et les routes `/scraper/cotes` et `/grands-prix/{id}/cotes` répondent `422` en portant `42P01`.
@@ -768,7 +806,7 @@ Les étapes 6 à 9 de l'ordre de développement de la section 7.
   ```
 
 Points non couverts, à traiter le moment venu :
-- **Scraper exercé contre le vrai Supabase** — le scraping a été vérifié de bout en bout contre le vrai Unibet, et la migration contre un PostgreSQL jetable, mais **jamais les deux ensemble** : l'écriture réelle en base n'a pas encore eu lieu. C'est le premier essai à faire une fois la migration appliquée et les variables posées sur Railway.
+- **Scraper exercé contre le vrai Supabase** — la ligne réelle observée en version `0.5.1` (voir ci-dessus) montre que l'écriture a eu lieu au moins une fois. Reste à vérifier le contenu de `public.cotes` pour ce GP, et le comportement du scraper sur un GP déjà figé.
 - **Programmation automatique du scraping** — la règle 4.3 veut un scraping le samedi, 2h après les qualifications, puis un figeage des cotes. Aujourd'hui le déclenchement est **manuel** (`POST /scraper/declencher`) et **rien ne fait passer un GP en `cotes_figees`** : le statut existe, la protection qu'il commande est en place et testée, mais aucun code ne l'applique encore. À traiter avec les cron jobs de l'étape 6.
 - **Marchés disponibles à J-10** — au moment du développement, Unibet n'exposait que 3 marchés pour le GP Pays-Bas (vainqueur, podium, écurie gagnante). Le noyau annoncé en section 3.1 (top 6, top 10, duels…) n'apparaîtra qu'à l'approche de la course. Le scraper les découvre dynamiquement, donc rien à changer — mais **le jeu de marchés réellement obtenu après les qualifications reste à observer**, notamment pour l'étape 6 qui devra savoir valider chacun d'eux.
 - **Parcours des championnats exercé contre le vrai Supabase** — le backend a été validé contre une doublure en mémoire et la migration contre un PostgreSQL jetable, mais les deux n'ont jamais tourné ensemble contre le vrai projet.

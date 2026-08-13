@@ -163,6 +163,49 @@ export async function chargerTableauCotes(gpId, signal) {
   return combiner([cotes, favoris], (gp, epingles) => ({ gp, favoris: epingles }));
 }
 
+/**
+ * Maquette 04 : le prochain Grand Prix, et si le joueur y a déjà des
+ * pronostics enregistrés — c'est ce qui décide où mène le bouton du bloc rouge.
+ *
+ * Les deux lectures sont **enchaînées, pas parallèles** : l'identifiant du GP
+ * n'existe qu'une fois la première revenue. Elles vont toutes les deux
+ * directement à Supabase, sous les politiques RLS qui décrivent exactement ces
+ * deux cas — l'accueil ne paie donc toujours aucun réveil de Railway, et le
+ * cache *stale-while-revalidate* de `useDonnees` sert l'état connu
+ * immédiatement au lancement.
+ *
+ * **L'échec de la seconde lecture n'emporte pas la première.** Le Grand Prix
+ * est l'information principale du bloc ; savoir où mène son bouton n'est qu'un
+ * raccourci. En cas d'échec, le joueur est envoyé vers les cotes : l'écran de
+ * saisie sait retrouver seul les pronostics déjà enregistrés, alors qu'un
+ * récapitulatif vide serait un cul-de-sac.
+ */
+/**
+ * Clé de cache du bloc « Prochain GP ».
+ *
+ * Écrite ici plutôt qu'à ses deux points d'usage : l'accueil la lit, l'écran de
+ * saisie l'oublie après une validation. Deux chaînes en dur auraient divergé au
+ * premier renommage, et le symptôme aurait été discret — un bouton qui propose
+ * encore « Pronostiquer » juste après avoir enregistré.
+ */
+export const cleAccueilGp = (profilId) => `accueil-gp:${profilId}`;
+
+export async function chargerAccueilGp(profilId, signal) {
+  const prochain = await chargerProchainGp(signal);
+  if (!prochain.ok) return prochain;
+
+  const gp = prochain.donnees;
+  if (!gp) return { ok: true, message: null, donnees: { gp: null, aPronostique: false } };
+
+  const miens = await chargerMesPronostics(gp.id, profilId, signal);
+
+  return {
+    ok: true,
+    message: null,
+    donnees: { gp, aPronostique: miens.ok && (miens.donnees?.length ?? 0) > 0 },
+  };
+}
+
 /** Maquette 09 : tout ce qu'il faut pour saisir, y compris la saisie en cours. */
 export async function chargerSaisie(gpId, profilId, signal) {
   const [cotes, favoris, miens] = await Promise.all([
