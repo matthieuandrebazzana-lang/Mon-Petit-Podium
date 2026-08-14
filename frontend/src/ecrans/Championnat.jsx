@@ -4,11 +4,14 @@ import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
+import BlocErreur from "../composants/BlocErreur.jsx";
 import BasculeVue from "../composants/BasculeVue.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import { Barre, Rangee } from "../composants/Squelette.jsx";
 import {
+  IconeCalendrier,
   IconeChevronDroit,
   IconeCoche,
   IconeCopie,
@@ -160,13 +163,20 @@ export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
 function SqueletteChampionnat() {
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-bloc bg-primaire h-[168px]" />
-      <div className="rounded-bloc bg-surface flex flex-col gap-4 p-4">
+      {/* Le bloc du code garde son aplat rouge : c'est la surface, pas le
+          contenu. La voir changer de couleur à la révélation ferait clignoter
+          l'écran, alors qu'il ne fait que se remplir. */}
+      <div className="rounded-bloc bg-primaire p-5">
+        <div className="h-2.5 w-28 rounded-full bg-white/25" />
+        <div className="rounded-champ mt-3 h-8 w-40 bg-white/25" />
+        <div className="mt-2.5 h-2.5 w-48 rounded-full bg-white/20" />
+        <div className="rounded-champ mt-3.5 h-10 w-36 bg-white/15" />
+      </div>
+
+      <div className="rounded-bloc bg-surface p-4">
+        <Barre largeur="w-20" hauteur="h-2.5" className="mb-1 ml-1" />
         {[0, 1, 2].map((rang) => (
-          <div key={rang} className="flex items-center gap-3">
-            <div className="bg-fond size-9 shrink-0 rounded-full" />
-            <div className="bg-fond h-3.5 w-1/3 rounded-full" />
-          </div>
+          <Rangee key={rang} />
         ))}
       </div>
     </div>
@@ -186,7 +196,7 @@ export default function Championnat() {
   // par quelqu'un d'autre sur le même appareil ne doit pas ressortir ici.
   const cle = utilisateur ? `championnat:${utilisateur.id}:${id}` : null;
   const chargeur = useCallback((signal) => chargerChampionnat(id, signal), [id]);
-  const { donnees, chargement, erreur } = useDonnees(cle, chargeur);
+  const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
 
   // Le classement suit son propre chemin : il passe par l'API, là où le détail
   // du championnat se lit directement dans Supabase. Les deux chargements sont
@@ -197,15 +207,24 @@ export default function Championnat() {
     (signal) => chargerClassement(id, signal),
     [id],
   );
-  const { donnees: classement, chargement: chargementRang } = useDonnees(
-    cleRang,
-    chargeurRang,
-  );
+  const {
+    donnees: classement,
+    chargement: chargementRang,
+    echec: echecRang,
+    recharger: rechargerRang,
+  } = useDonnees(cleRang, chargeurRang);
 
   const [confirmation, setConfirmation] = useState(false);
   const [depart, setDepart] = useState(false);
   const [erreurDepart, setErreurDepart] = useState(null);
   const [tentative, setTentative] = useState(0);
+  const [tentativeChargement, setTentativeChargement] = useState(0);
+
+  function reessayer() {
+    setTentativeChargement((n) => n + 1);
+    recharger();
+    rechargerRang();
+  }
 
   async function quitter() {
     setDepart(true);
@@ -228,14 +247,18 @@ export default function Championnat() {
 
   // Sortie de secours : sans championnat lisible, il n'y a rien à afficher, et
   // l'écran ne doit surtout pas être un cul-de-sac.
-  if (erreur && !donnees) {
+  if (echec && !donnees) {
     return (
       <Ecran direction="avant">
         <Bloc rang={1}>
           <EnTete titre="Championnat" retourVers="/accueil" />
         </Bloc>
         <Bloc rang={2}>
-          <Alerte ton="erreur">{erreur}</Alerte>
+          <BlocErreur
+            echec={echec}
+            onReessayer={reessayer}
+            tentative={tentativeChargement}
+          />
         </Bloc>
       </Ecran>
     );
@@ -339,7 +362,47 @@ export default function Championnat() {
                       </span>
                     </p>
                   )}
+
+                  {/* Le classement a échoué mais les membres sont là : on le
+                      dit sous la liste, sans emporter l'écran. C'est le même
+                      arbitrage que depuis l'étape 7 — deux chargements
+                      indépendants, et celui qui tient debout reste affiché. */}
+                  {lignes.length === 0 && !chargementRang && echecRang && (
+                    <div className="mt-2">
+                      <BlocErreur
+                        echec={echecRang}
+                        onReessayer={reessayer}
+                        tentative={tentativeChargement}
+                      />
+                    </div>
+                  )}
                 </div>
+
+                {/* Le calendrier du championnat (maquette 15). Il n'entre pas
+                    dans la bascule Classement / Piste : celle-ci oppose deux
+                    vues du même classement, alors que le calendrier est un
+                    autre écran. Y ajouter un troisième segment aurait mis trois
+                    libellés dans la largeur d'un iPhone. */}
+                <Link
+                  to={`/championnats/${id}/calendrier`}
+                  className="rounded-carte bg-surface pressable min-h-tactile flex items-center gap-3 p-4"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="bg-fond text-primaire rounded-champ flex size-10 shrink-0 items-center justify-center"
+                  >
+                    <IconeCalendrier className="size-[18px]" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="text-corps text-texte block font-medium">
+                      Calendrier
+                    </span>
+                    <span className="text-texte-doux mt-0.5 block text-[12px]">
+                      Les Grands Prix de la saison, un par un
+                    </span>
+                  </span>
+                  <IconeChevronDroit className="text-texte-doux size-4 shrink-0" />
+                </Link>
               </div>
             )}
           </ZoneChargement>

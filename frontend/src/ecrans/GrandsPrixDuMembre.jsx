@@ -1,9 +1,10 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
-import Alerte from "../composants/Alerte.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import BlocErreur from "../composants/BlocErreur.jsx";
+import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
 import { IconeCoche, IconeHorloge } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import {
@@ -170,15 +171,15 @@ function SqueletteGp() {
   return (
     <div className="flex flex-col gap-3">
       {[0, 1].map((rang) => (
-        <div key={rang} className="rounded-carte bg-surface flex flex-col gap-3 p-4">
-          <div className="bg-fond h-4 w-1/2 rounded-full" />
+        <Carte key={rang} className="flex flex-col gap-3">
+          <Barre largeur="w-1/2" hauteur="h-4" />
           {[0, 1, 2].map((ligne) => (
             <div key={ligne} className="flex items-center justify-between gap-3">
-              <div className="bg-fond h-3.5 w-1/3 rounded-full" />
-              <div className="bg-fond h-6 w-20 rounded-[10px]" />
+              <Barre largeur="w-1/3" />
+              <Pave className="h-6 w-20" arrondi="rounded-[10px]" />
             </div>
           ))}
-        </div>
+        </Carte>
       ))}
     </div>
   );
@@ -211,19 +212,29 @@ export default function GrandsPrixDuMembre() {
     },
     [profilId],
   );
-  const { donnees, chargement, erreur } = useDonnees(cle, chargeur);
+  const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
+  const [tentativeChargement, setTentativeChargement] = useState(0);
+
+  function reessayerChargement() {
+    setTentativeChargement((n) => n + 1);
+    recharger();
+  }
 
   const pseudo = donnees?.pseudo ?? null;
   const grandsPrix = donnees?.grandsPrix ?? [];
 
-  if (erreur && !donnees) {
+  if (echec && !donnees) {
     return (
       <Ecran direction="avant">
         <Bloc rang={1}>
           <EnTete titre="Grands Prix" retourVers={-1} />
         </Bloc>
         <Bloc rang={2}>
-          <Alerte ton="erreur">{erreur}</Alerte>
+          <BlocErreur
+            echec={echec}
+            onReessayer={reessayerChargement}
+            tentative={tentativeChargement}
+          />
         </Bloc>
       </Ecran>
     );

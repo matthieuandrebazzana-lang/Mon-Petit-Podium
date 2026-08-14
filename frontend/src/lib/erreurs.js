@@ -104,6 +104,81 @@ export function messageErreur(erreur) {
   return REPLI;
 }
 
+/* ==========================================================================
+   Étape 9 — les trois cas d'échec des écrans de données
+   ==========================================================================
+
+   L'authentification n'est plus le seul chemin qui échoue. Chaque écran lit des
+   données, et trois situations doivent être dites différemment parce qu'elles
+   n'appellent pas le même geste :
+
+   - **Réseau / réveil de Railway** — le plan gratuit met le service en veille
+     (note technique de la section 9 du CLAUDE.md). Ce n'est pas une panne :
+     c'est une attente. Le message le dit, et le bouton relance l'appel.
+   - **Supabase** — la base a répondu autre chose que ce qu'on attendait.
+     Réessayer a du sens, le message reste sobre.
+   - **Données manquantes** — aucune cote, championnat vide, aucun Grand Prix.
+     Ce n'est pas une erreur du tout : chaque écran écrit son propre message,
+     et il n'y a rien à réessayer.
+
+   Les genres voyagent avec le résultat des chargeurs (`lib/api.js`,
+   `lib/pronostics.js`, `lib/profils.js`, `lib/championnats.js`) plutôt que
+   d'être devinés d'après le texte du message : deviner à partir d'une chaîne
+   déjà traduite en français ferait dépendre le comportement de la formulation. */
+
+export const GENRE_RESEAU = "reseau";
+export const GENRE_SUPABASE = "supabase";
+export const GENRE_SESSION = "session";
+export const GENRE_SERVEUR = "serveur";
+// Ce qui est demandé n'existe pas : championnat effacé, Grand Prix inconnu.
+// Réessayer ne changera rien, et l'écran doit proposer une sortie plutôt qu'un
+// bouton qui rejoue le même refus.
+export const GENRE_DONNEES = "donnees";
+
+const PAR_GENRE = {
+  [GENRE_RESEAU]:
+    "Connexion au serveur en cours… Réessaie dans quelques secondes.",
+  [GENRE_SUPABASE]: "Une erreur est survenue. Réessaie.",
+  [GENRE_SERVEUR]: "Une erreur est survenue. Réessaie.",
+  [GENRE_SESSION]: "Session expirée. Reconnecte-toi.",
+  [GENRE_DONNEES]: "Ce contenu n'existe pas ou n'est plus accessible.",
+};
+
+/**
+ * Le message à afficher pour un échec de chargement.
+ *
+ * Le genre l'emporte sur le message reçu pour les deux cas où le texte du
+ * serveur n'aide personne : une coupure réseau et une panne Supabase. Pour tout
+ * le reste, le message du serveur est déjà en français et plus précis que le
+ * générique (« Tu ne fais pas partie de ce championnat », « Ce Grand Prix
+ * n'existe pas ») : il est conservé.
+ *
+ * @param {{genre?: string, message?: string}|string|null} echec
+ */
+export function messageDeChargement(echec) {
+  if (!echec) return PAR_GENRE[GENRE_SERVEUR];
+
+  if (typeof echec === "string") return echec;
+
+  const { genre, message } = echec;
+  if (genre === GENRE_RESEAU || genre === GENRE_SUPABASE) return PAR_GENRE[genre];
+  if (message) return message;
+  return PAR_GENRE[genre] ?? PAR_GENRE[GENRE_SERVEUR];
+}
+
+/**
+ * Vrai si l'échec vaut la peine d'être retenté.
+ *
+ * Deux genres ne se réparent pas en réessayant, et le bouton disparaît pour
+ * eux : une **session expirée** rejouerait le même jeton mort en boucle (le
+ * garde-fou de `RouteProtegee` fait le reste), et une **donnée absente** ne
+ * réapparaîtra pas parce qu'on redemande.
+ */
+export function estRejouable(echec) {
+  if (typeof echec !== "object" || echec === null) return true;
+  return echec.genre !== GENRE_SESSION && echec.genre !== GENRE_DONNEES;
+}
+
 /**
  * Détecte le cas « email déjà inscrit » que Supabase ne signale pas comme une
  * erreur. Quand la confirmation par email est active — le réglage par défaut —

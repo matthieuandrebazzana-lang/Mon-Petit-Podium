@@ -59,6 +59,12 @@ TENTATIVES_CODE = 5
 # Code d'erreur PostgreSQL d'une violation de contrainte d'unicité.
 VIOLATION_UNICITE = "23505"
 
+# Saison servie par défaut au calendrier. Écrite ici plutôt que déduite de
+# `datetime.now()` : le calendrier doit rester lisible en intersaison, où
+# l'année courante n'a encore aucun Grand Prix en base. À faire évoluer avec la
+# grille de `backend/app/calcul/pilotes.py`, qui décrit la même saison.
+SAISON_COURANTE = 2026
+
 
 class CreationChampionnat(BaseModel):
     nom: str = Field(min_length=1, max_length=80)
@@ -94,6 +100,41 @@ class LigneClassement(BaseModel):
     couleur1: str = "#800111"
     couleur2: str = "#FFFFFF"
     numero: int | None = None
+
+
+class LigneCalendrier(BaseModel):
+    """Un membre au classement d'un seul Grand Prix (maquette 15)."""
+
+    profil_id: UUID
+    pseudo: str
+    points: int
+    # Le rang de CE Grand Prix, calculé par `rank` et non `row_number` : la
+    # règle 4.6 départage le classement de la saison, pas une course isolée.
+    # Deux membres à égalité sur un GP le sont vraiment, et partagent le rang.
+    rang: int
+    couleur1: str = "#800111"
+    couleur2: str = "#FFFFFF"
+
+
+class GrandPrixCalendrier(BaseModel):
+    gp_id: UUID
+    nom: str
+    # Nulle tant qu'Unibet n'a pas annoncé l'horaire. Le GP est servi quand
+    # même, en fin de liste : l'écarter le rendrait invisible jusqu'au samedi.
+    date_course: datetime | None = None
+    statut: str
+    # Lus dans `cotes` et `resultats_gp`, jamais déduits du statut : rien ne fait
+    # passer un GP en `cotes_figees` aujourd'hui, et le statut peut donc mentir
+    # dans les deux sens.
+    cotes_disponibles: bool = False
+    resultats_disponibles: bool = False
+    vainqueur: str | None = None
+    # Ce que l'appelant a marqué sur ce GP. `None` tant qu'aucun de ses
+    # pronostics n'a été noté — jamais `0`, qui se lirait « tout raté ».
+    mes_points: int | None = None
+    mon_rang: int | None = None
+    mes_pronostics: int = 0
+    classement: list[LigneCalendrier] = []
 
 
 class Championnat(BaseModel):
@@ -297,6 +338,44 @@ async def classement(
         raise echec_lisible("Chargement du classement", erreur) from erreur
 
     return [LigneClassement(**ligne) for ligne in (lignes or [])]
+
+
+@router.get("/{championnat_id}/calendrier", response_model=list[GrandPrixCalendrier])
+@journaliser_echecs("Chargement du calendrier")
+async def calendrier(
+    championnat_id: UUID,
+    saison: int = SAISON_COURANTE,
+    utilisateur: str = Depends(utilisateur_courant),
+) -> list[GrandPrixCalendrier]:
+    """Grands Prix de la saison, avec ce que le championnat y a marqué (maquette 15).
+
+    L'appartenance est vérifiée **avant** toute lecture, comme au classement : la
+    fonction SQL est `security definer` et contourne donc la RLS. C'est ici, et
+    nulle part ailleurs, que l'autorisation est portée — à partir de
+    l'identifiant du jeton vérifié, jamais d'une valeur reçue de l'appelant.
+
+    Le profil transmis à la fonction est celui du **jeton**, pas un paramètre :
+    « mon score sur ce GP » ne peut désigner que l'appelant. Un identifiant reçu
+    dans l'URL laisserait un membre demander le calendrier vu par un autre.
+
+    Aucun Grand Prix en base est un état normal tant que le scraper n'a pas
+    tourné : la réponse est alors une liste vide, jamais un `404`.
+    """
+    await exiger_membre(championnat_id, utilisateur)
+
+    try:
+        lignes = await appeler_fonction(
+            "calendrier_du_championnat",
+            {
+                "p_championnat": str(championnat_id),
+                "p_profil": utilisateur,
+                "p_saison": saison,
+            },
+        )
+    except ErreurSupabase as erreur:
+        raise echec_lisible("Chargement du calendrier", erreur) from erreur
+
+    return [GrandPrixCalendrier(**ligne) for ligne in (lignes or [])]
 
 
 @router.delete("/{championnat_id}/quitter", status_code=status.HTTP_204_NO_CONTENT)

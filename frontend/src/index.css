@@ -15,6 +15,12 @@
   --color-texte: #1a1a1a;
   --color-texte-doux: #999999;
   --color-surface: #ffffff;
+  /* Gris des squelettes de chargement (étape 9). Ce n'est pas une couleur
+     nouvelle du design system au sens de la section 5 : elle ne peint jamais
+     un fond, un bouton ni un texte. C'est le beige `fond` assombri juste ce
+     qu'il faut pour se détacher d'une carte blanche comme du fond de l'app —
+     les squelettes vivent sur les deux. */
+  --color-squelette: #e8e0d8;
 
   /* Typographie — Helvetica Neue partout, graisses 400 et 500.
      La graisse 700 est réservée aux numéros de voiture. */
@@ -459,6 +465,40 @@
   }
 }
 
+/* — Barre de squelette, étape 9 —
+   Croisement assumé de deux snippets déjà installés : la structure vient du
+   skeleton loader (14), le balayage de shimmer text (15). Le snippet 15 clippe
+   sa bande sur des glyphes (`background-clip: text`) ; ici il n'y a pas de
+   texte, la bande est donc peinte sur l'aplat lui-même, par-dessus le gris de
+   base. Les jetons de temps et de largeur de bande sont ceux du snippet 15,
+   inchangés — c'est la même lumière qui passe.
+
+   La bande est un pseudo-élément et non un `background` sur la barre : la
+   barre porte déjà la pulsation du snippet 14, et une seule propriété
+   `background-position` ne peut pas servir les deux. */
+.t-skel-bar {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-squelette);
+}
+.t-skel-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    rgb(255 255 255 / 0.55) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: var(--shimmer-band) 100%;
+  background-repeat: no-repeat;
+  animation: t-shimmer var(--shimmer-dur) var(--shimmer-ease) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .t-skel-skeleton,
   .t-skel-content {
@@ -466,6 +506,10 @@
   }
   .t-skel-skeleton.is-pulsing > * {
     animation: none !important;
+  }
+  .t-skel-bar::after {
+    animation: none !important;
+    opacity: 0;
   }
 }
 

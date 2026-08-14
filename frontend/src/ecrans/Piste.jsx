@@ -5,6 +5,7 @@ import { IconeChevronGauche } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerChampionnat } from "../lib/championnats.js";
 import { chargerClassement, cleClassement } from "../lib/classement.js";
+import { messageDeChargement } from "../lib/erreurs.js";
 import { couleursDuMembre } from "../lib/palette.js";
 import { useDonnees } from "../lib/useDonnees.js";
 
@@ -166,7 +167,7 @@ export default function Piste() {
 
   const cle = utilisateur ? cleClassement(utilisateur.id, id) : null;
   const chargeur = useCallback((signal) => chargerClassement(id, signal), [id]);
-  const { donnees, chargement } = useDonnees(cle, chargeur);
+  const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
 
   const lignes = useMemo(() => donnees ?? [], [donnees]);
 
@@ -260,12 +261,51 @@ export default function Piste() {
           />
         ))}
 
-        {lignes.length === 0 && (
-          <p className="text-corps-sm absolute inset-x-10 top-1/2 -translate-y-1/2 text-center text-white/60">
-            {chargement
-              ? "Chargement du championnat…"
-              : "Aucun membre à afficher sur la piste."}
-          </p>
+        {/* Squelette de la piste : des silhouettes de voitures aux bonnes
+            hauteurs, pas un texte. Elles sont volontairement peintes en blanc
+            translucide et non dans le gris `#E8E0D8` des autres écrans — c'est
+            le seul écran qui sorte de la surface `fond`, et un aplat beige clair
+            posé sur l'asphalte s'y lirait comme une vraie voiture blanche. La
+            silhouette, elle, est la même : voiture à gauche, score à droite. */}
+        {lignes.length === 0 && chargement && (
+          <div aria-hidden="true" className="absolute inset-0">
+            {[0.14, 0.34, 0.54, 0.74].map((fraction, rang) => (
+              <div
+                key={fraction}
+                className="absolute right-5 left-0 flex items-center gap-3"
+                style={{ top: `${fraction * 100}%` }}
+              >
+                <div className="flex flex-1 justify-center">
+                  <div
+                    className="h-[52px] w-[38px] rounded-[10px] bg-white/10"
+                    style={{ animation: `t-skel-pulse 1400ms ease-in-out ${rang * 140}ms infinite` }}
+                  />
+                </div>
+                <div className="h-3 w-12 shrink-0 rounded-full bg-white/10" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Deux situations distinctes, et les confondre serait mentir : le
+            classement a échoué, ou le championnat n'a réellement personne. */}
+        {lignes.length === 0 && !chargement && (
+          <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 text-center">
+            <p className="text-corps-sm text-white/70">
+              {echec
+                ? messageDeChargement(echec)
+                : "Aucun membre à afficher sur la piste."}
+            </p>
+            {echec && (
+              <button
+                type="button"
+                onClick={recharger}
+                className="rounded-champ min-h-tactile pressable mt-3 inline-flex items-center justify-center bg-white/15 px-5 text-[14px] font-medium text-white"
+              >
+                Réessayer
+              </button>
+            )}
+          </div>
         )}
       </div>
 

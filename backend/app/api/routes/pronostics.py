@@ -135,6 +135,17 @@ class MembrePronostics(BaseModel):
     profil_id: UUID
     pseudo: str
     rejoint_le: datetime
+    # La voiture du membre (étape 8), servie depuis l'étape 9 pour la miniature
+    # de la maquette 11. Les valeurs par défaut ne sont pas décoratives : un
+    # backend déployé avant la migration `20260814213000` recevrait des lignes
+    # sans ces champs, et un modèle strict rendrait alors TOUTE la réponse en
+    # `500` — le piège déjà rencontré avec `cree_par` (version 0.4.1).
+    couleur1: str = "#800111"
+    couleur2: str = "#FFFFFF"
+    numero: int | None = None
+    # Ce que le membre a marqué sur ce Grand Prix. `None` tant qu'aucun de ses
+    # pronostics n'a été noté — jamais `0`, qui dirait « tout raté ».
+    total_points: int | None = None
     pronostics: list[PronosticServi]
 
 

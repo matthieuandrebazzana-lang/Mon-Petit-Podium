@@ -18,6 +18,8 @@ import RecapPronostics from "./ecrans/RecapPronostics.jsx";
 import MonProfil from "./ecrans/MonProfil.jsx";
 import ProfilMembre from "./ecrans/ProfilMembre.jsx";
 import GrandsPrixDuMembre from "./ecrans/GrandsPrixDuMembre.jsx";
+import Calendrier from "./ecrans/Calendrier.jsx";
+import ResultatsGp from "./ecrans/ResultatsGp.jsx";
 
 /** Configuration absente : mieux vaut le dire que servir une page blanche. */
 function EcranConfiguration({ message }) {
@@ -49,6 +51,20 @@ export default function App() {
           doit rester atteignable dans cet entre-deux. */}
       <Route path="/nouveau-mot-de-passe" element={<NouveauMotDePasse />} />
 
+      {/* Résultats d'un Grand Prix, hors des deux groupes pour la même raison
+          que l'écran ci-dessus : le classement de la course est **public**
+          (étape 6, et la maquette 11 le montre comme tel). Dans le groupe
+          public, `RoutePublique` renverrait un membre connecté sur son accueil ;
+          dans le groupe protégé, un visiteur sans compte ne pourrait pas le
+          lire. La variante avec championnat est déclarée à côté : c'est la même
+          route côté API, avec `?championnat_id=`, et c'est elle qui ajoute le
+          classement des membres — que la route refuse à qui n'en est pas. */}
+      <Route path="/grands-prix/:gpId/resultats" element={<ResultatsGp />} />
+      <Route
+        path="/championnats/:id/grands-prix/:gpId/resultats"
+        element={<ResultatsGp />}
+      />
+
       <Route element={<RouteProtegee />}>
         <Route path="/accueil" element={<Accueil />} />
         {/* « creer » et « rejoindre » sont déclarés avant « :id » : sans cet
@@ -58,6 +74,9 @@ export default function App() {
         <Route path="/championnats/:id" element={<Championnat />} />
         {/* Vue piste : le même championnat, vu de la route (maquette 07b). */}
         <Route path="/championnats/:id/piste" element={<Piste />} />
+        {/* Calendrier du championnat (maquette 15). Le mot « historique » de la
+            maquette est écarté par le vocabulaire imposé de la section 1. */}
+        <Route path="/championnats/:id/calendrier" element={<Calendrier />} />
 
         {/* Parcours de pronostics, maquettes 08 → 09 → 10. Les trois écrans
             partagent l'identifiant du Grand Prix : la lecture des cotes est

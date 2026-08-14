@@ -4,9 +4,11 @@ import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
+import BlocErreur from "../composants/BlocErreur.jsx";
 import Onglets from "../composants/Onglets.jsx";
 import EtoileFavori from "../composants/EtoileFavori.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
 import { IconeEtoile } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { basculerFavori, chargerTableauCotes } from "../lib/pronostics.js";
@@ -17,15 +19,17 @@ import { useFermeture } from "../lib/useFermeture.js";
 function SqueletteCotes() {
   return (
     <div className="flex flex-col gap-3">
+      {/* La piste des onglets garde sa surface blanche : elle a la même forme
+          pleine que le contrôle segmenté qui la remplace. */}
       <div className="bg-surface h-[52px] rounded-full" />
-      <div className="rounded-carte bg-surface flex flex-col gap-4 p-4">
+      <Carte className="flex flex-col gap-4">
         {[0, 1, 2, 3, 4].map((rang) => (
           <div key={rang} className="flex items-center justify-between gap-3">
-            <div className="bg-fond h-3.5 w-1/3 rounded-full" />
-            <div className="bg-fond h-6 w-20 rounded-[10px]" />
+            <Barre largeur="w-1/3" />
+            <Pave className="h-6 w-20" arrondi="rounded-[10px]" />
           </div>
         ))}
-      </div>
+      </Carte>
     </div>
   );
 }
@@ -65,7 +69,10 @@ export default function Cotes() {
     (signal) => chargerTableauCotes(gpId, signal),
     [gpId],
   );
-  const { donnees, chargement, erreur, setDonnees } = useDonnees(cle, chargeur);
+  const { donnees, chargement, echec, recharger, setDonnees } = useDonnees(
+    cle,
+    chargeur,
+  );
 
   const gp = donnees?.gp ?? null;
   const marches = useMemo(() => gp?.marches ?? [], [gp]);
@@ -81,6 +88,12 @@ export default function Cotes() {
   const [choixMarche, setChoixMarche] = useState(null);
   const [erreurFavori, setErreurFavori] = useState(null);
   const [tentative, setTentative] = useState(0);
+  const [tentativeChargement, setTentativeChargement] = useState(0);
+
+  function reessayerChargement() {
+    setTentativeChargement((n) => n + 1);
+    recharger();
+  }
 
   const { ferme } = useFermeture(gp?.date_course);
 
@@ -129,14 +142,18 @@ export default function Cotes() {
     if (utilisateur) oublierCache(`saisie:${utilisateur.id}:${gpId}`);
   }
 
-  if (erreur && !donnees) {
+  if (echec && !donnees) {
     return (
       <Ecran direction="avant">
         <Bloc rang={1}>
           <EnTete titre="Les cotes" retourVers="/accueil" />
         </Bloc>
         <Bloc rang={2}>
-          <Alerte ton="erreur">{erreur}</Alerte>
+          <BlocErreur
+            echec={echec}
+            onReessayer={reessayerChargement}
+            tentative={tentativeChargement}
+          />
         </Bloc>
       </Ecran>
     );

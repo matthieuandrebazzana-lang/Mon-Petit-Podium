@@ -9,7 +9,14 @@ import {
 import { supabase, supabaseConfigure, urlDeRetour } from "../lib/supabase.js";
 import { emailDejaInscrit, messageErreur } from "../lib/erreurs.js";
 
-const AuthContexte = createContext(null);
+/**
+ * Exporté nommément depuis l'étape 9, pour la même raison que `BlocProchainGp`
+ * à la version 0.5.1 : rendre un écran hors navigateur (`react-dom/server`)
+ * imposerait sinon de monter `AuthProvider`, dont la session ne se résout que
+ * dans un effet — jamais exécuté en rendu serveur. L'application, elle, passe
+ * toujours par `useAuth`.
+ */
+export const AuthContexte = createContext(null);
 
 const CONFIG_MANQUANTE =
   "L'application n'est pas reliée à son serveur d'authentification. " +

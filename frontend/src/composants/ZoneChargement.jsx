@@ -34,8 +34,14 @@ export default function ZoneChargement({ chargement, squelette, children }) {
 
   return (
     <div className={`t-skel t-skel--flux ${chargement ? "" : "is-revealed"}`}>
+      {/* `is-pulsing` du snippet n'est volontairement plus posé depuis
+          l'étape 9 : les barres portent désormais leur propre balayage
+          (`t-skel-bar`), et superposer la pulsation d'ensemble à la bande de
+          lumière donnait deux battements de rythmes différents sur le même
+          bloc. La règle CSS de la pulsation reste en place — c'est le snippet
+          14 tel quel — elle n'est simplement plus appelée. */}
       {squeletteMonte && (
-        <div className="t-skel-skeleton is-pulsing" aria-hidden="true">
+        <div className="t-skel-skeleton" aria-hidden="true">
           {squelette}
         </div>
       )}

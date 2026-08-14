@@ -1,5 +1,10 @@
 import { appelApi } from "./api.js";
 import { supabase } from "./supabase.js";
+import {
+  GENRE_DONNEES,
+  GENRE_SESSION,
+  GENRE_SUPABASE,
+} from "./erreurs.js";
 
 /**
  * Profils, statistiques et Grands Prix pariés — étape 8.
@@ -81,7 +86,7 @@ export const cleMesGp = (profilId, cible) => `profil-gp:${profilId}:${cible}`;
  * les profils correspondants (« Profils lisibles par les membres connectés »).
  */
 export async function chargerNumerosPris(profilId, signal) {
-  if (!supabase) return { ok: false, message: NON_CONFIGURE };
+  if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
   if (!profilId) return { ok: true, message: null, donnees: [] };
 
   try {
@@ -93,7 +98,7 @@ export async function chargerNumerosPris(profilId, signal) {
         .select("championnat_id")
         .eq("profil_id", profilId),
     );
-    if (erreurMiennes) return { ok: false, message: LECTURE_IMPOSSIBLE };
+    if (erreurMiennes) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
 
     const championnats = (miennes ?? []).map((ligne) => ligne.championnat_id);
     if (championnats.length === 0) return { ok: true, message: null, donnees: [] };
@@ -104,7 +109,7 @@ export async function chargerNumerosPris(profilId, signal) {
         .select("profil_id")
         .in("championnat_id", championnats),
     );
-    if (erreurMembres) return { ok: false, message: LECTURE_IMPOSSIBLE };
+    if (erreurMembres) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
 
     // Le membre lui-même est écarté : son propre numéro n'est pas « déjà pris ».
     const autres = [
@@ -119,7 +124,7 @@ export async function chargerNumerosPris(profilId, signal) {
         .in("id", autres)
         .not("numero", "is", null),
     );
-    if (erreurProfils) return { ok: false, message: LECTURE_IMPOSSIBLE };
+    if (erreurProfils) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
 
     return {
       ok: true,
@@ -128,7 +133,7 @@ export async function chargerNumerosPris(profilId, signal) {
     };
   } catch (erreur) {
     if (erreur.name === "AbortError") throw erreur;
-    return { ok: false, message: LECTURE_IMPOSSIBLE };
+    return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
   }
 }
 
@@ -166,7 +171,7 @@ export function porteurDuNumero(pris, numero) {
  * donnent le nom du pilote et les points possibles.
  */
 export async function chargerGrandsPrixDuMembre(profilId, signal) {
-  if (!supabase) return { ok: false, message: NON_CONFIGURE };
+  if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
   if (!profilId) return { ok: true, message: null, donnees: [] };
 
   try {
@@ -180,7 +185,7 @@ export async function chargerGrandsPrixDuMembre(profilId, signal) {
         )
         .eq("profil_id", profilId),
     );
-    if (erreurPronostics) return { ok: false, message: LECTURE_IMPOSSIBLE };
+    if (erreurPronostics) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
 
     const lignes = pronostics ?? [];
     if (lignes.length === 0) return { ok: true, message: null, donnees: [] };
@@ -204,7 +209,7 @@ export async function chargerGrandsPrixDuMembre(profilId, signal) {
         ),
       ]);
 
-    if (erreurGps || erreurCotes) return { ok: false, message: LECTURE_IMPOSSIBLE };
+    if (erreurGps || erreurCotes) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
 
     return {
       ok: true,
@@ -213,7 +218,7 @@ export async function chargerGrandsPrixDuMembre(profilId, signal) {
     };
   } catch (erreur) {
     if (erreur.name === "AbortError") throw erreur;
-    return { ok: false, message: LECTURE_IMPOSSIBLE };
+    return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
   }
 }
 

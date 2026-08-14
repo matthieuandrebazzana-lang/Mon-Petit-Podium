@@ -43,21 +43,37 @@ def technique(erreur: BaseException) -> str:
 
 
 def echec_lisible(domaine: str, contexte: str, erreur: BaseException) -> HTTPException:
-    """Journalise une panne avec sa trace, et la renvoie en clair à l'appelant.
+    """Journalise une panne avec sa trace, et rend un message français à l'appelant.
 
-    **Mesure de diagnostic, temporaire.** Le `422` retenu ici n'a rien d'une
-    erreur de validation : c'est le seul statut que `lib/api.js` affiche déjà
-    tel quel côté frontend, et qui ne se confond ni avec le `503` d'une
-    configuration absente ni avec le `500` d'un plantage non capturé.
+    **La cause technique ne quitte plus le serveur** (étape 9). Jusqu'à la
+    version `0.8.1`, le `detail` portait le message Supabase, son code
+    PostgreSQL et son statut HTTP jusque dans l'interface — délibérément, le
+    temps de la mise en service, et le CLAUDE.md l'inscrivait au « Reste à
+    faire ». Une chaîne comme
+    `relation "public.cotes" does not exist · code 42P01` n'apprend rien à un
+    joueur et lui fait croire que l'application est cassée pour de bon.
+
+    Ce que l'appelant reçoit désormais : le **contexte en français** (« Le
+    classement n'a pas pu être chargé »), et l'invitation à réessayer. Ce que
+    les logs Railway reçoivent : exactement ce qu'ils recevaient avant, message,
+    code, statut et trace complète. Rien n'est perdu au diagnostic — la seule
+    chose qui change, c'est où on le lit.
+
+    Le `422` est conservé, et il reste un choix de transport, pas de sémantique :
+    il ne se confond ni avec le `503` d'une configuration absente, ni avec le
+    `500` d'un plantage non capturé, ni avec les statuts métier (`404`, `409`,
+    `423`) que le décorateur laisse passer intacts.
 
     À appeler **depuis un bloc `except`** : `logger.exception` n'a de trace à
     joindre que là.
     """
-    detail = technique(erreur)
-    logger.exception("[%s] %s — %s", domaine, contexte, detail)
+    logger.exception("[%s] %s — %s", domaine, contexte, technique(erreur))
     return HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        detail=f"{contexte} — {detail}",
+        # Formulé pour rester grammatical quel que soit le contexte, qui est un
+        # groupe nominal (« Chargement du classement », « Adhésion au
+        # championnat ») : le deux-points évite d'avoir à lui accorder un verbe.
+        detail=f"{contexte} : impossible pour le moment. Réessaie dans quelques instants.",
     )
 
 

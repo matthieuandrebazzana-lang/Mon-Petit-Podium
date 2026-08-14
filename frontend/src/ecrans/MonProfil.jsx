@@ -9,6 +9,8 @@ import Pastille from "../composants/Pastille.jsx";
 import GrilleStats from "../composants/GrilleStats.jsx";
 import SelecteurCouleur from "../composants/SelecteurCouleur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import BlocErreur from "../composants/BlocErreur.jsx";
+import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
 import { IconeChevronDroit, IconeDrapeau } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import {
@@ -47,13 +49,33 @@ function nettoyerNumero(saisi) {
 function SqueletteProfil() {
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-bloc bg-primaire h-[104px]" />
+      {/* L'en-tête garde son aplat rouge, les quatre cases et le bloc de
+          personnalisation gardent leur surface blanche : ce sont les formes de
+          l'écran, seul leur contenu est encore inconnu. */}
+      <div className="rounded-bloc bg-primaire flex items-center justify-between gap-4 p-5">
+        <div className="flex flex-1 items-center gap-3.5">
+          <div className="size-[42px] shrink-0 rounded-full bg-white/25" />
+          <div className="min-w-0 flex-1">
+            <div className="h-4 w-28 rounded-full bg-white/25" />
+            <div className="mt-2 h-2.5 w-20 rounded-full bg-white/20" />
+          </div>
+        </div>
+        <div className="h-12 w-9 rounded-champ bg-white/15" />
+      </div>
       <div className="grid grid-cols-2 gap-2.5">
         {[0, 1, 2, 3].map((rang) => (
-          <div key={rang} className="rounded-carte-sm bg-surface h-[68px]" />
+          <Carte key={rang} className="rounded-carte-sm h-[68px] p-3.5">
+            <Barre largeur="w-14" hauteur="h-2.5" />
+            <Barre largeur="w-10" hauteur="h-5" className="mt-2.5" />
+          </Carte>
         ))}
       </div>
-      <div className="rounded-carte bg-surface h-[210px]" />
+      <Carte className="flex flex-col gap-3">
+        <Barre largeur="w-32" hauteur="h-2.5" />
+        <Pave className="h-[46px]" />
+        <Pave className="h-[46px]" />
+        <Pave className="h-[46px]" />
+      </Carte>
     </div>
   );
 }
@@ -109,7 +131,16 @@ export default function MonProfil() {
     (signal) => chargerProfilComplet(profilId, signal),
     [profilId],
   );
-  const { donnees, chargement, erreur, setDonnees } = useDonnees(cle, chargeur);
+  const { donnees, chargement, echec, recharger, setDonnees } = useDonnees(
+    cle,
+    chargeur,
+  );
+  const [tentativeChargement, setTentativeChargement] = useState(0);
+
+  function reessayerChargement() {
+    setTentativeChargement((n) => n + 1);
+    recharger();
+  }
 
   const profil = donnees?.profil ?? null;
 
@@ -133,7 +164,10 @@ export default function MonProfil() {
   }, [profil]);
 
   const [envoi, setEnvoi] = useState(false);
-  const [echec, setEchec] = useState(null);
+  // Échec de l'ENREGISTREMENT, à ne pas confondre avec celui du chargement
+  // rendu par `useDonnees` : l'un est un message de refus métier posé sous le
+  // bouton, l'autre remplace l'écran.
+  const [echecEnvoi, setEchecEnvoi] = useState(null);
   const [enregistre, setEnregistre] = useState(false);
   const [tentative, setTentative] = useState(0);
 
@@ -178,7 +212,7 @@ export default function MonProfil() {
 
   async function enregistrer() {
     setEnvoi(true);
-    setEchec(null);
+    setEchecEnvoi(null);
     setEnregistre(false);
     setTentative((n) => n + 1);
 
@@ -194,7 +228,7 @@ export default function MonProfil() {
     setEnvoi(false);
 
     if (!resultat.ok) {
-      setEchec(resultat.message);
+      setEchecEnvoi(resultat.message);
       return;
     }
 
@@ -219,14 +253,18 @@ export default function MonProfil() {
     if (resultat.ok) naviguer("/", { replace: true });
   }
 
-  if (erreur && !donnees) {
+  if (echec && !donnees) {
     return (
       <Ecran direction="avant">
         <Bloc rang={1}>
           <EnTete titre="Mon profil" retourVers="/accueil" />
         </Bloc>
         <Bloc rang={2}>
-          <Alerte ton="erreur">{erreur}</Alerte>
+          <BlocErreur
+            echec={echec}
+            onReessayer={reessayerChargement}
+            tentative={tentativeChargement}
+          />
         </Bloc>
       </Ecran>
     );
@@ -350,10 +388,10 @@ export default function MonProfil() {
                     </p>
                   )}
 
-                  {echec && (
+                  {echecEnvoi && (
                     <div className="mt-3">
                       <Alerte ton="erreur" tentative={tentative}>
-                        {echec}
+                        {echecEnvoi}
                       </Alerte>
                     </div>
                   )}
@@ -364,7 +402,7 @@ export default function MonProfil() {
                       onClick={enregistrer}
                       occupe={envoi}
                       libelleOccupe="Enregistrement…"
-                      disabled={!modifie && !echec}
+                      disabled={!modifie && !echecEnvoi}
                     >
                       {enregistre && !modifie
                         ? "Voiture enregistrée"

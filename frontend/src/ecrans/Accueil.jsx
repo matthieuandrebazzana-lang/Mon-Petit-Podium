@@ -1,9 +1,10 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
-import Alerte from "../composants/Alerte.jsx";
+import BlocErreur from "../composants/BlocErreur.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
 import { IconeChevronDroit, IconeMembres, IconePlus } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
@@ -41,8 +42,19 @@ export function BlocProchainGp({ profilId }) {
   const etat = useFermeture(gp?.date_course);
 
   if (chargement && !gp) {
+    // Le squelette garde l'aplat rouge du bloc et n'en griser que le contenu :
+    // c'est le seul aplat de couleur de l'accueil, et le voir passer au gris
+    // puis revenir au rouge ferait clignoter l'écran d'entrée de l'app.
     return (
-      <div className="rounded-bloc bg-primaire h-[150px] animate-pulse opacity-60" />
+      <div className="rounded-bloc bg-primaire p-5" aria-hidden="true">
+        <div className="mb-2.5 flex items-center justify-between gap-3">
+          <div className="h-6 w-24 rounded-full bg-white/25" />
+          <div className="h-3 w-20 rounded-full bg-white/20" />
+        </div>
+        <div className="h-5 w-40 rounded-full bg-white/25" />
+        <div className="mt-2.5 mb-4 h-3 w-52 rounded-full bg-white/20" />
+        <div className="rounded-champ h-tactile w-full bg-white/15" />
+      </div>
     );
   }
 
@@ -64,42 +76,57 @@ export function BlocProchainGp({ profilId }) {
 
   const depart = formaterDepart(gp.date_course);
 
-  // Deux destinations pour un même bouton (maquette 08 ou maquette 10) : le
-  // joueur qui a déjà validé ses pronostics veut les revoir, pas repartir du
-  // tableau des cotes. Une fois la fermeture passée, le récapitulatif est de
-  // toute façon le seul écran qui ait encore quelque chose à dire.
+  // **Trois destinations pour un même bouton**, et le libellé suit toujours la
+  // destination : un bouton nommé « Pronostiquer » qui ouvre autre chose serait
+  // une promesse fausse.
   //
-  // Le libellé suit la destination plutôt que l'inverse : « Pronostiquer » sur
-  // un bouton qui ouvre un récapitulatif serait une promesse fausse.
-  const versRecap = etat.ferme || donnees?.aPronostique === true;
+  // - Grand Prix **couru** (étape 9) — les résultats. Il n'y a plus de
+  //   pronostics à saisir, et c'est l'écran que tout le monde ouvre le dimanche
+  //   soir. C'est aussi le seul cas où le bloc n'annonce pas un GP à venir : le
+  //   libellé du bandeau change avec lui.
+  // - Pronostics déjà enregistrés, ou fermeture passée — le récapitulatif.
+  // - Sinon — le tableau des cotes.
+  const couru = donnees?.couru === true;
+  const versRecap = !couru && (etat.ferme || donnees?.aPronostique === true);
+
+  const destination = couru
+    ? `/grands-prix/${gp.id}/resultats`
+    : `/grands-prix/${gp.id}/${versRecap ? "recap" : "cotes"}`;
+  const libelle = couru
+    ? "Voir les résultats"
+    : versRecap
+      ? "Voir mes pronos"
+      : "Pronostiquer";
 
   return (
     <div className="rounded-bloc bg-primaire p-5">
       <div className="mb-2.5 flex items-center justify-between gap-3">
         <span className="text-label-sm rounded-full bg-white/20 px-2.5 py-1 text-white uppercase">
-          Prochain GP
+          {couru ? "Dernier GP" : "Prochain GP"}
         </span>
         <span className="shrink-0 text-[11px] text-white/60">{depart.courte}</span>
       </div>
 
       <p className="truncate text-[22px] font-medium text-white">{gp.nom}</p>
       <p className="mb-4 text-[12px] text-white/60">
-        {etat.ferme
-          ? "Pronostics fermés"
-          : etat.texte
-            ? `Pronos ouverts · Fermeture dans ${etat.texte}`
-            : "Pronos ouverts"}
+        {couru
+          ? "Course terminée · Points attribués"
+          : etat.ferme
+            ? "Pronostics fermés"
+            : etat.texte
+              ? `Pronos ouverts · Fermeture dans ${etat.texte}`
+              : "Pronos ouverts"}
       </p>
 
       <Link
-        to={`/grands-prix/${gp.id}/${versRecap ? "recap" : "cotes"}`}
+        to={destination}
         className="rounded-champ bg-surface text-primaire pressable min-h-tactile flex items-center justify-center px-4 text-center text-[14px] font-medium"
       >
         {/* Le cache peut avoir servi l'état d'avant la dernière validation : le
             libellé change alors sous les yeux du joueur, une fois la lecture
             fraîche revenue. TexteEchange (transitions-dev 04) le remplace en
             place plutôt que de le laisser clignoter. */}
-        <TexteEchange valeur={versRecap ? "Voir mes pronos" : "Pronostiquer"} />
+        <TexteEchange valeur={libelle} />
       </Link>
     </div>
   );
@@ -142,13 +169,13 @@ function SqueletteChampionnats() {
   return (
     <div className="flex flex-col gap-2.5">
       {[0, 1].map((rang) => (
-        <div key={rang} className="rounded-carte bg-surface flex items-center gap-3.5 p-4">
-          <div className="bg-fond size-[46px] shrink-0 rounded-champ" />
+        <Carte key={rang} className="flex items-center gap-3.5">
+          <Pave className="size-[46px] shrink-0" />
           <div className="flex-1">
-            <div className="bg-fond h-3.5 w-1/2 rounded-full" />
-            <div className="bg-fond mt-2 h-2.5 w-3/4 rounded-full" />
+            <Barre largeur="w-1/2" />
+            <Barre largeur="w-3/4" hauteur="h-2.5" className="mt-2" />
           </div>
-        </div>
+        </Carte>
       ))}
     </div>
   );
@@ -196,7 +223,14 @@ export default function Accueil() {
   // fraction de seconde avant le rafraîchissement.
   const cle = utilisateur ? `championnats:${utilisateur.id}` : null;
   const chargeur = useCallback((signal) => listerMesChampionnats(signal), []);
-  const { donnees, chargement, erreur } = useDonnees(cle, chargeur);
+  const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
+
+  const [tentative, setTentative] = useState(0);
+
+  function reessayer() {
+    setTentative((n) => n + 1);
+    recharger();
+  }
 
   const championnats = donnees ?? [];
 
@@ -230,7 +264,17 @@ export default function Accueil() {
             Mes championnats
           </p>
 
-          {erreur && <Alerte ton="erreur">{erreur}</Alerte>}
+          {/* Le cache a peut-être déjà servi la liste : l'échec s'ajoute alors
+              sous les cartes plutôt que de les remplacer. Le bouton relance
+              l'appel, ce qui est exactement le geste attendu quand Railway se
+              réveille encore. */}
+          {echec && (
+            <BlocErreur
+              echec={echec}
+              onReessayer={reessayer}
+              tentative={tentative}
+            />
+          )}
 
           <ZoneChargement chargement={chargement} squelette={<SqueletteChampionnats />}>
             {championnats.length === 0 ? (

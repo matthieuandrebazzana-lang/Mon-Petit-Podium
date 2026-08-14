@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { GENRE_SERVEUR, messageDeChargement } from "./erreurs.js";
 
 /**
  * Chargement de données avec cache localStorage en *stale-while-revalidate*
@@ -74,13 +75,21 @@ export function useDonnees(cle, chargeur) {
   // Pas d'écran d'attente si le cache a déjà quelque chose à montrer : la
   // requête tourne en fond et le contenu se met à jour tout seul.
   const [chargement, setChargement] = useState(() => lireCache(cle) === undefined);
-  const [erreur, setErreur] = useState(null);
+  // `echec` porte le genre en plus du message (étape 9) : c'est lui qui décide
+  // si l'écran propose « Réessayer » et sous quelle formulation. `erreur` reste
+  // la chaîne seule, pour les écrans qui n'ont besoin que de l'afficher.
+  const [echec, setEchec] = useState(null);
 
   const chargeurRef = useRef(chargeur);
   chargeurRef.current = chargeur;
 
   const [tour, setTour] = useState(0);
-  const recharger = useCallback(() => setTour((n) => n + 1), []);
+  const recharger = useCallback(() => {
+    // L'attente doit repartir avec la tentative, sinon le squelette ne
+    // réapparaît jamais et le bouton semble n'avoir rien déclenché.
+    setChargement(true);
+    setTour((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     const controleur = new AbortController();
@@ -93,14 +102,18 @@ export function useDonnees(cle, chargeur) {
 
         if (resultat.ok) {
           setDonnees(resultat.donnees);
-          setErreur(null);
+          setEchec(null);
           ecrireCache(cle, resultat.donnees);
         } else {
-          setErreur(resultat.message);
+          setEchec(resultat);
         }
       } catch (erreurAttrapee) {
         if (erreurAttrapee.name === "AbortError") return;
-        if (actif) setErreur(null);
+        // Jusqu'à l'étape 9, une exception inattendue remettait l'erreur à
+        // `null` : l'écran restait vide, sans squelette ni message, et rien ne
+        // disait au joueur quoi faire. Elle est désormais rendue comme les
+        // autres, avec son bouton « Réessayer ».
+        if (actif) setEchec({ ok: false, genre: GENRE_SERVEUR, message: null });
       } finally {
         if (actif) setChargement(false);
       }
@@ -112,5 +125,12 @@ export function useDonnees(cle, chargeur) {
     };
   }, [cle, tour]);
 
-  return { donnees, chargement, erreur, recharger, setDonnees };
+  return {
+    donnees,
+    chargement,
+    echec,
+    erreur: echec ? messageDeChargement(echec) : null,
+    recharger,
+    setDonnees,
+  };
 }

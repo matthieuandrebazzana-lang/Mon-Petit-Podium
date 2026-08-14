@@ -1,5 +1,10 @@
 import { appelApi } from "./api.js";
 import { supabase } from "./supabase.js";
+import {
+  GENRE_DONNEES,
+  GENRE_SESSION,
+  GENRE_SUPABASE,
+} from "./erreurs.js";
 
 /**
  * Deux chemins de données coexistent, et c'est délibéré.
@@ -49,7 +54,7 @@ export function quitterChampionnat(id) {
  * relation à suivre entre les deux. Les effectifs restent petits.
  */
 export async function chargerChampionnat(id, signal) {
-  if (!supabase) return { ok: false, message: NON_CONFIGURE };
+  if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
 
   try {
     const requete = supabase
@@ -62,8 +67,8 @@ export async function chargerChampionnat(id, signal) {
       ? requete.abortSignal(signal)
       : requete);
 
-    if (erreurChampionnat) return { ok: false, message: LECTURE_IMPOSSIBLE };
-    if (!championnat) return { ok: false, message: INTROUVABLE };
+    if (erreurChampionnat) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
+    if (!championnat) return { ok: false, message: INTROUVABLE, genre: GENRE_DONNEES };
 
     const requeteMembres = supabase
       .from("membres_championnat")
@@ -75,7 +80,7 @@ export async function chargerChampionnat(id, signal) {
       ? requeteMembres.abortSignal(signal)
       : requeteMembres);
 
-    if (erreurMembres) return { ok: false, message: LECTURE_IMPOSSIBLE };
+    if (erreurMembres) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
 
     const identifiants = (lignes ?? []).map((ligne) => ligne.profil_id);
     let pseudos = new Map();
@@ -104,6 +109,6 @@ export async function chargerChampionnat(id, signal) {
     };
   } catch (erreur) {
     if (erreur.name === "AbortError") throw erreur;
-    return { ok: false, message: LECTURE_IMPOSSIBLE };
+    return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
   }
 }

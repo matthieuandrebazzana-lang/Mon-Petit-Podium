@@ -1,10 +1,10 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
-import Alerte from "../composants/Alerte.jsx";
 import GrilleStats from "../composants/GrilleStats.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import BlocErreur from "../composants/BlocErreur.jsx";
 import { IconeChevronDroit, IconeDrapeau } from "../composants/Icones.jsx";
 import { HeroProfil } from "./MonProfil.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
@@ -43,7 +43,13 @@ export default function ProfilMembre() {
     (signal) => chargerProfilComplet(profilId, signal),
     [profilId],
   );
-  const { donnees, chargement, erreur } = useDonnees(cle, chargeur);
+  const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
+  const [tentativeChargement, setTentativeChargement] = useState(0);
+
+  function reessayerChargement() {
+    setTentativeChargement((n) => n + 1);
+    recharger();
+  }
 
   const profil = donnees?.profil ?? null;
 
@@ -55,14 +61,18 @@ export default function ProfilMembre() {
     return <Navigate to="/profil" replace />;
   }
 
-  if (erreur && !donnees) {
+  if (echec && !donnees) {
     return (
       <Ecran direction="avant">
         <Bloc rang={1}>
           <EnTete titre="Profil" retourVers={-1} />
         </Bloc>
         <Bloc rang={2}>
-          <Alerte ton="erreur">{erreur}</Alerte>
+          <BlocErreur
+            echec={echec}
+            onReessayer={reessayerChargement}
+            tentative={tentativeChargement}
+          />
         </Bloc>
       </Ecran>
     );

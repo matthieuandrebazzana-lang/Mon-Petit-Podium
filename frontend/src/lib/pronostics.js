@@ -1,5 +1,10 @@
 import { appelApi } from "./api.js";
 import { supabase } from "./supabase.js";
+import {
+  GENRE_DONNEES,
+  GENRE_SESSION,
+  GENRE_SUPABASE,
+} from "./erreurs.js";
 
 /**
  * Cotes, favoris et pronostics — étape 5.
@@ -86,7 +91,7 @@ export function chargerFavoris(gpId, signal) {
  * comme « prochain » un GP sans date.
  */
 export async function chargerProchainGp(signal) {
-  if (!supabase) return { ok: false, message: NON_CONFIGURE };
+  if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
 
   try {
     const requete = supabase
@@ -98,14 +103,14 @@ export async function chargerProchainGp(signal) {
       .maybeSingle();
 
     const { data, error } = await (signal ? requete.abortSignal(signal) : requete);
-    if (error) return { ok: false, message: LECTURE_IMPOSSIBLE };
+    if (error) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
 
     // Aucun GP en base n'est un état normal tant que le scraper n'a pas tourné :
     // `null`, pas une erreur.
     return { ok: true, message: null, donnees: data ?? null };
   } catch (erreur) {
     if (erreur.name === "AbortError") throw erreur;
-    return { ok: false, message: LECTURE_IMPOSSIBLE };
+    return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
   }
 }
 
@@ -118,7 +123,7 @@ export async function chargerProchainGp(signal) {
  * `id_outcome_unibet`, côté appelant, avec les cotes qu'il a déjà chargées.
  */
 export async function chargerMesPronostics(gpId, profilId, signal) {
-  if (!supabase) return { ok: false, message: NON_CONFIGURE };
+  if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
   if (!profilId) return { ok: true, message: null, donnees: [] };
 
   try {
@@ -129,12 +134,12 @@ export async function chargerMesPronostics(gpId, profilId, signal) {
       .eq("profil_id", profilId);
 
     const { data, error } = await (signal ? requete.abortSignal(signal) : requete);
-    if (error) return { ok: false, message: LECTURE_IMPOSSIBLE };
+    if (error) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
 
     return { ok: true, message: null, donnees: data ?? [] };
   } catch (erreur) {
     if (erreur.name === "AbortError") throw erreur;
-    return { ok: false, message: LECTURE_IMPOSSIBLE };
+    return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
   }
 }
 
@@ -190,19 +195,78 @@ export async function chargerTableauCotes(gpId, signal) {
  */
 export const cleAccueilGp = (profilId) => `accueil-gp:${profilId}`;
 
+/**
+ * Le dernier Grand Prix **couru**, résultats compris.
+ *
+ * Sert de repli à l'accueil en intersaison et entre deux courses : dès que le
+ * job passe un GP à `termine`, il quitte la liste des `a_venir` et le bloc
+ * rouge n'avait plus rien à annoncer jusqu'au scraping du samedi suivant. Le
+ * dimanche soir d'un Grand Prix, c'est précisément l'écran que tout le monde
+ * ouvre.
+ *
+ * La lecture reste directe, sous les politiques publiques des étapes 4 et 6 :
+ * `grands_prix` et `resultats_gp` sont lisibles par tous. La jointure sur
+ * `resultats_gp` n'est pas décorative — un GP passé à `termine` sans résultats
+ * enregistrés (course annulée, job en échec) ne doit pas envoyer l'accueil vers
+ * un écran de résultats vide.
+ */
+export async function chargerDernierGpCouru(signal) {
+  if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
+
+  try {
+    const requete = supabase
+      .from("grands_prix")
+      .select("id, nom, date_course, statut, resultats_gp!inner(gp_id)")
+      .order("date_course", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+
+    const { data, error } = await (signal ? requete.abortSignal(signal) : requete);
+    if (error) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
+
+    return { ok: true, message: null, donnees: data ?? null };
+  } catch (erreur) {
+    if (erreur.name === "AbortError") throw erreur;
+    return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
+  }
+}
+
 export async function chargerAccueilGp(profilId, signal) {
   const prochain = await chargerProchainGp(signal);
   if (!prochain.ok) return prochain;
 
-  const gp = prochain.donnees;
-  if (!gp) return { ok: true, message: null, donnees: { gp: null, aPronostique: false } };
+  let gp = prochain.donnees;
+
+  // Aucun Grand Prix à venir : on montre le dernier couru et son bouton mène
+  // aux résultats. **L'échec de ce repli n'emporte pas l'accueil** — c'est la
+  // même règle que pour les pronostics ci-dessous : le bloc garde sa place et
+  // dit qu'aucun Grand Prix n'est ouvert, ce qui reste vrai.
+  if (!gp) {
+    const dernier = await chargerDernierGpCouru(signal);
+    if (dernier.ok && dernier.donnees) {
+      return {
+        ok: true,
+        message: null,
+        donnees: { gp: dernier.donnees, aPronostique: false, couru: true },
+      };
+    }
+    return {
+      ok: true,
+      message: null,
+      donnees: { gp: null, aPronostique: false, couru: false },
+    };
+  }
 
   const miens = await chargerMesPronostics(gp.id, profilId, signal);
 
   return {
     ok: true,
     message: null,
-    donnees: { gp, aPronostique: miens.ok && (miens.donnees?.length ?? 0) > 0 },
+    donnees: {
+      gp,
+      aPronostique: miens.ok && (miens.donnees?.length ?? 0) > 0,
+      couru: false,
+    },
   };
 }
 

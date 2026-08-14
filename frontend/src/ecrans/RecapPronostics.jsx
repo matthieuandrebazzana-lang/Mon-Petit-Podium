@@ -1,10 +1,11 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
-import Alerte from "../composants/Alerte.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import BlocErreur from "../composants/BlocErreur.jsx";
+import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
 import { IconeCoche, IconeHorloge } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerRecap, indexerCotes, organiserPronostics } from "../lib/pronostics.js";
@@ -15,15 +16,19 @@ import { useFermeture } from "../lib/useFermeture.js";
 function SqueletteRecap() {
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-bloc bg-primaire h-[88px]" />
-      <div className="rounded-carte bg-surface flex flex-col gap-4 p-4">
+      {/* Aplat rouge conservé : seule la matière qu'il contient est grisée. */}
+      <div className="rounded-bloc bg-primaire p-5">
+        <div className="h-2.5 w-28 rounded-full bg-white/25" />
+        <div className="mt-3 h-5 w-44 rounded-full bg-white/25" />
+      </div>
+      <Carte className="flex flex-col gap-4">
         {[0, 1, 2, 3].map((rang) => (
           <div key={rang} className="flex items-center justify-between gap-3">
-            <div className="bg-fond h-3.5 w-1/3 rounded-full" />
-            <div className="bg-fond h-6 w-24 rounded-[10px]" />
+            <Barre largeur="w-1/3" />
+            <Pave className="h-6 w-24" arrondi="rounded-[10px]" />
           </div>
         ))}
-      </div>
+      </Carte>
     </div>
   );
 }
@@ -81,7 +86,13 @@ export default function RecapPronostics() {
     (signal) => chargerRecap(gpId, utilisateur?.id, signal),
     [gpId, utilisateur?.id],
   );
-  const { donnees, chargement, erreur } = useDonnees(cle, chargeur);
+  const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
+  const [tentativeChargement, setTentativeChargement] = useState(0);
+
+  function reessayerChargement() {
+    setTentativeChargement((n) => n + 1);
+    recharger();
+  }
 
   const gp = donnees?.gp ?? null;
   const index = useMemo(() => indexerCotes(gp), [gp]);
@@ -92,14 +103,18 @@ export default function RecapPronostics() {
 
   const etat = useFermeture(gp?.date_course);
 
-  if (erreur && !donnees) {
+  if (echec && !donnees) {
     return (
       <Ecran direction="arriere">
         <Bloc rang={1}>
           <EnTete titre="Récap" retourVers="/accueil" />
         </Bloc>
         <Bloc rang={2}>
-          <Alerte ton="erreur">{erreur}</Alerte>
+          <BlocErreur
+            echec={echec}
+            onReessayer={reessayerChargement}
+            tentative={tentativeChargement}
+          />
         </Bloc>
       </Ecran>
     );

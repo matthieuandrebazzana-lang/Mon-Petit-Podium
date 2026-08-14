@@ -5,6 +5,8 @@ import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import BlocErreur from "../composants/BlocErreur.jsx";
+import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
 import Compteur from "../composants/Compteur.jsx";
 import {
   IconeChevronAccordeon,
@@ -30,12 +32,21 @@ import { useFermeture } from "../lib/useFermeture.js";
 function SqueletteSaisie() {
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-carte bg-primaire h-[68px]" />
-      {[0, 1].map((rang) => (
-        <div key={rang} className="rounded-carte bg-surface flex flex-col gap-2.5 p-4">
-          <div className="bg-fond h-3 w-24 rounded-full" />
-          <div className="bg-fond rounded-champ h-[46px]" />
+      {/* Le bloc de fermeture garde son aplat rouge : c'est la surface, pas le
+          contenu, et la voir virer au gris puis revenir ferait clignoter
+          l'écran au lieu de le remplir. */}
+      <div className="rounded-carte bg-primaire flex items-center justify-between gap-3 px-4.5 py-3.5">
+        <div className="flex-1">
+          <div className="h-2.5 w-24 rounded-full bg-white/25" />
+          <div className="mt-2 h-4 w-32 rounded-full bg-white/25" />
         </div>
+        <div className="rounded-champ size-8 bg-white/15" />
+      </div>
+      {[0, 1].map((rang) => (
+        <Carte key={rang} className="flex flex-col gap-2.5">
+          <Barre largeur="w-24" hauteur="h-3" />
+          <Pave className="h-[46px]" />
+        </Carte>
       ))}
     </div>
   );
@@ -190,7 +201,13 @@ export default function Pronostics() {
     (signal) => chargerSaisie(gpId, utilisateur?.id, signal),
     [gpId, utilisateur?.id],
   );
-  const { donnees, chargement, erreur } = useDonnees(cle, chargeur);
+  const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
+  const [tentativeChargement, setTentativeChargement] = useState(0);
+
+  function reessayerChargement() {
+    setTentativeChargement((n) => n + 1);
+    recharger();
+  }
 
   const gp = donnees?.gp ?? null;
   const index = useMemo(() => indexerCotes(gp), [gp]);
@@ -296,14 +313,18 @@ export default function Pronostics() {
     naviguer(`/grands-prix/${gpId}/recap`, { state: { enregistre: true } });
   }
 
-  if (erreur && !donnees) {
+  if (echec && !donnees) {
     return (
       <Ecran direction="avant">
         <Bloc rang={1}>
           <EnTete titre="Mes pronos" retourVers={`/grands-prix/${gpId}/cotes`} />
         </Bloc>
         <Bloc rang={2}>
-          <Alerte ton="erreur">{erreur}</Alerte>
+          <BlocErreur
+            echec={echec}
+            onReessayer={reessayerChargement}
+            tentative={tentativeChargement}
+          />
         </Bloc>
       </Ecran>
     );
