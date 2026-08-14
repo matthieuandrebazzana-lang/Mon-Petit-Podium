@@ -5,7 +5,7 @@ import { IconeChevronGauche } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerChampionnat } from "../lib/championnats.js";
 import { chargerClassement, cleClassement } from "../lib/classement.js";
-import { livreePour } from "../lib/livrees.js";
+import { couleursDuMembre } from "../lib/palette.js";
 import { useDonnees } from "../lib/useDonnees.js";
 
 /**
@@ -100,9 +100,15 @@ export function positionsDesVoitures(lignes, hauteur) {
  *
  * Exporté nommément pour pouvoir être rendu hors navigateur : le composant
  * d'écran, lui, dépend de la session, qui ne se résout que dans un effet.
+ *
+ * Depuis l'étape 8, la voiture porte les **vraies couleurs** du membre et le
+ * **numéro qu'il a choisi** — l'une et l'autre servies par le classement. Le
+ * rang ne s'affiche que faute de numéro choisi : c'était le comportement
+ * provisoire de l'étape 7, il devient le repli.
  */
 export function LigneDePiste({ ligne, centre, hauteur, retard, estMoi }) {
-  const livree = livreePour(ligne.ordre_inscription);
+  const voiture = couleursDuMembre(ligne);
+  const numero = ligne.numero ?? ligne.rang;
 
   return (
     <div
@@ -118,9 +124,9 @@ export function LigneDePiste({ ligne, centre, hauteur, retard, estMoi }) {
       }}
     >
       <Voiture
-        couleur1={livree.couleur1}
-        couleur2={livree.couleur2}
-        numero={ligne.rang}
+        couleur1={voiture.couleur1}
+        couleur2={voiture.couleur2}
+        numero={numero}
         nom={ligne.pseudo}
         titre={`${ligne.rang}. ${ligne.pseudo}, ${ligne.total_points} points`}
         className="absolute left-1/2 h-full -translate-x-1/2"

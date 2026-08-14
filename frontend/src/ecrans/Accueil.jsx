@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback } from "react";
+import { Link } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import Pastille from "../composants/Pastille.jsx";
@@ -189,8 +189,7 @@ function Action({ vers, variante, icone, children }) {
 
 /** Maquette 04 — accueil connecté : mes championnats et les deux actions. */
 export default function Accueil() {
-  const { pseudo, utilisateur, deconnecter } = useAuth();
-  const naviguer = useNavigate();
+  const { pseudo, utilisateur } = useAuth();
 
   // La clé porte l'identifiant du compte : deux personnes qui se relaient sur
   // le même téléphone ne doivent jamais voir la liste de l'autre, même une
@@ -200,16 +199,6 @@ export default function Accueil() {
   const { donnees, chargement, erreur } = useDonnees(cle, chargeur);
 
   const championnats = donnees ?? [];
-  const [sortie, setSortie] = useState(false);
-
-  async function seDeconnecter() {
-    setSortie(true);
-    const resultat = await deconnecter();
-    // En cas de succès la redirection vient du contexte de session : le
-    // composant est démonté, inutile de retoucher l'état.
-    if (!resultat.ok) setSortie(false);
-    else naviguer("/", { replace: true });
-  }
 
   return (
     <Ecran direction="avant">
@@ -218,7 +207,18 @@ export default function Accueil() {
           <h1 className="text-titre text-texte min-w-0 truncate">
             {pseudo ? `Salut ${pseudo}` : "Mon Petit Podium"}
           </h1>
-          <Pastille nom={pseudo} graine={utilisateur?.id ?? pseudo} taille="lg" />
+          {/* La pastille mène au profil (maquette 14). C'est l'endroit où
+              l'attend quelqu'un qui vient d'iOS, et c'est déjà la place que la
+              maquette 04 lui donne — elle n'y était simplement reliée à rien.
+              La zone tactile est portée à 44px sans déplacer la pastille de
+              42px que dessine la maquette. */}
+          <Link
+            to="/profil"
+            aria-label="Mon profil"
+            className="pressable size-tactile -m-0.5 flex shrink-0 items-center justify-center"
+          >
+            <Pastille nom={pseudo} graine={utilisateur?.id ?? pseudo} taille="lg" />
+          </Link>
         </Bloc>
 
         <Bloc rang={2}>
@@ -266,16 +266,9 @@ export default function Accueil() {
       </div>
 
       <footer className="flex flex-col items-center gap-3 pt-5">
-        {/* Provisoire : la déconnexion rejoindra l'onglet Profil quand la barre
-            de navigation basse existera (étape 8). */}
-        <button
-          type="button"
-          onClick={seDeconnecter}
-          disabled={sortie}
-          className="text-texte-doux min-h-tactile pressable -my-2 px-3 py-2 text-[13px] font-medium"
-        >
-          {sortie ? "Déconnexion…" : "Se déconnecter"}
-        </button>
+        {/* La déconnexion a quitté ce pied de page pour le profil (étape 8),
+            comme l'annonçait l'étape 3 : c'est sa place définitive, et la
+            garder ici en double aurait donné deux endroits à corriger. */}
         <span className="text-label-sm text-texte-doux uppercase">
           Version {APP_VERSION}
         </span>

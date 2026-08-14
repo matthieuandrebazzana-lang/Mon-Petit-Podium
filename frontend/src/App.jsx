@@ -15,6 +15,9 @@ import Piste from "./ecrans/Piste.jsx";
 import Cotes from "./ecrans/Cotes.jsx";
 import Pronostics from "./ecrans/Pronostics.jsx";
 import RecapPronostics from "./ecrans/RecapPronostics.jsx";
+import MonProfil from "./ecrans/MonProfil.jsx";
+import ProfilMembre from "./ecrans/ProfilMembre.jsx";
+import GrandsPrixDuMembre from "./ecrans/GrandsPrixDuMembre.jsx";
 
 /** Configuration absente : mieux vaut le dire que servir une page blanche. */
 function EcranConfiguration({ message }) {
@@ -62,6 +65,18 @@ export default function App() {
         <Route path="/grands-prix/:gpId/cotes" element={<Cotes />} />
         <Route path="/grands-prix/:gpId/pronostics" element={<Pronostics />} />
         <Route path="/grands-prix/:gpId/recap" element={<RecapPronostics />} />
+
+        {/* Profils, maquettes 14 → 12 → 13. « /profil » au singulier est le
+            mien, le seul qui se modifie ; « /profils/:id » celui d'un autre
+            membre. Deux écrans distincts et non un seul paramétré : l'un porte
+            des sélecteurs et un bouton d'enregistrement, l'autre non, et les
+            confondre reviendrait à cacher la moitié d'un écran sur deux. */}
+        <Route path="/profil" element={<MonProfil />} />
+        <Route path="/profils/:profilId" element={<ProfilMembre />} />
+        <Route
+          path="/profils/:profilId/grands-prix"
+          element={<GrandsPrixDuMembre />}
+        />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

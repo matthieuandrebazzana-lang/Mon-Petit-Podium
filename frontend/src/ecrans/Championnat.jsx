@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
@@ -8,7 +8,12 @@ import BasculeVue from "../composants/BasculeVue.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
-import { IconeCoche, IconeCopie, IconeSortie } from "../composants/Icones.jsx";
+import {
+  IconeChevronDroit,
+  IconeCoche,
+  IconeCopie,
+  IconeSortie,
+} from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerChampionnat, quitterChampionnat } from "../lib/championnats.js";
 import {
@@ -17,7 +22,7 @@ import {
   saisonCommencee,
 } from "../lib/classement.js";
 import { formaterPoints } from "../lib/format.js";
-import { couleurLisible, livreePour } from "../lib/livrees.js";
+import { couleurLisible } from "../lib/palette.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 
 const DUREE_CONFIRMATION = 2000;
@@ -83,9 +88,13 @@ function BlocCode({ code, miseEnAvant }) {
  * Une ligne du classement — la rangée de la maquette 07, avec ses vraies
  * données. Exportée nommément pour pouvoir être rendue hors navigateur : le
  * composant d'écran dépend de la session, qui ne se résout que dans un effet.
+ *
+ * Depuis l'étape 8, la rangée **mène au profil du membre** (maquette 12) et la
+ * pastille porte la couleur de sa vraie voiture, plus celle d'une livrée
+ * attribuée par ordre d'inscription : la même personne se reconnaît du même
+ * coup d'œil au classement, sur la piste et sur son profil.
  */
 export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
-  const livree = livreePour(ligne.ordre_inscription);
   const podium = ligne.rang <= 3;
 
   // Sous-ligne : les deux critères qui départagent avant l'ordre d'inscription
@@ -105,38 +114,45 @@ export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
     : "En attente du premier Grand Prix";
 
   return (
-    <li className="flex items-center gap-3 py-2.5">
-      <span
-        className={`w-6 shrink-0 text-center text-[16px] font-medium ${
-          podium ? "text-primaire" : "text-texte-doux"
-        }`}
+    <li>
+      <Link
+        to={`/profils/${ligne.profil_id}`}
+        className="pressable min-h-tactile flex items-center gap-3 py-2.5"
       >
-        {ligne.rang}
-      </span>
+        <span
+          className={`w-6 shrink-0 text-center text-[16px] font-medium ${
+            podium ? "text-primaire" : "text-texte-doux"
+          }`}
+        >
+          {ligne.rang}
+        </span>
 
-      <Pastille
-        nom={ligne.pseudo}
-        graine={ligne.profil_id}
-        couleur={couleurLisible(livree)}
-      />
+        <Pastille
+          nom={ligne.pseudo}
+          graine={ligne.profil_id}
+          couleur={couleurLisible(ligne)}
+        />
 
-      <div className="min-w-0 flex-1">
-        <p className="text-corps-sm text-texte truncate font-medium">
-          {ligne.pseudo}
-          {estMoi && <span className="text-primaire"> · Toi</span>}
-          {estCreateur && (
-            <span className="text-texte-doux"> · Créateur</span>
-          )}
-        </p>
-        <p className="text-texte-doux mt-0.5 truncate text-[12px]">{detail}</p>
-      </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-corps-sm text-texte truncate font-medium">
+            {ligne.pseudo}
+            {estMoi && <span className="text-primaire"> · Toi</span>}
+            {estCreateur && (
+              <span className="text-texte-doux"> · Créateur</span>
+            )}
+          </p>
+          <p className="text-texte-doux mt-0.5 truncate text-[12px]">{detail}</p>
+        </div>
 
-      <div className="shrink-0 text-right">
-        <p className="text-primaire text-[20px] leading-none font-medium">
-          {ligne.total_points}
-        </p>
-        <p className="text-label-sm text-texte-doux mt-1 uppercase">pts</p>
-      </div>
+        <div className="shrink-0 text-right">
+          <p className="text-primaire text-[20px] leading-none font-medium">
+            {ligne.total_points}
+          </p>
+          <p className="text-label-sm text-texte-doux mt-1 uppercase">pts</p>
+        </div>
+
+        <IconeChevronDroit className="text-texte-doux size-3.5 shrink-0" />
+      </Link>
     </li>
   );
 }
@@ -291,24 +307,26 @@ export default function Championnat() {
                   ) : (
                     <ul>
                       {membres.map((membre) => (
-                        <li
-                          key={membre.id}
-                          className="flex items-center gap-3 px-1 py-2.5"
-                        >
-                          <Pastille nom={membre.pseudo} graine={membre.id} />
-                          <span className="text-corps-sm text-texte min-w-0 flex-1 truncate font-medium">
-                            {membre.pseudo}
-                          </span>
-                          {membre.id === donnees.cree_par && (
-                            <span className="text-label-sm text-texte-doux uppercase">
-                              Créateur
+                        <li key={membre.id}>
+                          <Link
+                            to={`/profils/${membre.id}`}
+                            className="pressable min-h-tactile flex items-center gap-3 px-1 py-2.5"
+                          >
+                            <Pastille nom={membre.pseudo} graine={membre.id} />
+                            <span className="text-corps-sm text-texte min-w-0 flex-1 truncate font-medium">
+                              {membre.pseudo}
                             </span>
-                          )}
-                          {membre.id === utilisateur?.id && (
-                            <span className="text-label-sm text-primaire uppercase">
-                              Toi
-                            </span>
-                          )}
+                            {membre.id === donnees.cree_par && (
+                              <span className="text-label-sm text-texte-doux uppercase">
+                                Créateur
+                              </span>
+                            )}
+                            {membre.id === utilisateur?.id && (
+                              <span className="text-label-sm text-primaire uppercase">
+                                Toi
+                              </span>
+                            )}
+                          </Link>
                         </li>
                       ))}
                     </ul>

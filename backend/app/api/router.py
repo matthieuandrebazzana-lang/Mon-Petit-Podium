@@ -1,12 +1,21 @@
 from fastapi import APIRouter
 
-from app.api.routes import championnats, health, pronostics, resultats, scraper
+from app.api.routes import (
+    championnats,
+    health,
+    profils,
+    pronostics,
+    resultats,
+    scraper,
+)
 
-# Routeur racine : chaque nouveau domaine (classements, profils) ajoute ici son
-# propre routeur.
+# Routeur racine : chaque nouveau domaine ajoute ici son propre routeur.
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(championnats.router)
+# Profils (étape 8) : voiture personnalisée et statistiques. Préfixe `/profils`,
+# qui ne recoupe aucun autre domaine.
+api_router.include_router(profils.router)
 # Trois routeurs se partagent le préfixe `/grands-prix/{id}` : `scraper` porte
 # `/cotes` (publique, étape 4), `pronostics` porte `/favoris` et `/pronostics`
 # (protégées, étape 5), `resultats` porte `/resultats` (mixte, étape 6). Les

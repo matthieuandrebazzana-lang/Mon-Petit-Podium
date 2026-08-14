@@ -1,4 +1,4 @@
-import { encreSur } from "../lib/livrees.js";
+import { COULEUR1_DEFAUT, COULEUR2_DEFAUT, encreSur } from "../lib/palette.js";
 
 /**
  * La voiture vue du dessus — `assets/voiture.svg` transformé en composant.
@@ -35,8 +35,8 @@ function tailleDuNom(nom) {
 }
 
 export default function Voiture({
-  couleur1 = "#800111",
-  couleur2 = "#FFFFFF",
+  couleur1 = COULEUR1_DEFAUT,
+  couleur2 = COULEUR2_DEFAUT,
   numero = "",
   nom = "",
   className = "",

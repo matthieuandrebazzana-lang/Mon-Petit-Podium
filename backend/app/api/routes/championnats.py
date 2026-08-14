@@ -84,10 +84,16 @@ class LigneClassement(BaseModel):
     # Rang de 1 à N, sans ex æquo : les quatre critères de la règle 4.6 réunis
     # départagent toujours.
     rang: int
-    # Rang d'adhésion au championnat, 4ᵉ critère de départage. Il sert aussi de
-    # graine à la livrée de la voiture côté frontend : le premier inscrit prend
-    # la première combinaison de couleurs, et il la garde.
+    # Rang d'adhésion au championnat, 4ᵉ critère de départage.
     ordre_inscription: int
+    # La voiture du membre (étape 8). Les couleurs ne sont jamais nulles : la
+    # fonction SQL retombe sur les défauts de la colonne quand le profil manque,
+    # sans quoi le SVG afficherait des aplats transparents. Le numéro, lui, reste
+    # nul tant que le membre n'en a pas choisi — c'est alors son rang qui
+    # s'affiche sur la voiture, comme à l'étape 7.
+    couleur1: str = "#800111"
+    couleur2: str = "#FFFFFF"
+    numero: int | None = None
 
 
 class Championnat(BaseModel):
