@@ -640,6 +640,109 @@
   animation: t-digit-pop-in var(--digit-dur) var(--digit-ease) both;
 }
 
+/* ---------------------------------------------------------------
+   Vue piste — maquette 07b.
+   L'écran signature. Asphalte plein cadre, bordures rouge et blanc
+   sur les deux côtés, ligne pointillée centrale. Aucun fond beige
+   n'est visible : c'est le seul écran de l'app qui sorte de la
+   surface `fond`, et c'est voulu — une piste éclairée par le beige
+   de l'app ne serait plus une piste.
+   --------------------------------------------------------------- */
+:root {
+  --piste-asphalte: #1a1a1a;
+  --piste-kerb-rouge: #cc2200;
+  --piste-kerb-blanc: #ffffff;
+  /* Hauteur d'un rectangle de bordure : le motif fait donc 40px de période. */
+  --piste-kerb-pas: 20px;
+  --piste-kerb-largeur: 20px;
+  --piste-axe-largeur: 4px;
+}
+
+.piste-fond {
+  background-color: var(--piste-asphalte);
+}
+
+/* Bordure rouge et blanc : un dégradé répété plutôt qu'une série de blocs —
+   la piste doit garder la même cadence quelle que soit la hauteur d'écran,
+   et un motif CSS ne coûte aucun nœud du DOM. */
+.piste-kerb {
+  width: var(--piste-kerb-largeur);
+  background-image: repeating-linear-gradient(
+    180deg,
+    var(--piste-kerb-rouge) 0,
+    var(--piste-kerb-rouge) var(--piste-kerb-pas),
+    var(--piste-kerb-blanc) var(--piste-kerb-pas),
+    var(--piste-kerb-blanc) calc(var(--piste-kerb-pas) * 2)
+  );
+}
+
+/* Ligne médiane discontinue. Même raison : un dégradé répété, pas 30 traits. */
+.piste-axe {
+  width: var(--piste-axe-largeur);
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.5) 0,
+    rgb(255 255 255 / 0.5) 22px,
+    transparent 22px,
+    transparent 38px
+  );
+}
+
+/* Ligne d'arrivée en damier. */
+.piste-arrivee {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--piste-kerb-blanc) 0,
+    var(--piste-kerb-blanc) 8px,
+    var(--piste-asphalte) 8px,
+    var(--piste-asphalte) 16px
+  );
+}
+
+/* — Entrée des voitures, d'après texts reveal (transitions-dev 18) —
+   Le snippet monte des lignes de texte de 12px avec 40ms de décalage ; ici
+   chaque voiture part du bas de l'écran, d'une distance qui lui est propre
+   (--voiture-depart, écrite en ligne : elle dépend de la position d'arrivée),
+   et le décalage passe à 100ms pour que les voitures se suivent au lieu de
+   monter en bloc. Structure, propriétés animées et garde-fou de mouvement
+   réduit sont ceux du snippet.
+
+   Le retard est écrit en ligne plutôt que par des classes --N : le nombre de
+   membres d'un championnat n'est pas borné (règle 4.5), on ne peut pas
+   déclarer une classe par rang. */
+:root {
+  --voiture-dur: 700ms;
+  --voiture-stagger: 100ms;
+  --voiture-blur: 2px;
+  --voiture-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-voiture {
+  opacity: 0;
+  transform: translateY(var(--voiture-depart, 100px));
+  filter: blur(var(--voiture-blur));
+  transition:
+    opacity var(--voiture-dur) var(--voiture-ease),
+    transform var(--voiture-dur) var(--voiture-ease),
+    filter var(--voiture-dur) var(--voiture-ease);
+  transition-delay: var(--voiture-retard, 0ms);
+  will-change: transform, opacity, filter;
+}
+.t-piste.is-en-piste .t-voiture {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-voiture {
+    transition: none !important;
+    transform: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+}
+
 /* — Retour tactile (/apple-design) —
    Le retour visuel se déclenche à l'appui, pas au relâchement : attendre le
    clic donne une interface morte. 100ms suffisent à être perçus sans retarder

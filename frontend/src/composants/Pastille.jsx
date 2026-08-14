@@ -20,7 +20,13 @@ function couleurPour(graine) {
   return COULEURS[total % COULEURS.length];
 }
 
-export default function Pastille({ nom = "", graine, taille = "md" }) {
+/**
+ * @param {string} [couleur] livrée du membre (étape 7), en `#rrggbb`. Quand elle
+ *   est fournie, la pastille prend la couleur de sa voiture : la même personne
+ *   se reconnaît alors du même coup d'œil au classement et sur la vue piste.
+ *   Sans elle, on retombe sur la teinte déterministe ci-dessus.
+ */
+export default function Pastille({ nom = "", graine, taille = "md", couleur }) {
   const initiale = nom.trim().charAt(0).toUpperCase() || "?";
   const dimensions =
     taille === "lg"
@@ -32,7 +38,8 @@ export default function Pastille({ nom = "", graine, taille = "md" }) {
   return (
     <span
       aria-hidden="true"
-      className={`${dimensions} ${couleurPour(graine || nom)} flex shrink-0 items-center justify-center rounded-full font-medium text-white`}
+      style={couleur ? { backgroundColor: couleur } : undefined}
+      className={`${dimensions} ${couleur ? "" : couleurPour(graine || nom)} flex shrink-0 items-center justify-center rounded-full font-medium text-white`}
     >
       {initiale}
     </span>

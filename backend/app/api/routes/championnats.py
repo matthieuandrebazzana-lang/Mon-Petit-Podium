@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.api import journal
 from app.api.deps import utilisateur_courant
+from app.api.routes.pronostics import exiger_membre
 from app.supabase_client import (
     ErreurSupabase,
     appeler_fonction,
@@ -65,6 +66,28 @@ class CreationChampionnat(BaseModel):
 
 class Adhesion(BaseModel):
     code: str = Field(min_length=1, max_length=32)
+
+
+class LigneClassement(BaseModel):
+    """Un membre au classement, déjà rangé par la fonction SQL (règle 4.6)."""
+
+    profil_id: UUID
+    pseudo: str
+    # Somme des `points_gagnes` du membre. `0` — jamais `null` — quand aucun de
+    # ses pronostics n'a encore été noté : un classement à blanc se lit « tout le
+    # monde à zéro », pas « on ne sait pas ».
+    total_points: int
+    pronostics_reussis: int
+    # Le plus gros coup, en points (règle 4.1). `None` tant qu'il n'a rien
+    # réussi — `0` dirait que son meilleur coup vaut zéro.
+    meilleure_cote: int | None = None
+    # Rang de 1 à N, sans ex æquo : les quatre critères de la règle 4.6 réunis
+    # départagent toujours.
+    rang: int
+    # Rang d'adhésion au championnat, 4ᵉ critère de départage. Il sert aussi de
+    # graine à la livrée de la voiture côté frontend : le premier inscrit prend
+    # la première combinaison de couleurs, et il la garde.
+    ordre_inscription: int
 
 
 class Championnat(BaseModel):
@@ -235,6 +258,39 @@ async def rejoindre(
     return en_championnat(
         championnat, utilisateur, nombre_membres=await compter_membres(championnat["id"])
     )
+
+
+@router.get("/{championnat_id}/classement", response_model=list[LigneClassement])
+@journaliser_echecs("Chargement du classement")
+async def classement(
+    championnat_id: UUID,
+    utilisateur: str = Depends(utilisateur_courant),
+) -> list[LigneClassement]:
+    """Classement du championnat, trié selon les départages de la règle 4.6.
+
+    L'appartenance est vérifiée **avant** toute lecture : la fonction SQL est
+    `security definer` et contourne donc la RLS, comme toutes celles que le
+    backend appelle avec la clé de service. C'est ici, et nulle part ailleurs,
+    que l'autorisation est portée — à partir de l'identifiant du jeton vérifié,
+    jamais d'une valeur reçue de l'appelant.
+
+    Un membre qui n'a jamais pronostiqué figure au classement avec 0 point : le
+    faire disparaître de la liste des membres serait un autre écran.
+
+    **Les points ne sont pas cloisonnés par championnat**, et c'est la règle
+    posée à l'étape 5 : un pronostic vaut dans tous les championnats du joueur à
+    la fois. Le championnat dit qui classer, pas quels pronostics compter.
+    """
+    await exiger_membre(championnat_id, utilisateur)
+
+    try:
+        lignes = await appeler_fonction(
+            "classement_du_championnat", {"p_championnat": str(championnat_id)}
+        )
+    except ErreurSupabase as erreur:
+        raise echec_lisible("Chargement du classement", erreur) from erreur
+
+    return [LigneClassement(**ligne) for ligne in (lignes or [])]
 
 
 @router.delete("/{championnat_id}/quitter", status_code=status.HTTP_204_NO_CONTENT)

@@ -4,12 +4,20 @@ import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
+import BasculeVue from "../composants/BasculeVue.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { IconeCoche, IconeCopie, IconeSortie } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerChampionnat, quitterChampionnat } from "../lib/championnats.js";
+import {
+  chargerClassement,
+  cleClassement,
+  saisonCommencee,
+} from "../lib/classement.js";
+import { formaterPoints } from "../lib/format.js";
+import { couleurLisible, livreePour } from "../lib/livrees.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 
 const DUREE_CONFIRMATION = 2000;
@@ -71,6 +79,68 @@ function BlocCode({ code, miseEnAvant }) {
   );
 }
 
+/**
+ * Une ligne du classement — la rangée de la maquette 07, avec ses vraies
+ * données. Exportée nommément pour pouvoir être rendue hors navigateur : le
+ * composant d'écran dépend de la session, qui ne se résout que dans un effet.
+ */
+export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
+  const livree = livreePour(ligne.ordre_inscription);
+  const podium = ligne.rang <= 3;
+
+  // Sous-ligne : les deux critères qui départagent avant l'ordre d'inscription
+  // (règle 4.6). La maquette y répète le total, déjà affiché à droite ; dire ce
+  // qui sépare deux joueurs à égalité de points est plus utile.
+  const detail = aDesPoints
+    ? [
+        `${ligne.pronostics_reussis} ${
+          ligne.pronostics_reussis > 1 ? "réussis" : "réussi"
+        }`,
+        ligne.meilleure_cote
+          ? `meilleur coup ${formaterPoints(ligne.meilleure_cote)}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "En attente du premier Grand Prix";
+
+  return (
+    <li className="flex items-center gap-3 py-2.5">
+      <span
+        className={`w-6 shrink-0 text-center text-[16px] font-medium ${
+          podium ? "text-primaire" : "text-texte-doux"
+        }`}
+      >
+        {ligne.rang}
+      </span>
+
+      <Pastille
+        nom={ligne.pseudo}
+        graine={ligne.profil_id}
+        couleur={couleurLisible(livree)}
+      />
+
+      <div className="min-w-0 flex-1">
+        <p className="text-corps-sm text-texte truncate font-medium">
+          {ligne.pseudo}
+          {estMoi && <span className="text-primaire"> · Toi</span>}
+          {estCreateur && (
+            <span className="text-texte-doux"> · Créateur</span>
+          )}
+        </p>
+        <p className="text-texte-doux mt-0.5 truncate text-[12px]">{detail}</p>
+      </div>
+
+      <div className="shrink-0 text-right">
+        <p className="text-primaire text-[20px] leading-none font-medium">
+          {ligne.total_points}
+        </p>
+        <p className="text-label-sm text-texte-doux mt-1 uppercase">pts</p>
+      </div>
+    </li>
+  );
+}
+
 function SqueletteChampionnat() {
   return (
     <div className="flex flex-col gap-3">
@@ -101,6 +171,20 @@ export default function Championnat() {
   const cle = utilisateur ? `championnat:${utilisateur.id}:${id}` : null;
   const chargeur = useCallback((signal) => chargerChampionnat(id, signal), [id]);
   const { donnees, chargement, erreur } = useDonnees(cle, chargeur);
+
+  // Le classement suit son propre chemin : il passe par l'API, là où le détail
+  // du championnat se lit directement dans Supabase. Les deux chargements sont
+  // donc indépendants — et c'est voulu. Si Railway se réveille lentement, ou
+  // même s'il échoue, le championnat et ses membres restent affichés.
+  const cleRang = utilisateur ? cleClassement(utilisateur.id, id) : null;
+  const chargeurRang = useCallback(
+    (signal) => chargerClassement(id, signal),
+    [id],
+  );
+  const { donnees: classement, chargement: chargementRang } = useDonnees(
+    cleRang,
+    chargeurRang,
+  );
 
   const [confirmation, setConfirmation] = useState(false);
   const [depart, setDepart] = useState(false);
@@ -142,7 +226,11 @@ export default function Championnat() {
   }
 
   const membres = donnees?.membres ?? [];
-  const effectif = membres.length;
+  const lignes = classement ?? [];
+  // L'effectif vient du classement dès qu'il est là : c'est la seule des deux
+  // sources qui compte les membres sans dépendre de la RLS.
+  const effectif = lignes.length || membres.length;
+  const aDesPoints = saisonCommencee(lignes);
 
   return (
     <Ecran direction="avant">
@@ -155,8 +243,22 @@ export default function Championnat() {
         </p>
       </Bloc>
 
+      <Bloc rang={2} className="mt-3">
+        <BasculeVue
+          etiquette="Vue du championnat"
+          valeur="classement"
+          onChange={(vue) => {
+            if (vue === "piste") naviguer(`/championnats/${id}/piste`);
+          }}
+          options={[
+            { cle: "classement", libelle: "Classement" },
+            { cle: "piste", libelle: "Piste" },
+          ]}
+        />
+      </Bloc>
+
       <div className="mt-3 flex flex-1 flex-col gap-3">
-        <Bloc rang={2}>
+        <Bloc rang={3}>
           <ZoneChargement
             chargement={chargement && !donnees}
             squelette={<SqueletteChampionnat />}
@@ -167,31 +269,58 @@ export default function Championnat() {
 
                 <div className="rounded-bloc bg-surface p-4">
                   <p className="text-label text-texte-doux mb-1 px-1 uppercase">
-                    Membres
+                    {lignes.length > 0 ? "Classement" : "Membres"}
                   </p>
-                  <ul>
-                    {membres.map((membre) => (
-                      <li
-                        key={membre.id}
-                        className="flex items-center gap-3 px-1 py-2.5"
-                      >
-                        <Pastille nom={membre.pseudo} graine={membre.id} />
-                        <span className="text-corps-sm text-texte min-w-0 flex-1 truncate font-medium">
-                          {membre.pseudo}
-                        </span>
-                        {membre.id === donnees.cree_par && (
-                          <span className="text-label-sm text-texte-doux uppercase">
-                            Créateur
+
+                  {/* Le classement remplace la liste des membres dès qu'il est
+                      là. Tant qu'il n'est pas revenu — Railway se réveille — la
+                      liste lue sous RLS tient sa place : elle porte les mêmes
+                      personnes, sans les points. Un bloc vide serait pire. */}
+                  {lignes.length > 0 ? (
+                    <ul className="px-1">
+                      {lignes.map((ligne) => (
+                        <LigneClassement
+                          key={ligne.profil_id}
+                          ligne={ligne}
+                          estMoi={ligne.profil_id === utilisateur?.id}
+                          estCreateur={ligne.profil_id === donnees.cree_par}
+                          aDesPoints={aDesPoints}
+                        />
+                      ))}
+                    </ul>
+                  ) : (
+                    <ul>
+                      {membres.map((membre) => (
+                        <li
+                          key={membre.id}
+                          className="flex items-center gap-3 px-1 py-2.5"
+                        >
+                          <Pastille nom={membre.pseudo} graine={membre.id} />
+                          <span className="text-corps-sm text-texte min-w-0 flex-1 truncate font-medium">
+                            {membre.pseudo}
                           </span>
-                        )}
-                        {membre.id === utilisateur?.id && (
-                          <span className="text-label-sm text-primaire uppercase">
-                            Toi
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                          {membre.id === donnees.cree_par && (
+                            <span className="text-label-sm text-texte-doux uppercase">
+                              Créateur
+                            </span>
+                          )}
+                          {membre.id === utilisateur?.id && (
+                            <span className="text-label-sm text-primaire uppercase">
+                              Toi
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {lignes.length === 0 && chargementRang && (
+                    <p className="text-texte-doux mt-1 px-1 text-[12px]">
+                      <span className="t-shimmer" data-text="Classement en cours de chargement…">
+                        Classement en cours de chargement…
+                      </span>
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -210,7 +339,7 @@ export default function Championnat() {
             l'action est réversible tant qu'on a gardé le code, et un bouton
             qui se transforme sur place reste moins brutal qu'un écran qui
             s'interpose. Le geste de retour, lui, annule tout. */}
-        <Bloc rang={3}>
+        <Bloc rang={4}>
           {confirmation ? (
             <div className="flex flex-col gap-2.5">
               <Bouton

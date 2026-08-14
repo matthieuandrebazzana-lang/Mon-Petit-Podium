@@ -11,6 +11,7 @@ import Accueil from "./ecrans/Accueil.jsx";
 import CreerChampionnat from "./ecrans/CreerChampionnat.jsx";
 import RejoindreChampionnat from "./ecrans/RejoindreChampionnat.jsx";
 import Championnat from "./ecrans/Championnat.jsx";
+import Piste from "./ecrans/Piste.jsx";
 import Cotes from "./ecrans/Cotes.jsx";
 import Pronostics from "./ecrans/Pronostics.jsx";
 import RecapPronostics from "./ecrans/RecapPronostics.jsx";
@@ -52,6 +53,8 @@ export default function App() {
         <Route path="/championnats/creer" element={<CreerChampionnat />} />
         <Route path="/championnats/rejoindre" element={<RejoindreChampionnat />} />
         <Route path="/championnats/:id" element={<Championnat />} />
+        {/* Vue piste : le même championnat, vu de la route (maquette 07b). */}
+        <Route path="/championnats/:id/piste" element={<Piste />} />
 
         {/* Parcours de pronostics, maquettes 08 → 09 → 10. Les trois écrans
             partagent l'identifiant du Grand Prix : la lecture des cotes est
