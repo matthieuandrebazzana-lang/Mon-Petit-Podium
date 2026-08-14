@@ -132,8 +132,13 @@ export function BlocProchainGp({ profilId }) {
   );
 }
 
-/** Carte de championnat de la maquette 04. */
-function CarteChampionnat({ championnat, rang }) {
+/** Carte de championnat de la maquette 04.
+ *
+ * Exportée depuis l'étape 10 : l'écran de l'onglet Championnats sert la même
+ * liste, et deux cartes dessinées séparément auraient divergé au premier
+ * ajustement. C'est aussi ce qui fait qu'un championnat se reconnaît d'un écran
+ * à l'autre. */
+export function CarteChampionnat({ championnat, rang }) {
   return (
     <Link
       to={`/championnats/${championnat.id}`}
@@ -165,7 +170,7 @@ function CarteChampionnat({ championnat, rang }) {
 }
 
 /** Silhouette des cartes pendant le réveil du backend. */
-function SqueletteChampionnats() {
+export function SqueletteChampionnats() {
   return (
     <div className="flex flex-col gap-2.5">
       {[0, 1].map((rang) => (
@@ -199,7 +204,7 @@ function AucunChampionnat() {
 }
 
 /** Bouton d'action de la grille à deux colonnes de la maquette 04. */
-function Action({ vers, variante, icone, children }) {
+export function Action({ vers, variante, icone, children }) {
   const tons =
     variante === "principal" ? "bg-primaire text-white" : "bg-surface text-primaire";
 

@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
+import { barreVisible } from "../lib/navigation.js";
 
 /**
  * Enveloppe commune à tous les écrans.
@@ -19,6 +21,12 @@ export default function Ecran({
   children,
 }) {
   const racine = useRef(null);
+  const { pathname } = useLocation();
+  // La barre de navigation basse est `position: fixed` : elle ne pousse rien.
+  // C'est donc à l'écran de réserver sa hauteur, sans quoi elle recouvrirait le
+  // dernier bloc — souvent un bouton. La réponse vient de `lib/navigation.js`,
+  // le même module que celui qui décide de l'afficher.
+  const reserverBarre = barreVisible(pathname);
 
   useEffect(() => {
     const element = racine.current;
@@ -36,6 +44,12 @@ export default function Ecran({
       className={`t-ecran t-stagger ecran flex min-h-dvh flex-col ${className}`}
     >
       {children}
+
+      {/* Un bloc en fin de flux plutôt qu'un rembourrage qui viendrait écraser
+          celui d'`ecran` : deux utilitaires écrivant la même propriété se
+          départagent par leur ordre dans la feuille compilée, ce qui n'est pas
+          une garantie sur laquelle poser la zone sûre du home indicator. */}
+      {reserverBarre && <div className="h-nav shrink-0" aria-hidden="true" />}
     </main>
   );
 }

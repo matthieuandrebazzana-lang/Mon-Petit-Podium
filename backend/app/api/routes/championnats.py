@@ -8,7 +8,7 @@ Le corps de la requête ne dit jamais qui est l'appelant.
 import re
 import secrets
 import string
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -58,6 +58,11 @@ TENTATIVES_CODE = 5
 
 # Code d'erreur PostgreSQL d'une violation de contrainte d'unicité.
 VIOLATION_UNICITE = "23505"
+
+# Statuts d'un Grand Prix qui n'a pas encore été couru. `termine` en est exclu,
+# et c'est tout l'objet du filtre : le « prochain GP » d'un championnat est
+# celui sur lequel il reste quelque chose à faire.
+STATUTS_A_VENIR = ("a_venir", "cotes_figees")
 
 # Saison servie par défaut au calendrier. Écrite ici plutôt que déduite de
 # `datetime.now()` : le calendrier doit rester lisible en intersaison, où
@@ -137,6 +142,23 @@ class GrandPrixCalendrier(BaseModel):
     classement: list[LigneCalendrier] = []
 
 
+class ProchainGp(BaseModel):
+    """Le Grand Prix à venir, annoncé sur chaque carte de championnat.
+
+    Il est **le même pour tous les championnats** : `public.grands_prix` est une
+    table globale, un Grand Prix n'appartient à personne. C'est ce qui permet de
+    le lire une seule fois pour toute la liste (voir `prochain_grand_prix`).
+    """
+
+    id: UUID
+    nom: str
+    # Nulle tant qu'Unibet n'a pas annoncé l'horaire. Le GP est servi quand
+    # même : l'écarter le rendrait invisible jusqu'au samedi des qualifications,
+    # exactement le choix déjà fait pour le calendrier à l'étape 9.
+    date_course: datetime | None = None
+    statut: str
+
+
 class Championnat(BaseModel):
     id: UUID
     nom: str
@@ -151,6 +173,13 @@ class Championnat(BaseModel):
     # Calculé ici plutôt que déduit côté frontend : la comparaison porte sur
     # l'identifiant du jeton vérifié, que le client n'a pas à refaire.
     est_createur: bool
+    # Le prochain Grand Prix (étape 10), pour l'onglet Calendrier. `None` quand
+    # aucun n'est à venir — la saison est terminée, ou le scraper n'a jamais
+    # tourné. Valeur par défaut pour que les autres routes qui construisent un
+    # `Championnat` (création, adhésion) n'aient pas à s'en soucier : elles
+    # rendent un championnat qu'on vient de créer ou de rejoindre, l'écran
+    # d'arrivée n'affiche pas de Grand Prix.
+    prochain_gp: ProchainGp | None = None
 
 
 def generer_code() -> str:
@@ -188,7 +217,12 @@ async def compter_membres(championnat_id: str) -> int:
     return len(lignes)
 
 
-def en_championnat(ligne: dict, utilisateur: str, nombre_membres: int) -> Championnat:
+def en_championnat(
+    ligne: dict,
+    utilisateur: str,
+    nombre_membres: int,
+    prochain_gp: ProchainGp | None = None,
+) -> Championnat:
     return Championnat(
         id=ligne["id"],
         nom=ligne["nom"],
@@ -198,7 +232,42 @@ def en_championnat(ligne: dict, utilisateur: str, nombre_membres: int) -> Champi
         nombre_membres=nombre_membres,
         est_createur=ligne["cree_par"] is not None
         and str(ligne["cree_par"]) == utilisateur,
+        prochain_gp=prochain_gp,
     )
+
+
+async def prochain_grand_prix() -> ProchainGp | None:
+    """Le prochain Grand Prix non couru, ou `None` s'il n'y en a plus.
+
+    **Lu une seule fois pour toute la liste des championnats.** Un Grand Prix
+    n'appartient à aucun championnat : la table est globale, et le prochain GP
+    est donc le même pour tous. Une lecture par championnat, ou une jointure
+    dans `mes_championnats`, referait N fois le même travail.
+
+    Deux points de mise en œuvre à ne pas défaire :
+
+    - **Un GP sans horaire annoncé reste servi**, mais après les autres
+      (`nullslast`). Sans cette clause, PostgreSQL place les NULL en tête et un
+      GP dont Unibet n'a pas encore publié la date passerait devant la course de
+      dimanche. C'est le même piège que `nullsFirst: false` à l'accueil.
+    - **L'instant de comparaison est calculé ici, en UTC**, et non laissé à un
+      `now` interprété par PostgreSQL : le résultat ne dépend alors ni du fuseau
+      de la session, ni de la façon dont PostgREST transmet la valeur. Le suffixe
+      `Z` est préféré à `+00:00`, dont le `+` se confond avec une espace une fois
+      la requête encodée.
+    """
+    maintenant = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    lignes = await selectionner(
+        "grands_prix",
+        {
+            "statut": f"in.({','.join(STATUTS_A_VENIR)})",
+            "or": f"(date_course.is.null,date_course.gte.{maintenant})",
+            "select": "id,nom,date_course,statut",
+            "order": "date_course.asc.nullslast",
+            "limit": "1",
+        },
+    )
+    return ProchainGp(**lignes[0]) if lignes else None
 
 
 @router.post("", response_model=Championnat, status_code=status.HTTP_201_CREATED)
@@ -244,15 +313,43 @@ async def creer(
 async def mes_championnats(
     utilisateur: str = Depends(utilisateur_courant),
 ) -> list[Championnat]:
-    """Championnats dont l'appelant est membre, avec leur effectif."""
+    """Championnats dont l'appelant est membre, avec leur effectif et le prochain GP.
+
+    Le prochain Grand Prix est ajouté à l'étape 10 pour l'onglet Calendrier, qui
+    annonce pour chaque championnat ce qui l'attend. Il est lu **une seule fois**
+    et recopié sur chaque ligne : la table `grands_prix` est globale.
+
+    **Son échec n'emporte pas la liste.** Un championnat sans Grand Prix annoncé
+    reste un championnat lisible, alors qu'une liste vide serait un cul-de-sac —
+    c'est le même arbitrage qu'à la version `0.5.1` pour les pronostics de
+    l'accueil. La panne part dans les logs Railway, avec sa cause.
+    """
     try:
         lignes = await appeler_fonction("mes_championnats", {"p_profil": utilisateur})
     except ErreurSupabase as erreur:
         raise echec_lisible("Chargement de tes championnats", erreur) from erreur
 
+    if not lignes:
+        return []
+
+    try:
+        prochain = await prochain_grand_prix()
+    except Exception as erreur:  # noqa: BLE001 — le GP est un enrichissement
+        journal.logger.warning(
+            "[%s] Prochain Grand Prix indisponible — %s",
+            DOMAINE,
+            journal.technique(erreur),
+        )
+        prochain = None
+
     return [
-        en_championnat(ligne, utilisateur, nombre_membres=ligne["nombre_membres"])
-        for ligne in (lignes or [])
+        en_championnat(
+            ligne,
+            utilisateur,
+            nombre_membres=ligne["nombre_membres"],
+            prochain_gp=prochain,
+        )
+        for ligne in lignes
     ]
 
 

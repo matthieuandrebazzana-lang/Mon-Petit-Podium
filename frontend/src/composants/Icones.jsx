@@ -113,15 +113,86 @@ export function IconeEtoile({ pleine = false, ...props }) {
   );
 }
 
-/* Calendrier — quatrième onglet de la barre de navigation des maquettes, repris
-   pour le bouton qui mène au calendrier du championnat (maquette 15). */
-export function IconeCalendrier(props) {
+/* ---------------------------------------------------------------------------
+   Les quatre icônes de la barre de navigation basse (étape 10).
+
+   Chacune accepte `pleine` : le contour désigne l'onglet au repos, l'aplat
+   l'onglet actif. C'est le couple que l'échange d'icônes de transitions-dev 09
+   fait glisser de l'un à l'autre, et c'est aussi la façon dont iOS distingue
+   l'onglet courant — la couleur seule reste le signal principal, l'aplat
+   l'appuie.
+
+   Les variantes pleines sont dessinées avec `fill-rule="evenodd"` plutôt qu'en
+   superposant une forme de la couleur du fond : la barre est blanche
+   aujourd'hui, elle ne le sera peut-être pas toujours, et un aplat blanc en dur
+   se verrait le jour où le fond change.
+   --------------------------------------------------------------------------- */
+
+/* Maison — la porte est un trou dans l'aplat, pas un rectangle blanc posé
+   dessus. */
+export function IconeMaison({ pleine = false, ...props }) {
+  if (pleine) {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" aria-hidden="true" {...props}>
+        <path d="M12 1.36 22 9.13V20a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V9.13zM10 21h4v-8h-4z" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
+    </svg>
+  );
+}
+
+/* Trophée — l'onglet Championnats.
+
+   **Écart assumé par rapport à la maquette 04**, qui y met le même tracé de
+   groupe de personnes qu'`IconeMembres`. Deux raisons de ne pas le suivre : la
+   maquette pose alors deux icônes de personnages côte à côte (Championnats et
+   Profil), impossibles à distinguer d'un coup d'œil au pouce ; et
+   `IconeMembres` sert déjà d'emblème aux cartes de championnat de l'accueil,
+   où elle désigne l'effectif. La demande de l'étape 10 tranche pour le
+   trophée. */
+export function IconeTrophee({ pleine = false, ...props }) {
+  const coupe = "M6 3h12v6a6 6 0 0 1-12 0z";
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d={coupe} fill={pleine ? "currentColor" : "none"} />
+      <path d="M6 5H3.5v1.5A3.5 3.5 0 0 0 7 10" />
+      <path d="M18 5h2.5v1.5A3.5 3.5 0 0 1 17 10" />
+      <line x1="12" y1="15" x2="12" y2="18" />
+      <path d="M8.5 21h7l-.7-3h-5.6z" fill={pleine ? "currentColor" : "none"} />
+    </svg>
+  );
+}
+
+/* Calendrier — quatrième onglet de la barre des maquettes, repris aussi pour le
+   bouton qui mène au calendrier d'un championnat (maquette 15).
+
+   La variante pleine ne remplit que le corps, sous la barre de titre : un
+   rectangle intégralement plein ne se lirait plus comme un calendrier. */
+export function IconeCalendrier({ pleine = false, ...props }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" {...props}>
+      {pleine && (
+        <path d="M3 10h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="currentColor" stroke="none" />
+      )}
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <line x1="16" y1="2" x2="16" y2="6" />
       <line x1="8" y1="2" x2="8" y2="6" />
       <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
+/* Personne — l'onglet Profil. Tracé de la maquette 04. */
+export function IconePersonne({ pleine = false, ...props }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill={pleine ? "currentColor" : "none"} />
+      <circle cx="12" cy="7" r="4" fill={pleine ? "currentColor" : "none"} />
     </svg>
   );
 }

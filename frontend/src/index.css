@@ -81,6 +81,11 @@
 
   /* Taille tactile minimale iOS : 44 × 44 px */
   --spacing-tactile: 44px;
+
+  /* Hauteur de la rangée d'onglets de la barre basse, hors zone sûre — celle-ci
+     s'ajoute par-dessous. C'est la place qu'`Ecran` réserve en fin de flux pour
+     que la barre, qui est `fixed`, ne recouvre aucun contenu. */
+  --spacing-nav: 58px;
 }
 
 @layer base {
@@ -787,6 +792,16 @@
   }
 }
 
+/* — Barre de navigation basse (étape 10) —
+   Aucune transition nouvelle, aucun jeton nouveau : l'échange contour ↔ aplat
+   des icônes est celui de transitions-dev 09, déjà installé pour l'étoile de
+   favori. Il ne reste qu'à interpoler la couleur, sur la même durée et la même
+   courbe que cet échange — la teinte et le dessin doivent changer ensemble,
+   sinon l'œil voit deux événements là où il n'y en a qu'un. */
+.t-nav .t-nav-onglet {
+  transition: color var(--icon-swap-dur) var(--icon-swap-ease);
+}
+
 /* — Retour tactile (/apple-design) —
    Le retour visuel se déclenche à l'appui, pas au relâchement : attendre le
    clic donne une interface morte. 100ms suffisent à être perçus sans retarder
@@ -808,7 +823,8 @@
   .t-acc-panel,
   .t-acc-panel-inner,
   .t-acc-chevron,
-  .t-icon-swap .t-icon {
+  .t-icon-swap .t-icon,
+  .t-nav .t-nav-onglet {
     transition: none !important;
   }
   .t-input,
