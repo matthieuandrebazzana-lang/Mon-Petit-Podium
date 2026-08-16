@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 from app.api import journal
 from app.api.deps import exiger_configuration, exiger_secret
-from app.scraper.unibet import scraper_en_tache_de_fond
+from app.jobs.scraper import declencher_en_tache_de_fond
 from app.supabase_client import appeler_fonction, selectionner
 
 router = APIRouter(tags=["scraper"])
@@ -44,6 +44,9 @@ _taches: set[asyncio.Task] = set()
 
 class Lancement(BaseModel):
     statut: str
+    # Dit à l'appelant ce que son déclenchement va faire des cotes. Le champ a
+    # une valeur par défaut : un client écrit avant l'étape 11 n'y perd rien.
+    figera: bool = True
 
 
 class CoteServie(BaseModel):
@@ -86,6 +89,7 @@ def journaliser_echecs(contexte: str):
 @journaliser_echecs("Déclenchement du scraper")
 async def declencher(
     x_admin_secret: str | None = Header(default=None),
+    figer: bool = True,
 ) -> Lancement:
     """Lance un scraping en tâche de fond et rend la main immédiatement.
 
@@ -95,6 +99,20 @@ async def declencher(
 
     `202` plutôt que `200` : la réponse dit que le travail est accepté, pas
     qu'il est fait.
+
+    **Le figeage suit le succès, comme dans le job automatique** (étape 11) : un
+    Grand Prix dont les cotes viennent d'être enregistrées passe en
+    `cotes_figees`. Un même scraping doit avoir le même effet, qu'il vienne
+    d'une horloge ou d'un `curl`. Un Grand Prix **déjà figé** voit son scraping
+    refusé et ses cotes conservées : elles ne doivent plus bouger (règle 4.3).
+    Le refus est explicite dans les logs, nommant le Grand Prix, son statut et
+    le nombre de cotes ignorées — la réponse, elle, part avant que le scraping
+    n'ait commencé et ne peut rien en dire.
+
+    `?figer=false` coupe ce dernier temps, et sert exactement à un cas : refaire
+    un scraping **avant** les qualifications sans arrêter les cotes pour de bon.
+    Sans cette porte de sortie, le premier essai de la saison figerait des cotes
+    de mardi et il faudrait un `update` à la main pour les débloquer.
     """
     exiger_secret(x_admin_secret, DOMAINE)
 
@@ -107,12 +125,15 @@ async def declencher(
     # coup — et éviter d'aller solliciter Unibet en pure perte.
     exiger_configuration()
 
-    tache = asyncio.create_task(scraper_en_tache_de_fond())
+    tache = asyncio.create_task(declencher_en_tache_de_fond(figer_apres=figer))
     _taches.add(tache)
     tache.add_done_callback(_taches.discard)
 
-    logger.info("[scraper-api] Scraping déclenché.")
-    return Lancement(statut="lance")
+    logger.info(
+        "[scraper-api] Scraping déclenché (figeage des cotes après succès : %s).",
+        "oui" if figer else "non",
+    )
+    return Lancement(statut="lance", figera=figer)
 
 
 async def _grands_prix_servis(filtre: dict[str, str]) -> list[GrandPrixServi]:

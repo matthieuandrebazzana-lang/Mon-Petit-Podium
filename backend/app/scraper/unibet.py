@@ -30,6 +30,13 @@ elles expliquent l'essentiel du code ci-dessous :
 Le scraper ne remplace jamais les cotes d'un GP dont le statut est
 `cotes_figees` : une fois les qualifications passées, les cotes sont arrêtées et
 tout le monde pronostique sur les mêmes (règle 4.3).
+
+Depuis l'étape 11, il relève aussi **l'heure des qualifications** au passage.
+C'est elle qui permet au job de `app/jobs/scraper.py` de se déclencher tout seul
+deux heures plus tard, sans intervention manuelle. Ce module ne décide jamais de
+figer quoi que ce soit : il découvre, il écrit, il rend compte. Le figeage est
+une décision du job (ou de la route d'administration), prise **après** un
+scraping réussi.
 """
 
 import asyncio
@@ -37,7 +44,7 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import unescape
 from json import JSONDecodeError, loads
 from zoneinfo import ZoneInfo
@@ -104,6 +111,24 @@ MOTIF_ETAT_SSR = re.compile(
 # trouver en silence.
 EVENEMENT_COURSE = "course"
 
+# Les qualifications, elles, ne sont pas un événement à parier ici : c'est leur
+# **heure** qui nous intéresse, parce que la règle 4.3 y accroche le scraping
+# (deux heures après, la grille est définitive et les cotes sont figées).
+#
+# Le motif est volontairement large et posé sur le libellé brut : Unibet écrit
+# « Qualifications », mais rien ne garantit qu'il n'écrira pas « Qualifying »
+# demain, ni qu'il ne suffixera pas le libellé. Un motif trop strict ferait
+# retomber tous les Grands Prix sur le repli sans que rien ne le signale — alors
+# que le repli, lui, est journalisé à chaque fois.
+MOTIF_QUALIFICATIONS = re.compile(r"qualif", re.IGNORECASE)
+
+# Repli quand Unibet n'annonce pas ses qualifications : elles se courent le
+# samedi après-midi pour une course le dimanche après-midi, soit 22 heures avant
+# le départ. Ce n'est pas une devinette élégante, c'est un plancher raisonnable —
+# et le scraping se déclenchera deux heures après, donc le samedi en fin de
+# journée. Le cas est journalisé pour qu'il ne passe jamais inaperçu.
+REPLI_QUALIFICATIONS = timedelta(hours=22)
+
 # Rubrique dont dépendent les GP dans l'arborescence d'Unibet, et donc segment
 # correspondant dans l'URL d'une page d'événement. Le nœud racine la confirme
 # à chaque appel (`path.Category`), mais elle ne change pas d'un GP à l'autre.
@@ -147,6 +172,13 @@ class GrandPrix:
     nom: str
     id_evenement: str
     date_course: datetime | None
+
+    # Horaires des épreuves de qualification trouvés chez Unibet, en UTC. Une
+    # liste et non une valeur : un week-end sprint en compte deux (la
+    # qualification du sprint le vendredi, la vraie le samedi), et c'est
+    # `resoudre_qualifications` qui tranche laquelle compte.
+    qualifications: list[datetime] = field(default_factory=list)
+
     cotes: list[Cote] = field(default_factory=list)
 
 
@@ -206,6 +238,38 @@ def date_de_depart(brut: object) -> datetime | None:
     except ValueError:
         return None
     return locale.astimezone(ZoneInfo("UTC"))
+
+
+def resoudre_qualifications(gp: GrandPrix) -> tuple[datetime | None, str]:
+    """Arrête l'heure des qualifications d'un GP, et dit d'où elle vient.
+
+    Renvoie `(date, origine)` avec `origine` valant :
+
+    - `"unibet"` — un événement de qualification a été trouvé chez le bookmaker ;
+    - `"repli"`  — aucun, l'heure est déduite de `date_course - 22h` ;
+    - `"inconnue"` — ni l'un ni l'autre : le GP n'a même pas d'heure de course.
+
+    **La dernière qualification l'emporte, jamais la première.** Un week-end
+    sprint en compte deux : la qualification du sprint le vendredi, et la vraie
+    qualification le samedi. C'est la seconde qui arrête la grille de départ, et
+    donc la seule après laquelle les cotes ont un sens (règle 4.3). Retenir la
+    première ferait figer les cotes un jour trop tôt, sur une grille qui n'existe
+    pas encore.
+
+    Celles qui tomberaient après le départ sont écartées : ce serait un horaire
+    abîmé, et il déclencherait un scraping après la course.
+    """
+    candidates = sorted(gp.qualifications)
+    if gp.date_course:
+        candidates = [date for date in candidates if date < gp.date_course]
+
+    if candidates:
+        return candidates[-1], "unibet"
+
+    if gp.date_course:
+        return gp.date_course - REPLI_QUALIFICATIONS, "repli"
+
+    return None, "inconnue"
 
 
 async def jeton(client: httpx.AsyncClient) -> str:
@@ -280,6 +344,11 @@ async def decouvrir(client: httpx.AsyncClient, cle: str) -> list[GrandPrix]:
 
     grands_prix: list[GrandPrix] = []
     ecartes: list[str] = []
+    # Horaires de qualification relevés au passage, rangés par GP. Ils sont
+    # collectés dans la même boucle que les courses, puis rattachés ensuite :
+    # rien ne garantit que l'événement « Qualifications » arrive avant l'événement
+    # « Course » dans `items`, et un dictionnaire n'a pas d'ordre à respecter.
+    qualifications: dict[str, list[datetime]] = {}
 
     for identifiant, item in items.items():
         if not identifiant.startswith("e"):
@@ -290,7 +359,15 @@ async def decouvrir(client: httpx.AsyncClient, cle: str) -> list[GrandPrix]:
             continue
 
         libelle = str(item.get("desc") or "")
+
         if slug(libelle) != EVENEMENT_COURSE:
+            if MOTIF_QUALIFICATIONS.search(libelle):
+                depart_qualifs = date_de_depart(item.get("start"))
+                if depart_qualifs:
+                    qualifications.setdefault(parent, []).append(depart_qualifs)
+                    continue
+                # Un événement de qualification sans horaire lisible n'apporte
+                # rien : il est écarté comme les autres, mais nommé dans les logs.
             ecartes.append(f"{libelle!r} (sous {noeuds[parent].get('desc')!r})")
             continue
 
@@ -307,6 +384,9 @@ async def decouvrir(client: httpx.AsyncClient, cle: str) -> list[GrandPrix]:
                 date_course=date_de_depart(item.get("start")),
             )
         )
+
+    for gp in grands_prix:
+        gp.qualifications = sorted(qualifications.get(gp.id_unibet, []))
 
     if ecartes:
         # Jamais en silence : c'est ici qu'on verrait Unibet renommer « Course ».
@@ -461,19 +541,59 @@ async def _enregistrer(gp: GrandPrix) -> dict:
     if gp.date_course:
         ligne["date_course"] = gp.date_course.isoformat()
 
+    # L'heure des qualifications est écrite même pour un GP figé : c'est une
+    # donnée de programme, pas une cote. La refuser à un GP déjà figé priverait
+    # l'interface d'un horaire exact qu'Unibet vient d'annoncer.
+    qualifs, origine = resoudre_qualifications(gp)
+    if qualifs:
+        ligne["date_qualifications"] = qualifs.isoformat()
+        if origine == "unibet":
+            logger.info(
+                "[scraper] %s : qualifications annoncées par Unibet à %s "
+                "(scraping automatique prévu 2h après).",
+                gp.nom,
+                qualifs.isoformat(),
+            )
+        else:
+            logger.warning(
+                "[scraper] %s : aucune épreuve de qualification trouvée chez Unibet. "
+                "Repli sur date_course - %s, soit %s.",
+                gp.nom,
+                REPLI_QUALIFICATIONS,
+                qualifs.isoformat(),
+            )
+    else:
+        logger.warning(
+            "[scraper] %s : ni qualifications ni heure de course connues. "
+            "Le déclenchement automatique du scraping restera impossible pour ce "
+            "Grand Prix tant qu'Unibet n'aura pas publié son programme.",
+            gp.nom,
+        )
+
     enregistres = await upserter("grands_prix", [ligne], "id_unibet")
     if not enregistres:
         raise ErreurScraper(f"Le GP {gp.nom} n'a pas pu être enregistré.")
     gp_id = enregistres[0]["id"]
 
     if fige:
-        logger.info(
-            "[scraper] %s : statut « %s », cotes conservées en l'état (%d ignorée(s)).",
-            gp.nom,
-            existants[0].get("statut"),
-            len(gp.cotes),
+        refus = (
+            f"{gp.nom} : les cotes sont figées (statut « "
+            f"{existants[0].get('statut')} »), elles ne doivent plus bouger "
+            f"(règle 4.3). {len(gp.cotes)} cote(s) lue(s) chez Unibet ont été "
+            f"ignorées."
         )
-        return {"nom": gp.nom, "cotes": 0, "fige": True}
+        # WARNING et non INFO : le scraping a bien été refusé pour ce GP, et
+        # c'est exactement ce qu'on vient chercher dans les logs quand on se
+        # demande pourquoi une cote n'a pas bougé.
+        logger.warning("[scraper] %s", refus)
+        return {
+            "nom": gp.nom,
+            "gp_id": gp_id,
+            "id_unibet": gp.id_unibet,
+            "cotes": 0,
+            "fige": True,
+            "refus": refus,
+        }
 
     lignes = [
         {
@@ -492,7 +612,18 @@ async def _enregistrer(gp: GrandPrix) -> dict:
     # l'idempotence demandée par la section 9.
     await upserter("cotes", lignes, "gp_id,id_outcome_unibet")
 
-    return {"nom": gp.nom, "cotes": len(lignes), "fige": False}
+    # `gp_id` est l'identifiant interne, et il n'est pas décoratif : c'est par
+    # lui que le job automatique retrouve, dans ce compte rendu, le Grand Prix
+    # qu'il voulait figer. Se fier au nom ne tiendrait pas — Unibet en change
+    # l'orthographe d'une semaine à l'autre (« GP Pays Bas », « GP Pays-Bas »),
+    # ce qui est déjà la raison d'être de `id_unibet` en base.
+    return {
+        "nom": gp.nom,
+        "gp_id": gp_id,
+        "id_unibet": gp.id_unibet,
+        "cotes": len(lignes),
+        "fige": False,
+    }
 
 
 async def scraper() -> dict:
@@ -561,17 +692,3 @@ async def scraper() -> dict:
         len(echecs),
     )
     return rapport
-
-
-async def scraper_en_tache_de_fond() -> None:
-    """Point d'entrée du déclenchement asynchrone : ne laisse jamais rien fuir.
-
-    La tâche tourne détachée de toute requête. Une exception qui s'en échapperait
-    ne serait signalée nulle part — asyncio la garderait pour la destruction de
-    la tâche, souvent après le redéploiement suivant. Elle est donc attrapée et
-    journalisée ici, avec sa trace.
-    """
-    try:
-        await scraper()
-    except Exception:  # noqa: BLE001 — dernier filet avant le silence complet
-        logger.exception("[scraper] Échec complet du scraping.")

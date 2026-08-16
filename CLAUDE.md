@@ -1402,6 +1402,83 @@ Le champ a une **valeur par défaut** dans le modèle `Championnat` : les routes
 | Sous un vrai `uvicorn` | `/health` en `0.10.0`, la route répond, le `503` de configuration absente est journalisé |
 | `npm run build` | passe, **128 modules**, version `0.10.0` dans le bundle |
 
+**Étape 11 — Scraping automatique 2h après les qualifications** (version `0.11.0`)
+
+Le déclenchement du scraper cesse d'être manuel, et le statut `cotes_figees` cesse d'être un statut que rien ne pose. Une migration, une colonne, un second scheduler. **Aucun changement frontend** hormis la version.
+
+C'est le point le plus ancien du « Reste à faire » qui se referme : depuis l'étape 4, la protection commandée par `cotes_figees` était en place et testée, mais **aucun code ne l'appliquait jamais**. Le job de résultats compensait en surveillant aussi les GP restés `a_venir` — ce contournement reste en place, il ne coûte rien et couvre le cas d'un scraping manqué.
+
+*Schéma* — `supabase/migrations/20260816120000_date_qualifications.sql`, **à exécuter à la main dans le SQL Editor de Supabase**, après les dix précédentes. Idempotente. Elle ne crée **aucune table** : une colonne, un index partiel, une reprise de l'existant. Elle ne remplace **aucune fonction**, donc elle est la seule migration depuis la 7 qui ne puisse pas entrer en conflit d'ordre avec une migration antérieure rejouée par-dessus.
+
+`public.grands_prix` gagne `date_qualifications` (timestamptz, **nullable**). Nullable et pas seulement par prudence : Unibet publie parfois un Grand Prix avant d'en annoncer le programme — le CLAUDE.md le note dès l'étape 4 pour `date_course`. Un `not null` obligerait le scraper à inventer une date pour pouvoir écrire la ligne, ou à ne pas écrire la ligne du tout, c'est-à-dire à **faire disparaître le Grand Prix de l'accueil et du calendrier**. En pratique la colonne est presque toujours remplie : à défaut d'événement de qualification, le scraper retient `date_course - 22h`.
+
+L'index `grands_prix_qualifs_a_venir_idx` est **partiel sur `statut = 'a_venir'`**, le seul statut que le job interroge. Il se vide de lui-même à mesure que la saison avance, exactement comme `pronostics_a_calculer_idx` de l'étape 6.
+
+*Reprise de l'existant* — les Grands Prix déjà en base ont été scrapés avant l'existence de la colonne et ne seraient donc **jamais figés automatiquement**. Ils reçoivent le même repli. Le filtre `date_qualifications is null` rend l'opération à la fois idempotente et non destructive : un horaire déjà connu — annoncé par Unibet, ou corrigé à la main — n'est jamais réécrit. Les GP `termine` et `cotes_figees` sont laissés tels quels : leur scraping a eu lieu ou n'aura plus lieu.
+
+---
+
+*Scraper — l'heure des qualifications est relevée au passage.* `decouvrir()` classait jusqu'ici les événements en deux tas : la « Course », et les écartés. Un troisième apparaît, reconnu par le motif `qualif` (insensible à la casse, posé sur le libellé brut : Unibet écrit « Qualifications », rien ne garantit qu'il n'écrira pas « Qualifying »). Les horaires trouvés sont rangés sur le GP, puis `resoudre_qualifications()` tranche.
+
+**La DERNIÈRE qualification l'emporte, jamais la première**, et c'est le point à ne pas défaire. Un week-end sprint en compte deux : la qualification du sprint le vendredi, et la vraie qualification le samedi. C'est la seconde qui arrête la grille de départ, donc la seule après laquelle les cotes ont un sens (règle 4.3). Retenir la première ferait figer les cotes **un jour trop tôt, sur une grille qui n'existe pas encore**. Une qualification qui tomberait après le départ est écartée — horaire abîmé, et il déclencherait un scraping après la course.
+
+**Le repli est `date_course - 22h`**, et il est journalisé en `warning` à chaque fois. 22h place les qualifications le samedi après-midi pour une course le dimanche après-midi ; le scraping tombe alors deux heures après, le samedi en fin de journée. Les logs disent toujours lequel des deux cas s'applique — c'est ce qui empêche le repli de devenir le régime normal sans que personne ne s'en aperçoive.
+
+**Constat de terrain, et il compte.** Interrogé le 16 août 2026 (J-7 du GP Pays-Bas), le nœud racine d'Unibet **n'expose aucun événement de qualification** : un seul événement « Course » sous le GP, et rien d'autre — vérifié aussi dans le bloc SSR de la page d'événement, qui n'en contient pas davantage. **C'est donc le repli qui s'applique aujourd'hui.** Les épreuves annexes apparaîtront peut-être à l'approche de la course, comme le font les marchés (point de vigilance de l'étape 6) ; le code traite les deux cas et dit lequel. **À relire dans les logs le samedi du premier vrai Grand Prix.**
+
+`_enregistrer` écrit l'horaire **même pour un GP figé** : c'est une donnée de programme, pas une cote. La refuser à un GP déjà figé priverait l'interface d'un horaire exact qu'Unibet vient d'annoncer. Le compte rendu du scraping porte désormais `gp_id` et `id_unibet` — c'est par `gp_id` que le job retrouve le Grand Prix qu'il voulait figer. Se fier au nom ne tiendrait pas : Unibet en change l'orthographe d'une semaine à l'autre, ce qui est déjà la raison d'être de `id_unibet` en base.
+
+**Le refus d'un GP figé devient explicite.** Il était jusqu'ici une ligne `info` discrète ; c'est maintenant un `warning` nommant le Grand Prix, son statut et le nombre de cotes ignorées, et le message part aussi dans le compte rendu (`refus`). C'est exactement ce qu'on vient chercher dans les logs quand on se demande pourquoi une cote n'a pas bougé.
+
+*Job* — `backend/app/jobs/scraper.py`, second `AsyncIOScheduler` démarré dans le `lifespan` à côté de celui de l'étape 6. Aucun processus ni thread supplémentaire, ce qui compte sur le plan gratuit. Il n'est pas démarré sans configuration Supabase, pour la même raison exactement que l'autre.
+
+| Réglage | Valeur | Pourquoi |
+|---|---|---|
+| Vérification | **1h** | Le job de résultats court après une donnée qui paraît d'un instant à l'autre ; celui-ci attend une heure connue à l'avance et écrite en base. Une rafale n'apporterait rien. |
+| Déclenchement | **qualifs + 2h** | Règle 4.3. |
+| Fenêtre | **4h** | Sur le plan gratuit, Railway se met en veille (section 9). Un déclenchement à l'heure pile serait manqué **définitivement** si le service dort à cet instant, et le Grand Prix n'aurait jamais de cotes. La fenêtre laisse quatre tours pour rattraper — dont trois après un premier échec. |
+| Premier tour | **+2 min** | Le job de résultats prend le sien à 30 s ; les espacer évite qu'un redéploiement ne lance de front un scraping Unibet et une rafale d'appels OpenF1. |
+
+**Le figeage ne suit qu'un scraping réussi**, et « réussi » est vérifié sur trois points : le GP visé figure dans le compte rendu, il n'était pas déjà figé, et **au moins une cote a été écrite**. À défaut, le statut reste `a_venir` et le tour suivant réessaie tant que la fenêtre est ouverte. Figer après un échec arrêterait les cotes sur ce que la base contenait avant — au pire, sur rien du tout.
+
+**Le scraping n'est pas ciblé, et il ne peut pas l'être** : Unibet n'expose que le Grand Prix suivant et ne se laisse pas interroger par identifiant (section 3.1). On scrape donc ce qui est disponible, et **on ne fige que celui qu'on visait** — un autre Grand Prix rencontré au passage garde son statut, ses propres qualifications n'ayant pas eu lieu.
+
+Deux points de mise en œuvre :
+
+1. **Le `PATCH` de figeage filtre sur le statut autant que sur l'identifiant** (`id=eq.… & statut=eq.a_venir`). Sans ce second filtre, un scraping tardif ramènerait à `cotes_figees` un GP que le job de résultats vient de passer à `termine`, et **le remettrait dans la boucle de surveillance**. Zéro ligne touchée n'est pas une panne : c'est l'état voulu, atteint par quelqu'un d'autre.
+2. **Passé la fenêtre, aucune alerte répétée.** Contrairement au job de résultats, qui alerte une fois puis se tait, celui-ci se tait tout de suite : le Grand Prix resterait dans la liste des candidats jusqu'à ce que le job de résultats le passe à `termine`, et une erreur par heure jusque-là noierait les logs. Le silence est rattrapable — `POST /scraper/declencher` reste disponible.
+
+Comme le job de résultats, ce module suppose **un seul processus**. À plusieurs instances, deux schedulers scraperaient en parallèle : l'upsert des cotes est idempotent, les appels à Unibet ne le sont pas. Même remède que pour l'étape 6 : `pg_try_advisory_lock` ou worker dédié.
+
+*`POST /scraper/declencher` fige aussi.* Un même scraping doit avoir le même effet, qu'il vienne d'une horloge ou d'un `curl` : après succès, les Grands Prix effectivement scrapés passent en `cotes_figees`. La route reste **asynchrone et `202`** — son contrat ne change pas —, ce qui a une conséquence à connaître : **le refus d'un GP déjà figé ne peut pas être renvoyé dans la réponse**, qui part avant que le scraping n'ait commencé. Il est dans les logs, explicite, avec le nom du Grand Prix et son statut.
+
+**`?figer=false` est un ajout par rapport à la demande, et il évite un vrai piège.** Sans lui, le premier `curl` de la saison — passé un mardi, pour vérifier que le scraper écrit bien — figerait des cotes de mardi, sur une grille non définitive, et il faudrait un `update` à la main dans le SQL Editor pour les débloquer. Le défaut reste `true`, donc le comportement demandé ; la porte de sortie est explicite. La réponse porte `figera` pour que l'appelant sache ce qu'il vient de lancer.
+
+`scraper_en_tache_de_fond()` disparaît de `app/scraper/unibet.py` : `app/jobs/scraper.declencher_en_tache_de_fond()` la remplace exactement, en ajoutant le figeage. Le module de scraping ne décide plus jamais de figer quoi que ce soit — il découvre, il écrit, il rend compte ; la décision appartient au job ou à la route.
+
+*Vérifié* :
+
+| Contrôle | Résultat |
+|---|---|
+| Migration sur PostgreSQL 16 jetable (Docker), les **onze** dans l'ordre, avec doublure du schéma `auth` | s'appliquent sans erreur |
+| Structure | colonne `timestamptz` **nullable** sans défaut, index bien **partiel** sur `statut = 'a_venir'`, contraintes de `grands_prix` intactes, une seule politique RLS |
+| RLS | `anon` **lit** la nouvelle colonne (les horaires ne sont un secret pour personne), `authenticated` ne peut pas l'écrire |
+| Reprise, sur une base montée avec les **dix** migrations précédentes puis peuplée | le GP `a_venir` daté reçoit `date_course - 22h` ; le GP **sans date** reste NULL, jamais une date inventée ; les GP `termine` et `cotes_figees` ne sont pas touchés |
+| Rejeu | horaire corrigé à la main **conservé**, aucune notice de reprise au second passage ; rejeu des onze migrations sur base peuplée : **calendrier, classement et statistiques rendent exactement la même chose**, données inchangées |
+| Résolution de l'heure des qualifications | **69 contrôles passent** (avec le reste de l'étape) — qualif Unibet retenue ; **week-end sprint : la dernière l'emporte**, quel que soit l'ordre d'arrivée ; qualif postérieure au départ écartée ; aucune qualif → repli de 22h ; **ni qualif ni course → « inconnue », jamais une date inventée** ; qualif connue sans heure de course retenue quand même ; motif reconnaissant « Qualifications », « QUALIFYING », « Qualif. Sprint » et ne prenant pas « Course » pour une qualification |
+| Découverte | les deux qualifications d'un week-end sprint relevées, le « Championnat du monde » toujours écarté, dates converties de Paris vers UTC |
+| Enregistrement | colonne écrite à la bonne valeur ; compte rendu portant `gp_id` et `id_unibet` ; **GP `cotes_figees` et GP `termine` : aucune cote écrite, refus explicite dans le compte rendu, horaire des qualifs quand même tenu à jour, statut jamais transmis à l'upsert** |
+| Fenêtre du job | rien à 30 min ni à 1h59 ; déclenché à 2h01 **et cotes figées** ; encore dans la fenêtre à 5h59, plus rien à 6h01 ; requête filtrant sur `a_venir` et sur une date connue ; GP sans date de qualifications jamais déclenché |
+| Figeage | le `PATCH` vise `id=eq.… & statut=eq.a_venir` ; **scraping en échec → pas figé** ; **GP absent du compte rendu → pas figé, et l'autre GP rencontré non plus** ; **aucune cote enregistrée → pas figé** ; une panne de base ne fait pas tomber la boucle |
+| Déclenchement manuel | scraping puis figeage ; `?figer=false` : scraping sans figeage ; GP déjà figé → aucun `PATCH` inutile ; la tâche de fond n'avale rien en silence et ne lève pas |
+| Route et non-régression | `401` sans secret et sur mauvais secret (**la signature survit au décorateur**), `202` sur bon secret, `figera` porté jusqu'à la réponse ; **19 chemins toujours exposés**, `/health` en `0.11.0`, routes des étapes précédentes toujours protégées, cotes toujours publiques |
+| Scheduler | démarré, **un seul emploi nommé « scraper »**, `max_instances=1`, `coalesce`, un tour par heure, second démarrage sans doublon, arrêt idempotent ; le `lifespan` le démarre et l'arrête, **et seulement si Supabase est configuré** |
+| Contre le **vrai** Unibet | jeton obtenu, GP Pays-Bas découvert, date de course `2026-08-23T13:00Z` ; **aucun événement de qualification exposé aujourd'hui** → repli appliqué et journalisé, scraping automatique calé au 2026-08-22 17:00 UTC |
+| Sous un vrai `uvicorn` | les **deux** schedulers démarrent et se journalisent ; sans configuration Supabase, les deux refusent de démarrer avec un avertissement explicite ; `?figer=false` journalisé |
+| `npm run build` | passe, version `0.11.0` dans le bundle |
+
+---
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -1410,7 +1487,7 @@ Le champ a une **valeur par défaut** dans le modèle `Championnat` : les routes
 
 **Les seize maquettes sont codées, et la barre de navigation basse avec elles.** L'étape 9 a livré les deux derniers écrans (11 et 15), les squelettes de chargement et la gestion d'erreurs ; l'étape 10 a posé la barre à quatre onglets, dernier écart de structure par rapport aux maquettes. Ce qui reste de la section 7 tient en un point : **les tests sur iPhone réel**, jamais faits — le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur.
 
-**Migrations à appliquer** — cette liste est à revérifier. Au cours de la version `0.5.1`, une lecture partie par erreur vers le **vrai** projet Supabase (doublure de test mal branchée) a rendu une ligne réelle de `public.grands_prix` : « GP Pays Bas », `2026-08-23T13:00:00+00:00`, statut `a_venir` — exactement ce que le scraper de l'étape 4 avait produit en local. **La migration 3 est donc appliquée et le scraper a bel et bien écrit en base**, ce qui contredit la mention ci-dessous. L'état des autres n'a pas été observé. À vérifier dans le SQL Editor avant de rejouer quoi que ce soit — les huit migrations sont idempotentes, les rejouer ne casse rien.
+**Migrations à appliquer** — cette liste est à revérifier. Au cours de la version `0.5.1`, une lecture partie par erreur vers le **vrai** projet Supabase (doublure de test mal branchée) a rendu une ligne réelle de `public.grands_prix` : « GP Pays Bas », `2026-08-23T13:00:00+00:00`, statut `a_venir` — exactement ce que le scraper de l'étape 4 avait produit en local. **La migration 3 est donc appliquée et le scraper a bel et bien écrit en base**, ce qui contredit la mention ci-dessous. L'état des autres n'a pas été observé. À vérifier dans le SQL Editor avant de rejouer quoi que ce soit — les onze migrations sont idempotentes, les rejouer ne casse rien.
 
 Ordre d'application, si l'une manque :
 1. `supabase/migrations/20260809191018_profils_pseudo_unique.sql` — sans elle, aucun pseudo n'est unique et la liste des membres affiche « Pilote » partout.
@@ -1425,11 +1502,21 @@ Ordre d'application, si l'une manque :
 
 10. `supabase/migrations/20260814213000_calendrier_championnat.sql` — sans elle, `GET /championnats/{id}/calendrier` répond `422` en portant `42883` (fonction absente) et l'écran de calendrier (maquette 15) reste vide ; le tableau des résultats (maquette 11), lui, s'affiche mais sans les voitures des membres, qui retombent sur les défauts. **Elle suppose les 3, 5, 6 et 8 déjà appliquées** : elle lit `grands_prix`, `cotes`, `resultats_gp`, `pronostics.points_gagnes` et `profils.couleur1` / `couleur2` / `numero`, et **remplace** `public.pronostics_du_championnat` (migration 5). Elle ne crée aucune table. **Attention à l'ordre, vérifié en test** : **rejouer la 5 après la 10 retire les voitures du tableau des résultats**. Si la 5 est rejouée pour une raison quelconque, rejouer la 10 derrière.
 
+11. `supabase/migrations/20260816120000_date_qualifications.sql` — sans elle, `POST /scraper/declencher` et le job automatique répondent `42703` (colonne absente) à l'écriture d'un Grand Prix : **le scraper ne peut plus rien enregistrer du tout**, ni GP ni cotes. Le job horaire, lui, échoue à sa lecture et le journalise à chaque tour. **Elle suppose la 3 déjà appliquée** : elle altère `public.grands_prix`. Elle ne crée aucune table et **ne remplace aucune fonction** — c'est la seule migration depuis la 7 qui ne puisse pas entrer en conflit d'ordre avec une migration antérieure rejouée par-dessus.
+
 **Variables d'environnement du backend** — à définir sur Railway :
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Sans elles, `/championnats` et `POST /scraper/declencher` répondent `503` avec un message explicite, et **le scheduler de l'étape 6 ne démarre pas du tout** (il le journalise au démarrage). La clé de service ne doit jamais être exposée au frontend ni committée.
 - **`ADMIN_SECRET`** — chaîne libre, choisie par toi, à garder secrète. C'est la valeur attendue dans l'en-tête `X-Admin-Secret` de `POST /scraper/declencher` **et de `POST /jobs/resultats/{gp_id}`**. **Tant qu'elle n'est pas définie, les deux routes refusent tout le monde** (`503`) : une variable absente ne doit jamais valoir accès libre. Déclenchement type :
   ```
+  # Depuis l'étape 11, ce déclenchement FIGE les cotes des GP scrapés avec
+  # succès (statut `cotes_figees`), comme le fait le job automatique.
   curl -X POST https://<railway>/scraper/declencher -H "X-Admin-Secret: <valeur>"
+
+  # Essai AVANT les qualifications : scrape sans figer. Sans ce paramètre, les
+  # cotes sont arrêtées pour de bon et il faut un `update` à la main pour les
+  # débloquer.
+  curl -X POST "https://<railway>/scraper/declencher?figer=false" \
+    -H "X-Admin-Secret: <valeur>"
 
   # Étape 6 — force le traitement d'un GP : résultats, points, clôture.
   # Synchrone : la réponse porte le compte rendu, dont les pronostics restés
@@ -1447,7 +1534,7 @@ Ordre d'application, si l'une manque :
 
 Points non couverts, à traiter le moment venu :
 - **Scraper exercé contre le vrai Supabase** — la ligne réelle observée en version `0.5.1` (voir ci-dessus) montre que l'écriture a eu lieu au moins une fois. Reste à vérifier le contenu de `public.cotes` pour ce GP, et le comportement du scraper sur un GP déjà figé.
-- **Programmation automatique du scraping, et figeage des cotes** — la règle 4.3 veut un scraping le samedi, 2h après les qualifications, puis un figeage des cotes. Aujourd'hui le déclenchement est **manuel** (`POST /scraper/declencher`) et **rien ne fait passer un GP en `cotes_figees`** : le statut existe, la protection qu'il commande est en place et testée, mais aucun code ne l'applique encore. **Le scheduler de l'étape 6 existe désormais** (`app/jobs/resultats.py`, APScheduler dans le `lifespan`) : c'est là qu'un second emploi viendra naturellement se greffer. En attendant, le job de résultats surveille aussi les GP restés `a_venir`, pour ne pas dépendre d'un figeage qui n'a jamais lieu.
+- **Programmation automatique du scraping, et figeage des cotes** — **faite à l'étape 11** (`app/jobs/scraper.py`, second emploi APScheduler dans le `lifespan`). Le scraping se déclenche tout seul 2h après les qualifications, et le statut `cotes_figees` est enfin posé par du code. Trois points restent à surveiller : **(1)** Unibet n'exposait aucun événement de qualification au 16 août 2026, c'est donc le repli `date_course - 22h` qui s'applique — **relire les logs du samedi du premier vrai Grand Prix** pour voir si une vraie heure de qualifications est apparue (chercher « qualifications annoncées par Unibet » ou « aucune épreuve de qualification trouvée ») ; **(2)** le job de résultats continue de surveiller les GP restés `a_venir`, ce qui reste le bon filet si un figeage est manqué ; **(3)** `POST /scraper/declencher` fige désormais lui aussi — utiliser `?figer=false` pour un essai avant les qualifications, sans quoi les cotes sont arrêtées pour de bon et il faut un `update` à la main pour les débloquer.
 - **Marchés disponibles à J-10** — au moment du développement, Unibet n'exposait que 3 marchés pour le GP Pays-Bas (vainqueur, podium, écurie gagnante). Le noyau annoncé en section 3.1 (top 6, top 10, duels…) n'apparaîtra qu'à l'approche de la course. Le scraper les découvre dynamiquement, donc rien à changer — mais **le jeu de marchés réellement obtenu après les qualifications reste à observer**. C'est le point de vigilance principal de l'étape 6 : `app/calcul/points.py` reconnaît neuf familles de marchés, mais **seules trois ont été confrontées à de vrais libellés Unibet**. Les autres (top N, abandon, safety car, drapeau rouge, meilleur tour) sont écrites d'après la section 4.4. Un marché non reconnu ne fait aucun dégât — le pronostic reste à `NULL` et les logs le disent — mais il faut **relire les avertissements `[points] … laissé(s) sans points` après le premier vrai GP** et compléter `validateur()` en conséquence, puis rejouer `POST /jobs/resultats/{gp_id}`. **Depuis la version `0.6.1`, l'attente n'est plus obligatoire** : `POST /jobs/resultats/{gp_id}/test` confronte le calcul aux vrais pronostics en base sur un classement fictif, sans rien écrire. Dès que les marchés complets apparaissent chez Unibet (après les qualifications), un essai dit immédiatement lesquels restent non reconnus.
 - **Duels entre pilotes, premier abandon, marge de victoire, classement exact** — annoncés en section 4.4, **non implémentés**. Ils demandent chacun une règle explicite (égalités, pilote classé contre pilote abandonné) que le CLAUDE.md pose mais que rien ne code encore. Les cas d'égalité du « premier abandon » sont le point à trancher en premier. En l'état ils tombent dans le filet « marché non reconnu ».
 - **Écran de résultats (maquette 11) et calendrier (maquette 15)** — **faits à l'étape 9.** Les seize maquettes du projet sont désormais codées.
@@ -1459,7 +1546,7 @@ Points non couverts, à traiter le moment venu :
 - **Effacement des pronostics au départ d'un championnat** — tranché à l'étape 5 : ils ne sont effacés que si le joueur ne fait plus partie d'aucun championnat, parce qu'un pronostic compte dans tous ses championnats à la fois. **Si le comportement voulu est autre**, c'est `public.quitter_championnat` qu'il faut reprendre, et rien d'autre.
 - **Pronostics d'un GP annulé ou reporté** — la règle 4.7 veut que les pronostics enregistrés soient **effacés**. Rien ne le fait aujourd'hui : le statut `annule` n'existe pas dans la contrainte `check` de `grands_prix`, et aucun code ne l'applique. L'étape 6 apporte un demi-pas : **OpenF1 expose `is_cancelled` sur ses sessions**, et `session_de_course()` le **journalise** quand il vaut vrai — le cas se verra dans les logs au lieu de passer pour une course sans résultat. Il reste à ajouter le statut, l'effacement, et la reprise après report.
 - **Marchés obligatoires liés au nom Unibet** — le vainqueur et le podium sont reconnus par les slugs `vainqueur` et `podium`, en dur à **trois** endroits depuis l'étape 6 : `backend/app/api/routes/pronostics.py`, `backend/app/calcul/points.py` et `frontend/src/lib/pronostics.js`. Si Unibet renomme un de ces marchés, la saisie s'arrête proprement en le disant, mais **les trois constantes doivent être corrigées ensemble**.
-- **Scheduler et instances multiples** — le job de résultats suppose **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers : la base empêche la double attribution, mais pas les appels OpenF1 en double. Ajouter alors un `pg_try_advisory_lock` dans `surveiller()`, ou sortir le job dans un worker dédié.
+- **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. Point à regarder en premier depuis l'étape 10 : la **barre de navigation basse**, dont la zone sûre (`env(safe-area-inset-bottom)`) et la hauteur réservée (`h-nav`, 58px) n'ont jamais été confrontées à un vrai home indicator — c'est exactement le genre de calage qui ne se vérifie pas au simulateur. Regarder aussi qu'elle **ne bouge pas quand la barre d'adresse de Safari se rétracte**, et que les 44px de chaque onglet tombent bien sous le pouce. Points hérités de l'étape 9 : le **balayage des squelettes** (une animation permanente sur plusieurs blocs à la fois, à surveiller côté fluidité), la **vue piste** dont la hauteur est mesurée et change quand la barre d'adresse de Safari se rétracte, et les **accordéons** de l'écran de résultats, dont le chevron bascule en `scaleY(-1)` précisément parce que l'interpolation de `d:` n'existe pas sous Safari.
 - **Parcours d'authentification testé de bout en bout** — le code est en place et compile, mais inscription, confirmation par email, connexion et réinitialisation n'ont pas encore été exercées contre le vrai projet Supabase.
 - **Clés OAuth Google et Apple** — à renseigner dans le tableau de bord Supabase. Ajouter aussi les URL de redirection autorisées : `https://mon-petit-podium.vercel.app/accueil`, `.../nouveau-mot-de-passe` et leurs équivalents `http://localhost:5173`. **Les boutons sont masqués depuis la version `0.2.2`** : une fois les clés en place, repasser `OAUTH_ACTIF` à `true` dans `frontend/src/composants/BoutonsOAuth.jsx`.
