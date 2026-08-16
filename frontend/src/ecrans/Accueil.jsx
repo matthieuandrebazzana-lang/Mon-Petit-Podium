@@ -8,11 +8,20 @@ import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { Pave } from "../composants/Squelette.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
 import TraceCircuit, { traceDuGrandPrix } from "../composants/TraceCircuit.jsx";
-import { IconeMembres, IconePlus } from "../composants/Icones.jsx";
+import {
+  IconeChevronDroit,
+  IconeLien,
+  IconeMembres,
+  IconePlus,
+} from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { listerMesChampionnats } from "../lib/championnats.js";
-import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
-import { chargerAccueilGp, cleAccueilGp } from "../lib/pronostics.js";
+import { couleurBloc, couleurChampionnat, tonalites } from "../lib/couleurs.js";
+import {
+  chargerAccueilGp,
+  chargerGrandsPrixRestants,
+  cleAccueilGp,
+} from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import { formaterDepart } from "../lib/format.js";
 import { useFermeture } from "../lib/useFermeture.js";
@@ -211,56 +220,88 @@ export function BlocProchainGp({ profilId }) {
  * deux voisins échangeraient leurs couleurs à la première adhésion. C'est la
  * règle déjà tenue par les livrées de voiture depuis l'étape 7.
  *
- * Le chevron de la maquette disparaît : la carte entière est devenue un aplat
- * de couleur, elle se lit comme une surface tactile sans qu'un signe le dise,
- * et le coin droit est désormais occupé par le numéro.
+ * **Le chiffre affiché est désormais le vrai rang du membre dans ce
+ * championnat**, et non plus la position de la carte dans la liste. C'est le
+ * point que la version `0.12.0` laissait ouvert : le rang existait depuis
+ * l'étape 7 mais coûtait un appel Railway par championnat. `GET
+ * /championnats/moi` le sert maintenant lui-même, en une seule réponse.
+ *
+ * La jauge du bas dit la même chose autrement : où en est le membre par rapport
+ * au leader. Elle est vide avant le premier Grand Prix, quand tout le monde est
+ * encore à zéro — ce qui est exact, et bien plus honnête qu'une barre à moitié
+ * pleine posée là pour faire joli.
+ *
+ * Le code d'invitation quitte la carte au profit de la saison : il reste sur
+ * l'écran du championnat, où l'on va quand on veut le partager, et cette
+ * sous-ligne devait laisser la place à ce que la carte est venue dire.
  */
-export function CarteChampionnat({ championnat, rang }) {
+export function CarteChampionnat({ championnat }) {
   const couleur = couleurChampionnat(championnat);
   const ton = tonalites(couleur.hex);
-  const numero = rang + 1;
+
+  const membres = championnat.nombre_membres ?? 0;
+  const position = championnat.position ?? null;
+
+  // La fraction du leader. Trois cas, et le troisième est le plus fréquent en
+  // début de saison : personne n'a marqué, la jauge reste vide pour tout le
+  // monde. La division n'a alors jamais lieu.
+  const leader = position?.points_leader ?? 0;
+  const fraction =
+    leader > 0 ? Math.min(1, Math.max(0, (position?.mes_points ?? 0) / leader)) : 0;
 
   return (
     <Link
       to={`/championnats/${championnat.id}`}
-      className={`rounded-carte shadow-aplat pressable-large min-h-tactile relative flex items-center gap-3.5 overflow-hidden p-4 ${couleur.fond}`}
+      className={`rounded-carte shadow-aplat pressable-large relative flex min-h-[120px] flex-col justify-between gap-3 overflow-hidden p-4 ${couleur.fond}`}
     >
       <span
         aria-hidden="true"
         className="lueur-haute pointer-events-none absolute inset-0"
       />
 
+      <span className="relative flex items-start justify-between gap-3">
+        <span className="min-w-0 flex-1">
+          <span
+            className={`block truncate text-[20px] leading-tight font-medium ${ton.texte}`}
+          >
+            {championnat.nom}
+          </span>
+          <span className={`mt-1.5 block text-[12px] ${ton.texteDoux}`}>
+            {membres} {membres > 1 ? "membres" : "membre"} · Saison 2026
+          </span>
+        </span>
+
+        {/* Le rang, en très grand et en retrait. Il n'est rendu que s'il est
+            connu : un tiret sous le mot « classement » ne dirait rien de plus
+            que la colonne absente, et laisserait croire à une donnée manquante
+            là où c'est le réveil de Railway qui n'a pas encore répondu. */}
+        {position && (
+          <span className="shrink-0 text-right">
+            <span
+              className={`block text-[48px] leading-none font-medium ${ton.fantomeLisible}`}
+            >
+              {position.mon_rang}
+            </span>
+            <span
+              className={`text-label-sm mt-1 block uppercase ${ton.texteDoux}`}
+            >
+              classement
+            </span>
+          </span>
+        )}
+      </span>
+
+      {/* La jauge. `overflow-hidden` sur la piste, parce que le remplissage est
+          mis à l'échelle : sans lui, un arrondi mis à l'échelle déborderait des
+          coins de la piste. */}
       <span
         aria-hidden="true"
-        className={`rounded-champ relative flex size-[46px] shrink-0 items-center justify-center ${ton.surface} ${ton.texte}`}
+        className={`relative h-1 w-full overflow-hidden rounded-full ${ton.jaugePiste}`}
       >
-        <IconeMembres className="size-[22px]" />
-      </span>
-
-      <span className="relative min-w-0 flex-1">
-        <span className={`text-corps block truncate font-medium ${ton.texte}`}>
-          {championnat.nom}
-        </span>
-        <span className={`mt-0.5 block text-[12px] ${ton.texteDoux}`}>
-          {championnat.nombre_membres}{" "}
-          {championnat.nombre_membres > 1 ? "membres" : "membre"} · Code{" "}
-          {championnat.code_invitation}
-        </span>
-      </span>
-
-      {/* Effet de profondeur : le même chiffre deux fois, le grand en retrait
-          derrière le petit. Le fantôme est `aria-hidden` — un lecteur d'écran
-          n'a pas à entendre le numéro en double. */}
-      <span className="relative flex size-12 shrink-0 items-center justify-center">
         <span
-          aria-hidden="true"
-          className={`absolute text-[52px] leading-none font-medium ${ton.fantome}`}
-        >
-          {numero}
-        </span>
-        <span className={`relative text-[17px] font-medium ${ton.texte}`}>
-          {numero}
-        </span>
+          className={`t-jauge block h-full w-full rounded-full ${ton.jaugePleine}`}
+          style={{ "--jauge": fraction }}
+        />
       </span>
     </Link>
   );
@@ -268,16 +309,16 @@ export function CarteChampionnat({ championnat, rang }) {
 
 /** Silhouette des cartes pendant le réveil du backend.
  *
- * Depuis la refonte, la carte réelle est un aplat plein : sa silhouette est donc
- * un aplat plein elle aussi, à la hauteur exacte de la carte (16 + 46 + 16), et
- * non une carte blanche avec des barres dedans. La couleur, elle, ne peut pas
- * être devinée — on ne sait pas encore quels championnats vont arriver — et le
- * gris des squelettes reste la seule réponse honnête. */
+ * La carte réelle est un aplat plein : sa silhouette est donc un aplat plein
+ * elle aussi, à la hauteur exacte de la carte, et non une carte blanche avec des
+ * barres dedans. La couleur, elle, ne peut pas être devinée — on ne sait pas
+ * encore quels championnats vont arriver — et le gris des squelettes reste la
+ * seule réponse honnête. */
 export function SqueletteChampionnats() {
   return (
     <div className="flex flex-col gap-2.5">
       {[0, 1].map((rang) => (
-        <Pave key={rang} className="h-[78px]" arrondi="rounded-carte" />
+        <Pave key={rang} className="h-[120px]" arrondi="rounded-carte" />
       ))}
     </div>
   );
@@ -300,19 +341,105 @@ function AucunChampionnat() {
   );
 }
 
-/** Bouton d'action de la grille à deux colonnes de la maquette 04. */
-export function Action({ vers, variante, icone, children }) {
-  const tons =
-    variante === "principal" ? "bg-primaire text-white" : "bg-surface text-primaire";
+/**
+ * Carte d'action — « Créer » et « Rejoindre », désormais **dans le flux** de la
+ * liste plutôt que dans une grille collée au bas de l'écran.
+ *
+ * Elles adoptent la hauteur et la forme des cartes de championnat, et s'en
+ * distinguent par leur surface blanche : la liste se lit alors d'un seul
+ * mouvement du pouce, du dernier championnat aux deux façons d'en avoir un de
+ * plus, au lieu de sauter par-dessus un blanc de plusieurs centimètres.
+ *
+ * *Écart assumé sur la pastille d'icône.* La demande décrit « une icône en rouge
+ * dans un cercle rouge » et « une icône de lien en amber ». Une icône ambre sur
+ * une pastille ambre pâle tombe à 2,2:1 de contraste sur une carte blanche, très
+ * en dessous du plancher de 3:1 exigé d'un élément graphique porteur de sens.
+ * La pastille prend donc l'aplat plein et l'icône l'encre que `encreSurAplat`
+ * calcule pour lui — blanche sur le bordeaux, foncée sur l'ambre. C'est le même
+ * arbitrage, et le même seuil, que celui déjà tranché pour les blocs de bonus.
+ */
+export function CarteAction({ vers, couleur, icone, titre, sousTitre }) {
+  const ton = tonalites(couleur.hex);
 
   return (
     <Link
       to={vers}
-      className={`rounded-carte-sm shadow-carte pressable min-h-tactile flex items-center justify-center gap-2 px-3 py-4 text-center text-[15px] font-medium ${tons}`}
+      className="rounded-carte bg-surface shadow-carte pressable-large flex min-h-[120px] items-center gap-3.5 p-4"
     >
-      {icone}
-      {children}
+      <span
+        aria-hidden="true"
+        className={`flex size-12 shrink-0 items-center justify-center rounded-full ${couleur.fond} ${ton.texte}`}
+      >
+        {icone}
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="text-texte block truncate text-[17px] font-medium">
+          {titre}
+        </span>
+        <span className="text-texte-doux mt-1 block text-[13px]">{sousTitre}</span>
+      </span>
+
+      <IconeChevronDroit className="text-texte-doux size-5 shrink-0" />
     </Link>
+  );
+}
+
+/** Les deux cartes d'action, ensemble : elles ne vont jamais l'une sans
+ *  l'autre, et les trois écrans qui les portent ne doivent pas avoir à se
+ *  souvenir de leurs libellés. */
+export function ActionsChampionnat() {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <CarteAction
+        vers="/championnats/creer"
+        couleur={couleurBloc("rouge")}
+        icone={<IconePlus className="size-5" />}
+        titre="Créer un championnat"
+        sousTitre="Lance ton championnat 2026"
+      />
+      <CarteAction
+        vers="/championnats/rejoindre"
+        couleur={couleurBloc("amber")}
+        icone={<IconeLien className="size-5" />}
+        titre="Rejoindre un championnat"
+        sousTitre="Entre un code à 6 caractères"
+      />
+    </div>
+  );
+}
+
+/**
+ * Le bandeau qui ferme l'écran : « Saison 2026 · N Grands Prix restants ».
+ *
+ * Il répond à un vrai défaut de composition — sous une liste d'un ou deux
+ * championnats, le bas de l'écran restait vide sur toute sa moitié. Le remplir
+ * d'un ornement aurait été pire ; ce décompte, lui, dit quelque chose, et il se
+ * vide de lui-même à mesure que la saison avance.
+ *
+ * **Rien ne s'affiche tant que le décompte n'est pas connu**, et rien non plus
+ * si sa lecture échoue. Un bandeau qui annoncerait « 0 Grand Prix restant »
+ * pendant le réveil de la base dirait le contraire de la vérité, sur le seul
+ * élément de l'écran dont personne n'attend qu'il se corrige.
+ *
+ * Aucun aplat, aucune ombre : ce n'est pas un bloc. C'est la même graisse et le
+ * même gris que la ligne de version, quelques pixels plus haut.
+ */
+export function BlocSaison() {
+  const chargeur = useCallback((signal) => chargerGrandsPrixRestants(signal), []);
+  const { donnees } = useDonnees("gp-restants", chargeur);
+
+  if (typeof donnees !== "number") return null;
+
+  const texte =
+    donnees === 0
+      ? "Saison 2026 terminée"
+      : `Saison 2026 · ${donnees} Grand${donnees > 1 ? "s" : ""} Prix restant${
+          donnees > 1 ? "s" : ""
+        }`;
+
+  return (
+    <p className="text-texte-doux px-4 pt-1 text-center text-[13px]">{texte}</p>
   );
 }
 
@@ -386,32 +513,27 @@ export default function Accueil() {
               <AucunChampionnat />
             ) : (
               <div className="flex flex-col gap-2.5">
-                {championnats.map((championnat, rang) => (
+                {championnats.map((championnat) => (
                   <CarteChampionnat
                     key={championnat.id}
                     championnat={championnat}
-                    rang={rang}
                   />
                 ))}
               </div>
             )}
           </ZoneChargement>
+
+          {/* Les deux actions suivent les championnats **dans le même bloc**,
+              et non dans une grille collée au bas de l'écran : elles sont la
+              suite naturelle de la liste, pas un pied de page. */}
+          <ActionsChampionnat />
+        </Bloc>
+
+        <Bloc rang={3}>
+          <BlocSaison />
         </Bloc>
 
         <div className="min-h-3 flex-1" />
-
-        <Bloc rang={3} className="grid grid-cols-2 gap-2.5">
-          <Action
-            vers="/championnats/creer"
-            variante="principal"
-            icone={<IconePlus className="size-4" />}
-          >
-            Créer
-          </Action>
-          <Action vers="/championnats/rejoindre" variante="secondaire">
-            Rejoindre
-          </Action>
-        </Bloc>
       </div>
 
       <footer className="flex flex-col items-center gap-3 pt-5">

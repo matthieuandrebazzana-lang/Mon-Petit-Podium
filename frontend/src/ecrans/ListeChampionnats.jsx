@@ -2,9 +2,9 @@ import { useCallback, useState } from "react";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
-import { IconePlus } from "../composants/Icones.jsx";
 import {
-  Action,
+  ActionsChampionnat,
+  BlocSaison,
   CarteChampionnat,
   SqueletteChampionnats,
 } from "./Accueil.jsx";
@@ -70,7 +70,7 @@ export default function ListeChampionnats() {
           </Bloc>
         )}
 
-        <Bloc rang={2}>
+        <Bloc rang={2} className="flex flex-col gap-2.5">
           <ZoneChargement chargement={chargement} squelette={<SqueletteChampionnats />}>
             {championnats.length === 0 ? (
               /* Pas une erreur : un compte neuf n'appartient à rien. Le message
@@ -86,32 +86,24 @@ export default function ListeChampionnats() {
               </div>
             ) : (
               <div className="flex flex-col gap-2.5">
-                {championnats.map((championnat, rang) => (
+                {championnats.map((championnat) => (
                   <CarteChampionnat
                     key={championnat.id}
                     championnat={championnat}
-                    rang={rang}
                   />
                 ))}
               </div>
             )}
           </ZoneChargement>
+
+          <ActionsChampionnat />
+        </Bloc>
+
+        <Bloc rang={3}>
+          <BlocSaison />
         </Bloc>
 
         <div className="min-h-3 flex-1" />
-
-        <Bloc rang={3} className="grid grid-cols-2 gap-2.5">
-          <Action
-            vers="/championnats/creer"
-            variante="principal"
-            icone={<IconePlus className="size-4" />}
-          >
-            Créer
-          </Action>
-          <Action vers="/championnats/rejoindre" variante="secondaire">
-            Rejoindre
-          </Action>
-        </Bloc>
       </div>
     </Ecran>
   );

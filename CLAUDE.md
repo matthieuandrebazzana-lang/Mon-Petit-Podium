@@ -1503,7 +1503,7 @@ Interface plus vivante, à blocs de couleur pleins. **Aucune migration, aucun ch
 
 Les cartes de championnat deviennent des aplats pleins, avec leur numéro en grand à droite : le même chiffre deux fois, le grand à 40 % derrière le petit en encre pleine. Le fantôme est `aria-hidden` — un lecteur d'écran n'a pas à entendre le numéro en double. Le chevron de la maquette disparaît : la carte entière est devenue une surface tactile, et le coin droit est désormais occupé.
 
-**Ce numéro est la position de la carte dans la liste, pas un rang de classement**, et c'est la limite à connaître. Le vrai rang du joueur dans chaque championnat existe depuis l'étape 7, mais il coûterait **un appel Railway par championnat** — `GET /championnats/{id}/classement` n'agrège qu'un championnat à la fois. Aucune étiquette ne le présente comme un classement ; si le vrai rang devient souhaitable, c'est une route qui les servirait tous d'un coup qu'il faut ajouter, pas du code d'écran.
+**Ce numéro est la position de la carte dans la liste, pas un rang de classement**, et c'est la limite à connaître. Le vrai rang du joueur dans chaque championnat existe depuis l'étape 7, mais il coûterait **un appel Railway par championnat** — `GET /championnats/{id}/classement` n'agrège qu'un championnat à la fois. Aucune étiquette ne le présente comme un classement ; si le vrai rang devient souhaitable, c'est une route qui les servirait tous d'un coup qu'il faut ajouter, pas du code d'écran. **Fait en version `0.14.0`** : `GET /championnats/moi` porte désormais `position` (rang, points, points du leader), et la carte affiche le vrai rang.
 
 Le squelette des cartes devient un aplat plein à la hauteur exacte de la carte (16 + 46 + 16), et non plus une carte blanche à barres. Sa **couleur**, elle, ne peut pas être devinée — on ne sait pas encore quels championnats vont arriver — et le gris des squelettes reste la seule réponse honnête. C'est le seul endroit de l'app où un aplat de couleur naît d'un squelette gris ; ailleurs la règle de l'étape 9 tient toujours.
 
@@ -1672,6 +1672,109 @@ Le bloc du prochain Grand Prix est recomposé autour de **deux cases de statut**
 
 ---
 
+**Fond texturé, cartes de championnat enrichies, boutons intégrés au flux** (version `0.14.0`)
+
+Deux défauts relevés sur **iPhone réel** — le premier essai sur appareil, jamais fait jusqu'ici. Le fond trop uniforme et plat ; les cartes de championnat trop minces et vides, une ligne de texte sur un aplat. Quatre corrections, dont une qui demande une donnée que l'API ne servait pas encore.
+
+**Aucune migration.** Le seul changement de base serait une fonction SQL, et il n'en faut pas : le classement existe depuis l'étape 7, il suffisait de l'appeler.
+
+---
+
+***Correction 1 — le grain du fond.***
+
+Le beige `#F5F0EB` en aplat uni lit comme un vide : rien n'y accroche la lumière, et les blocs paraissent découpés dedans plutôt que posés dessus. Un bruit gris à **4 %**, en image de fond sur `body`, lui donne la matière d'un papier légèrement texturé. Il couvre **tous les écrans à la fois**, sans qu'aucun ait à le savoir.
+
+**Aucune couleur nouvelle n'entre par cette porte** : la couleur de fond reste exactement celle de la section 5, le grain est du gris à 4 % par-dessus.
+
+Trois points de mise en œuvre à ne pas défaire :
+
+1. **C'est une image de fond, pas un filtre vivant ni un calque fixe.** Le motif est rastérisé une fois puis répété en tuile de 160px, et le navigateur le met en cache. Un `filter` SVG appliqué à un conteneur qui défile, ou un `background-attachment: fixed` — que Safari iOS gère mal — repeindraient à chaque image. C'est la contrainte de performance que le skill Taste pose explicitement sur les grains, et la raison pour laquelle celui-ci vit sur `body` plutôt que sur un calque `fixed`.
+2. **`stitchTiles="stitch"`** dans le `feTurbulence` : sans lui, la turbulence recommence sa séquence à chaque tuile et la répétition se voit en damier de 160px.
+3. **Le contraste du bruit est étiré dans le filtre** (`feComponentTransfer`, pente 1,8) avant d'être ramené à 4 %. `fractalNoise` sort une valeur très resserrée autour du gris moyen : sans cet étirement, 4 % ne donnent littéralement rien à voir, et il aurait fallu monter l'opacité — donc assombrir le fond — pour obtenir la même texture. La demande disait 3-4 % ; c'est bien 4 %, et c'est l'étirement qui les rend visibles.
+
+Sous **`prefers-contrast: more`**, le grain disparaît et le fond redevient un aplat pur : une texture, même à 4 %, retire un peu de contraste effectif au texte posé dessus, ce que ce réglage demande précisément d'éviter. La vue piste, qui peint son propre asphalte par-dessus, n'est pas concernée.
+
+---
+
+***Correction 2 — les cartes de championnat, et la donnée qui leur manquait.***
+
+La carte passe de 78px à **120px minimum** : nom du championnat à 20px, effectif et saison en dessous, **rang du membre en 48px** à droite avec « classement » sous lui, et une **jauge de 4px** en bas disant où il en est par rapport au leader.
+
+**Le chiffre affiché est désormais le vrai rang**, et non plus la position de la carte dans la liste. C'est le point que la version `0.12.0` laissait explicitement ouvert : le rang existait depuis l'étape 7, mais `GET /championnats/{id}/classement` n'agrège qu'un championnat à la fois — l'afficher aurait coûté **un appel Railway par carte**, en série, sur le premier écran de l'app.
+
+*La réponse, et pourquoi elle ne demande aucune migration.* `GET /championnats/moi` porte un objet `position` par championnat (`mon_rang`, `mes_points`, `points_leader`), obtenu en appelant `classement_du_championnat` **une fois par championnat, en parallèle** (`asyncio.gather`). Une fonction SQL nouvelle aurait fait le même travail au prix d'un passage par le SQL Editor, sur une liste de migrations dont le CLAUDE.md dit déjà qu'elle est à revérifier.
+
+C'est aussi **la fonction même** que sert `GET /championnats/{id}/classement` : le rang lu sur une carte et celui lu sur l'écran du championnat ne peuvent donc pas diverger, et les quatre critères de départage de la règle 4.6 s'appliquent ici sans être réécrits. Les reprogrammer en Python aurait créé un second classement à tenir d'accord avec le premier.
+
+Quatre points de mise en œuvre :
+
+1. **`points_leader` est le plus haut total du championnat, pas celui de la première ligne.** Les deux coïncident aujourd'hui, la fonction SQL triant d'abord par points ; dériver la jauge d'une hypothèse d'ordre la ferait mentir le jour où le tri changerait. Un contrôle sert volontairement un classement dans le désordre pour le vérifier.
+2. **L'échec d'un classement n'emporte ni les autres ni la liste.** Une carte sans rang reste une carte utile ; une liste vide serait un cul-de-sac. Même arbitrage que pour le prochain Grand Prix depuis l'étape 10, et les pannes partent dans les logs Railway avec leur cause.
+3. **`LIMITE_CLASSEMENTS = 12`.** La règle 4.5 ne borne pas le nombre d'adhésions : au-delà de douze championnats, les cartes suivantes s'affichent **sans** rang plutôt que d'allonger indéfiniment la route la plus sollicitée de l'application. L'ordre venant de `mes_championnats`, ce sont toujours les mêmes qui le portent d'un chargement à l'autre.
+4. **`position` a une valeur par défaut** dans le modèle `Championnat`. La création et l'adhésion rendent un championnat qu'on vient tout juste de rejoindre, où le classement n'a rien à dire, et un frontend déployé avant le backend n'y perd rien — le piège déjà rencontré avec `cree_par` à la version `0.4.1`.
+
+**Le rang n'est rendu que s'il est connu.** Un tiret sous le mot « classement » ne dirait rien de plus qu'une colonne absente, et laisserait croire à une donnée manquante là où c'est le réveil de Railway qui n'a pas encore répondu.
+
+*Écart assumé, et c'est le seul de la refonte.* La demande décrit le rang « semi-transparent à 30 % ». **À 30 %, le blanc sur le bordeaux `#800111` tombe à 1,6:1 de contraste** : le rang deviendrait un ornement illisible, alors que c'est la deuxième chose qu'on vient lire sur la carte. `tonalites` sert donc une encre à **80 %**, et cette valeur est mesurée, pas choisie à l'œil. L'aplat qui contraint est le **terracotta `#C4622D`**, le plus clair des cinq à encre blanche : l'encre pleine n'y vaut déjà que 4,1:1, et 80 % la ramènent à **3,20:1**, juste au-dessus du plancher AA des grands textes ; **à 75 % elle tombe à 2,99:1**, sous le seuil. Les cinq autres aplats sont plus confortables (3,77:1 sur le vert sauge, 7,20:1 sur le bordeaux). Le chiffre reste nettement en retrait de l'encre pleine, ce que la demande cherchait, sans cesser d'être lisible.
+
+*La jauge.* Piste blanche à 30 %, remplissage blanc plein — ou l'encre foncée sur l'amber, `tonalites` portant les deux couches pour la même raison que les encres : un écran qui écrirait `bg-white` de mémoire donnerait une jauge invisible sur l'ambre. **Elle est vide avant le premier Grand Prix**, quand tout le monde est encore à zéro : c'est exact, et bien plus honnête qu'une barre à moitié pleine posée là pour faire joli. La division n'a alors jamais lieu.
+
+*Le code d'invitation quitte la carte* au profit de la saison, comme la demande le prescrit. Il reste sur l'écran du championnat, où l'on va quand on veut le partager.
+
+---
+
+***Correction 3 — les deux actions entrent dans le flux.***
+
+« Créer » et « Rejoindre » quittent la grille à deux colonnes collée au bas de l'écran pour devenir **deux cartes de la liste** : surface blanche, même hauteur et même rayon que les cartes de championnat, pastille d'icône à gauche, titre, sous-titre, chevron. La liste se lit alors d'un seul mouvement du pouce, du dernier championnat aux deux façons d'en avoir un de plus, au lieu de sauter par-dessus un blanc de plusieurs centimètres.
+
+*Écart assumé sur la pastille d'icône.* La demande décrit « une icône `+` en rouge dans un cercle rouge » et « une icône de lien en amber ». Une icône ambre sur une pastille ambre pâle tombe à **2,2:1** de contraste sur une carte blanche, sous le plancher de 3:1 exigé d'un élément graphique porteur de sens. La pastille prend donc l'aplat plein et l'icône l'encre que `encreSurAplat` calcule pour lui — blanche sur le bordeaux, foncée sur l'ambre. C'est le même arbitrage, et le même seuil, que celui déjà tranché pour les blocs de bonus à la version `0.12.0`.
+
+`IconeLien` est ajoutée à `composants/Icones.jsx` : rejoindre, c'est entrer un code reçu d'ailleurs, et le maillon dit ce lien là où le `+` dit la création. Les deux doivent se distinguer d'un coup d'œil au pouce, posées l'une sous l'autre.
+
+**`Action` disparaît**, et avec elle sa dernière utilisation : l'état vide du calendrier global (étape 10) montre désormais les mêmes deux cartes. Cet écran pose exactement la même question — « tu n'as aucun championnat, voici comment en avoir un » — et deux réponses dessinées séparément auraient divergé au premier ajustement. `ActionsChampionnat` les sert d'un bloc aux **trois** écrans : aucun n'a à se souvenir des libellés.
+
+---
+
+***Correction 4 — le bandeau de saison.***
+
+Sous une liste d'un ou deux championnats, le bas de l'écran restait vide sur toute sa moitié. « Saison 2026 · 8 Grands Prix restants » le ferme, en gris clair, centré, **sans aplat ni ombre** : ce n'est pas un bloc, c'est la même graisse et le même gris que la ligne de version, quelques pixels plus haut.
+
+Le décompte est **lu directement dans Supabase, sans jeton** : `grands_prix` est en lecture publique depuis l'étape 4, et ce nombre n'apprend rien que le calendrier de la Formule 1 ne dise déjà. C'est aussi ce qui permet de ne pas réveiller Railway pour trois mots en bas de page. `head: true` ne rapatrie **aucune ligne** — seul l'en-tête de comptage revient.
+
+Le filtre est exactement celui du prochain GP de l'accueil : les statuts non courus, les départs pas encore passés. **Un Grand Prix dont Unibet n'a pas annoncé l'horaire est compté quand même** : il reste un Grand Prix à jouer, et l'écarter le ferait disparaître du décompte jusqu'au samedi des qualifications. C'est l'arbitrage du calendrier de l'étape 9, pas celui des statistiques de l'étape 8.
+
+**Rien ne s'affiche tant que le décompte n'est pas connu**, ni si sa lecture échoue. Un bandeau annonçant « 0 Grand Prix restant » pendant le réveil de la base dirait le contraire de la vérité, sur le seul élément de l'écran dont personne n'attend qu'il se corrige. Zéro Grand Prix se dit « Saison 2026 terminée », jamais « 0 Grand Prix restant ».
+
+---
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton de transitions-dev nouveau.** La jauge se remplit sur la durée et la courbe de *texts reveal* (18), celles-là mêmes qui font entrer le bloc qui la porte : la carte et sa jauge arrivent comme un seul geste, au lieu de deux mouvements de rythmes différents sur la même surface. Deux points : c'est un `transform: scaleX` et jamais une `width` — seules les propriétés composables s'animent (`/apple-design` §11) ; et la valeur de repos vit sur la règle de base, l'animation ne fait que la rejoindre depuis zéro, si bien que sous `prefers-reduced-motion` la jauge reste à sa bonne longueur. L'information demeure, seul le mouvement disparaît.
+
+*Apport d'`/apple-design`* — le retour tactile des grandes surfaces (`pressable-large`, 1,5 %) passe des cartes de championnat aux cartes d'action, qui font désormais la même taille ; les deux chiffres et la jauge sont `aria-hidden` ou lus une seule fois, un lecteur d'écran n'ayant rien à annoncer d'un effet de profondeur ; le squelette suit la carte à 120px, sans quoi l'écran sauterait de 42px par carte à l'arrivée des données ; et le grain respecte `prefers-contrast: more`.
+
+*Vérifié* :
+
+| Contrôle | Résultat |
+|---|---|
+| Route contre une doublure Supabase (auth + PostgREST en mémoire) | **50 contrôles passent** |
+| Protection | `401` sans jeton, sur jeton inconnu et sur en-tête sans `Bearer` ; **aucune lecture pour un appel refusé** |
+| Contenu | les trois champs de `position` portés jusqu'au client ; nom, code, effectif, `est_createur` et prochain GP de l'étape 10 intacts ; **un classement demandé par championnat, sur les bons identifiants**, une seule lecture de `grands_prix` pour toute la liste |
+| Leader | **classement servi dans le désordre → le leader reste le plus haut total**, pas la première ligne |
+| Cas limites | saison non commencée : rang servi, 0 point, leader à 0 ; **appelant absent du classement → aucune position inventée** ; classement vide → position nulle |
+| Robustesse | un classement en panne : **liste servie, ce championnat perd son rang, l'autre garde le sien** ; tous en panne : liste servie sans position ; `grands_prix` en panne : rang quand même servi ; **rien de technique dans la réponse** (`42P01` reste dans les logs) |
+| Plafond | 20 championnats → **12 classements demandés**, les 20 cartes servies, les 8 dernières sans rang |
+| Non-régression | championnat orphelin (`0.4.1`) toujours sérialisé et **portant son rang** ; création `201` **sans position et sans classement demandé** ; `/health` en `0.14.0`, 19 chemins, classement et calendrier toujours protégés, préflight CORS |
+| Rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage doublé) | **102 contrôles passent** |
+| Contraste, calculé sur les six aplats | l'encre à 80 % tient **≥ 3:1 sur les six**, terracotta compris ; jauge déclarée pour chacun ; **amber servi en encre foncée**, bordeaux en blanc ; le fantôme décoratif à 40 % reste distinct du chiffre lisible |
+| Carte de championnat | 120px, aplat conservé, **aucune surface blanche**, élévation et lumière spéculaire ; nom à 20px, effectif accordé, saison ; rang à 48px en encre 80 % ; jauge à la bonne fraction ; **le code d'invitation a quitté la carte** ; destination et retour tactile |
+| Jauge | saison non commencée → **vide** ; leader → pleine ; points aberrants → **bornée à 1** ; rang inconnu → aucune colonne, **aucun tiret inventé**, carte entière quand même |
+| Cartes d'action | les deux titres et sous-titres demandés, fond blanc, **même hauteur et même rayon que les cartes de championnat**, pastille rouge et pastille amber, **encre foncée sur l'amber**, chevron, élévation, retour tactile |
+| Bandeau de saison | décompte servi, **singulier et pluriel accordés**, zéro → « Saison 2026 terminée » et **jamais « 0 Grand Prix »**, décompte inconnu → **rien du tout**, ni aplat ni ombre |
+| Écrans | accueil, liste et calendrier global se rendent ; les deux rangs et les deux jauges ; **plus aucun bouton court « Créer » / « Rejoindre »** ; bandeau présent sur les deux écrans ; liste vide → message et les deux cartes ; calendrier global → cartes seulement dans l'état vide |
+| Vocabulaire et règle 4.1 | **aucune cote brute « ×N »**, ni « ligue », ni « historique », sur les trois écrans |
+| Squelette | à la hauteur réelle de la carte (120px), aucune couleur en dur, balayage conservé |
+| Sous un vrai `uvicorn`, Supabase pointé sur un port mort | `/health` en `0.14.0`, 19 chemins, `401` sans jeton, **réponse en français et trace complète sur la sortie standard** |
+| `npm run build` | passe, 128 modules ; grain, jauge et les quatre opacités nouvelles bien générés dans le CSS |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -1742,6 +1845,8 @@ Points non couverts, à traiter le moment venu :
 - **Marchés obligatoires liés au nom Unibet** — le vainqueur et le podium sont reconnus par les slugs `vainqueur` et `podium`, en dur à **trois** endroits depuis l'étape 6 : `backend/app/api/routes/pronostics.py`, `backend/app/calcul/points.py` et `frontend/src/lib/pronostics.js`. Si Unibet renomme un de ces marchés, la saisie s'arrête proprement en le disant, mais **les trois constantes doivent être corrigées ensemble**.
 - **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
+
+**Deux points depuis la version `0.14.0`**, tous deux liés au grain du fond, qui ne se juge qu'à l'œil sur un écran réel : **l'intensité du grain** — 4 % avec un contraste étiré dans le filtre, c'est le réglage qui devrait donner « du papier légèrement texturé » sans jamais salir le beige ; si le rendu paraît trop faible, monter `opacity` dans le SVG de `--grain-fond` plutôt que la taille de tuile, et si le grain se remarque, la descendre à 0,03 ; et le **coût au défilement** — le motif est une tuile rastérisée mise en cache, il ne devrait rien coûter, mais c'est exactement le genre d'effet qui se juge en faisant défiler une longue liste de cotes sur un vrai iPhone. Vérifier aussi le repli `prefers-contrast: more` (« Augmenter le contraste » dans les réglages d'accessibilité), qui doit rendre le fond parfaitement uni. Point secondaire : les **cartes de 120px** portent maintenant deux fois plus de contenu, à confronter à un pseudo de championnat long sur un iPhone étroit.
 
 **Quatre points depuis la refonte sans restriction (`0.13.0`)**, tous liés au collage et aux matériaux, c'est-à-dire à ce qui ne se vérifie pas au simulateur : l'**en-tête à grand titre rétractable** — regarder que la barre ne saute pas quand la barre d'adresse de Safari se rétracte, que le matériau apparaisse bien au bon moment (la marge de déclenchement est fixée à 64px, à réajuster si la zone sûre d'un modèle la décale), et que le flou d'un élément pleine largeur ne fasse pas saccader le défilement ; les **en-têtes de marché collants** du tableau des cotes, dont le décalage repose sur `--entete-hauteur` = zone sûre + 60px — à confronter à un vrai `env(safe-area-inset-top)` ; l'**en-tête teinté du championnat**, où la couleur de la barre et celle de l'aplat doivent se toucher sans laisser de ligne au premier pixel de défilement ; et les deux **nouvelles barres collées en bas** (cotes et pronostics), à vérifier avec un vrai home indicator. Vérifier aussi le repli `prefers-reduced-transparency` sur l'en-tête, en plus des deux matériaux déjà signalés.
 

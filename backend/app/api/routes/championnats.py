@@ -5,6 +5,7 @@ sans jeton Supabase valide, et son résultat est la seule source d'identité.
 Le corps de la requête ne dit jamais qui est l'appelant.
 """
 
+import asyncio
 import re
 import secrets
 import string
@@ -63,6 +64,15 @@ VIOLATION_UNICITE = "23505"
 # et c'est tout l'objet du filtre : le « prochain GP » d'un championnat est
 # celui sur lequel il reste quelque chose à faire.
 STATUTS_A_VENIR = ("a_venir", "cotes_figees")
+
+# Nombre maximum de championnats dont la carte porte le rang de l'appelant.
+# Chaque rang coûte un appel à `classement_du_championnat` ; ils partent tous en
+# parallèle, mais la règle 4.5 ne borne pas le nombre d'adhésions et rien
+# n'empêche d'en avoir cinquante. Au-delà de cette limite, les cartes suivantes
+# s'affichent **sans** rang plutôt que d'allonger la route la plus sollicitée de
+# l'application. Les championnats sont servis dans l'ordre de `mes_championnats`,
+# donc ce sont toujours les mêmes qui portent le rang d'un chargement à l'autre.
+LIMITE_CLASSEMENTS = 12
 
 # Saison servie par défaut au calendrier. Écrite ici plutôt que déduite de
 # `datetime.now()` : le calendrier doit rester lisible en intersaison, où
@@ -159,6 +169,24 @@ class ProchainGp(BaseModel):
     statut: str
 
 
+class PositionMembre(BaseModel):
+    """Où en est l'appelant dans un championnat, pour sa carte de liste.
+
+    Trois nombres et pas un de plus : le rang qui s'affiche en grand, ses points
+    et ceux du leader — de quoi remplir la jauge de progression sans que l'écran
+    ait à savoir comment un classement se calcule.
+
+    `points_leader` est le **plus haut total du championnat**, pas celui du
+    premier de la liste : les deux coïncident aujourd'hui, la fonction SQL triant
+    d'abord par points, mais dériver la jauge d'une hypothèse d'ordre la ferait
+    mentir le jour où le tri changerait.
+    """
+
+    mon_rang: int
+    mes_points: int
+    points_leader: int
+
+
 class Championnat(BaseModel):
     id: UUID
     nom: str
@@ -180,6 +208,12 @@ class Championnat(BaseModel):
     # rendent un championnat qu'on vient de créer ou de rejoindre, l'écran
     # d'arrivée n'affiche pas de Grand Prix.
     prochain_gp: ProchainGp | None = None
+    # La position de l'appelant dans ce championnat. `None` quand le classement
+    # n'a pas pu être lu, ou au-delà de `LIMITE_CLASSEMENTS`. Valeur par défaut
+    # pour la même raison que `prochain_gp` : la création et l'adhésion rendent
+    # un championnat qu'on vient tout juste de rejoindre, où le classement n'a
+    # rien à dire, et un frontend déployé avant le backend n'y perd rien.
+    position: PositionMembre | None = None
 
 
 def generer_code() -> str:
@@ -222,6 +256,7 @@ def en_championnat(
     utilisateur: str,
     nombre_membres: int,
     prochain_gp: ProchainGp | None = None,
+    position: PositionMembre | None = None,
 ) -> Championnat:
     return Championnat(
         id=ligne["id"],
@@ -233,7 +268,85 @@ def en_championnat(
         est_createur=ligne["cree_par"] is not None
         and str(ligne["cree_par"]) == utilisateur,
         prochain_gp=prochain_gp,
+        position=position,
     )
+
+
+async def position_dans(championnat_id: str, profil: str) -> PositionMembre | None:
+    """La place de l'appelant au classement d'un championnat.
+
+    Elle est tirée de `classement_du_championnat`, **la fonction même** que sert
+    `GET /championnats/{id}/classement` : le rang lu sur une carte de liste et
+    celui lu sur l'écran du championnat ne peuvent donc pas diverger, et les
+    quatre critères de départage de la règle 4.6 s'appliquent ici sans être
+    réécrits. Les reprogrammer en Python aurait créé un second classement à
+    tenir d'accord avec le premier.
+
+    Un appelant absent du classement rend `None` plutôt que d'inventer une
+    position : le cas ne devrait pas se produire — `mes_championnats` ne rend
+    que des championnats dont il est membre, et un membre figure toujours au
+    classement, fût-ce à zéro point — mais un rang faux sur une carte serait pire
+    qu'une carte sans rang.
+    """
+    lignes = await appeler_fonction(
+        "classement_du_championnat", {"p_championnat": championnat_id}
+    )
+    if not lignes:
+        return None
+
+    mienne = next(
+        (l for l in lignes if str(l.get("profil_id")) == profil),
+        None,
+    )
+    if mienne is None:
+        return None
+
+    return PositionMembre(
+        mon_rang=int(mienne["rang"]),
+        mes_points=int(mienne.get("total_points") or 0),
+        points_leader=max(int(l.get("total_points") or 0) for l in lignes),
+    )
+
+
+async def positions_des_championnats(
+    identifiants: list[str], profil: str
+) -> dict[str, PositionMembre]:
+    """Les positions de l'appelant dans plusieurs championnats, en parallèle.
+
+    Un classement ne se lit **que** championnat par championnat : la fonction SQL
+    est paramétrée par un championnat, et les points ne sont de toute façon pas
+    cloisonnés (règle de l'étape 5) — c'est le championnat qui dit qui classer.
+    Les appels partent donc ensemble plutôt qu'à la file : mis bout à bout, ils
+    ajouteraient autant d'allers-retours Supabase que de championnats sur la
+    route la plus chargée de l'application.
+
+    **L'échec d'un classement n'emporte ni les autres ni la liste.** C'est le
+    même arbitrage que pour le prochain Grand Prix depuis l'étape 10 : une carte
+    sans rang reste une carte utile, une liste vide serait un cul-de-sac. Les
+    pannes partent dans les logs Railway avec leur cause.
+    """
+    vises = identifiants[:LIMITE_CLASSEMENTS]
+    if not vises:
+        return {}
+
+    resultats = await asyncio.gather(
+        *(position_dans(identifiant, profil) for identifiant in vises),
+        return_exceptions=True,
+    )
+
+    positions: dict[str, PositionMembre] = {}
+    for identifiant, resultat in zip(vises, resultats):
+        if isinstance(resultat, BaseException):
+            journal.logger.warning(
+                "[%s] Classement indisponible pour %s — %s",
+                DOMAINE,
+                identifiant,
+                journal.technique(resultat),
+            )
+        elif resultat is not None:
+            positions[identifiant] = resultat
+
+    return positions
 
 
 async def prochain_grand_prix() -> ProchainGp | None:
@@ -342,12 +455,17 @@ async def mes_championnats(
         )
         prochain = None
 
+    positions = await positions_des_championnats(
+        [str(ligne["id"]) for ligne in lignes], utilisateur
+    )
+
     return [
         en_championnat(
             ligne,
             utilisateur,
             nombre_membres=ligne["nombre_membres"],
             prochain_gp=prochain,
+            position=positions.get(str(ligne["id"])),
         )
         for ligne in lignes
     ]

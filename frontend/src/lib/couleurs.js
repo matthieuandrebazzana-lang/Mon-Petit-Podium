@@ -87,6 +87,27 @@ export function tonalites(hex) {
     /* Le fantôme de profondeur des cartes de championnat : 40 % comme demandé,
        mais dans l'encre de l'aplat, sinon il disparaît sur l'amber. */
     fantome: claire ? "text-white/40" : "text-texte/40",
+    /* Même effet de retrait, mais pour un chiffre qui **porte une
+       information** — le rang du membre sur sa carte de championnat.
+
+       **80 % est un plancher mesuré, pas un goût**, et c'est la valeur à ne pas
+       baisser. La demande décrivait ce chiffre « semi-transparent à 30 % » : à
+       30 %, le blanc sur le bordeaux `#800111` tombe à 1,6:1 de contraste, et le
+       rang devient un ornement illisible.
+
+       L'aplat qui contraint est le **terracotta `#C4622D`**, le plus clair des
+       cinq à encre blanche : l'encre pleine n'y vaut déjà que 4,1:1, et 80 % la
+       ramènent à 3,20:1 — juste au-dessus du plancher AA des grands textes. À
+       75 % elle tombe à 2,99:1, sous le seuil. Les cinq autres aplats sont plus
+       confortables (3,77:1 sur le vert sauge, jusqu'à 7,20:1 sur le bordeaux).
+       C'est donc bien 80 %, et non un chiffre rond choisi à l'œil. */
+    fantomeLisible: claire ? "text-white/80" : "text-texte/80",
+    /* Les deux couches de la jauge de progression : la piste, et ce qui la
+       remplit. Elles vivent ici plutôt que dans l'écran, pour la même raison
+       que les encres — un aplat amber recevrait sinon une jauge blanche
+       invisible, parce qu'un écran l'a écrite de mémoire. */
+    jaugePiste: claire ? "bg-white/30" : "bg-black/15",
+    jaugePleine: claire ? "bg-white" : "bg-texte",
   };
 }
 

@@ -231,6 +231,46 @@ export async function chargerDernierGpCouru(signal) {
   }
 }
 
+/**
+ * Combien de Grands Prix restent à courir cette saison.
+ *
+ * Sert le bandeau de bas d'écran de l'accueil et de l'onglet Championnats : il
+ * habille le blanc laissé sous une liste courte, sans rien inventer — c'est un
+ * décompte, pas une phrase d'ambiance.
+ *
+ * **Lu directement dans Supabase, et sans jeton.** `grands_prix` est en lecture
+ * publique depuis l'étape 4 : ce décompte n'apprend rien à personne que le
+ * calendrier de la Formule 1 ne dise déjà. C'est aussi ce qui permet de ne pas
+ * réveiller Railway pour trois mots en bas de page.
+ *
+ * `head: true` ne rapatrie **aucune ligne** — seul l'en-tête de comptage
+ * revient. Le filtre est exactement celui du prochain GP de l'accueil : les
+ * statuts non courus, et les départs pas encore passés. **Un Grand Prix dont
+ * Unibet n'a pas annoncé l'horaire est compté quand même** : il reste un Grand
+ * Prix à jouer, et l'écarter le ferait disparaître du décompte jusqu'au samedi
+ * des qualifications. C'est le même arbitrage qu'au calendrier de l'étape 9.
+ */
+export async function chargerGrandsPrixRestants(signal) {
+  if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
+
+  try {
+    const maintenant = new Date().toISOString();
+    const requete = supabase
+      .from("grands_prix")
+      .select("id", { count: "exact", head: true })
+      .in("statut", ["a_venir", "cotes_figees"])
+      .or(`date_course.is.null,date_course.gte.${maintenant}`);
+
+    const { count, error } = await (signal ? requete.abortSignal(signal) : requete);
+    if (error) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
+
+    return { ok: true, message: null, donnees: count ?? 0 };
+  } catch (erreur) {
+    if (erreur.name === "AbortError") throw erreur;
+    return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
+  }
+}
+
 export async function chargerAccueilGp(profilId, signal) {
   const prochain = await chargerProchainGp(signal);
   if (!prochain.ok) return prochain;

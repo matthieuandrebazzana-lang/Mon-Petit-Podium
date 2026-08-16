@@ -144,6 +144,40 @@
     0 2px 6px rgb(84 57 37 / 0.1), 0 14px 34px rgb(84 57 37 / 0.16);
 }
 
+/* ---------------------------------------------------------------
+   Grain du fond.
+
+   Le beige `#F5F0EB` posé en aplat uni lit comme un vide : rien n'y accroche
+   la lumière, et les blocs paraissent découpés dedans plutôt que posés dessus.
+   Ce grain lui donne la matière d'un papier légèrement texturé.
+
+   **Aucune couleur nouvelle n'entre par cette porte** : c'est du bruit gris à
+   4 % d'opacité, cuit dans l'image. La couleur de fond reste exactement celle
+   de la section 5.
+
+   Trois points de mise en œuvre à ne pas défaire :
+
+   1. **C'est une image de fond, pas un filtre vivant ni un calque fixe.** Le
+      motif est rastérisé une fois puis répété en tuile ; le navigateur le met
+      en cache et le défilement ne coûte rien. Un `filter` SVG appliqué à un
+      conteneur qui défile, ou un `background-attachment: fixed` — que Safari
+      iOS gère mal — repeindraient à chaque image.
+   2. **`stitchTiles="stitch"`** : sans lui, `feTurbulence` recommence sa
+      séquence à chaque tuile et la répétition se voit en damier de 160px.
+   3. **Le contraste du bruit est étiré dans le filtre** (`feComponentTransfer`,
+      pente 1,8) avant d'être ramené à 4 %. `fractalNoise` sort une valeur très
+      resserrée autour du gris moyen : sans cet étirement, 4 % ne donnent
+      littéralement rien à voir, et il aurait fallu monter l'opacité — donc
+      assombrir le fond — pour obtenir la même texture.
+
+   Le grain vit sur `body`, donc sur **tous les écrans à la fois**, sans qu'aucun
+   n'ait à le savoir. La vue piste, qui peint son propre asphalte par-dessus,
+   n'est pas concernée. */
+@theme {
+  --grain-fond: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNjAiIGhlaWdodD0iMTYwIj48ZmlsdGVyIGlkPSJnIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iMC44IiBudW1PY3RhdmVzPSI0IiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjxmZUNvbXBvbmVudFRyYW5zZmVyPjxmZUZ1bmNSIHR5cGU9ImxpbmVhciIgc2xvcGU9IjEuOCIgaW50ZXJjZXB0PSItMC40Ii8+PGZlRnVuY0cgdHlwZT0ibGluZWFyIiBzbG9wZT0iMS44IiBpbnRlcmNlcHQ9Ii0wLjQiLz48ZmVGdW5jQiB0eXBlPSJsaW5lYXIiIHNsb3BlPSIxLjgiIGludGVyY2VwdD0iLTAuNCIvPjwvZmVDb21wb25lbnRUcmFuc2Zlcj48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTYwIiBoZWlnaHQ9IjE2MCIgZmlsdGVyPSJ1cmwoI2cpIiBvcGFjaXR5PSIwLjA0Ii8+PC9zdmc+");
+  --grain-tuile: 160px;
+}
+
 @layer base {
   html {
     background-color: var(--color-fond);
@@ -153,6 +187,9 @@
 
   body {
     background-color: var(--color-fond);
+    background-image: var(--grain-fond);
+    background-repeat: repeat;
+    background-size: var(--grain-tuile) var(--grain-tuile);
     color: var(--color-texte);
     font-family: var(--font-sans);
     font-size: var(--text-corps);
@@ -180,6 +217,15 @@
   svg,
   img {
     -webkit-touch-callout: none;
+  }
+}
+
+/* Sous contraste renforcé, le fond redevient un aplat pur : un grain, même à
+   4 %, retire un peu de contraste effectif au texte posé dessus, et c'est
+   exactement ce que ce réglage demande d'éviter (/apple-design §14). */
+@media (prefers-contrast: more) {
+  body {
+    background-image: none;
   }
 }
 
@@ -341,6 +387,42 @@
     rgb(255 255 255 / 0.06) 45%,
     transparent 70%
   );
+}
+
+/* — Jauge de progression d'une carte de championnat —
+   Où en est le membre par rapport au leader de son championnat.
+
+   **Aucun jeton nouveau** : la barre se remplit sur la durée et la courbe de
+   *texts reveal* (transitions-dev 18), celles-là mêmes qui font entrer le bloc
+   qui la porte. La carte et sa jauge arrivent donc comme un seul geste, au lieu
+   de deux mouvements de rythmes différents sur la même surface.
+
+   Deux points de mise en œuvre :
+   - c'est un `transform: scaleX`, jamais une `width` : seules les propriétés
+     composables s'animent (/apple-design §11), et animer la largeur relancerait
+     une passe de mise en page à chaque image ;
+   - la valeur de repos vit sur la règle de base, l'animation ne fait que la
+     rejoindre depuis zéro. Sous `prefers-reduced-motion`, couper l'animation
+     laisse donc la jauge à sa bonne longueur — l'information reste, seul le
+     mouvement disparaît. */
+.t-jauge {
+  transform: scaleX(var(--jauge, 0));
+  transform-origin: left center;
+  animation: t-jauge-remplir var(--stagger-dur) var(--stagger-ease) both;
+  will-change: transform;
+}
+@keyframes t-jauge-remplir {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(var(--jauge, 0));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-jauge {
+    animation: none !important;
+  }
 }
 
 /* Repli des deux réglages d'accessibilité, comme pour les autres matériaux. */

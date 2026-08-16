@@ -5,8 +5,8 @@ import BlocErreur from "../composants/BlocErreur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import TraceCircuit, { traceDuGrandPrix } from "../composants/TraceCircuit.jsx";
 import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
-import { IconeChevronDroit, IconePlus } from "../composants/Icones.jsx";
-import { Action } from "./Accueil.jsx";
+import { IconeChevronDroit } from "../composants/Icones.jsx";
+import { ActionsChampionnat } from "./Accueil.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { listerMesChampionnats } from "../lib/championnats.js";
 import { useDonnees } from "../lib/useDonnees.js";
@@ -183,17 +183,8 @@ export default function CalendrierGlobal() {
             un écran de consultation n'a pas à porter les mêmes boutons qu'un
             écran de gestion. */}
         {!chargement && championnats.length === 0 && (
-          <Bloc rang={3} className="grid grid-cols-2 gap-2.5">
-            <Action
-              vers="/championnats/creer"
-              variante="principal"
-              icone={<IconePlus className="size-4" />}
-            >
-              Créer
-            </Action>
-            <Action vers="/championnats/rejoindre" variante="secondaire">
-              Rejoindre
-            </Action>
+          <Bloc rang={3}>
+            <ActionsChampionnat />
           </Bloc>
         )}
       </div>
