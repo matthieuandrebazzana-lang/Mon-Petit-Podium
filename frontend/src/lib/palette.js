@@ -67,8 +67,15 @@ export function couleursDuMembre(ligne) {
   };
 }
 
-/** Luminance relative (WCAG) d'une couleur `#rrggbb`. */
-function luminance(hex) {
+/**
+ * Luminance relative (WCAG) d'une couleur `#rrggbb`.
+ *
+ * Exportée depuis la refonte visuelle : `lib/couleurs.js` en a besoin pour
+ * choisir l'encre d'un aplat de bloc. Une seconde implémentation du même calcul
+ * finirait par diverger de celle-ci, et deux textes de la même app ne seraient
+ * plus jugés lisibles selon la même règle.
+ */
+export function luminance(hex) {
   const canal = (paire) => {
     const valeur = parseInt(paire, 16) / 255;
     return valeur <= 0.03928

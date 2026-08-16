@@ -4,11 +4,13 @@ import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
-import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
+import { Pave } from "../composants/Squelette.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
-import { IconeChevronDroit, IconeMembres, IconePlus } from "../composants/Icones.jsx";
+import TraceCircuit, { traceDuGrandPrix } from "../composants/TraceCircuit.jsx";
+import { IconeMembres, IconePlus } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { listerMesChampionnats } from "../lib/championnats.js";
+import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
 import { chargerAccueilGp, cleAccueilGp } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import { formaterDepart } from "../lib/format.js";
@@ -99,88 +101,127 @@ export function BlocProchainGp({ profilId }) {
       : "Pronostiquer";
 
   return (
-    <div className="rounded-bloc bg-primaire p-5">
-      <div className="mb-2.5 flex items-center justify-between gap-3">
-        <span className="text-label-sm rounded-full bg-white/20 px-2.5 py-1 text-white uppercase">
-          {couru ? "Dernier GP" : "Prochain GP"}
-        </span>
-        <span className="shrink-0 text-[11px] text-white/60">{depart.courte}</span>
+    <div className="rounded-bloc bg-primaire relative overflow-hidden p-5">
+      {/* Le tracé du circuit, posé en filigrane à droite. Il reprend le
+          composant du calendrier (étape 9) : le Grand Prix qui a un vrai tracé
+          montre le sien, les autres le tracé générique. À 8 % de blanc, il
+          donne de la matière à l'aplat sans jamais concurrencer le texte — et
+          l'aplat rouge reste seul en cas de repli, exactement comme demandé.
+          `overflow-hidden` sur le bloc le laisse déborder par la droite plutôt
+          que de le contraindre à tenir en entier, ce qui l'écraserait. */}
+      <TraceCircuit
+        trace={traceDuGrandPrix(gp.nom)}
+        className="pointer-events-none absolute top-1/2 -right-8 h-[150%] w-[60%] -translate-y-1/2 text-white/8"
+      />
+
+      <div className="relative">
+        <div className="mb-2.5 flex items-center justify-between gap-3">
+          <span className="text-label-sm rounded-full bg-white/20 px-2.5 py-1 text-white uppercase">
+            {couru ? "Dernier GP" : "Prochain GP"}
+          </span>
+          <span className="shrink-0 text-[11px] text-white/60">{depart.courte}</span>
+        </div>
+
+        <p className="truncate text-[22px] font-medium text-white">{gp.nom}</p>
+        <p className="mb-4 text-[12px] text-white/60">
+          {couru
+            ? "Course terminée · Points attribués"
+            : etat.ferme
+              ? "Pronostics fermés"
+              : etat.texte
+                ? `Pronos ouverts · Fermeture dans ${etat.texte}`
+                : "Pronos ouverts"}
+        </p>
+
+        <Link
+          to={destination}
+          className="rounded-champ bg-surface text-primaire pressable min-h-tactile flex items-center justify-center px-4 text-center text-[14px] font-medium"
+        >
+          {/* Le cache peut avoir servi l'état d'avant la dernière validation : le
+              libellé change alors sous les yeux du joueur, une fois la lecture
+              fraîche revenue. TexteEchange (transitions-dev 04) le remplace en
+              place plutôt que de le laisser clignoter. */}
+          <TexteEchange valeur={libelle} />
+        </Link>
       </div>
-
-      <p className="truncate text-[22px] font-medium text-white">{gp.nom}</p>
-      <p className="mb-4 text-[12px] text-white/60">
-        {couru
-          ? "Course terminée · Points attribués"
-          : etat.ferme
-            ? "Pronostics fermés"
-            : etat.texte
-              ? `Pronos ouverts · Fermeture dans ${etat.texte}`
-              : "Pronos ouverts"}
-      </p>
-
-      <Link
-        to={destination}
-        className="rounded-champ bg-surface text-primaire pressable min-h-tactile flex items-center justify-center px-4 text-center text-[14px] font-medium"
-      >
-        {/* Le cache peut avoir servi l'état d'avant la dernière validation : le
-            libellé change alors sous les yeux du joueur, une fois la lecture
-            fraîche revenue. TexteEchange (transitions-dev 04) le remplace en
-            place plutôt que de le laisser clignoter. */}
-        <TexteEchange valeur={libelle} />
-      </Link>
     </div>
   );
 }
 
-/** Carte de championnat de la maquette 04.
+/** Carte de championnat de la maquette 04, refondue en aplat de couleur.
  *
  * Exportée depuis l'étape 10 : l'écran de l'onglet Championnats sert la même
  * liste, et deux cartes dessinées séparément auraient divergé au premier
  * ajustement. C'est aussi ce qui fait qu'un championnat se reconnaît d'un écran
- * à l'autre. */
+ * à l'autre — d'autant plus depuis qu'il porte une couleur.
+ *
+ * La couleur vient de `couleurChampionnat` et **jamais du rang** : elle doit
+ * rester la même quand le championnat change de place dans la liste, sans quoi
+ * deux voisins échangeraient leurs couleurs à la première adhésion. C'est la
+ * règle déjà tenue par les livrées de voiture depuis l'étape 7.
+ *
+ * Le chevron de la maquette disparaît : la carte entière est devenue un aplat
+ * de couleur, elle se lit comme une surface tactile sans qu'un signe le dise,
+ * et le coin droit est désormais occupé par le numéro.
+ */
 export function CarteChampionnat({ championnat, rang }) {
+  const couleur = couleurChampionnat(championnat);
+  const ton = tonalites(couleur.hex);
+  const numero = rang + 1;
+
   return (
     <Link
       to={`/championnats/${championnat.id}`}
-      className="rounded-carte bg-surface pressable min-h-tactile flex items-center gap-3.5 p-4"
+      className={`rounded-carte pressable min-h-tactile flex items-center gap-3.5 overflow-hidden p-4 ${couleur.fond}`}
     >
       <span
         aria-hidden="true"
-        className={`flex size-[46px] shrink-0 items-center justify-center rounded-champ text-white ${
-          rang % 2 === 0 ? "bg-primaire" : "bg-accent"
-        }`}
+        className={`rounded-champ flex size-[46px] shrink-0 items-center justify-center ${ton.surface} ${ton.texte}`}
       >
         <IconeMembres className="size-[22px]" />
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="text-corps text-texte block truncate font-medium">
+        <span className={`text-corps block truncate font-medium ${ton.texte}`}>
           {championnat.nom}
         </span>
-        <span className="text-texte-doux mt-0.5 block text-[12px]">
+        <span className={`mt-0.5 block text-[12px] ${ton.texteDoux}`}>
           {championnat.nombre_membres}{" "}
           {championnat.nombre_membres > 1 ? "membres" : "membre"} · Code{" "}
           {championnat.code_invitation}
         </span>
       </span>
 
-      <IconeChevronDroit className="text-texte-doux size-4 shrink-0" />
+      {/* Effet de profondeur : le même chiffre deux fois, le grand en retrait
+          derrière le petit. Le fantôme est `aria-hidden` — un lecteur d'écran
+          n'a pas à entendre le numéro en double. */}
+      <span className="relative flex size-12 shrink-0 items-center justify-center">
+        <span
+          aria-hidden="true"
+          className={`absolute text-[52px] leading-none font-medium ${ton.fantome}`}
+        >
+          {numero}
+        </span>
+        <span className={`relative text-[17px] font-medium ${ton.texte}`}>
+          {numero}
+        </span>
+      </span>
     </Link>
   );
 }
 
-/** Silhouette des cartes pendant le réveil du backend. */
+/** Silhouette des cartes pendant le réveil du backend.
+ *
+ * Depuis la refonte, la carte réelle est un aplat plein : sa silhouette est donc
+ * un aplat plein elle aussi, à la hauteur exacte de la carte (16 + 46 + 16), et
+ * non une carte blanche avec des barres dedans. La couleur, elle, ne peut pas
+ * être devinée — on ne sait pas encore quels championnats vont arriver — et le
+ * gris des squelettes reste la seule réponse honnête. */
 export function SqueletteChampionnats() {
   return (
     <div className="flex flex-col gap-2.5">
       {[0, 1].map((rang) => (
-        <Carte key={rang} className="flex items-center gap-3.5">
-          <Pave className="size-[46px] shrink-0" />
-          <div className="flex-1">
-            <Barre largeur="w-1/2" />
-            <Barre largeur="w-3/4" hauteur="h-2.5" className="mt-2" />
-          </div>
-        </Carte>
+        <Pave key={rang} className="h-[78px]" arrondi="rounded-carte" />
       ))}
     </div>
   );

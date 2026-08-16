@@ -6,7 +6,7 @@ import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
-import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
+import { Pave } from "../composants/Squelette.jsx";
 import Compteur from "../composants/Compteur.jsx";
 import {
   IconeChevronAccordeon,
@@ -14,6 +14,7 @@ import {
   IconeHorloge,
 } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
+import { couleurBloc, tonalites } from "../lib/couleurs.js";
 import {
   BONUS_MAXIMUM,
   MARCHE_PODIUM,
@@ -29,11 +30,21 @@ import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 import { formaterDepart, formaterPoints } from "../lib/format.js";
 import { useFermeture } from "../lib/useFermeture.js";
 
+// Les trois aplats de l'écran, et leurs encres, calculés une fois pour toutes :
+// ils ne dépendent d'aucune donnée. Les recalculer à chaque rendu ne coûterait
+// pas cher, mais les écrire ici dit clairement qu'ils sont fixes.
+const COULEUR_VAINQUEUR = couleurBloc("rouge");
+const COULEUR_PODIUM = couleurBloc("bleu-ardoise");
+const COULEUR_BONUS = couleurBloc("amber");
+const tonVainqueur = tonalites(COULEUR_VAINQUEUR.hex);
+const tonPodium = tonalites(COULEUR_PODIUM.hex);
+const tonBonus = tonalites(COULEUR_BONUS.hex);
+
 function SqueletteSaisie() {
   return (
     <div className="flex flex-col gap-3">
-      {/* Le bloc de fermeture garde son aplat rouge : c'est la surface, pas le
-          contenu, et la voir virer au gris puis revenir ferait clignoter
+      {/* Les blocs gardent leurs aplats de couleur : c'est la surface, pas le
+          contenu, et les voir virer au gris puis revenir ferait clignoter
           l'écran au lieu de le remplir. */}
       <div className="rounded-carte bg-primaire flex items-center justify-between gap-3 px-4.5 py-3.5">
         <div className="flex-1">
@@ -42,12 +53,17 @@ function SqueletteSaisie() {
         </div>
         <div className="rounded-champ size-8 bg-white/15" />
       </div>
-      {[0, 1].map((rang) => (
-        <Carte key={rang} className="flex flex-col gap-2.5">
-          <Barre largeur="w-24" hauteur="h-3" />
-          <Pave className="h-[46px]" />
-        </Carte>
-      ))}
+
+      <div className="rounded-carte bg-primaire p-4">
+        <div className="h-3 w-24 rounded-full bg-white/25" />
+        <div className="rounded-champ mt-3 h-[50px] bg-white/15" />
+      </div>
+      <div className="rounded-carte bg-bleu-ardoise p-4">
+        <div className="h-3 w-20 rounded-full bg-white/25" />
+        <div className="rounded-champ mt-3 h-[50px] bg-white/15" />
+        <div className="rounded-champ mt-2 h-[50px] bg-white/15" />
+      </div>
+      <Pave className="h-[62px]" arrondi="rounded-carte" />
     </div>
   );
 }
@@ -88,22 +104,44 @@ function Emplacement({
   onChoisir,
   ouvert,
   onBasculer,
-  placeholder,
+  etiquette,
+  ton,
+  couleur,
   verrouille,
 }) {
+  // Le choix, ou son absence, dit toujours la même chose au même endroit : une
+  // étiquette de place à gauche (elle seule distingue les deux pilotes du
+  // podium), la valeur au centre, les points à droite.
+  const valeur = (
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      {etiquette && (
+        <span
+          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${ton.surfaceForte} ${ton.texte}`}
+        >
+          {etiquette}
+        </span>
+      )}
+      <span
+        className={`min-w-0 flex-1 truncate text-[15px] ${
+          choisi ? `font-medium ${ton.texte}` : ton.texteDoux
+        }`}
+      >
+        {choisi ? choisi.pilote : "Non sélectionné"}
+      </span>
+    </span>
+  );
+
   if (verrouille) {
-    return choisi ? (
-      <div className="rounded-champ bg-primaire flex items-center justify-between gap-3 px-4 py-3.5">
-        <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-white">
-          {choisi.pilote}
-        </span>
-        <span className="shrink-0 text-[13px] text-white/70">
-          {formaterPoints(choisi.points)}
-        </span>
-      </div>
-    ) : (
-      <div className="rounded-champ bg-fond px-4 py-3.5">
-        <span className="text-texte-doux text-[14px]">Aucun pronostic</span>
+    return (
+      <div
+        className={`rounded-champ flex items-center justify-between gap-3 px-4 py-3.5 ${ton.surface}`}
+      >
+        {valeur}
+        {choisi && (
+          <span className={`shrink-0 text-[13px] ${ton.texteDoux}`}>
+            {formaterPoints(choisi.points)}
+          </span>
+        )}
       </div>
     );
   }
@@ -115,24 +153,18 @@ function Emplacement({
         onClick={onBasculer}
         aria-expanded={ouvert}
         className={`rounded-champ pressable min-h-tactile flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left ${
-          choisi ? "bg-primaire" : "bg-fond"
+          choisi ? ton.surfaceForte : ton.surface
         }`}
       >
-        <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
-          <span className={choisi ? "text-white" : "text-texte-doux font-normal text-[14px]"}>
-            {choisi ? choisi.pilote : placeholder}
-          </span>
-        </span>
+        {valeur}
         <span className="flex shrink-0 items-center gap-2.5">
           {choisi && (
-            <span className="text-[13px] text-white/70">
+            <span className={`text-[13px] ${ton.texteDoux}`}>
               {formaterPoints(choisi.points)}
             </span>
           )}
           <span className="t-acc-chevron">
-            <IconeChevronAccordeon
-              className={`size-4 ${choisi ? "text-white/70" : "text-texte-doux"}`}
-            />
+            <IconeChevronAccordeon className={`size-4 ${ton.texteDoux}`} />
           </span>
         </span>
       </button>
@@ -144,12 +176,16 @@ function Emplacement({
               const actif = choisi?.id === option.id;
               return (
                 <li key={option.id}>
+                  {/* Le pilote retenu passe en négatif — surface pleine, texte
+                      à la couleur du bloc. C'est le seul contraste franc
+                      disponible à l'intérieur d'un aplat déjà coloré. */}
                   <button
                     type="button"
                     onClick={() => onChoisir(option)}
                     aria-pressed={actif}
+                    style={actif ? { color: couleur.hex } : undefined}
                     className={`rounded-champ pressable min-h-tactile flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left ${
-                      actif ? "bg-primaire text-white" : "bg-fond text-texte"
+                      actif ? "bg-surface" : `${ton.surface} ${ton.texte}`
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate text-[14px] font-medium">
@@ -157,7 +193,7 @@ function Emplacement({
                     </span>
                     <span
                       className={`shrink-0 text-[12px] font-medium ${
-                        actif ? "text-white/70" : "text-secondaire"
+                        actif ? "" : ton.texteDoux
                       }`}
                     >
                       {formaterPoints(option.points)}
@@ -173,15 +209,24 @@ function Emplacement({
   );
 }
 
-/** Carte blanche d'un marché obligatoire : titre, étiquette, emplacements. */
-function BlocObligatoire({ titre, children }) {
+/**
+ * Bloc d'un marché obligatoire, désormais en aplat de couleur : rouge pour le
+ * vainqueur, bleu ardoise pour le podium. Les deux pronostics que la règle 4.2
+ * impose se distinguent ainsi au premier coup d'œil des bonus facultatifs, qui
+ * sont ambre et plus petits.
+ */
+function BlocObligatoire({ titre, couleur, ton, children }) {
   return (
-    <div className="rounded-carte bg-surface flex flex-col gap-2.5 p-4">
+    <div className={`rounded-carte flex flex-col gap-2.5 p-4 ${couleur.fond}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-primaire text-[12px] font-medium tracking-[0.5px] uppercase">
+        <p
+          className={`min-w-0 truncate text-[12px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
+        >
           {titre}
         </p>
-        <span className="text-accent bg-accent/15 rounded-lg px-2 py-0.5 text-[10px] font-medium">
+        <span
+          className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-medium ${ton.surfaceForte} ${ton.texte}`}
+        >
           Obligatoire
         </span>
       </div>
@@ -388,7 +433,11 @@ export default function Pronostics() {
                       Obligatoires
                     </p>
 
-                    <BlocObligatoire titre={marcheVainqueur.libelle}>
+                    <BlocObligatoire
+                      titre={marcheVainqueur.libelle}
+                      couleur={COULEUR_VAINQUEUR}
+                      ton={tonVainqueur}
+                    >
                       <Emplacement
                         choisi={cote(vainqueur)}
                         options={marcheVainqueur.cotes}
@@ -397,12 +446,17 @@ export default function Pronostics() {
                         onBasculer={() =>
                           setOuvert(ouvert === "vainqueur" ? null : "vainqueur")
                         }
-                        placeholder="Choisis le vainqueur..."
+                        couleur={COULEUR_VAINQUEUR}
+                        ton={tonVainqueur}
                         verrouille={etat.ferme}
                       />
                     </BlocObligatoire>
 
-                    <BlocObligatoire titre={marchePodium.libelle}>
+                    <BlocObligatoire
+                      titre={marchePodium.libelle}
+                      couleur={COULEUR_PODIUM}
+                      ton={tonPodium}
+                    >
                       {[0, 1].map((place) => (
                         <Emplacement
                           key={place}
@@ -415,11 +469,9 @@ export default function Pronostics() {
                               ouvert === `podium-${place}` ? null : `podium-${place}`,
                             )
                           }
-                          placeholder={
-                            place === 0
-                              ? "1er pilote sur le podium..."
-                              : "2e pilote sur le podium..."
-                          }
+                          etiquette={place === 0 ? "1er" : "2e"}
+                          couleur={COULEUR_PODIUM}
+                          ton={tonPodium}
                           verrouille={etat.ferme}
                         />
                       ))}
@@ -449,7 +501,15 @@ export default function Pronostics() {
                         </p>
                       </div>
                     ) : (
-                      <div className="rounded-carte bg-surface flex flex-col gap-2 p-4">
+                      // Chaque bonus est son propre bloc, ambre une fois retenu
+                      // et blanc tant qu'il ne l'est pas. La demande décrit les
+                      // « 3 bonus dans des blocs amber » : c'est donc la
+                      // sélection que l'ambre désigne, sinon une liste de vingt
+                      // favoris serait un mur ambre où plus rien ne se
+                      // distingue. L'encre reste `#1A1A1A` sur l'ambre, comme
+                      // demandé, et pour la raison que la demande donne
+                      // elle-même : le blanc y tombe à 2,2:1 de contraste.
+                      <div className="flex flex-col gap-2">
                         {favoris.map((favori) => {
                           const actif = bonus.includes(favori.id_outcome_unibet);
                           const sature = !actif && bonus.length >= BONUS_MAXIMUM;
@@ -460,21 +520,21 @@ export default function Pronostics() {
                               onClick={() => basculerBonus(favori.id_outcome_unibet)}
                               disabled={etat.ferme || sature}
                               aria-pressed={actif}
-                              className={`rounded-champ pressable min-h-tactile flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left ${
-                                actif ? "bg-primaire" : "bg-fond"
+                              className={`rounded-carte-sm pressable min-h-tactile flex w-full items-center justify-between gap-3 px-4 py-3 text-left ${
+                                actif ? COULEUR_BONUS.fond : "bg-surface"
                               } ${sature ? "opacity-50" : ""}`}
                             >
                               <span className="min-w-0">
                                 <span
                                   className={`block truncate text-[10px] font-medium tracking-[0.4px] uppercase ${
-                                    actif ? "text-white/60" : "text-texte-doux"
+                                    actif ? tonBonus.texteDoux : "text-texte-doux"
                                   }`}
                                 >
                                   {favori.libelle ?? "Cote retirée"}
                                 </span>
                                 <span
                                   className={`mt-0.5 block truncate text-[14px] font-medium ${
-                                    actif ? "text-white" : "text-texte"
+                                    actif ? tonBonus.texte : "text-texte"
                                   }`}
                                 >
                                   {favori.pilote ?? favori.id_outcome_unibet}
@@ -485,8 +545,8 @@ export default function Pronostics() {
                                 <span
                                   className={`rounded-lg px-2 py-1 text-[12px] font-medium ${
                                     actif
-                                      ? "bg-white/20 text-white"
-                                      : "bg-surface text-secondaire"
+                                      ? `${tonBonus.surfaceForte} ${tonBonus.texte}`
+                                      : "bg-fond text-texte"
                                   }`}
                                 >
                                   {formaterPoints(favori.points)}
@@ -495,12 +555,12 @@ export default function Pronostics() {
                                   aria-hidden="true"
                                   className={`flex size-[22px] items-center justify-center rounded-full ${
                                     actif
-                                      ? "bg-white"
+                                      ? "bg-texte"
                                       : "border-2 border-texte-doux/35"
                                   }`}
                                 >
                                   {actif && (
-                                    <IconeCoche className="text-primaire size-3 [stroke-width:3]" />
+                                    <IconeCoche className="text-accent size-3 [stroke-width:3]" />
                                   )}
                                 </span>
                               </span>
@@ -518,13 +578,19 @@ export default function Pronostics() {
 
         <div className="min-h-3 flex-1" />
 
-        {erreurEnvoi && (
-          <Alerte ton="erreur" tentative={tentative}>
-            {erreurEnvoi}
-          </Alerte>
-        )}
+        {/* La validation est collée en bas : sur un écran qui déroule trois
+            blocs et jusqu'à vingt favoris, un bouton en fin de page obligerait
+            à redescendre à chaque changement d'avis. La barre rend elle-même la
+            zone sûre du home indicator (voir `barre-collee` dans index.css).
+            Le message d'erreur voyage avec elle, sinon il resterait hors de
+            l'écran au moment précis où il compte. */}
+        <div className="barre-collee pleine-largeur flex flex-col gap-2.5 px-4">
+          {erreurEnvoi && (
+            <Alerte ton="erreur" tentative={tentative}>
+              {erreurEnvoi}
+            </Alerte>
+          )}
 
-        <Bloc rang={3}>
           {etat.ferme ? (
             <Bouton
               variante="secondaire"
@@ -545,7 +611,7 @@ export default function Pronostics() {
               Valider mes pronos
             </Bouton>
           )}
-        </Bloc>
+        </div>
       </div>
     </Ecran>
   );

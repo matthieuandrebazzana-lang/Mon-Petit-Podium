@@ -5,12 +5,12 @@ import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
-import Onglets from "../composants/Onglets.jsx";
 import EtoileFavori from "../composants/EtoileFavori.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
-import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
+import { Barre, Pave } from "../composants/Squelette.jsx";
 import { IconeEtoile } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
+import { couleurMarche, tonalites } from "../lib/couleurs.js";
 import { basculerFavori, chargerTableauCotes } from "../lib/pronostics.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 import { formaterDepart, formaterPoints } from "../lib/format.js";
@@ -19,18 +19,80 @@ import { useFermeture } from "../lib/useFermeture.js";
 function SqueletteCotes() {
   return (
     <div className="flex flex-col gap-3">
-      {/* La piste des onglets garde sa surface blanche : elle a la même forme
-          pleine que le contrôle segmenté qui la remplace. */}
-      <div className="bg-surface h-[52px] rounded-full" />
-      <Carte className="flex flex-col gap-4">
-        {[0, 1, 2, 3, 4].map((rang) => (
-          <div key={rang} className="flex items-center justify-between gap-3">
-            <Barre largeur="w-1/3" />
-            <Pave className="h-6 w-20" arrondi="rounded-[10px]" />
+      {[0, 1].map((section) => (
+        <div key={section} className="rounded-carte bg-surface overflow-hidden">
+          {/* L'en-tête garde son aplat de couleur, seul son contenu est grisé :
+              le voir virer au gris puis revenir ferait clignoter l'écran au
+              lieu de le remplir. C'est la règle tenue depuis l'étape 9. */}
+          <div className="bg-primaire px-4 py-3">
+            <div className="h-3 w-28 rounded-full bg-white/25" />
           </div>
-        ))}
-      </Carte>
+          <div className="flex flex-col gap-4 p-4">
+            {[0, 1, 2].map((rang) => (
+              <div key={rang} className="flex items-center justify-between gap-3">
+                <Barre largeur="w-1/3" />
+                <Pave className="h-7 w-24" arrondi="rounded-[10px]" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
+  );
+}
+
+/**
+ * Une section de marché : en-tête coloré, puis ses cotes sur fond blanc.
+ *
+ * Les trois marchés du noyau ont chacun leur couleur nommée (`lib/couleurs.js`),
+ * les marchés que le scraper découvre en prennent une parmi les trois qui
+ * restent. Le libellé affiché est celui d'Unibet, jamais un slug reconstitué :
+ * le bookmaker est la seule source légitime du nom d'un marché (étape 4).
+ */
+function SectionMarche({ marche, rang, epingles, ferme, onBasculer }) {
+  const couleur = couleurMarche(marche.marche, rang);
+  const ton = tonalites(couleur.hex);
+
+  return (
+    <section className="rounded-carte bg-surface overflow-hidden">
+      <header
+        className={`flex items-center justify-between gap-3 px-4 py-3 ${couleur.fond}`}
+      >
+        <h2
+          className={`min-w-0 truncate text-[13px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
+        >
+          {marche.libelle}
+        </h2>
+        <span className={`shrink-0 text-[12px] ${ton.texteDoux}`}>
+          {marche.cotes.length}
+        </span>
+      </header>
+
+      <ul className="px-4 py-1.5">
+        {marche.cotes.map((cote) => (
+          <li
+            key={cote.id}
+            className="flex items-center justify-between gap-3 py-2.5"
+          >
+            <span className="text-texte min-w-0 flex-1 truncate text-[14px] font-medium">
+              {cote.pilote}
+            </span>
+            <span className="flex items-center gap-2.5">
+              <span className="bg-fond text-texte rounded-[10px] px-2.5 py-1.5 text-[14px] font-medium">
+                {formaterPoints(cote.points)}
+              </span>
+              {!ferme && (
+                <EtoileFavori
+                  nom={cote.pilote}
+                  favori={epingles.has(cote.id)}
+                  onClick={() => onBasculer(cote, marche)}
+                />
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -77,15 +139,6 @@ export default function Cotes() {
   const gp = donnees?.gp ?? null;
   const marches = useMemo(() => gp?.marches ?? [], [gp]);
 
-  // Seul le choix explicite du joueur est mémorisé ; le marché affiché s'en
-  // déduit. Le poser dans un effet ferait rendre une première image sans
-  // aucune cote, puis la liste d'un coup — un sursaut à chaque arrivée sur
-  // l'écran, y compris quand le cache a déjà tout ce qu'il faut.
-  //
-  // Le choix est ignoré si le marché a disparu d'un rafraîchissement, et
-  // conservé sinon : remettre le premier onglet sous le doigt du joueur parce
-  // que les cotes se sont rafraîchies lui ferait perdre sa place.
-  const [choixMarche, setChoixMarche] = useState(null);
   const [erreurFavori, setErreurFavori] = useState(null);
   const [tentative, setTentative] = useState(0);
   const [tentativeChargement, setTentativeChargement] = useState(0);
@@ -97,9 +150,6 @@ export default function Cotes() {
 
   const { ferme } = useFermeture(gp?.date_course);
 
-  const affiche =
-    marches.find((marche) => marche.marche === choixMarche) ?? marches[0] ?? null;
-  const marcheActif = affiche?.marche ?? null;
   const favoris = donnees?.favoris ?? [];
   const epingles = useMemo(
     () => new Set(favoris.map((favori) => favori.id_outcome_unibet)),
@@ -204,16 +254,6 @@ export default function Cotes() {
                   </div>
                 ) : (
                   <>
-                    <Onglets
-                      etiquette="Marchés de paris"
-                      options={marches.map((marche) => ({
-                        cle: marche.marche,
-                        libelle: marche.libelle,
-                      }))}
-                      valeur={marcheActif}
-                      onChange={setChoixMarche}
-                    />
-
                     {favoris.length > 0 && (
                       <div className="flex flex-col gap-2">
                         <p className="text-label text-texte-doux px-1 uppercase">
@@ -229,37 +269,20 @@ export default function Cotes() {
                       </Alerte>
                     )}
 
-                    {affiche && (
-                      <div className="rounded-carte bg-surface px-4 py-3.5">
-                        <p className="text-primaire mb-1 text-[12px] font-medium tracking-[0.5px] uppercase">
-                          {affiche.libelle}
-                        </p>
-                        <ul>
-                          {affiche.cotes.map((cote) => (
-                            <li
-                              key={cote.id}
-                              className="flex items-center justify-between gap-3 py-2.5"
-                            >
-                              <span className="text-texte min-w-0 flex-1 truncate text-[14px] font-medium">
-                                {cote.pilote}
-                              </span>
-                              <span className="flex items-center gap-2.5">
-                                <span className="bg-fond text-secondaire rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium">
-                                  {formaterPoints(cote.points)}
-                                </span>
-                                {!ferme && (
-                                  <EtoileFavori
-                                    nom={cote.pilote}
-                                    favori={epingles.has(cote.id)}
-                                    onClick={() => basculer(cote, affiche)}
-                                  />
-                                )}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    {/* Tous les marchés sont empilés, chacun sous son en-tête
+                        coloré, au lieu d'un seul marché derrière des onglets.
+                        Le joueur voit d'un seul défilement tout ce que le
+                        bookmaker propose. */}
+                    {marches.map((marche, rang) => (
+                      <SectionMarche
+                        key={marche.marche}
+                        marche={marche}
+                        rang={rang}
+                        epingles={epingles}
+                        ferme={ferme}
+                        onBasculer={basculer}
+                      />
+                    ))}
                   </>
                 )}
               </div>

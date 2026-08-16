@@ -15,6 +15,19 @@
   --color-texte: #1a1a1a;
   --color-texte-doux: #999999;
   --color-surface: #ffffff;
+
+  /* Palette élargie — refonte visuelle des quatre écrans principaux.
+     Ces quatre teintes ne remplacent rien : elles s'ajoutent aux sept couleurs
+     de la section 5, qui gardent tous leurs rôles. Leur emploi est **borné** :
+     elles ne peignent que des **aplats de bloc** (carte de championnat, en-tête
+     de section de marché, bloc de pronostic) et le texte qui vit dessus. Jamais
+     un fond d'écran, jamais un texte sur le beige, jamais une bordure. C'est le
+     même périmètre que la palette des voitures (`lib/palette.js`, étape 8). */
+  --color-vert-sauge: #4a7c59;
+  --color-bleu-ardoise: #2c4a6e;
+  --color-terracotta: #c4622d;
+  --color-violet: #5c3d7a;
+
   /* Gris des squelettes de chargement (étape 9). Ce n'est pas une couleur
      nouvelle du design system au sens de la section 5 : elle ne peint jamais
      un fond, un bouton ni un texte. C'est le beige `fond` assombri juste ce
@@ -133,6 +146,54 @@
   padding-bottom: calc(var(--spacing-safe-bottom) + --spacing(4));
   padding-left: calc(var(--spacing-safe-left) + --spacing(4));
   padding-right: calc(var(--spacing-safe-right) + --spacing(4));
+}
+
+/* Annule les marges latérales d'`ecran` pour un bloc qui doit toucher les deux
+   bords — l'en-tête coloré d'un championnat. La zone sûre est reprise dans le
+   calcul, sinon le bloc déborderait de l'écran en paysage sur un iPhone à
+   encoche. Le rembourrage intérieur, lui, reste à la charge du bloc : c'est ce
+   qui garde son texte aligné sur le reste de la page. */
+@utility pleine-largeur {
+  margin-left: calc((var(--spacing-safe-left) + --spacing(4)) * -1);
+  margin-right: calc((var(--spacing-safe-right) + --spacing(4)) * -1);
+}
+
+/* Même chose vers le haut : le bloc remonte sous la zone sûre et la rend en
+   rembourrage, pour que la couleur coure jusque derrière la Dynamic Island
+   sans jamais y pousser de texte. */
+@utility coiffe-ecran {
+  margin-top: calc((var(--spacing-safe-top) + --spacing(4)) * -1);
+  padding-top: calc(var(--spacing-safe-top) + --spacing(4));
+}
+
+/* Barre d'action collée en bas (refonte de la maquette 09).
+   Le bouton de validation reste sous le pouce quel que soit le défilement.
+   Trois points, chacun nécessaire :
+   - elle **rend elle-même la zone sûre basse** et annule celle d'`ecran` par une
+     marge négative. Deux rembourrages superposés laisseraient une bande beige
+     morte sous la barre une fois la page défilée à fond ;
+   - le dégradé au-dessus est le « scroll edge effect » d'/apple-design : le
+     contenu se dissipe en passant dessous, au lieu d'être coupé par un trait,
+     que la section 5 proscrit de toute façon ;
+   - aucune animation, donc rien à couvrir sous `prefers-reduced-motion`. */
+@utility barre-collee {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin-bottom: calc((var(--spacing-safe-bottom) + --spacing(4)) * -1);
+  padding-top: --spacing(3);
+  padding-bottom: calc(var(--spacing-safe-bottom) + --spacing(3));
+  background-color: var(--color-fond);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: 100%;
+    height: 24px;
+    pointer-events: none;
+    background-image: linear-gradient(to top, var(--color-fond), transparent);
+  }
 }
 
 /* ---------------------------------------------------------------

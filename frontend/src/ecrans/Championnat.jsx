@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
-import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
-import BasculeVue from "../composants/BasculeVue.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
-import { Barre, Rangee } from "../composants/Squelette.jsx";
+import { Pave } from "../composants/Squelette.jsx";
 import {
   IconeCalendrier,
   IconeChevronDroit,
+  IconeChevronGauche,
   IconeCoche,
   IconeCopie,
   IconeSortie,
+  IconeVoiture,
 } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerChampionnat, quitterChampionnat } from "../lib/championnats.js";
@@ -25,15 +25,63 @@ import {
   saisonCommencee,
 } from "../lib/classement.js";
 import { formaterPoints } from "../lib/format.js";
+import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
 import { couleurLisible } from "../lib/palette.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 
 const DUREE_CONFIRMATION = 2000;
 
-/** Bloc rouge du code d'invitation, repris de la maquette 05. */
-function BlocCode({ code, miseEnAvant }) {
+/**
+ * En-tête coloré du championnat — l'effet hero de la refonte.
+ *
+ * La bande touche les deux bords et court **sous la zone sûre haute**
+ * (`pleine-largeur` + `coiffe-ecran`) : une couleur qui s'arrêterait sous la
+ * Dynamic Island se lirait comme un bandeau posé de travers, pas comme
+ * l'en-tête de l'écran. Le texte, lui, reste rendu dans la zone sûre — la
+ * couleur passe derrière l'encoche, jamais le contenu.
+ *
+ * Le bouton de retour vit dans la bande plutôt qu'au-dessus : il n'y a qu'un
+ * seul en-tête, et deux zones empilées auraient mangé 150px avant le premier
+ * contenu utile.
+ */
+function HeroChampionnat({ couleur, nom, sousTitre }) {
+  const naviguer = useNavigate();
+  const ton = tonalites(couleur.hex);
+
+  return (
+    <div
+      className={`pleine-largeur coiffe-ecran rounded-b-bloc min-h-[120px] px-4 pt-1 pb-5 ${couleur.fond}`}
+    >
+      <button
+        type="button"
+        onClick={() => naviguer("/accueil")}
+        className={`min-h-tactile pressable -mx-2 -my-3 flex max-w-full items-center gap-1.5 px-2 py-3 text-[13px] font-medium ${ton.texte}`}
+      >
+        <IconeChevronGauche className="size-[15px] shrink-0" />
+        <span className="truncate">Accueil</span>
+      </button>
+
+      <h1 className={`text-titre-lg mt-3.5 line-clamp-2 ${ton.texte}`}>{nom}</h1>
+      <p className={`mt-1 text-[13px] ${ton.texteDoux}`}>{sousTitre}</p>
+    </div>
+  );
+}
+
+/**
+ * Bloc du code d'invitation.
+ *
+ * *Écart assumé par rapport à l'état antérieur* : il était un aplat rouge, il
+ * devient une carte blanche dont seul le code prend la couleur du championnat.
+ * Deux aplats de couleur pleine à la suite — l'en-tête puis le code — se
+ * seraient disputé le même écran, et le rouge de la marque sous un en-tête
+ * violet aurait donné deux couleurs concurrentes sur une même page. Une seule
+ * couleur par écran, portée par l'en-tête : c'est aussi ce que demande le
+ * verrou de cohérence du skill Taste.
+ */
+function BlocCode({ code, couleur, miseEnAvant }) {
   const [copie, setCopie] = useState(false);
   const [echec, setEchec] = useState(false);
+  const ton = tonalites(couleur.hex);
 
   useEffect(() => {
     if (!copie) return undefined;
@@ -56,46 +104,56 @@ function BlocCode({ code, miseEnAvant }) {
   }
 
   return (
-    <div className="rounded-bloc bg-primaire p-5">
-      <p className="text-label uppercase text-white/60">Code d'invitation</p>
-      <p className="text-score mt-2 tracking-[6px] text-white">{code}</p>
-      <p className="text-corps-sm mt-1.5 text-white/50">
-        {miseEnAvant
-          ? "Championnat créé. Partage ce code pour inviter tes amis."
-          : "Partage ce code pour inviter tes amis."}
-      </p>
+    <div className="rounded-carte bg-surface flex items-center gap-3 p-4">
+      <div className="min-w-0 flex-1">
+        <p className="text-label text-texte-doux uppercase">Code d'invitation</p>
+        <p
+          className="mt-1 text-[26px] leading-none font-medium tracking-[5px]"
+          style={{ color: couleur.hex }}
+        >
+          {code}
+        </p>
+        {/* Le retour de création reste dit à l'arrivée sur l'écran : sans lui,
+            valider « Créer » débouche sur un écran qui ne confirme rien. */}
+        {miseEnAvant && !echec && (
+          <p className="text-corps-sm text-texte-doux mt-1.5">
+            Championnat créé. Partage ce code pour inviter tes amis.
+          </p>
+        )}
+        {echec && (
+          <p role="alert" className="text-corps-sm text-texte-doux mt-2">
+            Copie impossible sur cet appareil. Note le code : {code}
+          </p>
+        )}
+      </div>
 
       <button
         type="button"
         onClick={copier}
-        className="rounded-champ pressable min-h-tactile mt-3.5 inline-flex items-center gap-2 bg-white/15 px-4 py-2.5 text-[13px] font-medium text-white"
+        className={`rounded-champ pressable min-h-tactile flex shrink-0 items-center gap-2 px-3.5 text-[13px] font-medium ${couleur.fond} ${ton.texte}`}
       >
         {copie ? (
           <IconeCoche className="size-3.5" />
         ) : (
           <IconeCopie className="size-3.5" />
         )}
-        <TexteEchange valeur={copie ? "Code copié" : "Copier le code"} />
+        <TexteEchange valeur={copie ? "Copié" : "Copier"} />
       </button>
-
-      {echec && (
-        <p role="alert" className="text-corps-sm mt-2.5 text-white/70">
-          Copie impossible sur cet appareil. Note le code : {code}
-        </p>
-      )}
     </div>
   );
 }
 
 /**
- * Une ligne du classement — la rangée de la maquette 07, avec ses vraies
- * données. Exportée nommément pour pouvoir être rendue hors navigateur : le
+ * Une ligne du classement — carte blanche à filet coloré, refonte de la
+ * maquette 07. Exportée nommément pour pouvoir être rendue hors navigateur : le
  * composant d'écran dépend de la session, qui ne se résout que dans un effet.
  *
- * Depuis l'étape 8, la rangée **mène au profil du membre** (maquette 12) et la
- * pastille porte la couleur de sa vraie voiture, plus celle d'une livrée
- * attribuée par ordre d'inscription : la même personne se reconnaît du même
- * coup d'œil au classement, sur la piste et sur son profil.
+ * Le filet de 4px porte la couleur de la **voiture du membre**, pas celle du
+ * championnat : c'est la personne qu'on cherche à reconnaître dans une liste, et
+ * c'est la même couleur qu'elle porte sur la vue piste et sur son profil. Ce
+ * n'est pas une bordure au sens de la section 5 — la section proscrit les traits
+ * fins qui cernent un bloc ; celui-ci est un aplat posé à l'intérieur, et il
+ * remplace justement la pastille d'initiale qui tenait ce rôle avant.
  */
 export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
   const podium = ligne.rang <= 3;
@@ -120,29 +178,27 @@ export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
     <li>
       <Link
         to={`/profils/${ligne.profil_id}`}
-        className="pressable min-h-tactile flex items-center gap-3 py-2.5"
+        className="rounded-carte bg-surface pressable min-h-tactile relative flex items-center gap-3 overflow-hidden py-3 pr-4 pl-4"
       >
         <span
-          className={`w-6 shrink-0 text-center text-[16px] font-medium ${
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0 w-1"
+          style={{ backgroundColor: couleurLisible(ligne) }}
+        />
+
+        <span
+          className={`w-7 shrink-0 text-center text-[22px] leading-none font-medium ${
             podium ? "text-primaire" : "text-texte-doux"
           }`}
         >
           {ligne.rang}
         </span>
 
-        <Pastille
-          nom={ligne.pseudo}
-          graine={ligne.profil_id}
-          couleur={couleurLisible(ligne)}
-        />
-
         <div className="min-w-0 flex-1">
           <p className="text-corps-sm text-texte truncate font-medium">
             {ligne.pseudo}
             {estMoi && <span className="text-primaire"> · Toi</span>}
-            {estCreateur && (
-              <span className="text-texte-doux"> · Créateur</span>
-            )}
+            {estCreateur && <span className="text-texte-doux"> · Créateur</span>}
           </p>
           <p className="text-texte-doux mt-0.5 truncate text-[12px]">{detail}</p>
         </div>
@@ -153,8 +209,6 @@ export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
           </p>
           <p className="text-label-sm text-texte-doux mt-1 uppercase">pts</p>
         </div>
-
-        <IconeChevronDroit className="text-texte-doux size-3.5 shrink-0" />
       </Link>
     </li>
   );
@@ -163,27 +217,17 @@ export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
 function SqueletteChampionnat() {
   return (
     <div className="flex flex-col gap-3">
-      {/* Le bloc du code garde son aplat rouge : c'est la surface, pas le
-          contenu. La voir changer de couleur à la révélation ferait clignoter
-          l'écran, alors qu'il ne fait que se remplir. */}
-      <div className="rounded-bloc bg-primaire p-5">
-        <div className="h-2.5 w-28 rounded-full bg-white/25" />
-        <div className="rounded-champ mt-3 h-8 w-40 bg-white/25" />
-        <div className="mt-2.5 h-2.5 w-48 rounded-full bg-white/20" />
-        <div className="rounded-champ mt-3.5 h-10 w-36 bg-white/15" />
-      </div>
-
-      <div className="rounded-bloc bg-surface p-4">
-        <Barre largeur="w-20" hauteur="h-2.5" className="mb-1 ml-1" />
+      <Pave className="h-[86px]" arrondi="rounded-carte" />
+      <div className="flex flex-col gap-2">
         {[0, 1, 2].map((rang) => (
-          <Rangee key={rang} />
+          <Pave key={rang} className="h-[70px]" arrondi="rounded-carte" />
         ))}
       </div>
     </div>
   );
 }
 
-/** Maquette 07 — vue d'un championnat : code d'invitation et membres. */
+/** Maquette 07 — vue d'un championnat : en-tête coloré, code, classement. */
 export default function Championnat() {
   const { id } = useParams();
   const naviguer = useNavigate();
@@ -245,15 +289,24 @@ export default function Championnat() {
     naviguer("/accueil", { replace: true });
   }
 
+  // La couleur est calculée sur ce qu'on sait déjà : l'identifiant de l'URL
+  // suffit, elle ne dépend donc pas du chargement. L'en-tête est peint dès la
+  // première image, et ne change pas de teinte quand les données arrivent.
+  const couleur = couleurChampionnat({ id, ...(donnees ?? {}) });
+
   // Sortie de secours : sans championnat lisible, il n'y a rien à afficher, et
   // l'écran ne doit surtout pas être un cul-de-sac.
   if (echec && !donnees) {
     return (
       <Ecran direction="avant">
         <Bloc rang={1}>
-          <EnTete titre="Championnat" retourVers="/accueil" />
+          <HeroChampionnat
+            couleur={couleur}
+            nom="Championnat"
+            sousTitre="Saison 2026"
+          />
         </Bloc>
-        <Bloc rang={2}>
+        <Bloc rang={2} className="mt-3">
           <BlocErreur
             echec={echec}
             onReessayer={reessayer}
@@ -274,40 +327,33 @@ export default function Championnat() {
   return (
     <Ecran direction="avant">
       <Bloc rang={1}>
-        <EnTete titre={donnees?.nom ?? "Championnat"} retourVers="/accueil" />
-        <p className="text-corps-sm text-texte-doux -mt-1">
-          {chargement && !donnees
-            ? "Chargement…"
-            : `${effectif} ${effectif > 1 ? "membres" : "membre"} · Saison 2026`}
-        </p>
-      </Bloc>
-
-      <Bloc rang={2} className="mt-3">
-        <BasculeVue
-          etiquette="Vue du championnat"
-          valeur="classement"
-          onChange={(vue) => {
-            if (vue === "piste") naviguer(`/championnats/${id}/piste`);
-          }}
-          options={[
-            { cle: "classement", libelle: "Classement" },
-            { cle: "piste", libelle: "Piste" },
-          ]}
+        <HeroChampionnat
+          couleur={couleur}
+          nom={donnees?.nom ?? "Championnat"}
+          sousTitre={
+            chargement && !donnees
+              ? "Chargement…"
+              : `${effectif} ${effectif > 1 ? "membres" : "membre"} · Saison 2026`
+          }
         />
       </Bloc>
 
       <div className="mt-3 flex flex-1 flex-col gap-3">
-        <Bloc rang={3}>
+        <Bloc rang={2}>
           <ZoneChargement
             chargement={chargement && !donnees}
             squelette={<SqueletteChampionnat />}
           >
             {donnees && (
               <div className="flex flex-col gap-3">
-                <BlocCode code={donnees.code_invitation} miseEnAvant={nouveau} />
+                <BlocCode
+                  code={donnees.code_invitation}
+                  couleur={couleur}
+                  miseEnAvant={nouveau}
+                />
 
-                <div className="rounded-bloc bg-surface p-4">
-                  <p className="text-label text-texte-doux mb-1 px-1 uppercase">
+                <div className="flex flex-col gap-2">
+                  <p className="text-label text-texte-doux px-1 uppercase">
                     {lignes.length > 0 ? "Classement" : "Membres"}
                   </p>
 
@@ -316,7 +362,7 @@ export default function Championnat() {
                       liste lue sous RLS tient sa place : elle porte les mêmes
                       personnes, sans les points. Un bloc vide serait pire. */}
                   {lignes.length > 0 ? (
-                    <ul className="px-1">
+                    <ul className="flex flex-col gap-2">
                       {lignes.map((ligne) => (
                         <LigneClassement
                           key={ligne.profil_id}
@@ -328,12 +374,12 @@ export default function Championnat() {
                       ))}
                     </ul>
                   ) : (
-                    <ul>
+                    <ul className="flex flex-col gap-2">
                       {membres.map((membre) => (
                         <li key={membre.id}>
                           <Link
                             to={`/profils/${membre.id}`}
-                            className="pressable min-h-tactile flex items-center gap-3 px-1 py-2.5"
+                            className="rounded-carte bg-surface pressable min-h-tactile flex items-center gap-3 p-4"
                           >
                             <Pastille nom={membre.pseudo} graine={membre.id} />
                             <span className="text-corps-sm text-texte min-w-0 flex-1 truncate font-medium">
@@ -357,7 +403,10 @@ export default function Championnat() {
 
                   {lignes.length === 0 && chargementRang && (
                     <p className="text-texte-doux mt-1 px-1 text-[12px]">
-                      <span className="t-shimmer" data-text="Classement en cours de chargement…">
+                      <span
+                        className="t-shimmer"
+                        data-text="Classement en cours de chargement…"
+                      >
                         Classement en cours de chargement…
                       </span>
                     </p>
@@ -378,18 +427,15 @@ export default function Championnat() {
                   )}
                 </div>
 
-                {/* Le calendrier du championnat (maquette 15). Il n'entre pas
-                    dans la bascule Classement / Piste : celle-ci oppose deux
-                    vues du même classement, alors que le calendrier est un
-                    autre écran. Y ajouter un troisième segment aurait mis trois
-                    libellés dans la largeur d'un iPhone. */}
+                {/* Le calendrier du championnat (maquette 15). */}
                 <Link
                   to={`/championnats/${id}/calendrier`}
                   className="rounded-carte bg-surface pressable min-h-tactile flex items-center gap-3 p-4"
                 >
                   <span
                     aria-hidden="true"
-                    className="bg-fond text-primaire rounded-champ flex size-10 shrink-0 items-center justify-center"
+                    className="bg-fond rounded-champ flex size-10 shrink-0 items-center justify-center"
+                    style={{ color: couleur.hex }}
                   >
                     <IconeCalendrier className="size-[18px]" />
                   </span>
@@ -416,13 +462,14 @@ export default function Championnat() {
           </Alerte>
         )}
 
-        {/* Quitter demande une confirmation, mais pas une boîte de dialogue :
-            l'action est réversible tant qu'on a gardé le code, et un bouton
-            qui se transforme sur place reste moins brutal qu'un écran qui
-            s'interpose. Le geste de retour, lui, annule tout. */}
-        <Bloc rang={4}>
+        {/* La vue piste passe de la bascule segmentée à un bouton pleine
+            largeur, comme demandé. Les deux ensemble auraient offert deux
+            chemins vers le même écran, à trois centimètres l'un de l'autre.
+            L'écran de piste, lui, ramène ici par son propre bouton de retour :
+            l'aller-retour reste symétrique. */}
+        <Bloc rang={3} className="flex flex-col gap-2.5">
           {confirmation ? (
-            <div className="flex flex-col gap-2.5">
+            <>
               <Bouton
                 variante="principal"
                 onClick={quitter}
@@ -440,15 +487,25 @@ export default function Championnat() {
               >
                 Annuler
               </button>
-            </div>
+            </>
           ) : (
-            <Bouton
-              variante="secondaire"
-              onClick={() => setConfirmation(true)}
-              disabled={!donnees}
-            >
-              Quitter le championnat
-            </Bouton>
+            <>
+              <Bouton
+                variante="principal"
+                onClick={() => naviguer(`/championnats/${id}/piste`)}
+                icone={<IconeVoiture className="size-5" />}
+              >
+                Vue piste
+              </Bouton>
+              <button
+                type="button"
+                onClick={() => setConfirmation(true)}
+                disabled={!donnees}
+                className="text-texte-doux min-h-tactile pressable py-2 text-center text-[13px] font-medium disabled:opacity-50"
+              >
+                Quitter le championnat
+              </button>
+            </>
           )}
         </Bloc>
       </div>
