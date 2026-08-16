@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
+import EnTeteEcran from "../composants/EnTeteEcran.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
@@ -48,14 +49,23 @@ export function BlocProchainGp({ profilId }) {
     // c'est le seul aplat de couleur de l'accueil, et le voir passer au gris
     // puis revenir au rouge ferait clignoter l'écran d'entrée de l'app.
     return (
-      <div className="rounded-bloc bg-primaire shadow-bloc p-5" aria-hidden="true">
-        <div className="mb-2.5 flex items-center justify-between gap-3">
-          <div className="h-6 w-24 rounded-full bg-white/25" />
-          <div className="h-3 w-20 rounded-full bg-white/20" />
+      <div
+        className="rounded-bloc bg-primaire shadow-aplat relative overflow-hidden p-5"
+        aria-hidden="true"
+      >
+        <div className="lueur-haute pointer-events-none absolute inset-0" />
+        <div className="relative">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="h-6 w-24 rounded-full bg-white/25" />
+            <div className="h-3 w-20 rounded-full bg-white/20" />
+          </div>
+          <div className="h-7 w-44 rounded-full bg-white/25" />
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="rounded-champ h-[54px] bg-white/12" />
+            <div className="rounded-champ h-[54px] bg-white/12" />
+          </div>
+          <div className="rounded-champ mt-2.5 h-tactile w-full bg-white/15" />
         </div>
-        <div className="h-5 w-40 rounded-full bg-white/25" />
-        <div className="mt-2.5 mb-4 h-3 w-52 rounded-full bg-white/20" />
-        <div className="rounded-champ h-tactile w-full bg-white/15" />
       </div>
     );
   }
@@ -65,13 +75,16 @@ export function BlocProchainGp({ profilId }) {
   // l'accueil s'effondrer d'un cran à chaque intersaison.
   if (!gp) {
     return (
-      <div className="rounded-bloc bg-primaire shadow-bloc p-5">
-        <p className="text-label-sm uppercase text-white/60">Saison 2026</p>
-        <p className="text-titre mt-2 text-white">Pronostics F1 entre amis</p>
-        <p className="text-corps-sm mt-1 text-white/60">
-          Aucun Grand Prix ouvert aux pronostics pour l'instant. Les cotes sont
-          relevées le samedi, après les qualifications.
-        </p>
+      <div className="rounded-bloc bg-primaire shadow-aplat relative overflow-hidden p-5">
+        <div className="lueur-haute pointer-events-none absolute inset-0" />
+        <div className="relative">
+          <p className="text-label-sm uppercase text-white/60">Saison 2026</p>
+          <p className="text-titre mt-2 text-white">Pronostics F1 entre amis</p>
+          <p className="text-corps-sm mt-1 text-white/70">
+            Aucun Grand Prix ouvert aux pronostics pour l'instant. Les cotes sont
+            relevées le samedi, après les qualifications.
+          </p>
+        </div>
       </div>
     );
   }
@@ -100,8 +113,25 @@ export function BlocProchainGp({ profilId }) {
       ? "Voir mes pronos"
       : "Pronostiquer";
 
+  // Le bloc est la pièce maîtresse de l'écran d'entrée : il porte donc deux
+  // cases de statut plutôt qu'une phrase. Un chiffre posé sous son label se lit
+  // d'un coup d'œil, là où « Pronos ouverts · Fermeture dans 2j 14h 32min »
+  // demande de lire une ligne entière pour en extraire la même information.
+  const cases = couru
+    ? [
+        { label: "Course", valeur: "Terminée" },
+        { label: "Points", valeur: "Attribués" },
+      ]
+    : [
+        { label: "Départ", valeur: depart.heure ?? "À confirmer" },
+        {
+          label: etat.ferme ? "Pronos" : "Fermeture dans",
+          valeur: etat.ferme ? "Fermés" : (etat.texte ?? "À confirmer"),
+        },
+      ];
+
   return (
-    <div className="rounded-bloc bg-primaire shadow-bloc relative overflow-hidden p-5">
+    <div className="rounded-bloc bg-primaire shadow-aplat relative overflow-hidden p-5">
       {/* Le tracé du circuit, posé en filigrane à droite. Il reprend le
           composant du calendrier (étape 9) : le Grand Prix qui a un vrai tracé
           montre le sien, les autres le tracé générique. À 8 % de blanc, il
@@ -113,29 +143,50 @@ export function BlocProchainGp({ profilId }) {
         trace={traceDuGrandPrix(gp.nom)}
         className="pointer-events-none absolute top-1/2 -right-8 h-[150%] w-[60%] -translate-y-1/2 text-white/8"
       />
+      {/* La lumière spéculaire d'/apple-design §12 : un aplat plein est une
+          surface morte, ce galbe très doux lui donne une source lumineuse. Il
+          est posé par-dessus le tracé pour éclairer les deux ensemble. */}
+      <div
+        aria-hidden="true"
+        className="lueur-haute pointer-events-none absolute inset-0"
+      />
 
       <div className="relative">
-        <div className="mb-2.5 flex items-center justify-between gap-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <span className="text-label-sm rounded-full bg-white/20 px-2.5 py-1 text-white uppercase">
             {couru ? "Dernier GP" : "Prochain GP"}
           </span>
-          <span className="shrink-0 text-[11px] text-white/60">{depart.courte}</span>
+          <span className="shrink-0 text-[11px] text-white/70">
+            {depart.courte ?? "Date à confirmer"}
+          </span>
         </div>
 
-        <p className="truncate text-[22px] font-medium text-white">{gp.nom}</p>
-        <p className="mb-4 text-[12px] text-white/60">
-          {couru
-            ? "Course terminée · Points attribués"
-            : etat.ferme
-              ? "Pronostics fermés"
-              : etat.texte
-                ? `Pronos ouverts · Fermeture dans ${etat.texte}`
-                : "Pronos ouverts"}
-        </p>
+        {/* Le nom du Grand Prix passe à l'échelle des titres de page : c'est ce
+            qu'on vient lire, il doit être le plus gros élément de l'écran. */}
+        <p className="text-titre-lg truncate text-white">{gp.nom}</p>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {cases.map((donnee) => (
+            <div
+              key={donnee.label}
+              className="rounded-champ bg-white/12 px-3.5 py-2.5"
+            >
+              <p className="text-label-sm truncate uppercase text-white/70">
+                {donnee.label}
+              </p>
+              <p className="mt-1 truncate text-[15px] font-medium text-white">
+                {/* Le compte à rebours change toutes les secondes dans la
+                    dernière heure : l'échange en place évite le clignotement
+                    que donnerait un simple remplacement de texte. */}
+                <TexteEchange valeur={donnee.valeur} />
+              </p>
+            </div>
+          ))}
+        </div>
 
         <Link
           to={destination}
-          className="rounded-champ bg-surface text-primaire pressable min-h-tactile flex items-center justify-center px-4 text-center text-[14px] font-medium"
+          className="rounded-champ bg-surface text-primaire pressable min-h-tactile mt-2.5 flex items-center justify-center px-4 text-center text-[15px] font-medium"
         >
           {/* Le cache peut avoir servi l'état d'avant la dernière validation : le
               libellé change alors sous les yeux du joueur, une fois la lecture
@@ -172,16 +223,21 @@ export function CarteChampionnat({ championnat, rang }) {
   return (
     <Link
       to={`/championnats/${championnat.id}`}
-      className={`rounded-carte shadow-carte pressable-large min-h-tactile flex items-center gap-3.5 overflow-hidden p-4 ${couleur.fond}`}
+      className={`rounded-carte shadow-aplat pressable-large min-h-tactile relative flex items-center gap-3.5 overflow-hidden p-4 ${couleur.fond}`}
     >
       <span
         aria-hidden="true"
-        className={`rounded-champ flex size-[46px] shrink-0 items-center justify-center ${ton.surface} ${ton.texte}`}
+        className="lueur-haute pointer-events-none absolute inset-0"
+      />
+
+      <span
+        aria-hidden="true"
+        className={`rounded-champ relative flex size-[46px] shrink-0 items-center justify-center ${ton.surface} ${ton.texte}`}
       >
         <IconeMembres className="size-[22px]" />
       </span>
 
-      <span className="min-w-0 flex-1">
+      <span className="relative min-w-0 flex-1">
         <span className={`text-corps block truncate font-medium ${ton.texte}`}>
           {championnat.nom}
         </span>
@@ -280,32 +336,35 @@ export default function Accueil() {
 
   const championnats = donnees ?? [];
 
+  // La pastille mène au profil (maquette 14). C'est l'endroit où l'attend
+  // quelqu'un qui vient d'iOS, et c'est déjà la place que la maquette 04 lui
+  // donne — elle n'y était simplement reliée à rien. Depuis la passe
+  // `/apple-design`, elle vit dans la barre collante : c'est le seul élément
+  // qui doit rester atteignable quel que soit le défilement.
+  const avatar = (
+    <Link
+      to="/profil"
+      aria-label="Mon profil"
+      className="pressable size-tactile -m-0.5 flex shrink-0 items-center justify-center"
+    >
+      <Pastille nom={pseudo} graine={utilisateur?.id ?? pseudo} taille="lg" />
+    </Link>
+  );
+
   return (
     <Ecran direction="avant">
-      <div className="flex flex-1 flex-col gap-3">
-        <Bloc rang={1} className="flex items-center justify-between gap-3 py-1">
-          <h1 className="text-titre text-texte min-w-0 truncate">
-            {pseudo ? `Salut ${pseudo}` : "Mon Petit Podium"}
-          </h1>
-          {/* La pastille mène au profil (maquette 14). C'est l'endroit où
-              l'attend quelqu'un qui vient d'iOS, et c'est déjà la place que la
-              maquette 04 lui donne — elle n'y était simplement reliée à rien.
-              La zone tactile est portée à 44px sans déplacer la pastille de
-              42px que dessine la maquette. */}
-          <Link
-            to="/profil"
-            aria-label="Mon profil"
-            className="pressable size-tactile -m-0.5 flex shrink-0 items-center justify-center"
-          >
-            <Pastille nom={pseudo} graine={utilisateur?.id ?? pseudo} taille="lg" />
-          </Link>
-        </Bloc>
+      <EnTeteEcran
+        titre={pseudo ? `Salut ${pseudo}` : "Mon Petit Podium"}
+        sousTitre="Saison 2026 · Formule 1"
+        action={avatar}
+      />
 
-        <Bloc rang={2}>
+      <div className="mt-3 flex flex-1 flex-col gap-3">
+        <Bloc rang={1}>
           <BlocProchainGp profilId={utilisateur?.id ?? null} />
         </Bloc>
 
-        <Bloc rang={3} className="flex flex-col gap-2.5">
+        <Bloc rang={2} className="flex flex-col gap-2.5">
           <p className="text-label text-texte-doux px-1 pt-1 uppercase">
             Mes championnats
           </p>
@@ -341,7 +400,7 @@ export default function Accueil() {
 
         <div className="min-h-3 flex-1" />
 
-        <Bloc rang={4} className="grid grid-cols-2 gap-2.5">
+        <Bloc rang={3} className="grid grid-cols-2 gap-2.5">
           <Action
             vers="/championnats/creer"
             variante="principal"

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
+import EnTeteEcran from "../composants/EnTeteEcran.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
@@ -11,7 +12,6 @@ import { Pave } from "../composants/Squelette.jsx";
 import {
   IconeCalendrier,
   IconeChevronDroit,
-  IconeChevronGauche,
   IconeCoche,
   IconeCopie,
   IconeSortie,
@@ -26,45 +26,26 @@ import {
 } from "../lib/classement.js";
 import { formaterPoints } from "../lib/format.js";
 import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
-import { couleurLisible } from "../lib/palette.js";
+import { couleurLisible, encreSur } from "../lib/palette.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 
 const DUREE_CONFIRMATION = 2000;
 
 /**
- * En-tête coloré du championnat — l'effet hero de la refonte.
+ * En-tête coloré du championnat, désormais rétractable.
  *
- * La bande touche les deux bords et court **sous la zone sûre haute**
- * (`pleine-largeur` + `coiffe-ecran`) : une couleur qui s'arrêterait sous la
- * Dynamic Island se lirait comme un bandeau posé de travers, pas comme
- * l'en-tête de l'écran. Le texte, lui, reste rendu dans la zone sûre — la
- * couleur passe derrière l'encoche, jamais le contenu.
+ * La barre de retour est collée en haut et porte la couleur du championnat en
+ * permanence ; le nom, lui, vit dans l'aplat juste dessous et glisse sous la
+ * barre au défilement, où il se replace en petit. C'est la barre de navigation
+ * teintée d'iOS, et c'est `EnTeteEcran` qui en porte toute la mécanique — la
+ * couleur passe derrière la Dynamic Island, jamais le texte.
  *
- * Le bouton de retour vit dans la bande plutôt qu'au-dessus : il n'y a qu'un
- * seul en-tête, et deux zones empilées auraient mangé 150px avant le premier
- * contenu utile.
+ * Le tracé du circuit n'y figure pas : un championnat n'est pas un Grand Prix.
+ * L'aplat porte en revanche sa lumière spéculaire, comme les cartes de
+ * l'accueil, pour que les deux écrans se répondent.
  */
-function HeroChampionnat({ couleur, nom, sousTitre }) {
-  const naviguer = useNavigate();
-  const ton = tonalites(couleur.hex);
-
-  return (
-    <div
-      className={`pleine-largeur coiffe-ecran rounded-b-bloc shadow-bloc min-h-[120px] px-4 pt-1 pb-5 ${couleur.fond}`}
-    >
-      <button
-        type="button"
-        onClick={() => naviguer("/accueil")}
-        className={`min-h-tactile pressable -mx-2 -my-3 flex max-w-full items-center gap-1.5 px-2 py-3 text-[13px] font-medium ${ton.texte}`}
-      >
-        <IconeChevronGauche className="size-[15px] shrink-0" />
-        <span className="truncate">Accueil</span>
-      </button>
-
-      <h1 className={`text-titre-lg mt-3.5 line-clamp-2 ${ton.texte}`}>{nom}</h1>
-      <p className={`mt-1 text-[13px] ${ton.texteDoux}`}>{sousTitre}</p>
-    </div>
-  );
+function heroChampionnat(couleur) {
+  return { hex: couleur.hex, fond: couleur.fond, ton: tonalites(couleur.hex) };
 }
 
 /**
@@ -174,6 +155,8 @@ export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
         .join(" · ")
     : "En attente du premier Grand Prix";
 
+  const teinteVoiture = couleurLisible(ligne);
+
   return (
     <li>
       <Link
@@ -183,16 +166,30 @@ export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
         <span
           aria-hidden="true"
           className="absolute inset-y-0 left-0 w-1"
-          style={{ backgroundColor: couleurLisible(ligne) }}
+          style={{ backgroundColor: teinteVoiture }}
         />
 
-        <span
-          className={`w-7 shrink-0 text-center text-[22px] leading-none font-medium ${
-            podium ? "text-primaire" : "text-texte-doux"
-          }`}
-        >
-          {ligne.rang}
-        </span>
+        {/* Le rang des trois premiers est posé dans une pastille à la couleur de
+            la voiture du membre, les autres restent en chiffre nu. Le podium
+            doit se repérer sans lire les nombres — c'est la hiérarchie visuelle
+            du §16 d'/apple-design : le plus important est aussi le plus
+            évident. L'encre de la pastille est calculée pour rester lisible
+            quelle que soit la livrée choisie. */}
+        {podium ? (
+          <span
+            className="flex size-8 shrink-0 items-center justify-center rounded-full text-[15px] leading-none font-medium"
+            style={{
+              backgroundColor: teinteVoiture,
+              color: encreSur(teinteVoiture),
+            }}
+          >
+            {ligne.rang}
+          </span>
+        ) : (
+          <span className="text-texte-doux flex size-8 shrink-0 items-center justify-center text-[17px] leading-none font-medium">
+            {ligne.rang}
+          </span>
+        )}
 
         <div className="min-w-0 flex-1">
           <p className="text-corps-sm text-texte truncate font-medium">
@@ -204,7 +201,7 @@ export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
         </div>
 
         <div className="shrink-0 text-right">
-          <p className="text-primaire text-[20px] leading-none font-medium">
+          <p className="text-primaire text-[22px] leading-none font-medium tracking-[-0.02em]">
             {ligne.total_points}
           </p>
           <p className="text-label-sm text-texte-doux mt-1 uppercase">pts</p>
@@ -294,19 +291,21 @@ export default function Championnat() {
   // première image, et ne change pas de teinte quand les données arrivent.
   const couleur = couleurChampionnat({ id, ...(donnees ?? {}) });
 
+  const teinte = heroChampionnat(couleur);
+
   // Sortie de secours : sans championnat lisible, il n'y a rien à afficher, et
   // l'écran ne doit surtout pas être un cul-de-sac.
   if (echec && !donnees) {
     return (
       <Ecran direction="avant">
-        <Bloc rang={1}>
-          <HeroChampionnat
-            couleur={couleur}
-            nom="Championnat"
-            sousTitre="Saison 2026"
-          />
-        </Bloc>
-        <Bloc rang={2} className="mt-3">
+        <EnTeteEcran
+          titre="Championnat"
+          sousTitre="Saison 2026"
+          retourVers="/accueil"
+          libelleRetour="Accueil"
+          teinte={teinte}
+        />
+        <Bloc rang={1} className="mt-3">
           <BlocErreur
             echec={echec}
             onReessayer={reessayer}
@@ -326,20 +325,20 @@ export default function Championnat() {
 
   return (
     <Ecran direction="avant">
-      <Bloc rang={1}>
-        <HeroChampionnat
-          couleur={couleur}
-          nom={donnees?.nom ?? "Championnat"}
-          sousTitre={
-            chargement && !donnees
-              ? "Chargement…"
-              : `${effectif} ${effectif > 1 ? "membres" : "membre"} · Saison 2026`
-          }
-        />
-      </Bloc>
+      <EnTeteEcran
+        titre={donnees?.nom ?? "Championnat"}
+        sousTitre={
+          chargement && !donnees
+            ? "Chargement…"
+            : `${effectif} ${effectif > 1 ? "membres" : "membre"} · Saison 2026`
+        }
+        retourVers="/accueil"
+        libelleRetour="Accueil"
+        teinte={teinte}
+      />
 
       <div className="mt-3 flex flex-1 flex-col gap-3">
-        <Bloc rang={2}>
+        <Bloc rang={1}>
           <ZoneChargement
             chargement={chargement && !donnees}
             squelette={<SqueletteChampionnat />}
@@ -467,7 +466,7 @@ export default function Championnat() {
             chemins vers le même écran, à trois centimètres l'un de l'autre.
             L'écran de piste, lui, ramène ici par son propre bouton de retour :
             l'aller-retour reste symétrique. */}
-        <Bloc rang={3} className="flex flex-col gap-2.5">
+        <Bloc rang={2} className="flex flex-col gap-2.5">
           {confirmation ? (
             <>
               <Bouton

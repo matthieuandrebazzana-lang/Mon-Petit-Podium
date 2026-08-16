@@ -224,19 +224,17 @@ Barre de navigation basse à 4 onglets : **Accueil**, **Championnats**, **Calend
 
 Trois skills sont installés sur ce projet : **Apple Design**, **Taste** et **Transitions.dev**.
 
-> **Le design system ci-dessus n'est pas négociable.** Les couleurs, la police Helvetica Neue, les rayons de coins, l'échelle typographique et l'esprit widget sont des décisions déjà validées. Aucun skill ne doit les remplacer ni les réinterpréter.
+> **Règle de priorité pour le chantier design en cours** : les skills `/apple-design`, `/design-taste-frontend` et `/transitions-dev` ont la main sur les **compositions, espacements, ombres, matériaux, animations et hiérarchie visuelle**. Le design system de la section 5 reste la référence pour la **palette de couleurs et la typographie uniquement**. Claude Code applique les suggestions des skills **sans demander de validation ni signaler de conflit** — il tranche seul en faveur des skills sur tout ce qui n'est pas couleur ou typographie.
 
-**`/apple-design` doit être invoqué sur chaque écran codé, sans exception.** Son périmètre : les principes iOS — zones sûres, animations fluides de facture native, hiérarchie visuelle, gestes, home indicator. Il ne contredit pas le design system existant, il l'**enrichit** de la sensibilité iOS. En cas de conflit avec la section 5, **le CLAUDE.md gagne**.
+**`/apple-design` doit être invoqué sur chaque écran codé, sans exception.** Son périmètre : les principes iOS — zones sûres, élévation, matériaux, animations fluides de facture native, hiérarchie visuelle, gestes, home indicator.
 
-Cette règle s'applique **rétroactivement** : l'écran d'accueil minimal déjà codé devra être repassé sous `/apple-design` lors d'une prochaine session.
+**Taste** intervient comme directeur artistique sur la hiérarchie visuelle, le rythme des espacements, la qualité des micro-détails, l'équilibre des compositions et le choix des proportions. Il ne propose jamais une autre palette ni une autre typographie — c'est la seule borne.
 
-**Taste** intervient comme directeur artistique **à l'intérieur** de ces contraintes, jamais au-dessus. Son périmètre : hiérarchie visuelle, rythme des espacements, qualité des micro-détails, équilibre des compositions, choix des proportions. Il ne propose jamais une autre palette ni une autre typographie.
-
-**Transitions.dev** intervient uniquement sur le mouvement : transitions d'écran, apparition des blocs, changements d'onglet, états de chargement, retours tactiles. Aucune influence sur les couleurs ou les formes.
+**Transitions.dev** intervient sur le mouvement : transitions d'écran, apparition des blocs, changements d'onglet, états de chargement, retours tactiles.
 
 Ordre d'invocation avant de coder un écran : **`/apple-design`, puis `/design-taste-frontend`, puis `/transitions-dev`.**
 
-Si un skill suggère quelque chose qui contredit ce fichier, **ce fichier gagne**. Le signaler plutôt que de trancher seul.
+Les rayons de coins, l'échelle des espacements et l'esprit widget de la section 5 sont désormais des **valeurs par défaut**, pas des contraintes : les skills peuvent s'en écarter quand la composition le demande. Seules la palette et la typographie ne bougent pas.
 
 ---
 
@@ -1601,6 +1599,79 @@ Le **liseré blanc** que le snippet d'`/apple-design` pose sur l'arête haute d'
 
 ---
 
+**Refonte visuelle sans restriction des skills** (version `0.13.0`)
+
+Les skills `/apple-design`, `/design-taste-frontend` et `/transitions-dev` ont eu la main sur les compositions, espacements, ombres, matériaux, animations et hiérarchie visuelle des quatre écrans principaux. La règle de priorité de la section 5 a été réécrite en conséquence : seules la **palette** et la **typographie** restent hors de leur portée, plus le vocabulaire de la section 1. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.11.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1` et `0.12.x`).
+
+*Lecture du brief, telle que la pose le skill Taste* — PWA iOS de pronostics F1 entre amis, langage widget chaleureux, orientée matériaux translucides, navigation à grand titre rétractable et mouvement à ressort. Dials retenus : `DESIGN_VARIANCE 6`, `MOTION_INTENSITY 7`, `VISUAL_DENSITY 4`. Six est en deçà du 8 de base du skill parce qu'il s'agit d'une **application**, pas d'une page d'atterrissage : une composition asymétrique change de sens quand on revient sur le même écran vingt fois par week-end.
+
+---
+
+***L'en-tête à grand titre rétractable — l'apport principal de la passe.***
+
+C'était le plus gros écart avec une application native, et il touchait **tous** les écrans : l'en-tête défilait avec le contenu, et le titre de la page disparaissait dès le premier mouvement du pouce. Sur le tableau des cotes, qui empile trois marchés de vingt-deux pilotes, on ne savait plus ni où l'on était ni comment sortir — les deux premières questions du « wayfinding » d'`/apple-design` §16.
+
+`frontend/src/composants/EnTeteEcran.jsx` : la rangée de retour reste collée en haut, le grand titre défile dessous et se replace en petit dans la barre. **Le matériau translucide n'apparaît qu'une fois du contenu passé dessous** — c'est la règle des *scroll edge effects* du §12, le chrome ne se matérialise que là où il recouvre vraiment quelque chose. Une barre translucide posée sur du vide se lit comme un bandeau.
+
+**Quatre points de mise en œuvre à ne pas défaire :**
+
+1. **La bascule passe par un `IntersectionObserver` sur une sentinelle, jamais par un écouteur de défilement.** Un `scroll` se déclenche à chaque image et repasserait par l'état React à chaque fois ; l'observateur ne rend que deux fois par écran, aux deux franchissements. C'est aussi une interdiction franche du skill Taste (§5.D).
+2. **Le composant doit être monté en enfant direct d'`Ecran`.** Les blocs `t-stagger-line` portent un `transform` et un `filter` pendant leur entrée : un `position: sticky` posé à l'intérieur se collerait à leur boîte au lieu de la fenêtre, et l'en-tête défilerait avec la page. C'est le cousin exact du piège qui a chassé la barre de navigation basse des écrans à l'étape 10 — à ceci près que `sticky`, contrairement à `fixed`, n'est cassé que par un ancêtre *scrollable*, pas par un ancêtre transformé ; ici c'est bien la boîte de référence qui change.
+3. **Seule l'opacité du matériau s'anime**, sur un calque à part. Faire varier le rayon du `backdrop-filter` coûterait une passe de composition par image sur un élément pleine largeur.
+4. **`--entete-hauteur` est la source unique du décalage.** Les en-têtes de marché collants s'y accrochent ; écrite en dur à deux endroits, la valeur aurait divergé au premier ajustement de la barre, et les deux en-têtes se seraient recouverts.
+
+*Mode teinté, pour l'écran d'un championnat* — la barre porte la couleur du championnat **en permanence** et l'aplat du nom la prolonge juste dessous, les deux se lisant comme un seul bloc. Attendre le défilement pour la colorer laisserait une bande beige au-dessus d'un aplat de couleur, ce qui se lit comme un défaut de calage et non comme une intention. Le `-mt-2` qui referme le rembourrage bas de la barre n'est pas un ajustement à l'œil : sans lui, une ligne de fond apparaît entre les deux surfaces au premier pixel de défilement.
+
+**`composants/EnTete.jsx` reste en place et en service** sur les douze autres écrans. Le nouvel en-tête n'a été posé que sur les quatre écrans du périmètre ; l'étendre aux autres est une substitution d'import, sans autre changement.
+
+---
+
+*Élévation et matière* — `--shadow-aplat` s'ajoute aux trois niveaux de la version `0.12.1`. Les ombres existantes sont réglées pour une **surface blanche** ; sous un bloc rouge, violet ou bleu ardoise, un marron clair ne se voit plus. Celle-ci est plus profonde et plus contrastée, ce qui est la règle d'`/apple-design` §12 sur l'ombre sensible au contexte : plus la surface est dense, plus elle doit peser sur le fond. Elle porte les aplats de couleur — bloc du prochain GP, cartes de championnat, en-tête de championnat, blocs de pronostic obligatoires.
+
+`lueur-haute` pose sur ces mêmes aplats un galbe de lumière très doux, en haut. Un aplat plein est une surface morte : rien n'y dit d'où vient la lumière. **Aucune couleur n'entre par cette porte** — c'est du blanc à très faible opacité, la teinte du bloc reste exactement la sienne. L'overlay est `aria-hidden` : un lecteur d'écran n'a rien à annoncer d'un effet de profondeur.
+
+---
+
+*Retour tactile — l'aller et le retour cessent d'avoir la même courbe.* `--ease-ressort` entre dans les jetons de mouvement (l'équivalent CSS d'un amortissement ~0,8 d'`/apple-design` §4). L'enfoncement reste immédiat (100ms, `ease-out`), c'est la réponse au doigt et elle ne doit rien faire attendre ; le **relâchement** remonte sur le ressort et dépasse très légèrement avant de se poser. C'est ce qui distingue un objet physique qui se détend d'un rectangle qui reprend sa taille. Une courbe unique dans les deux sens donne toujours l'un ou l'autre, jamais les deux. Les deux amplitudes de la version `0.12.1` (`pressable`, `pressable-large`) sont conservées telles quelles, et les deux restent coupées sous `prefers-reduced-motion`.
+
+Le ressort ne s'emploie **que là où un geste a précédé le mouvement**, jamais sur une apparition automatique, où le dépassement se lirait comme une erreur.
+
+---
+
+*Écran 1 — Accueil.* Grand titre « Salut *pseudo* » rétractable, l'avatar passe dans la barre collante : c'est le seul élément qui doit rester atteignable quel que soit le défilement.
+
+Le bloc du prochain Grand Prix est recomposé autour de **deux cases de statut** (Départ, Fermeture dans) au lieu d'une phrase. Un chiffre posé sous son label se lit d'un coup d'œil, là où « Pronos ouverts · Fermeture dans 2j 14h 32min » demande de lire une ligne entière pour en extraire la même information. Le **nom du Grand Prix passe à l'échelle des titres de page** : c'est ce qu'on vient lire, il doit être le plus gros élément de l'écran. Les trois destinations du bouton et leurs libellés sont inchangés (versions `0.5.1` et `0.9.0`).
+
+*Écran 2 — Championnat.* En-tête teinté rétractable (voir plus haut). **Le rang des trois premiers passe dans une pastille à la couleur de la voiture du membre**, les autres restent en chiffre nu : le podium doit se repérer sans lire les nombres. L'encre de la pastille est calculée par `encreSur` (étape 8), donc lisible quelle que soit la livrée choisie — y compris une voiture blanche.
+
+*Écran 3 — Cotes.* **Les en-têtes de marché deviennent collants.** C'est le vrai apport sur cet écran : à mi-liste d'un marché de vingt-deux pilotes, plus rien ne disait ce qu'on lisait, et il fallait remonter pour le savoir. Le compteur de l'en-tête cède la place au **nombre de favoris épinglés dans ce marché** dès qu'il y en a — « 22 » ne dit rien qu'on ne voie en défilant, « 3 en favoris » dit où en est le joueur. La case de points de la ligne se teinte d'ambre une fois la cote épinglée : la ligne entière dit « retenue », pas seulement l'étoile de 18px posée au bout. Le bouton de validation passe en **barre collée en bas** et compte les favoris.
+
+*Écran 4 — Pronostics.* La barre collée porte désormais le **total potentiel**, au-dessus du bouton. C'est le chiffre qui fait changer d'avis : il doit bouger sous les yeux au moment du choix, pas attendre le récapitulatif. Il applique la règle tranchée à l'étape 6 — chaque pronostic compte pour sa cote, le podium pour la somme de ses deux pilotes — la même que `RecapPronostics.jsx`, pour que les deux écrans ne puissent pas annoncer deux totaux différents. **Il n'apparaît qu'une fois quelque chose de choisi** : « 0 pts » avant le premier pilote se lirait comme un mauvais départ.
+
+---
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton de transitions-dev nouveau.** Le compte à rebours de l'accueil et du bloc de fermeture passent par *text states swap* (04), déjà installé : ils changent toutes les secondes dans la dernière heure, et un remplacement de texte nu les ferait clignoter. Le seul jeton ajouté est `--ease-ressort`, qui relève du retour tactile et non d'un snippet.
+
+*Accessibilité* — `prefers-reduced-motion` couvre les trois nouvelles transitions ; sous ce réglage **le titre compact reste montré sans glisser** plutôt que de disparaître, la navigation n'étant pas de la décoration. `prefers-reduced-transparency` et `prefers-contrast: more` rendent le matériau de l'en-tête opaque, avec `--entete-opaque` pour que la version teintée retombe sur sa couleur et non sur le beige.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage pré-rempli) : **68 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| En-tête rétractable | présent sur les quatre écrans, **déplié au premier rendu**, titre compact rendu ; l'accueil n'a **aucun bouton de retour** (racine d'onglet) ; les cotes nomment le Grand Prix dans leur retour |
+| Mode teinté | le championnat porte `data-materiau="fixe"` et sa couleur en variable CSS ; les cotes et les pronostics restent en matériau au défilement ; en-tête pleine largeur et arrondi en bas |
+| Rendu isolé | `EnTeteEcran` se rend **sans `IntersectionObserver`** (rendu serveur), sentinelle bien placée après le grand titre |
+| Élévation | bloc GP, blocs obligatoires et cartes en `shadow-aplat` ; **au moins trois lumières spéculaires sur l'accueil** ; plus aucune carte de championnat plate |
+| Accueil | nom du GP à l'échelle des titres, cases Départ et Fermeture, destination et libellé inchangés, tracé de circuit décoratif, les deux championnats avec codes et effectifs accordés |
+| Championnat | filet à la couleur de la voiture, pastille de podium, les trois membres classés, saison non commencée dite, « Vue piste » conservé, **le mot « ligue » absent** |
+| Cotes | **quatre en-têtes de marché collants**, libellés du bookmaker servis tels quels, compteur de favoris par marché, cote épinglée teintée, barre collée, bouton comptant les favoris, **plus aucun onglet**, rangée de favoris calée au défilement |
+| Pronostics | trois emplacements « Non sélectionné », podium distinguant 1er et 2e, barre collée, **aucun total avant le premier choix**, échange de texte et accordéon conservés |
+| Règle 4.1 | **aucune cote brute « ×N »** sur les quatre écrans, points bien habillés |
+| CSS compilé | `.entete-collante`, `.entete-titre-compact`, `.section-collante`, `.lueur-haute`, `--shadow-aplat`, `--ease-ressort`, `--entete-hauteur` générés ; la barre teintée force son matériau ; **repli transparence réduite et mouvement réduit présents** |
+| `npm run build` | passe, 128 modules, version `0.13.0` dans le bundle |
+
+---
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -1671,6 +1742,8 @@ Points non couverts, à traiter le moment venu :
 - **Marchés obligatoires liés au nom Unibet** — le vainqueur et le podium sont reconnus par les slugs `vainqueur` et `podium`, en dur à **trois** endroits depuis l'étape 6 : `backend/app/api/routes/pronostics.py`, `backend/app/calcul/points.py` et `frontend/src/lib/pronostics.js`. Si Unibet renomme un de ces marchés, la saisie s'arrête proprement en le disant, mais **les trois constantes doivent être corrigées ensemble**.
 - **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
+
+**Quatre points depuis la refonte sans restriction (`0.13.0`)**, tous liés au collage et aux matériaux, c'est-à-dire à ce qui ne se vérifie pas au simulateur : l'**en-tête à grand titre rétractable** — regarder que la barre ne saute pas quand la barre d'adresse de Safari se rétracte, que le matériau apparaisse bien au bon moment (la marge de déclenchement est fixée à 64px, à réajuster si la zone sûre d'un modèle la décale), et que le flou d'un élément pleine largeur ne fasse pas saccader le défilement ; les **en-têtes de marché collants** du tableau des cotes, dont le décalage repose sur `--entete-hauteur` = zone sûre + 60px — à confronter à un vrai `env(safe-area-inset-top)` ; l'**en-tête teinté du championnat**, où la couleur de la barre et celle de l'aplat doivent se toucher sans laisser de ligne au premier pixel de défilement ; et les deux **nouvelles barres collées en bas** (cotes et pronostics), à vérifier avec un vrai home indicator. Vérifier aussi le repli `prefers-reduced-transparency` sur l'en-tête, en plus des deux matériaux déjà signalés.
 
 **Trois points depuis la refonte visuelle (`0.12.0`)** : l'**en-tête coloré du championnat**, qui remonte sous la zone sûre haute (`coiffe-ecran`) et dont la couleur doit courir jusque derrière la Dynamic Island sans y pousser de texte ; le **bouton de validation collé en bas** de l'écran de pronostics (`barre-collee`), qui rend lui-même `env(safe-area-inset-bottom)` et annule celui d'`ecran` — c'est exactement le genre de calage qui ne se vérifie qu'avec un vrai home indicator, et il faut aussi regarder qu'il ne saute pas quand la barre d'adresse de Safari se rétracte ; et les **aplats pleine largeur** (`pleine-largeur`), à vérifier en paysage sur un iPhone à encoche, où la zone sûre latérale n'est plus nulle. Point à regarder ensuite, hérité de l'étape 10 : la **barre de navigation basse**, dont la zone sûre (`env(safe-area-inset-bottom)`) et la hauteur réservée (`h-nav`, 58px) n'ont jamais été confrontées à un vrai home indicator — c'est exactement le genre de calage qui ne se vérifie pas au simulateur. Regarder aussi qu'elle **ne bouge pas quand la barre d'adresse de Safari se rétracte**, et que les 44px de chaque onglet tombent bien sous le pouce. Points hérités de l'étape 9 : le **balayage des squelettes** (une animation permanente sur plusieurs blocs à la fois, à surveiller côté fluidité), la **vue piste** dont la hauteur est mesurée et change quand la barre d'adresse de Safari se rétracte, et les **accordéons** de l'écran de résultats, dont le chevron bascule en `scaleY(-1)` précisément parce que l'interpolation de `d:` n'existe pas sous Safari.
 - **Parcours d'authentification testé de bout en bout** — le code est en place et compile, mais inscription, confirmation par email, connexion et réinitialisation n'ont pas encore été exercées contre le vrai projet Supabase.

@@ -134,6 +134,14 @@
   --shadow-bloc:
     0 2px 4px rgb(84 57 37 / 0.05), 0 10px 28px rgb(84 57 37 / 0.09);
   --shadow-flottant: 0 -1px 24px rgb(84 57 37 / 0.1);
+
+  /* Élévation d'un aplat de couleur. Les deux ombres ci-dessus sont réglées pour
+     une surface blanche ; sous un bloc rouge ou violet, un marron clair ne se
+     voit plus. Celle-ci est plus profonde et plus contrastée — c'est la règle
+     d'/apple-design §12 sur l'ombre sensible au contexte : plus la surface est
+     dense, plus elle doit peser sur le fond. */
+  --shadow-aplat:
+    0 2px 6px rgb(84 57 37 / 0.1), 0 14px 34px rgb(84 57 37 / 0.16);
 }
 
 @layer base {
@@ -199,6 +207,164 @@
 @utility coiffe-ecran {
   margin-top: calc((var(--spacing-safe-top) + --spacing(4)) * -1);
   padding-top: calc(var(--spacing-safe-top) + --spacing(4));
+}
+
+/* ---------------------------------------------------------------
+   En-tête à grand titre rétractable — /apple-design §7 et §12.
+
+   C'est le geste de navigation le plus reconnaissable d'iOS, et son absence
+   était le principal écart de l'app avec une application native : jusqu'ici,
+   l'en-tête de chaque écran défilait avec le contenu et le titre disparaissait
+   dès le premier mouvement du pouce. Ici, la rangée de retour reste collée en
+   haut ; le grand titre, lui, passe dessous et se replace en petit dans la
+   barre. On sait donc toujours où l'on est et comment sortir (le « wayfinding »
+   d'/apple-design §16).
+
+   Le matériau n'apparaît qu'une fois le contenu passé dessous : une barre
+   translucide posée sur du vide se lirait comme un bandeau. C'est la règle des
+   « scroll edge effects » du §12 — le chrome ne se matérialise que là où il
+   recouvre vraiment quelque chose.
+
+   La barre doit vivre en enfant direct d'`Ecran` : les blocs `t-stagger-line`
+   portent un `transform` et un `filter`, et un `position: sticky` posé dedans
+   se collerait à leur boîte au lieu de la fenêtre.
+   --------------------------------------------------------------- */
+@utility entete-collante {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  /* Elle reprend à son compte les quatre marges d'`ecran` : la couleur doit
+     courir d'un bord à l'autre et jusque derrière la Dynamic Island, le texte
+     rester dans la zone sûre. Même mécanique que `pleine-largeur` +
+     `coiffe-ecran`, réunies ici parce qu'elles vont toujours ensemble. */
+  margin-left: calc((var(--spacing-safe-left) + --spacing(4)) * -1);
+  margin-right: calc((var(--spacing-safe-right) + --spacing(4)) * -1);
+  margin-top: calc((var(--spacing-safe-top) + --spacing(4)) * -1);
+  padding-top: calc(var(--spacing-safe-top) + --spacing(2));
+  padding-bottom: --spacing(2);
+  padding-left: calc(var(--spacing-safe-left) + --spacing(4));
+  padding-right: calc(var(--spacing-safe-right) + --spacing(4));
+
+  /* Le matériau est un calque à part, dont seule l'opacité s'anime. Faire varier
+     le rayon du flou lui-même coûterait une passe de composition par image sur
+     un élément qui couvre toute la largeur. */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    opacity: 0;
+    pointer-events: none;
+    background-color: var(--entete-materiau, rgb(245 240 235 / 0.78));
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    transition: opacity var(--duration-fast) var(--ease-in-out);
+  }
+
+  /* Le dégradé de dissipation sous la barre : le contenu s'efface en passant
+     dessous au lieu d'être coupé par un trait, que la section 5 proscrit. */
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    height: 20px;
+    z-index: -1;
+    opacity: 0;
+    pointer-events: none;
+    background-image: linear-gradient(
+      to bottom,
+      var(--entete-materiau, rgb(245 240 235 / 0.78)),
+      transparent
+    );
+    transition: opacity var(--duration-fast) var(--ease-in-out);
+  }
+}
+
+.entete-collante[data-condense="true"]::before,
+.entete-collante[data-condense="true"]::after {
+  opacity: 1;
+}
+
+/* Barre teintée en permanence — l'écran d'un championnat. Elle prolonge un
+   aplat de couleur placé juste dessous ; attendre le défilement pour la colorer
+   laisserait une bande beige au-dessus de cet aplat, ce qui se lit comme un
+   défaut de calage et non comme une intention. Le dégradé de dissipation, lui,
+   reste conditionné au défilement : il n'a rien à dissiper tant que rien ne
+   passe dessous. */
+.entete-collante[data-materiau="fixe"]::before {
+  opacity: 1;
+}
+
+/* Le titre compact prend la place laissée par le grand titre parti sous la
+   barre. Il monte de quelques pixels plutôt que d'apparaître d'un coup : le
+   mouvement dit d'où il vient (/apple-design §7). */
+.entete-titre-compact {
+  opacity: 0;
+  transform: translateY(var(--distance-small));
+  transition:
+    opacity var(--duration-fast) var(--ease-smooth-out),
+    transform var(--duration-fast) var(--ease-smooth-out);
+  will-change: opacity, transform;
+}
+.entete-collante[data-condense="true"] .entete-titre-compact {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Hauteur occupée par la barre d'écran : ses deux rembourrages de 8px, la
+   rangée tactile de 44px, plus la zone sûre haute. Elle sert de décalage aux
+   en-têtes de section collants, qui viendraient sinon se coller par-dessus. */
+:root {
+  --entete-hauteur: calc(var(--spacing-safe-top) + 60px);
+}
+
+/* En-tête de section qui reste visible tant que sa section défile — les listes
+   groupées d'iOS. Sur le tableau des cotes, où chaque marché aligne vingt-deux
+   pilotes, c'est ce qui empêche de perdre le nom du marché qu'on est en train
+   de lire. */
+@utility section-collante {
+  position: sticky;
+  top: var(--entete-hauteur, 0px);
+  z-index: 20;
+}
+
+/* Lumière spéculaire d'un aplat de couleur — /apple-design §12.
+   Un aplat plein est une surface morte : rien n'y dit d'où vient la lumière.
+   Ce dégradé très doux, posé en haut, donne au bloc le galbe d'un objet
+   éclairé par au-dessus. Il n'introduit aucune couleur : c'est du blanc à
+   très faible opacité, donc la teinte du bloc reste exactement la sienne. */
+@utility lueur-haute {
+  background-image: radial-gradient(
+    120% 90% at 50% -25%,
+    rgb(255 255 255 / 0.22),
+    rgb(255 255 255 / 0.06) 45%,
+    transparent 70%
+  );
+}
+
+/* Repli des deux réglages d'accessibilité, comme pour les autres matériaux. */
+@media (prefers-reduced-transparency: reduce) {
+  .entete-collante::before {
+    background-color: var(--entete-opaque, var(--color-fond));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .entete-collante::after {
+    background-image: linear-gradient(
+      to bottom,
+      var(--entete-opaque, var(--color-fond)),
+      transparent
+    );
+  }
+}
+
+@media (prefers-contrast: more) {
+  .entete-collante::before {
+    background-color: var(--entete-opaque, var(--color-fond));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 /* Barre d'action collée en bas (refonte de la maquette 09).
@@ -297,6 +463,11 @@
   --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: ease-in-out;
   --ease-out: ease-out;
+  /* Ressort léger — l'équivalent CSS d'un amortissement ~0,8 d'/apple-design §4.
+     Il ne s'emploie que là où un geste a précédé le mouvement : le relâchement
+     d'un appui, l'arrivée d'un élément qu'on vient de sélectionner. Jamais sur
+     une apparition automatique, où le dépassement se lit comme une erreur. */
+  --ease-ressort: cubic-bezier(0.34, 1.36, 0.64, 1);
   /* Distances */
   --distance-micro: 4px;
   --distance-small: 6px;
@@ -945,25 +1116,37 @@
   transition: color var(--icon-swap-dur) var(--icon-swap-ease);
 }
 
-/* — Retour tactile (/apple-design) —
+/* — Retour tactile (/apple-design §1 et §4) —
    Le retour visuel se déclenche à l'appui, pas au relâchement : attendre le
-   clic donne une interface morte. 100ms suffisent à être perçus sans retarder
-   l'action. */
+   clic donne une interface morte.
+
+   **L'aller et le retour n'ont ni la même durée ni la même courbe, et c'est le
+   point à ne pas défaire.** L'enfoncement est immédiat (100ms, `ease-out`) :
+   c'est la réponse au doigt, elle ne doit rien faire attendre. Le relâchement,
+   lui, remonte sur un ressort léger (`--ease-ressort`) et dépasse très
+   légèrement avant de se poser — c'est ce qui distingue un objet physique qui
+   se détend d'un rectangle qui reprend sa taille. Une courbe unique dans les
+   deux sens donne toujours l'un ou l'autre, jamais les deux. */
 @utility pressable {
-  transition: transform 100ms var(--ease-out);
+  transition: transform var(--duration-medium) var(--ease-ressort);
   &:active {
     transform: scale(0.97);
+    transition-duration: 100ms;
+    transition-timing-function: var(--ease-out);
   }
 }
 
 /* Même retour, dosé pour les grandes surfaces. 3 % sur une carte pleine largeur
    déplacent une dizaine de pixels : le geste devient une secousse au lieu d'un
    appui. La règle d'/apple-design est que le retour soit *perçu*, pas qu'il ait
-   partout la même amplitude — un objet lourd s'enfonce moins qu'un bouton. */
+   partout la même amplitude — un objet lourd s'enfonce moins qu'un bouton, et
+   il se détend plus lentement. */
 @utility pressable-large {
-  transition: transform 100ms var(--ease-out);
+  transition: transform var(--duration-slow) var(--ease-ressort);
   &:active {
     transform: scale(0.985);
+    transition-duration: 100ms;
+    transition-timing-function: var(--ease-out);
   }
 }
 
@@ -978,8 +1161,16 @@
   .t-acc-panel-inner,
   .t-acc-chevron,
   .t-icon-swap .t-icon,
-  .t-nav .t-nav-onglet {
+  .t-nav .t-nav-onglet,
+  .entete-collante::before,
+  .entete-collante::after,
+  .entete-titre-compact {
     transition: none !important;
+  }
+  /* Le titre compact reste montré : sous mouvement réduit, il doit apparaître
+     sans glisser, pas disparaître. La navigation n'est pas de la décoration. */
+  .entete-titre-compact {
+    transform: none !important;
   }
   .t-input,
   .t-ecran {

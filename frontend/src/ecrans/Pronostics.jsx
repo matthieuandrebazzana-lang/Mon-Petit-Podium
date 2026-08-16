@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
-import EnTete from "../composants/EnTete.jsx";
+import EnTeteEcran from "../composants/EnTeteEcran.jsx";
+import TexteEchange from "../composants/TexteEchange.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
@@ -71,18 +72,27 @@ function SqueletteSaisie() {
 /** Bloc rouge du compte à rebours, maquette 09. */
 function BlocFermeture({ etat }) {
   return (
-    <div className="rounded-carte bg-primaire shadow-carte flex items-center justify-between gap-3 px-4.5 py-3.5">
-      <div className="min-w-0">
-        <p className="text-label uppercase text-white/60">
+    <div className="rounded-carte bg-primaire shadow-aplat relative flex items-center justify-between gap-3 overflow-hidden px-4.5 py-3.5">
+      <span
+        aria-hidden="true"
+        className="lueur-haute pointer-events-none absolute inset-0"
+      />
+      <div className="relative min-w-0">
+        <p className="text-label uppercase text-white/70">
           {etat.ferme ? "Pronostics" : "Fermeture dans"}
         </p>
         <p className="mt-0.5 truncate text-[20px] font-medium text-white">
-          {etat.ferme ? "Fermés" : (etat.texte ?? "Date à confirmer")}
+          {/* Le compte à rebours change toutes les secondes dans la dernière
+              heure : l'échange en place (transitions-dev 04) évite le
+              clignotement d'un simple remplacement de texte. */}
+          <TexteEchange
+            valeur={etat.ferme ? "Fermés" : (etat.texte ?? "Date à confirmer")}
+          />
         </p>
       </div>
       <span
         aria-hidden="true"
-        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15"
+        className="relative flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15"
       >
         <IconeHorloge className="size-[18px] text-white" />
       </span>
@@ -218,21 +228,27 @@ function Emplacement({
 function BlocObligatoire({ titre, couleur, ton, children }) {
   return (
     <div
-      className={`rounded-carte shadow-carte flex flex-col gap-2.5 p-4 ${couleur.fond}`}
+      className={`rounded-carte shadow-aplat relative overflow-hidden ${couleur.fond}`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <p
-          className={`min-w-0 truncate text-[12px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
-        >
-          {titre}
-        </p>
-        <span
-          className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-medium ${ton.surfaceForte} ${ton.texte}`}
-        >
-          Obligatoire
-        </span>
+      <span
+        aria-hidden="true"
+        className="lueur-haute pointer-events-none absolute inset-0"
+      />
+      <div className="relative flex flex-col gap-2.5 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className={`min-w-0 truncate text-[12px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
+          >
+            {titre}
+          </p>
+          <span
+            className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-medium ${ton.surfaceForte} ${ton.texte}`}
+          >
+            Obligatoire
+          </span>
+        </div>
+        {children}
       </div>
-      {children}
     </div>
   );
 }
@@ -363,10 +379,12 @@ export default function Pronostics() {
   if (echec && !donnees) {
     return (
       <Ecran direction="avant">
-        <Bloc rang={1}>
-          <EnTete titre="Mes pronos" retourVers={`/grands-prix/${gpId}/cotes`} />
-        </Bloc>
-        <Bloc rang={2}>
+        <EnTeteEcran
+          titre="Mes pronos"
+          retourVers={`/grands-prix/${gpId}/cotes`}
+          libelleRetour="Les cotes"
+        />
+        <Bloc rang={1} className="mt-3">
           <BlocErreur
             echec={echec}
             onReessayer={reessayerChargement}
@@ -380,6 +398,15 @@ export default function Pronostics() {
   const depart = formaterDepart(gp?.date_course);
   const marchesManquants = gp && (!marcheVainqueur || !marchePodium);
 
+  // Ce que la saisie en cours rapporterait si tout tombait. Même règle qu'au
+  // récapitulatif : chaque pronostic compte pour sa cote, et le podium pour la
+  // somme de ses deux pilotes (règle tranchée à l'étape 6). Il est affiché dans
+  // la barre collée plutôt qu'en fin de page — c'est le chiffre qui fait
+  // changer d'avis, il doit bouger sous les yeux au moment du choix.
+  const potentiel = [vainqueur, ...podium, ...bonus]
+    .map((id) => cote(id)?.points ?? 0)
+    .reduce((total, points) => total + points, 0);
+
   // Le second pilote du podium ne peut pas être le premier : l'écarter de la
   // liste vaut mieux que de le laisser choisir puis de le refuser.
   const optionsPodium = (place) =>
@@ -387,23 +414,21 @@ export default function Pronostics() {
 
   return (
     <Ecran direction="avant">
-      <Bloc rang={1}>
-        <EnTete
-          titre="Mes pronos"
-          retourVers={`/grands-prix/${gpId}/cotes`}
-          libelleRetour={gp?.nom ?? "Les cotes"}
-          sousTitre={
-            gp
-              ? depart.heure
-                ? `${depart.jour} · Départ ${depart.heure}`
-                : depart.jour
-              : null
-          }
-        />
-      </Bloc>
+      <EnTeteEcran
+        titre="Mes pronos"
+        retourVers={`/grands-prix/${gpId}/cotes`}
+        libelleRetour={gp?.nom ?? "Les cotes"}
+        sousTitre={
+          gp
+            ? depart.heure
+              ? `${depart.jour} · Départ ${depart.heure}`
+              : depart.jour
+            : null
+        }
+      />
 
-      <div className="mt-2 flex flex-1 flex-col gap-3">
-        <Bloc rang={2}>
+      <div className="mt-3 flex flex-1 flex-col gap-3">
+        <Bloc rang={1}>
           <ZoneChargement
             chargement={chargement && !donnees}
             squelette={<SqueletteSaisie />}
@@ -591,6 +616,22 @@ export default function Pronostics() {
             <Alerte ton="erreur" tentative={tentative}>
               {erreurEnvoi}
             </Alerte>
+          )}
+
+          {/* Le total potentiel vit dans la barre, au-dessus du bouton : c'est
+              le chiffre qui fait changer d'avis, il doit bouger sous les yeux
+              au moment du choix et non attendre le récapitulatif. Il n'apparaît
+              qu'une fois quelque chose de choisi — « 0 pts » avant le premier
+              pilote se lirait comme un mauvais départ. */}
+          {!marchesManquants && potentiel > 0 && (
+            <div className="flex items-baseline justify-between gap-3 px-1">
+              <span className="text-label text-texte-doux uppercase">
+                Total si tout tombe
+              </span>
+              <span className="text-primaire text-[17px] font-medium">
+                <TexteEchange valeur={formaterPoints(potentiel)} />
+              </span>
+            </div>
           )}
 
           {etat.ferme ? (
