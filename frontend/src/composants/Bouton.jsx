@@ -29,7 +29,7 @@ export default function Bouton({
       type="button"
       disabled={inactif}
       aria-busy={occupe || undefined}
-      className={`rounded-carte-sm pressable min-h-tactile flex w-full items-center justify-center gap-2.5 px-5 py-[18px] text-center text-[16px] font-medium ${
+      className={`rounded-carte-sm shadow-carte pressable min-h-tactile flex w-full items-center justify-center gap-2.5 px-5 py-[18px] text-center text-[16px] font-medium ${
         VARIANTES[variante]
       } ${inactif ? "opacity-60" : ""} ${className}`}
       {...reste}

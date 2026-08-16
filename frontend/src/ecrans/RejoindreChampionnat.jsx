@@ -62,7 +62,7 @@ export default function RejoindreChampionnat() {
       </Bloc>
 
       <form onSubmit={soumettre} className="mt-3 flex flex-col gap-3" noValidate>
-        <Bloc rang={2} className="rounded-bloc bg-surface p-5">
+        <Bloc rang={2} className="rounded-bloc bg-surface shadow-bloc p-5">
           <ChampCode
             valeur={code}
             onChange={(valeur) => {

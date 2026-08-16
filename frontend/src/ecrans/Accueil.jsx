@@ -48,7 +48,7 @@ export function BlocProchainGp({ profilId }) {
     // c'est le seul aplat de couleur de l'accueil, et le voir passer au gris
     // puis revenir au rouge ferait clignoter l'écran d'entrée de l'app.
     return (
-      <div className="rounded-bloc bg-primaire p-5" aria-hidden="true">
+      <div className="rounded-bloc bg-primaire shadow-bloc p-5" aria-hidden="true">
         <div className="mb-2.5 flex items-center justify-between gap-3">
           <div className="h-6 w-24 rounded-full bg-white/25" />
           <div className="h-3 w-20 rounded-full bg-white/20" />
@@ -65,7 +65,7 @@ export function BlocProchainGp({ profilId }) {
   // l'accueil s'effondrer d'un cran à chaque intersaison.
   if (!gp) {
     return (
-      <div className="rounded-bloc bg-primaire p-5">
+      <div className="rounded-bloc bg-primaire shadow-bloc p-5">
         <p className="text-label-sm uppercase text-white/60">Saison 2026</p>
         <p className="text-titre mt-2 text-white">Pronostics F1 entre amis</p>
         <p className="text-corps-sm mt-1 text-white/60">
@@ -101,7 +101,7 @@ export function BlocProchainGp({ profilId }) {
       : "Pronostiquer";
 
   return (
-    <div className="rounded-bloc bg-primaire relative overflow-hidden p-5">
+    <div className="rounded-bloc bg-primaire shadow-bloc relative overflow-hidden p-5">
       {/* Le tracé du circuit, posé en filigrane à droite. Il reprend le
           composant du calendrier (étape 9) : le Grand Prix qui a un vrai tracé
           montre le sien, les autres le tracé générique. À 8 % de blanc, il
@@ -172,7 +172,7 @@ export function CarteChampionnat({ championnat, rang }) {
   return (
     <Link
       to={`/championnats/${championnat.id}`}
-      className={`rounded-carte pressable min-h-tactile flex items-center gap-3.5 overflow-hidden p-4 ${couleur.fond}`}
+      className={`rounded-carte shadow-carte pressable-large min-h-tactile flex items-center gap-3.5 overflow-hidden p-4 ${couleur.fond}`}
     >
       <span
         aria-hidden="true"
@@ -229,7 +229,7 @@ export function SqueletteChampionnats() {
 
 function AucunChampionnat() {
   return (
-    <div className="rounded-carte bg-surface flex flex-col items-center gap-2 px-5 py-8 text-center">
+    <div className="rounded-carte bg-surface shadow-carte flex flex-col items-center gap-2 px-5 py-8 text-center">
       <span
         aria-hidden="true"
         className="bg-fond text-texte-doux mb-1 flex size-12 items-center justify-center rounded-champ"
@@ -252,7 +252,7 @@ export function Action({ vers, variante, icone, children }) {
   return (
     <Link
       to={vers}
-      className={`rounded-carte-sm pressable min-h-tactile flex items-center justify-center gap-2 px-3 py-4 text-center text-[15px] font-medium ${tons}`}
+      className={`rounded-carte-sm shadow-carte pressable min-h-tactile flex items-center justify-center gap-2 px-3 py-4 text-center text-[15px] font-medium ${tons}`}
     >
       {icone}
       {children}

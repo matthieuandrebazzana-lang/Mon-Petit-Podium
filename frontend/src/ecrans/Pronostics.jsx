@@ -46,7 +46,7 @@ function SqueletteSaisie() {
       {/* Les blocs gardent leurs aplats de couleur : c'est la surface, pas le
           contenu, et les voir virer au gris puis revenir ferait clignoter
           l'écran au lieu de le remplir. */}
-      <div className="rounded-carte bg-primaire flex items-center justify-between gap-3 px-4.5 py-3.5">
+      <div className="rounded-carte bg-primaire shadow-carte flex items-center justify-between gap-3 px-4.5 py-3.5">
         <div className="flex-1">
           <div className="h-2.5 w-24 rounded-full bg-white/25" />
           <div className="mt-2 h-4 w-32 rounded-full bg-white/25" />
@@ -54,11 +54,11 @@ function SqueletteSaisie() {
         <div className="rounded-champ size-8 bg-white/15" />
       </div>
 
-      <div className="rounded-carte bg-primaire p-4">
+      <div className="rounded-carte bg-primaire shadow-carte p-4">
         <div className="h-3 w-24 rounded-full bg-white/25" />
         <div className="rounded-champ mt-3 h-[50px] bg-white/15" />
       </div>
-      <div className="rounded-carte bg-bleu-ardoise p-4">
+      <div className="rounded-carte bg-bleu-ardoise shadow-carte p-4">
         <div className="h-3 w-20 rounded-full bg-white/25" />
         <div className="rounded-champ mt-3 h-[50px] bg-white/15" />
         <div className="rounded-champ mt-2 h-[50px] bg-white/15" />
@@ -71,7 +71,7 @@ function SqueletteSaisie() {
 /** Bloc rouge du compte à rebours, maquette 09. */
 function BlocFermeture({ etat }) {
   return (
-    <div className="rounded-carte bg-primaire flex items-center justify-between gap-3 px-4.5 py-3.5">
+    <div className="rounded-carte bg-primaire shadow-carte flex items-center justify-between gap-3 px-4.5 py-3.5">
       <div className="min-w-0">
         <p className="text-label uppercase text-white/60">
           {etat.ferme ? "Pronostics" : "Fermeture dans"}
@@ -217,7 +217,9 @@ function Emplacement({
  */
 function BlocObligatoire({ titre, couleur, ton, children }) {
   return (
-    <div className={`rounded-carte flex flex-col gap-2.5 p-4 ${couleur.fond}`}>
+    <div
+      className={`rounded-carte shadow-carte flex flex-col gap-2.5 p-4 ${couleur.fond}`}
+    >
       <div className="flex items-center justify-between gap-2">
         <p
           className={`min-w-0 truncate text-[12px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
@@ -411,14 +413,14 @@ export default function Pronostics() {
                 <BlocFermeture etat={etat} />
 
                 {etat.ferme && (
-                  <p className="rounded-carte bg-surface text-texte-doux text-corps-sm px-4 py-3">
+                  <p className="rounded-carte bg-surface shadow-carte text-texte-doux text-corps-sm px-4 py-3">
                     Le départ est imminent : les pronostics sont figés et ne
                     peuvent plus être modifiés.
                   </p>
                 )}
 
                 {marchesManquants ? (
-                  <div className="rounded-carte bg-surface px-5 py-8 text-center">
+                  <div className="rounded-carte bg-surface shadow-carte px-5 py-8 text-center">
                     <p className="text-corps text-texte font-medium">
                       Pronostics indisponibles
                     </p>
@@ -491,7 +493,7 @@ export default function Pronostics() {
                     </div>
 
                     {favoris.length === 0 ? (
-                      <div className="rounded-carte bg-surface px-5 py-7 text-center">
+                      <div className="rounded-carte bg-surface shadow-carte px-5 py-7 text-center">
                         <p className="text-corps text-texte font-medium">
                           Aucun favori pour l'instant
                         </p>
@@ -520,7 +522,7 @@ export default function Pronostics() {
                               onClick={() => basculerBonus(favori.id_outcome_unibet)}
                               disabled={etat.ferme || sature}
                               aria-pressed={actif}
-                              className={`rounded-carte-sm pressable min-h-tactile flex w-full items-center justify-between gap-3 px-4 py-3 text-left ${
+                              className={`rounded-carte-sm shadow-carte pressable min-h-tactile flex w-full items-center justify-between gap-3 px-4 py-3 text-left ${
                                 actif ? COULEUR_BONUS.fond : "bg-surface"
                               } ${sature ? "opacity-50" : ""}`}
                             >

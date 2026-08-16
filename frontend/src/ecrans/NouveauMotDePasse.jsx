@@ -88,7 +88,7 @@ export default function NouveauMotDePasse() {
       </Bloc>
 
       <form onSubmit={soumettre} className="flex flex-col gap-3" noValidate>
-        <Bloc rang={2} className="rounded-bloc bg-surface p-4.5">
+        <Bloc rang={2} className="rounded-bloc bg-surface shadow-bloc p-4.5">
           <div className="flex flex-col gap-3.5">
             <Champ
               label="Nouveau mot de passe"

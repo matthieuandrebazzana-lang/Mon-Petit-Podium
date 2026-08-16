@@ -48,7 +48,7 @@ export function RangeeChampionnat({ championnat }) {
   return (
     <Link
       to={`/championnats/${championnat.id}/calendrier`}
-      className="rounded-carte bg-surface pressable min-h-tactile flex items-center gap-3.5 p-4"
+      className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3.5 p-4"
     >
       <span
         aria-hidden="true"
@@ -154,7 +154,7 @@ export default function CalendrierGlobal() {
             squelette={<SqueletteCalendrierGlobal />}
           >
             {championnats.length === 0 ? (
-              <div className="rounded-bloc bg-surface px-5 py-9 text-center">
+              <div className="rounded-bloc bg-surface shadow-bloc px-5 py-9 text-center">
                 <p className="text-corps text-texte font-medium">
                   Rejoins ou crée un championnat pour voir ton calendrier
                 </p>

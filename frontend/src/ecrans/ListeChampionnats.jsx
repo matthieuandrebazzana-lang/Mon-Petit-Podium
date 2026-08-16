@@ -75,7 +75,7 @@ export default function ListeChampionnats() {
             {championnats.length === 0 ? (
               /* Pas une erreur : un compte neuf n'appartient à rien. Le message
                  dit quoi faire, et les deux actions sont juste en dessous. */
-              <div className="rounded-bloc bg-surface px-5 py-9 text-center">
+              <div className="rounded-bloc bg-surface shadow-bloc px-5 py-9 text-center">
                 <p className="text-corps text-texte font-medium">
                   Aucun championnat pour l'instant
                 </p>

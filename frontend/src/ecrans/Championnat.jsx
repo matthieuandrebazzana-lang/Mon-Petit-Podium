@@ -50,7 +50,7 @@ function HeroChampionnat({ couleur, nom, sousTitre }) {
 
   return (
     <div
-      className={`pleine-largeur coiffe-ecran rounded-b-bloc min-h-[120px] px-4 pt-1 pb-5 ${couleur.fond}`}
+      className={`pleine-largeur coiffe-ecran rounded-b-bloc shadow-bloc min-h-[120px] px-4 pt-1 pb-5 ${couleur.fond}`}
     >
       <button
         type="button"
@@ -104,7 +104,7 @@ function BlocCode({ code, couleur, miseEnAvant }) {
   }
 
   return (
-    <div className="rounded-carte bg-surface flex items-center gap-3 p-4">
+    <div className="rounded-carte bg-surface shadow-carte flex items-center gap-3 p-4">
       <div className="min-w-0 flex-1">
         <p className="text-label text-texte-doux uppercase">Code d'invitation</p>
         <p
@@ -178,7 +178,7 @@ export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
     <li>
       <Link
         to={`/profils/${ligne.profil_id}`}
-        className="rounded-carte bg-surface pressable min-h-tactile relative flex items-center gap-3 overflow-hidden py-3 pr-4 pl-4"
+        className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile relative flex items-center gap-3 overflow-hidden py-3 pr-4 pl-4"
       >
         <span
           aria-hidden="true"
@@ -379,7 +379,7 @@ export default function Championnat() {
                         <li key={membre.id}>
                           <Link
                             to={`/profils/${membre.id}`}
-                            className="rounded-carte bg-surface pressable min-h-tactile flex items-center gap-3 p-4"
+                            className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3 p-4"
                           >
                             <Pastille nom={membre.pseudo} graine={membre.id} />
                             <span className="text-corps-sm text-texte min-w-0 flex-1 truncate font-medium">
@@ -430,7 +430,7 @@ export default function Championnat() {
                 {/* Le calendrier du championnat (maquette 15). */}
                 <Link
                   to={`/championnats/${id}/calendrier`}
-                  className="rounded-carte bg-surface pressable min-h-tactile flex items-center gap-3 p-4"
+                  className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3 p-4"
                 >
                   <span
                     aria-hidden="true"

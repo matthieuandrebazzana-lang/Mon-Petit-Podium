@@ -57,7 +57,7 @@ export default function MotDePasseOublie() {
       </Bloc>
 
       <form onSubmit={soumettre} className="flex flex-col gap-3" noValidate>
-        <Bloc rang={2} className="rounded-bloc bg-surface p-4.5">
+        <Bloc rang={2} className="rounded-bloc bg-surface shadow-bloc p-4.5">
           <p className="text-corps-sm text-texte-doux mb-3.5">
             Entre l'adresse de ton compte. Tu recevras un lien pour choisir un
             nouveau mot de passe.

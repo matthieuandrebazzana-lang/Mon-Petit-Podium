@@ -26,7 +26,7 @@ export default function Alerte({ ton = "erreur", tentative = 0, children }) {
     <div
       ref={bloc}
       role="alert"
-      className={`t-input rounded-carte text-corps-sm px-4 py-3.5 ${TONS[ton]}`}
+      className={`t-input rounded-carte shadow-carte text-corps-sm px-4 py-3.5 ${TONS[ton]}`}
     >
       {children}
     </div>

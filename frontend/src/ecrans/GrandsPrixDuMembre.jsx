@@ -126,7 +126,7 @@ export function CarteGrandPrix({ gp }) {
   const attente = gp.pronostics.filter((p) => p.pointsGagnes === null).length;
 
   return (
-    <div className="rounded-carte bg-surface p-4">
+    <div className="rounded-carte bg-surface shadow-carte p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-corps text-texte truncate font-medium">{gp.nom}</p>
@@ -260,7 +260,7 @@ export default function GrandsPrixDuMembre() {
             {donnees && (
               <div className="flex flex-col gap-3">
                 {grandsPrix.length === 0 ? (
-                  <div className="rounded-bloc bg-surface px-5 py-9 text-center">
+                  <div className="rounded-bloc bg-surface shadow-bloc px-5 py-9 text-center">
                     <p className="text-corps text-texte font-medium">
                       Aucun Grand Prix pour l'instant
                     </p>

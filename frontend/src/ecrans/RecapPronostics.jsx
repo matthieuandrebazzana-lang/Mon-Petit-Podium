@@ -17,7 +17,7 @@ function SqueletteRecap() {
   return (
     <div className="flex flex-col gap-3">
       {/* Aplat rouge conservé : seule la matière qu'il contient est grisée. */}
-      <div className="rounded-bloc bg-primaire p-5">
+      <div className="rounded-bloc bg-primaire shadow-bloc p-5">
         <div className="h-2.5 w-28 rounded-full bg-white/25" />
         <div className="mt-3 h-5 w-44 rounded-full bg-white/25" />
       </div>
@@ -164,7 +164,7 @@ export default function RecapPronostics() {
             {gp && (
               <div className="flex flex-col gap-3">
                 {pronostics.vide ? (
-                  <div className="rounded-bloc bg-surface px-5 py-9 text-center">
+                  <div className="rounded-bloc bg-surface shadow-bloc px-5 py-9 text-center">
                     <p className="text-corps text-texte font-medium">
                       Aucun pronostic pour ce Grand Prix
                     </p>
@@ -176,7 +176,7 @@ export default function RecapPronostics() {
                   </div>
                 ) : (
                   <>
-                    <div className="rounded-bloc bg-primaire flex items-center gap-4 p-5">
+                    <div className="rounded-bloc bg-primaire shadow-bloc flex items-center gap-4 p-5">
                       <span
                         aria-hidden="true"
                         className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/15"
@@ -195,7 +195,7 @@ export default function RecapPronostics() {
                       </span>
                     </div>
 
-                    <div className="rounded-carte bg-surface p-4">
+                    <div className="rounded-carte bg-surface shadow-carte p-4">
                       <p className="mb-1 text-[10px] font-medium tracking-[0.8px] text-texte-doux uppercase">
                         Obligatoires
                       </p>
@@ -240,7 +240,7 @@ export default function RecapPronostics() {
                       </div>
                     </div>
 
-                    <div className="rounded-carte bg-surface flex items-center justify-between gap-3 px-4 py-3.5">
+                    <div className="rounded-carte bg-surface shadow-carte flex items-center justify-between gap-3 px-4 py-3.5">
                       <span className="min-w-0">
                         <span className="text-texte-doux block text-[11px]">
                           {etat.ferme ? "Pronostics" : "Fermeture dans"}

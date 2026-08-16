@@ -35,7 +35,7 @@ export function Pave({ className = "", arrondi = "rounded-champ" }) {
  */
 export function Carte({ className = "", children }) {
   return (
-    <div className={`rounded-carte bg-surface p-4 ${className}`}>{children}</div>
+    <div className={`rounded-carte bg-surface shadow-carte p-4 ${className}`}>{children}</div>
   );
 }
 

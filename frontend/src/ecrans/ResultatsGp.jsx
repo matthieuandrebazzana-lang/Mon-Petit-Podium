@@ -125,7 +125,7 @@ function BlocCourse({ classement }) {
   const podium = podiumDeLaCourse(classement);
 
   return (
-    <div className="rounded-carte bg-surface t-acc p-4" data-open={ouvert}>
+    <div className="rounded-carte bg-surface shadow-carte t-acc p-4" data-open={ouvert}>
       <p className="text-label text-texte-doux mb-2.5 uppercase">
         Résultats de la course
       </p>
@@ -334,7 +334,7 @@ function SqueletteResultats() {
     <div className="flex flex-col gap-3">
       {/* Le bloc rouge garde sa couleur : c'est la surface, pas le contenu, et
           la voir changer au moment de la révélation ferait clignoter l'écran. */}
-      <div className="rounded-bloc bg-primaire flex items-center justify-between gap-3 p-5">
+      <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-3 p-5">
         <div className="flex-1">
           <div className="h-2.5 w-24 rounded-full bg-white/25" />
           <div className="mt-3 h-9 w-20 rounded-champ bg-white/25" />
@@ -439,7 +439,7 @@ export default function ResultatsGp() {
                   /* Données manquantes, pas une erreur : la course n'a pas
                      encore de classement publié. Le message dit quand revenir
                      plutôt que de laisser l'écran vide. */
-                  <div className="rounded-bloc bg-primaire p-5">
+                  <div className="rounded-bloc bg-primaire shadow-bloc p-5">
                     <p className="text-label-sm uppercase text-white/60">
                       Résultats
                     </p>
@@ -458,7 +458,7 @@ export default function ResultatsGp() {
                         n'existe que si l'on regarde depuis un championnat —
                         sans championnat, personne n'est « moi » ici. */}
                     {moi && (
-                      <div className="rounded-bloc bg-primaire flex items-center justify-between gap-3 p-5">
+                      <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-3 p-5">
                         <div className="min-w-0">
                           <p className="text-label-sm uppercase text-white/60">
                             Mes points ce GP
@@ -491,7 +491,7 @@ export default function ResultatsGp() {
                       /* Arrivé ici sans championnat : la partie publique est
                          servie, et on dit pourquoi le reste manque plutôt que
                          de laisser croire que le championnat est vide. */
-                      <div className="rounded-carte bg-surface px-5 py-6 text-center">
+                      <div className="rounded-carte bg-surface shadow-carte px-5 py-6 text-center">
                         <p className="text-corps text-texte font-medium">
                           Les pronostics de tes amis
                         </p>
@@ -505,7 +505,7 @@ export default function ResultatsGp() {
                         <p className="text-label text-texte-doux px-1 uppercase">
                           Classement ce GP
                         </p>
-                        <div className="rounded-carte bg-surface px-4 py-2">
+                        <div className="rounded-carte bg-surface shadow-carte px-4 py-2">
                           <ul>
                             {membres.map((ligne) => (
                               <LigneMembre

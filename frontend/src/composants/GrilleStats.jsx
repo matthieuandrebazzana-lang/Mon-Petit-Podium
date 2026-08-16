@@ -21,7 +21,7 @@ const ABSENT = "—";
 
 function Case({ valeur, libelle }) {
   return (
-    <div className="rounded-carte-sm bg-surface px-3 py-3.5 text-center">
+    <div className="rounded-carte-sm bg-surface shadow-carte px-3 py-3.5 text-center">
       <p className="text-primaire text-[20px] leading-none font-medium">
         {valeur}
       </p>
@@ -38,7 +38,7 @@ export default function GrilleStats({ stats }) {
   // comme un bilan alors qu'aucun chiffre n'a été calculé.
   if (!stats) {
     return (
-      <div className="rounded-carte bg-surface px-4 py-5 text-center">
+      <div className="rounded-carte bg-surface shadow-carte px-4 py-5 text-center">
         <p className="text-corps-sm text-texte-doux">
           Statistiques indisponibles pour l'instant.
         </p>

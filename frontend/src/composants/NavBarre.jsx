@@ -98,10 +98,17 @@ export default function NavBarre() {
   return (
     <nav
       aria-label="Navigation principale"
-      // Aucune bordure (section 5 : jamais de trait fin), une ombre portée très
-      // douce et remontante pour détacher la barre du contenu qui défile
-      // dessous. La teinte de l'ombre est celle du texte, pas un noir pur.
-      className="pb-safe-bottom fixed inset-x-0 bottom-0 z-30 bg-surface shadow-[0_-1px_20px_rgba(26,26,26,0.07)]"
+      // Aucune bordure (section 5 : jamais de trait fin). La barre est un
+      // **matériau translucide** (/apple-design §12) : le contenu passe dessous
+      // et reste deviné, ce qui dit à la fois qu'elle flotte et que la page
+      // continue — une barre opaque, elle, ampute définitivement l'écran.
+      // `shadow-flottant` l'éloigne du fond ; sa teinte est le marron du design
+      // system, pas un noir pur, qui grisaillerait le beige.
+      //
+      // Le liseré blanc que le snippet d'/apple-design pose sur l'arête haute
+      // n'est pas repris : la section 5 proscrit les traits fins, et sur une
+      // barre déjà blanche il ne se verrait pas. Le CLAUDE.md gagne.
+      className="materiau-chrome pb-safe-bottom shadow-flottant fixed inset-x-0 bottom-0 z-30"
     >
       {/* `t-nav` porte la seule chose qui s'anime ici : la couleur des icônes.
           Elle est déclarée sur le conteneur pour ne pas la répéter par onglet. */}

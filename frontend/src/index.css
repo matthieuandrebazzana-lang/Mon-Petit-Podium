@@ -52,13 +52,21 @@
   --text-titre-lg--font-weight: 500;
   --text-titre-lg--letter-spacing: -0.02em;
 
-  /* Grands chiffres (scores, statistiques) : 32–44px, graisse 500 */
+  /* Grands chiffres (scores, statistiques) : 32–44px, graisse 500.
+     Le crénage négatif vient d'/apple-design, comme sur les titres et pour la
+     même raison : au-delà de 24px les caractères paraissent trop espacés. Il
+     est un peu plus marqué ici que sur les titres — les chiffres n'ont ni
+     jambages ni hampes, donc rien qui vienne remplir l'espace entre eux. La
+     section 5 ne fixe pas le letter-spacing des grands chiffres : cet ajout
+     l'enrichit sans rien remplacer. */
   --text-score: 2rem; /* 32px */
   --text-score--line-height: 1;
   --text-score--font-weight: 500;
+  --text-score--letter-spacing: -0.025em;
   --text-score-lg: 2.75rem; /* 44px */
   --text-score-lg--line-height: 1;
   --text-score-lg--font-weight: 500;
+  --text-score-lg--letter-spacing: -0.03em;
 
   /* Corps de texte : 14–15px */
   --text-corps: 0.9375rem; /* 15px */
@@ -99,6 +107,33 @@
      s'ajoute par-dessous. C'est la place qu'`Ecran` réserve en fin de flux pour
      que la barre, qui est `fixed`, ne recouvre aucun contenu. */
   --spacing-nav: 58px;
+
+  /* ---------------------------------------------------------------
+     Élévation — /apple-design §12.
+     Le style widget de la section 5 suppose des blocs autonomes posés sur un
+     fond, pas des aplats découpés dedans. Sans ombre, une carte blanche sur le
+     beige n'a aucune épaisseur : rien ne dit ce qui flotte et ce qui est le
+     fond. Trois niveaux, et un seul principe pour les distinguer — **plus une
+     surface est grande, plus elle est épaisse** :
+
+     - `ombre-carte`  : cartes et rangées (rayon 18–20px) ;
+     - `ombre-bloc`   : blocs principaux (rayon 24px), plus hauts et plus larges ;
+     - `ombre-flottant` : ce qui survole vraiment le contenu, barre de
+       navigation et barre d'action collée.
+
+     Chacune superpose deux couches : une ombre de contact très serrée, qui pose
+     l'objet, et une ombre ambiante large, qui l'éloigne du fond. Une seule
+     couche donne toujours l'un ou l'autre, jamais les deux.
+
+     **La teinte n'est pas un noir pur mais le marron `secondaire` du design
+     system.** Une ombre noire sur un fond beige tire vers le gris et salit la
+     couleur ; une ombre teintée du fond reste dans la même famille chaude.
+     Aucune couleur nouvelle n'entre : c'est `#543925` en très faible opacité. */
+  --shadow-carte:
+    0 1px 2px rgb(84 57 37 / 0.04), 0 4px 12px rgb(84 57 37 / 0.06);
+  --shadow-bloc:
+    0 2px 4px rgb(84 57 37 / 0.05), 0 10px 28px rgb(84 57 37 / 0.09);
+  --shadow-flottant: 0 -1px 24px rgb(84 57 37 / 0.1);
 }
 
 @layer base {
@@ -183,7 +218,12 @@
   margin-bottom: calc((var(--spacing-safe-bottom) + --spacing(4)) * -1);
   padding-top: --spacing(3);
   padding-bottom: calc(var(--spacing-safe-bottom) + --spacing(3));
-  background-color: var(--color-fond);
+  /* Matériau translucide plutôt qu'un aplat opaque (/apple-design §12) : le
+     contenu passe **sous** la barre au lieu d'être coupé net par une bande de
+     beige. Le repli plein est dans le bloc `prefers-reduced-transparency`. */
+  background-color: rgb(245 240 235 / 0.82);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
 
   &::before {
     content: "";
@@ -192,7 +232,49 @@
     bottom: 100%;
     height: 24px;
     pointer-events: none;
+    background-image: linear-gradient(
+      to top,
+      rgb(245 240 235 / 0.82),
+      transparent
+    );
+  }
+}
+
+/* Matériau des chromes flottants — barre de navigation basse (/apple-design
+   §12). Une barre opaque consomme définitivement une bande de l'écran ; une
+   barre translucide laisse deviner ce qui passe dessous, ce qui dit à la fois
+   qu'elle flotte et que la page continue. La saturation compense le lavage des
+   couleurs par le flou. */
+@utility materiau-chrome {
+  background-color: rgb(255 255 255 / 0.72);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* Les deux réglages d'accessibilité que le matériau doit respecter
+   (/apple-design §14). Ils sont indépendants de `prefers-reduced-motion`, déjà
+   couvert plus bas pour tout le mouvement de l'app. */
+@media (prefers-reduced-transparency: reduce) {
+  .materiau-chrome {
+    background-color: var(--color-surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .barre-collee {
+    background-color: var(--color-fond);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .barre-collee::before {
     background-image: linear-gradient(to top, var(--color-fond), transparent);
+  }
+}
+
+@media (prefers-contrast: more) {
+  .materiau-chrome {
+    background-color: var(--color-surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }
 
@@ -874,6 +956,17 @@
   }
 }
 
+/* Même retour, dosé pour les grandes surfaces. 3 % sur une carte pleine largeur
+   déplacent une dizaine de pixels : le geste devient une secousse au lieu d'un
+   appui. La règle d'/apple-design est que le retour soit *perçu*, pas qu'il ait
+   partout la même amplitude — un objet lourd s'enfonce moins qu'un bouton. */
+@utility pressable-large {
+  transition: transform 100ms var(--ease-out);
+  &:active {
+    transform: scale(0.985);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .t-stagger-line,
   .t-text-swap,
@@ -893,7 +986,8 @@
     animation: none !important;
     transform: none !important;
   }
-  .pressable {
+  .pressable,
+  .pressable-large {
     transition: none !important;
   }
   .t-shimmer::before,

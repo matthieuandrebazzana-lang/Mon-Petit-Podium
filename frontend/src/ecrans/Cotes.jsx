@@ -20,7 +20,7 @@ function SqueletteCotes() {
   return (
     <div className="flex flex-col gap-3">
       {[0, 1].map((section) => (
-        <div key={section} className="rounded-carte bg-surface overflow-hidden">
+        <div key={section} className="rounded-carte bg-surface shadow-carte overflow-hidden">
           {/* L'en-tête garde son aplat de couleur, seul son contenu est grisé :
               le voir virer au gris puis revenir ferait clignoter l'écran au
               lieu de le remplir. C'est la règle tenue depuis l'étape 9. */}
@@ -54,7 +54,7 @@ function SectionMarche({ marche, rang, epingles, ferme, onBasculer }) {
   const ton = tonalites(couleur.hex);
 
   return (
-    <section className="rounded-carte bg-surface overflow-hidden">
+    <section className="rounded-carte bg-surface shadow-carte overflow-hidden">
       <header
         className={`flex items-center justify-between gap-3 px-4 py-3 ${couleur.fond}`}
       >
@@ -237,13 +237,13 @@ export default function Cotes() {
             {gp && (
               <div className="flex flex-col gap-3">
                 {ferme && (
-                  <p className="rounded-carte bg-surface text-texte-doux text-corps-sm px-4 py-3">
+                  <p className="rounded-carte bg-surface shadow-carte text-texte-doux text-corps-sm px-4 py-3">
                     Les pronostics sont fermés. Les cotes restent consultables.
                   </p>
                 )}
 
                 {marches.length === 0 ? (
-                  <div className="rounded-carte bg-surface px-5 py-8 text-center">
+                  <div className="rounded-carte bg-surface shadow-carte px-5 py-8 text-center">
                     <p className="text-corps text-texte font-medium">
                       Aucune cote pour ce Grand Prix
                     </p>

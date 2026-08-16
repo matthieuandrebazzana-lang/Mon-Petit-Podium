@@ -32,7 +32,7 @@ export default function Landing() {
       <div className="flex flex-1 flex-col gap-3">
         <Bloc
           rang={1}
-          className="rounded-bloc bg-primaire px-6 pt-9 pb-8 text-center"
+          className="rounded-bloc bg-primaire shadow-bloc px-6 pt-9 pb-8 text-center"
         >
           <div className="mx-auto mb-4.5 flex size-[68px] items-center justify-center rounded-[20px] bg-white/15">
             <IconeDrapeau className="size-8 text-white" />
@@ -49,7 +49,7 @@ export default function Landing() {
           </p>
         </Bloc>
 
-        <Bloc rang={2} className="rounded-bloc bg-surface p-5">
+        <Bloc rang={2} className="rounded-bloc bg-surface shadow-bloc p-5">
           <div className="flex flex-col gap-4">
             {ATOUTS.map(({ Icone, titre, detail }) => (
               <div key={titre} className="flex items-center gap-3.5">

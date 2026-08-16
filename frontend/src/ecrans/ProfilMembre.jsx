@@ -94,12 +94,12 @@ export default function ProfilMembre() {
             chargement={chargement && !donnees}
             squelette={
               <div className="flex flex-col gap-3">
-                <div className="rounded-bloc bg-primaire h-[104px]" />
+                <div className="rounded-bloc bg-primaire shadow-bloc h-[104px]" />
                 <div className="grid grid-cols-2 gap-2.5">
                   {[0, 1, 2, 3].map((rang) => (
                     <div
                       key={rang}
-                      className="rounded-carte-sm bg-surface h-[68px]"
+                      className="rounded-carte-sm bg-surface shadow-carte h-[68px]"
                     />
                   ))}
                 </div>
@@ -119,7 +119,7 @@ export default function ProfilMembre() {
 
                 <Link
                   to={`/profils/${profilId}/grands-prix`}
-                  className="rounded-carte bg-surface pressable min-h-tactile flex items-center gap-3.5 p-4"
+                  className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3.5 p-4"
                 >
                   <span
                     aria-hidden="true"

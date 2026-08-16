@@ -52,7 +52,7 @@ function SqueletteProfil() {
       {/* L'en-tête garde son aplat rouge, les quatre cases et le bloc de
           personnalisation gardent leur surface blanche : ce sont les formes de
           l'écran, seul leur contenu est encore inconnu. */}
-      <div className="rounded-bloc bg-primaire flex items-center justify-between gap-4 p-5">
+      <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-4 p-5">
         <div className="flex flex-1 items-center gap-3.5">
           <div className="size-[42px] shrink-0 rounded-full bg-white/25" />
           <div className="min-w-0 flex-1">
@@ -85,7 +85,7 @@ export function HeroProfil({ pseudo, voiture, numero, action }) {
   const couleurs = couleursDuMembre(voiture);
 
   return (
-    <div className="rounded-bloc bg-primaire flex items-center justify-between gap-4 p-5">
+    <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-4 p-5">
       <div className="flex min-w-0 items-center gap-3.5">
         <Pastille nom={pseudo} graine={pseudo} taille="lg" />
         <div className="min-w-0">
@@ -293,7 +293,7 @@ export default function MonProfil() {
 
                 <GrilleStats stats={donnees?.stats} />
 
-                <div className="rounded-carte bg-surface p-4">
+                <div className="rounded-carte bg-surface shadow-carte p-4">
                   <p className="text-label text-texte-doux mb-3 uppercase">
                     Ma voiture
                   </p>
@@ -413,7 +413,7 @@ export default function MonProfil() {
 
                 <Link
                   to={`/profils/${profilId}/grands-prix`}
-                  className="rounded-carte bg-surface pressable min-h-tactile flex items-center gap-3.5 p-4"
+                  className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3.5 p-4"
                 >
                   <span
                     aria-hidden="true"

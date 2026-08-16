@@ -63,7 +63,7 @@ export default function BasculeVue({ options, valeur, onChange, etiquette }) {
     <div
       role="tablist"
       aria-label={etiquette}
-      className="t-tabs rounded-carte bg-surface flex w-full"
+      className="t-tabs rounded-carte bg-surface shadow-carte flex w-full"
     >
       <span
         ref={pastille}

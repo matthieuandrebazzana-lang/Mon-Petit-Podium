@@ -163,7 +163,7 @@ export function CarteGrandPrix({ gp, championnatId, profilId }) {
   );
 
   return (
-    <div className="rounded-carte bg-surface overflow-hidden">
+    <div className="rounded-carte bg-surface shadow-carte overflow-hidden">
       <div className="p-4">{entete}</div>
 
       {/* Mini-classement : seulement pour un Grand Prix couru. Avant la course,
@@ -216,7 +216,7 @@ export function CarteGrandPrix({ gp, championnatId, profilId }) {
 function SqueletteCalendrier() {
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-bloc bg-primaire flex items-center justify-between gap-3 p-4.5">
+      <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-3 p-4.5">
         <div className="flex-1">
           <div className="h-2.5 w-24 rounded-full bg-white/25" />
           <div className="mt-2.5 h-4 w-28 rounded-full bg-white/25" />
@@ -336,7 +336,7 @@ export default function Calendrier() {
                     Prix couru : avant, il annoncerait un leader à zéro point,
                     ce qui est un classement inventé. */}
                 {leader && (
-                  <div className="rounded-bloc bg-primaire flex items-center justify-between gap-3 p-4.5">
+                  <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-3 p-4.5">
                     <div className="min-w-0">
                       <p className="text-label-sm uppercase text-white/60">
                         Leader général
@@ -360,7 +360,7 @@ export default function Calendrier() {
                 {grandsPrix.length === 0 ? (
                   /* Données manquantes, pas une erreur : le scraper n'a pas
                      encore tourné, ou la saison n'a pas commencé. */
-                  <div className="rounded-bloc bg-surface px-5 py-9 text-center">
+                  <div className="rounded-bloc bg-surface shadow-bloc px-5 py-9 text-center">
                     <p className="text-corps text-texte font-medium">
                       Aucun Grand Prix au calendrier
                     </p>
