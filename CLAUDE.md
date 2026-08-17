@@ -2334,6 +2334,82 @@ Trois points de mise en œuvre :
 | Aperçu rendu avec la feuille compilée | les douze cartes dessinées à 390px de large : drapeaux reconnaissables, **tracés lisibles et à leur vraie forme**, colonnes alignées, les trois états distincts au premier coup d'œil |
 | `npm run build` | passe, version `0.20.0` dans le bundle |
 
+---
+
+**Carte GP du calendrier — drapeau pleine carte, fidèle au SVG** (version `0.21.0`)
+
+La carte de l'onglet Calendrier passe de deux zones — 180px de drapeau puis les informations sur fond blanc — à **une seule surface** : le drapeau couvre toute la carte, et tout le contenu est posé par-dessus en blanc. C'est ce que `assets/calendrier.svg` dessine, et la version `0.20.0` ne le suivait qu'à moitié : le drapeau n'y était qu'une vignette de tête. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x` et `0.18.x`).
+
+*Ce que la planche dessine, et ce que la carte reprend* — un aplat plein de 810 × 400 unités aux coins arrondis (soit très exactement le rapport d'une carte de 200px à la largeur d'un iPhone), le pays en haut à gauche, le quantième en très grand en bas à gauche avec son mois dessous, le circuit en bas à droite, et le tracé du circuit posé **à travers toute la surface**. La pastille de statut et la bande d'action n'existent pas dans la planche : ce sont les deux ajouts, et ce sont eux qui ont demandé le plus de mesure.
+
+*La pile de calques est celle du bloc de l'accueil, dans le même ordre* : fond du drapeau, lumière spéculaire, **voile calculé** du drapeau, surcouche uniforme de 15 %, tracé, contenu. Ce n'est pas indifférent — le voile est ce qui garantit que du texte blanc tient 3:1 sur les sept drapeaux à bande claire, et tout ce qui éclaircit la surface doit donc passer **dessous**. La surcouche peint **toute** la carte et non une bande, comme la correction de la version `0.16.1` : assombrir une zone seulement coupait un drapeau à bande répétée en deux et faisait paraître le rouge du haut plus vif que celui du bas.
+
+---
+
+***Le texte croise maintenant le tracé, et c'est ce qui change tout le reste.***
+
+Tant que le tracé avait sa propre zone, aucun texte ne le rencontrait. Ici il traverse la carte entière, et une lettre blanche posée pile sur un trait blanc à 60 % perd son contour. L'**ombre portée devient inconditionnelle** — `apparence()` ne la pose que sur les drapeaux à plusieurs bandes, parce que la couture était jusqu'ici la seule chose qu'un texte pouvait croiser ; le tracé en est une seconde, et il existe sur les douze cartes. Même valeur que celle du drapeau, pour que les deux écrans ne divergent pas. C'est le traitement que la vue piste applique déjà à sa légende, qui passe tantôt sur l'asphalte et tantôt sur une bordure blanche.
+
+Le tracé est **borné à la zone d'informations** et ne court pas sous la bande d'action : celle-ci est opaque, et un circuit qui passerait dessous se lirait comme un trait coupé net.
+
+---
+
+***Pastille et bande d'action : la surface est blanche, la couleur est dans l'encre.*** C'est la demande, et elle tient — à deux mesures près, toutes deux documentées ici plutôt que découvertes à l'écran.
+
+Sur une carte blanche, la pastille pouvait être un aplat coloré. Sur un drapeau, non : le gris translucide de l'état « à venir » prendrait la couleur du drapeau dessous, donc une couleur différente sur chacune des douze cartes ; et quatre aplats colorés posés sur douze drapeaux colorés font douze fois deux couleurs qui se disputent le même coin d'écran. D'où la pastille blanche à encre colorée, et la bande d'action de même.
+
+**Premier écart : la surface est opaque, pas semi-transparente.** Le pire substrat est le noir de Las Vegas ; une bande blanche à 85 % y poserait le vert sauge `#4A7C59` à **3,45:1**, et il faut **97 %** de blanc pour atteindre 4,5:1 — c'est-à-dire du blanc. La translucidité demandée est donc rendue par l'encre colorée, qui laisse la carte respirer, et non par une surface qui rendrait le libellé illisible une carte sur douze.
+
+**Second écart : « Pronos ouverts » garde son aplat amber.** Sur du blanc, l'amber `#E8A020` ne vaut que **2,22:1** en encre, et aucun ton chaud du design system ne tient 4,5:1 (le terracotta `#C4622D` plafonne à 4,09:1, même sur du blanc pur). L'amber n'existe que comme aplat — c'est déjà ce que les versions `0.12.0`, `0.17.0` et `0.19.0` avaient tranché, ici poussé à sa conséquence. **Et la conséquence tombe juste** : c'est le seul état sur lequel il y a quelque chose à faire, il est donc le seul à ressortir dans une liste de douze cartes, et la bande d'action juste en dessous le redit. Trois pastilles blanches informatives, une pastille amber actionnable : c'est une hiérarchie, pas une incohérence.
+
+| Élément | Surface | Encre | Contraste |
+|---|---|---|---|
+| Pastille « À venir » | blanc | `secondaire` `#543925` | 10,56:1 |
+| Pastille « Fermé » | blanc | `primaire` `#800111` | 10,88:1 |
+| Pastille « Terminé » | blanc | `vert-sauge` `#4A7C59` | 4,86:1 |
+| Pastille « Pronos ouverts » | **amber** `#E8A020` | `texte` `#1A1A1A` | 7,86:1 |
+| Bande « Pronostiquer » | blanc | `primaire` | 10,88:1 |
+| Bande « Voir les résultats » | blanc | `vert-sauge` | 4,86:1 |
+
+C'est le vert sauge, à 4,86:1 sur blanc pur, qui a fixé l'opacité des surfaces : il n'a aucune marge.
+
+**Les deux jeux de classes vivent dans la même table.** `ETATS_GP` (`lib/calendrier.js`) gagne un champ `pastilleSurDrapeau` à côté de `pastille`, plutôt qu'une seconde table : les deux calendriers doivent dire le même mot, et deux tables écrites séparément auraient divergé au premier libellé retouché. **`pastille` est inchangée** — le calendrier d'un championnat, qui pose ses pastilles sur des cartes blanches, ne bouge pas d'un pixel.
+
+Les deux bandes d'action gardent leur distinction : l'aplat bordeaux plein contre le bordeaux sur beige de la version `0.19.0` devient bordeaux contre vert, **par l'encre**. La raison est inchangée — douze cartes terminées feraient sinon douze barres identiques, et l'urgence ne se distinguerait plus de l'archive.
+
+---
+
+*Trois points de mise en œuvre à ne pas défaire :*
+
+1. **`HAUTEUR_BANDE` est retranchée de la carte, jamais ajoutée dessous.** Les douze cartes gardent la même hauteur, qu'elles portent un bouton ou non, comme sur la planche. 46px, donc au-dessus du plancher tactile de 44px.
+2. **La silhouette d'attente porte sa couleur en style en ligne.** `.t-skel-bar` peint elle-même `--color-squelette`, et cette règle n'est pas dans une couche Tailwind : une classe utilitaire ne la battrait pas. Le blanc translucide est obligatoire ici — sur un drapeau, le beige clair des autres squelettes se lirait comme une vraie pastille (règle de l'étape 9, celle de la vue piste).
+3. **L'interlignage du quantième est `leading-none` et non plus serré.** À 0,85 les chiffres ronds débordent leur boîte par le bas, et le « 13 » de l'Espagne comme le « 26 » de l'Azerbaïdjan venaient toucher le mois. Un chiffre plat comme le « 1 » du Mexique ne le montrait pas : **c'est le genre de défaut qu'on ne voit que sur la bonne date**, et il n'a été trouvé qu'en dessinant les douze cartes avec la feuille compilée.
+
+*Écart assumé sur la typographie, le même qu'en version `0.20.0`* — le quantième passe de 48 à **64px, graisse 700**. La section 5 réserve le 700 aux numéros de voiture et son échelle s'arrête à 44px. L'écart est borné à ce seul chiffre, et c'est la planche qui le demande : il est le repère par lequel on cherche « le prochain ».
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Les cartes entrent avec le bloc qui les porte (*texts reveal*, transitions-dev 18), la silhouette de pastille reprend le balayage de *skeleton loader and reveal* (14), et la bande prend `pressable-large` et non `pressable` : une bande pleine largeur est une grande surface, où 3 % déplacent une dizaine de pixels et transforment l'appui en secousse (règle de la version `0.12.1`). Une carte de calendrier ne change pas d'état sous les yeux du joueur — il n'y a aucun changement à accompagner.
+
+*Apport d'`/apple-design`* — la bande garde ses 44px et son retour à l'appui ; drapeau, voile, surcouche et tracé restent `aria-hidden` et `pointer-events-none`, un lecteur d'écran n'ayant rien à annoncer d'une illustration ; le nom du Grand Prix est un `<h2>`, ce qui donne à la liste une vraie structure de titres ; et l'écran ne dit jamais un état qu'il ne connaît pas (§16 : un statut est une information, pas une décoration).
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage doublé) : **96 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Structure | carte à 200px, 24px de rayon, débordement coupé, `shadow-aplat` ; **le dégradé néerlandais peint toute la carte** ; **aucune surface blanche de zone basse**, plus aucune zone de 180px |
+| Calques | **lueur → voile → surcouche → tracé → contenu**, vérifié par position dans le DOM ; voile rendu à l'opacité calculée (0,45), surcouche en `inset-0` |
+| Contenu | pays à 12px en haut à gauche ; quantième à 64px graisse 700 avec crénage négatif, mois dessous ; nom en `<h2>` 16px et circuit en bas à droite ; texte blanc ; **ombre portée sur tout le texte** ; encre secondaire venue du drapeau |
+| Tracé | trait et non aplat, `currentColor`, blanc à 60 %, centré, **aucun `aspect-ratio` en ligne**, décoratif ; **GP hors planche → aucun `<svg>`**, repli bordeaux sans voile ni surcouche, carte quand même complète |
+| Pastilles | les quatre variantes drapeau ; blanc + marron, blanc + bordeaux, blanc + vert ; **« ouvert » garde son aplat amber** ; **la variante carte blanche du calendrier d'un championnat est intacte** |
+| **Contraste, mesuré** | les trois encres ≥ 4,5:1 sur blanc, encre foncée sur amber à 7,86:1 ; **l'amber en encre échoue à 2,22:1** et le terracotta plafonne à 4,09:1 — d'où l'aplat conservé ; **une bande à 85 % laisserait le vert à 3,45:1** — d'où l'opacité |
+| Garantie de la version `0.15.0` | **le texte blanc tient toujours ≥ 3:1 sur les douze drapeaux**, voile et surcouche compris |
+| Bande | « Pronostiquer » blanc + bordeaux vers les cotes, « Voir les résultats » blanc + vert vers les résultats ; pleine largeur, 46px ≥ 44px tactile, `pressable-large` ; **aucune bande à venir ni fermé** ; **le tracé ne court pas sous la bande** |
+| Attente | silhouette au lieu d'un état posé d'office ; **blanc translucide, jamais le gris des squelettes** ; date, nom et circuit affichés pendant l'attente ; un GP déjà connu garde son état pendant un rechargement |
+| Les douze cartes | chacune se rend avec son drapeau, son tracé, son nom et son circuit |
+| Écran et règles permanentes | l'écran se monte sans lever, les douze noms présents, **aucune cote brute « ×N »**, ni « ligue », ni « historique » |
+| CSS de production | `font-size:64px`, `line-height:1`, `letter-spacing:-.03em`, `pressable-large`, `shadow-aplat`, `text-vert-sauge`, `text-secondaire`, `bg-accent`, `text-white/60`, `bg-black/15`, rayon 10px bien générés |
+| Aperçu rendu avec la feuille compilée | les douze cartes dessinées à 390px de large : drapeaux reconnaissables, **tracés lisibles et à leur vraie forme**, quantièmes séparés de leur mois, les quatre états distincts au premier coup d'œil |
+| `npm run build` | passe, version `0.21.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2407,7 +2483,9 @@ Points non couverts, à traiter le moment venu :
 - **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
 
-**Trois points depuis la version `0.20.0`**, tous sur l'onglet Calendrier. **La longueur de l'écran** : douze cartes d'environ 300px font près de quatre écrans de défilement, sans en-tête collant pour dire où l'on est — c'est le premier point à juger au pouce, et le levier est `HAUTEUR_DRAPEAU` (`frontend/src/composants/CarteGpSaison.jsx`), que le reste de la carte suit tout seul. **L'entrée dans la saison** : l'écran s'ouvre sur le premier Grand Prix de la liste, y compris quand il est terminé ; faire défiler jusqu'au prochain à jouer serait plus juste, mais demande un `scrollIntoView` à l'arrivée, donc un choix explicite sur le comportement du retour. Et **le décompte de l'en-tête**, qui contredira le bandeau de l'accueil dès la première course courue tant que celui-ci n'est pas rebranché (voir plus haut).
+**Trois points depuis les versions `0.20.0` et `0.21.0`**, tous sur l'onglet Calendrier. **La longueur de l'écran** : la refonte de la `0.21.0` ramène la carte de ~300px à **200px**, ce qui divise le défilement par une fois et demie, mais douze cartes font toujours près de trois écrans sans en-tête collant pour dire où l'on est — c'est le premier point à juger au pouce, et le levier est `HAUTEUR_CARTE` (`frontend/src/composants/CarteGpSaison.jsx`), que le tracé, la bande d'action et le squelette suivent tout seuls. **L'entrée dans la saison** : l'écran s'ouvre sur le premier Grand Prix de la liste, y compris quand il est terminé ; faire défiler jusqu'au prochain à jouer serait plus juste, mais demande un `scrollIntoView` à l'arrivée, donc un choix explicite sur le comportement du retour. Et **le décompte de l'en-tête**, qui contredira le bandeau de l'accueil dès la première course courue tant que celui-ci n'est pas rebranché (voir plus haut).
+
+**Deux points propres à la `0.21.0`**, tous deux sur la lisibilité du tracé maintenant qu'il traverse le texte. **Sur les sept drapeaux à bande claire**, le trait blanc à 60 % passe sur une bande ramenée au gris moyen par le voile : mesuré à 2,70:1 au pire, comme sur l'accueil, donc lisible mais discret — s'il paraît fantomatique sur un vrai écran, deux leviers d'une ligne, dans cet ordre : monter le trait de 60 à 70 % de blanc, ou approfondir la surcouche de 15 à 25 % (elle assombrit alors aussi le fond du texte, ce qui ne fait que renforcer sa lisibilité). **Ne pas toucher au voile**, calculé pour le texte. Et **le croisement texte / tracé** : l'ombre portée le rend lisible en rendu statique, mais c'est exactement le genre de détail qui se juge à la lumière du jour, sur les cartes où le tracé passe pile derrière le quantième (Espagne, Azerbaïdjan, Brésil).
 
 **Trois points depuis la version `0.19.0`**, tous sur les cartes du calendrier d'un championnat. **La hauteur des cartes** : 180px de drapeau plus une zone d'informations portent chaque carte à environ 300px, et douze Grands Prix font un écran très long — à juger au pouce, et si c'est trop, c'est `HAUTEUR_DRAPEAU` (`frontend/src/ecrans/Calendrier.jsx`) qu'il faut baisser, le squelette suivra tout seul. **La lisibilité du tracé** sur les drapeaux les plus clairs, mesurée à 2,70:1 au pire (Pays-Bas, Italie, Singapour, Mexique, Qatar) : deux leviers d'une ligne s'il paraît fantomatique — monter le trait de 60 à 70 % de blanc, ou approfondir la surcouche de 15 à 25 % — mais **ne pas toucher au voile**, calculé pour le texte. Et **les cartes pleine largeur** (`pleine-largeur`), à vérifier en paysage sur un iPhone à encoche, où la zone sûre latérale n'est plus nulle.
 

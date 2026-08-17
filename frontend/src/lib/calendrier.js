@@ -42,27 +42,60 @@ export function chargerCalendrier(championnatId, signal) {
  * L'état « à venir » est le seul sans couleur propre — il n'annonce rien — et
  * prend un gris translucide avec le marron du design system pour encre,
  * `#999999` en texte plein ne valant que 2,0:1 sur une carte blanche.
+ *
+ * ## Deux jeux de classes, parce qu'il y a deux fonds
+ *
+ * `pastille` est la version posée sur une **carte blanche** — celle du calendrier
+ * d'un championnat. `pastilleSurDrapeau` est la version posée sur un **drapeau**,
+ * celle de la carte de l'onglet Calendrier, et elle ne pouvait pas être la même :
+ *
+ * - le gris translucide de l'état « à venir » prendrait la couleur du drapeau
+ *   dessous, donc une couleur différente sur chacune des douze cartes ;
+ * - les aplats pleins, eux, tiennent leur contraste partout, mais quatre aplats
+ *   colorés posés sur douze drapeaux colorés font douze fois deux couleurs qui se
+ *   disputent le même coin d'écran.
+ *
+ * D'où la pastille blanche à encre colorée. **Trois états sur quatre l'adoptent ;
+ * « Pronos ouverts » garde son aplat amber, et c'est mesuré :** sur du blanc,
+ * l'amber `#E8A020` ne vaut que **2,22:1**, et aucun ton chaud du design system
+ * ne tient 4,5:1 en encre (le terracotta `#C4622D` plafonne à 4,09:1). L'amber
+ * n'existe que comme aplat. La conséquence tombe juste — c'est le seul état sur
+ * lequel il y a quelque chose à faire, et il est le seul à ressortir dans une
+ * liste de douze cartes.
+ *
+ * **La surface blanche est opaque, et c'est également mesuré.** Une pastille
+ * franchement translucide poserait le vert sauge `#4A7C59` à **3,45:1** sur le
+ * pire substrat (le noir de Las Vegas) : il faut 97 % de blanc pour atteindre
+ * 4,5:1, c'est-à-dire du blanc. La translucidité demandée est donc rendue par
+ * l'encre colorée, qui laisse le drapeau se lire à travers le sens de la carte,
+ * pas par une surface qui rendrait le libellé illisible une carte sur douze.
  */
 export const ETATS_GP = {
   termine: {
     cle: "termine",
     libelle: "Terminé",
     pastille: "bg-vert-sauge text-white",
+    // 4,86:1 — le plus serré des quatre, et c'est lui qui a fixé l'opacité.
+    pastilleSurDrapeau: "bg-white text-vert-sauge",
   },
   ferme: {
     cle: "ferme",
     libelle: "Fermé",
     pastille: "bg-primaire text-white",
+    pastilleSurDrapeau: "bg-white text-primaire", // 10,88:1
   },
   ouvert: {
     cle: "ouvert",
     libelle: "Pronos ouverts",
     pastille: "bg-accent text-texte",
+    // Seul état à garder son aplat : l'amber ne tient pas en encre sur blanc.
+    pastilleSurDrapeau: "bg-accent text-texte", // 7,86:1
   },
   a_venir: {
     cle: "a_venir",
     libelle: "À venir",
     pastille: "bg-texte-doux/25 text-secondaire",
+    pastilleSurDrapeau: "bg-white text-secondaire", // 10,56:1
   },
 };
 

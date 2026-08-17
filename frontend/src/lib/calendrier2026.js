@@ -155,6 +155,17 @@ export function etatDuGpSaison(gp, maintenant = Date.now()) {
  * plus rien : dans les deux cas, un bouton mènerait à un écran vide. Les deux
  * états qui en portent un exigent tous deux un identifiant venu de la base —
  * il ne peut donc jamais être `null` ici.
+ *
+ * **La bande est blanche dans les deux cas, la couleur est portée par l'encre.**
+ * Elle est posée sur le drapeau du pays hôte, qui change à chaque carte : un
+ * aplat bordeaux sur un drapeau bordeaux ne se verrait pas, et deux aplats
+ * colonnes l'un sur l'autre feraient deux couleurs concurrentes par carte. C'est
+ * l'encre qui distingue l'urgence de l'archive, comme le faisaient les deux
+ * styles d'avant.
+ *
+ * **La surface est opaque, et c'est mesuré**, pour la raison exacte de la
+ * pastille (voir `ETATS_GP`) : sur le noir de Las Vegas, une bande blanche à
+ * 85 % poserait le vert sauge à 3,45:1. Il faut 97 % pour tenir 4,5:1.
  */
 export function actionDuGp(gp, etat) {
   if (!gp.gp_id) return null;
@@ -163,17 +174,16 @@ export function actionDuGp(gp, etat) {
     return {
       vers: `/grands-prix/${gp.gp_id}/resultats`,
       libelle: "Voir les résultats",
-      // Consultation : le bordeaux sur le beige du fond, pas un aplat plein.
-      // Douze cartes terminées feraient sinon douze barres rouges, et l'urgence
-      // ne se distinguerait plus de l'archive.
-      style: "bg-fond text-primaire",
+      // Consultation. Vert sauge sur blanc : 4,86:1.
+      style: "bg-white text-vert-sauge",
     };
   }
   if (etat.cle === "ouvert") {
     return {
       vers: `/grands-prix/${gp.gp_id}/cotes`,
       libelle: "Pronostiquer",
-      style: "bg-primaire text-white",
+      // Action. Bordeaux sur blanc : 10,88:1.
+      style: "bg-white text-primaire",
     };
   }
   return null;
