@@ -17,7 +17,7 @@ import {
 } from "../composants/DrapeauxGP.jsx";
 import { Barre, Pave } from "../composants/Squelette.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
-import { chargerCalendrier, cleCalendrier } from "../lib/calendrier.js";
+import { ETATS_GP, chargerCalendrier, cleCalendrier } from "../lib/calendrier.js";
 import { chargerChampionnat } from "../lib/championnats.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import {
@@ -65,38 +65,18 @@ const HAUTEUR_DRAPEAU = 180;
  * L'ordre des tests compte : un Grand Prix couru est « terminé » quoi qu'il
  * arrive, et une fermeture passée l'emporte sur des cotes disponibles.
  *
- * **Les couleurs sont mesurées, pas choisies.** Chaque pastille est un aplat
- * plein portant l'encre qui contraste avec lui : `#1A1A1A` sur l'amber (7,7:1,
- * là où le blanc tomberait à 2,2:1), blanc sur le bordeaux et sur le vert
- * sauge. L'état « à venir » est le seul sans couleur propre — il n'annonce rien
- * — et prend un gris translucide avec le marron du design system pour encre,
- * `#999999` en texte plein ne valant que 2,0:1 sur une carte blanche.
+ * **Le mot et la couleur ne sont pas écrits ici** mais dans `ETATS_GP`
+ * (`lib/calendrier.js`), partagés avec le calendrier de la saison. Les deux
+ * écrans n'ont pas les mêmes données pour décider de l'état ; ils doivent en
+ * revanche le dire de la même façon.
  */
 export function etatDuGp(gp, maintenant = Date.now()) {
-  if (gp.resultats_disponibles) {
-    return {
-      cle: "termine",
-      libelle: "Terminé",
-      pastille: "bg-vert-sauge text-white",
-    };
-  }
+  if (gp.resultats_disponibles) return ETATS_GP.termine;
 
   const { ferme } = etatFermeture(gp.date_course, maintenant);
-  if (ferme) {
-    return { cle: "ferme", libelle: "Fermé", pastille: "bg-primaire text-white" };
-  }
-  if (gp.cotes_disponibles) {
-    return {
-      cle: "ouvert",
-      libelle: "Pronos ouverts",
-      pastille: "bg-accent text-texte",
-    };
-  }
-  return {
-    cle: "a_venir",
-    libelle: "À venir",
-    pastille: "bg-texte-doux/25 text-secondaire",
-  };
+  if (ferme) return ETATS_GP.ferme;
+  if (gp.cotes_disponibles) return ETATS_GP.ouvert;
+  return ETATS_GP.a_venir;
 }
 
 /* -------------------------------------------------------------------------- */

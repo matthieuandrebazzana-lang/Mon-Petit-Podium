@@ -25,6 +25,48 @@ export function chargerCalendrier(championnatId, signal) {
 }
 
 /**
+ * Les quatre états d'un Grand Prix, avec le mot et la couleur qui les disent.
+ *
+ * **Une seule table pour les deux calendriers** — celui d'un championnat
+ * (maquette 15) et celui de la saison (onglet Calendrier). Les deux écrans
+ * calculent l'état différemment, parce qu'ils ne disposent pas des mêmes
+ * données : l'un lit `resultats_disponibles` servi par la fonction SQL, l'autre
+ * croise une liste statique avec `GET /scraper/cotes`. Mais ils doivent dire le
+ * même mot avec la même couleur, sans quoi un Grand Prix changerait d'état en
+ * passant d'un onglet à l'autre. Deux tables écrites séparément auraient divergé
+ * au premier libellé retouché.
+ *
+ * **Les couleurs sont mesurées, pas choisies.** Chaque pastille est un aplat
+ * plein portant l'encre qui contraste avec lui : `#1A1A1A` sur l'amber (7,9:1,
+ * là où le blanc tomberait à 2,2:1), blanc sur le bordeaux et sur le vert sauge.
+ * L'état « à venir » est le seul sans couleur propre — il n'annonce rien — et
+ * prend un gris translucide avec le marron du design system pour encre,
+ * `#999999` en texte plein ne valant que 2,0:1 sur une carte blanche.
+ */
+export const ETATS_GP = {
+  termine: {
+    cle: "termine",
+    libelle: "Terminé",
+    pastille: "bg-vert-sauge text-white",
+  },
+  ferme: {
+    cle: "ferme",
+    libelle: "Fermé",
+    pastille: "bg-primaire text-white",
+  },
+  ouvert: {
+    cle: "ouvert",
+    libelle: "Pronos ouverts",
+    pastille: "bg-accent text-texte",
+  },
+  a_venir: {
+    cle: "a_venir",
+    libelle: "À venir",
+    pastille: "bg-texte-doux/25 text-secondaire",
+  },
+};
+
+/**
  * Résultats d'un Grand Prix.
  *
  * `championnatId` est facultatif, et c'est la route qui porte la distinction
