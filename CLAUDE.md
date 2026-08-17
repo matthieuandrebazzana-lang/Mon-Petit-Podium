@@ -1775,6 +1775,22 @@ Le filtre est exactement celui du prochain GP de l'accueil : les statuts non cou
 | Sous un vrai `uvicorn`, Supabase pointé sur un port mort | `/health` en `0.14.0`, 19 chemins, `401` sans jeton, **réponse en français et trace complète sur la sortie standard** |
 | `npm run build` | passe, 128 modules ; grain, jauge et les quatre opacités nouvelles bien générés dans le CSS |
 
+---
+
+**Bandeau « Grands Prix restants » — lisibilité et décompte figé** (version `0.14.1`)
+
+Deux corrections sur le bandeau de bas d'écran introduit en version `0.14.0`, partagé par l'accueil et l'onglet Championnats (`BlocSaison`, exporté depuis `Accueil.jsx`). **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1` et `0.12.x`).
+
+*Lisibilité* — le bandeau reprenait le gris `texte-doux` et la graisse 400 de la ligne de version. Posé sur le beige `#F5F0EB`, `#999999` tombe à **2,0:1** de contraste : c'était lisible à côté d'un numéro de version, que personne ne lit, pas pour une phrase qu'on vient lire. Il passe au **marron `secondaire` `#543925`** — couleur du design system, section 5 — en graisse 500, ce qui le porte à **9,4:1**. La taille reste à 13px, valeur qu'il avait déjà. Toujours aucun aplat ni ombre : ce n'est pas un bloc.
+
+*Décompte* — il comptait les lignes de `public.grands_prix`, et c'était le mauvais dénombrement. **Unibet n'expose jamais que le Grand Prix suivant** (section 3.1) : la table ne contient que ce que le scraper a rencontré, soit **un seul GP à ce jour**. Le bandeau annonçait donc « 1 Grand Prix restant » au milieu d'une saison qui en compte douze — l'exact contraire de ce qu'il devait dire, sur la seule ligne de l'écran dont personne n'attend qu'elle se corrige.
+
+La constante `GP_RESTANTS = 12` la remplace (des Pays-Bas à Abu Dhabi), avec un `TODO` à ses deux points d'usage. **`chargerGrandsPrixRestants` reste en place** dans `lib/pronostics.js`, comme le code OAuth depuis la version `0.2.2` et `Onglets.jsx` depuis la `0.12.0` : la lecture est déjà écrite et vérifiée, et elle redevient la bonne réponse le jour où le calendrier complet est en base — il n'y aura qu'à la rebrancher, avec le repli « rien tant que le décompte est inconnu » qu'elle servait.
+
+**Conséquence assumée : le bandeau ne se vide plus de lui-même.** Il affichera « 12 Grands Prix restants » jusqu'à ce que la constante bouge, y compris après le GP des Pays-Bas. C'est le prix d'un nombre juste aujourd'hui contre un nombre faux ; les branches singulier / pluriel et « Saison 2026 terminée » sont conservées telles quelles, pour que le rebranchement n'ait rien à réécrire.
+
+*Vérifié* : `npm run build` passe, 128 modules ; la constante est bien inlinée à 12 dans le bundle, l'utilitaire `text-secondaire` est généré, et la version `0.14.1` est présente.
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -1829,6 +1845,7 @@ Ordre d'application, si l'une manque :
   ```
 
 Points non couverts, à traiter le moment venu :
+- **Décompte des Grands Prix restants figé à 12** — depuis la version `0.14.1`, le bandeau de bas d'écran (`GP_RESTANTS` dans `frontend/src/ecrans/Accueil.jsx`) affiche une constante, parce que `public.grands_prix` ne contient que le Grand Prix suivant : Unibet n'en expose jamais davantage (section 3.1). **Il ne se décrémente donc pas tout seul** — à baisser à la main après chaque course, ou à rebrancher sur `chargerGrandsPrixRestants` (`lib/pronostics.js`, laissée en place et déjà vérifiée) le jour où le calendrier complet est enregistré. Enregistrer la saison entière demanderait une autre source qu'Unibet : le calendrier officiel de la FIA, ou OpenF1, dont `/meetings` porte déjà les vingt-quatre week-ends d'une année.
 - **Scraper exercé contre le vrai Supabase** — la ligne réelle observée en version `0.5.1` (voir ci-dessus) montre que l'écriture a eu lieu au moins une fois. Reste à vérifier le contenu de `public.cotes` pour ce GP, et le comportement du scraper sur un GP déjà figé.
 - **Programmation automatique du scraping, et figeage des cotes** — **faite à l'étape 11** (`app/jobs/scraper.py`, second emploi APScheduler dans le `lifespan`). Le scraping se déclenche tout seul 2h après les qualifications, et le statut `cotes_figees` est enfin posé par du code. Trois points restent à surveiller : **(1)** Unibet n'exposait aucun événement de qualification au 16 août 2026, c'est donc le repli `date_course - 22h` qui s'applique — **relire les logs du samedi du premier vrai Grand Prix** pour voir si une vraie heure de qualifications est apparue (chercher « qualifications annoncées par Unibet » ou « aucune épreuve de qualification trouvée ») ; **(2)** le job de résultats continue de surveiller les GP restés `a_venir`, ce qui reste le bon filet si un figeage est manqué ; **(3)** `POST /scraper/declencher` fige désormais lui aussi — utiliser `?figer=false` pour un essai avant les qualifications, sans quoi les cotes sont arrêtées pour de bon et il faut un `update` à la main pour les débloquer.
 - **Tableau des cotes quand les marchés se multiplient** — depuis la refonte visuelle (`0.12.0`), les marchés sont **empilés** en sections colorées au lieu d'être derrière des onglets. À trois marchés, l'écran se lit d'un défilement. Après les qualifications, le noyau complet de la section 3.1 (top 6, top 10, duels…) donnera un écran très long, à vingt-deux pilotes par section. `frontend/src/composants/Onglets.jsx` et sa transition *tabs sliding* sont **restés en place, simplement non montés** : c'est la réponse déjà écrite et vérifiée le jour où l'empilement devient impraticable.

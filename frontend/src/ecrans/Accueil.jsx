@@ -17,15 +17,23 @@ import {
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { listerMesChampionnats } from "../lib/championnats.js";
 import { couleurBloc, couleurChampionnat, tonalites } from "../lib/couleurs.js";
-import {
-  chargerAccueilGp,
-  chargerGrandsPrixRestants,
-  cleAccueilGp,
-} from "../lib/pronostics.js";
+import { chargerAccueilGp, cleAccueilGp } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import { formaterDepart } from "../lib/format.js";
 import { useFermeture } from "../lib/useFermeture.js";
 import { APP_VERSION } from "../config.js";
+
+/**
+ * Grands Prix restants dans la saison 2026, du GP des Pays-Bas à Abu Dhabi.
+ *
+ * En dur, et pour une raison précise : Unibet n'expose que le Grand Prix
+ * suivant (section 3.1), donc `public.grands_prix` ne contient que ce que le
+ * scraper a rencontré — un seul GP à ce jour. Le décompte lu en base annonçait
+ * donc « 1 Grand Prix restant » au milieu d'une saison qui en compte douze.
+ *
+ * TODO: dynamique quand tous les GP sont en base.
+ */
+const GP_RESTANTS = 12;
 
 /**
  * Bloc rouge « PROCHAIN GP » de la maquette 04.
@@ -417,29 +425,34 @@ export function ActionsChampionnat() {
  * d'un ornement aurait été pire ; ce décompte, lui, dit quelque chose, et il se
  * vide de lui-même à mesure que la saison avance.
  *
- * **Rien ne s'affiche tant que le décompte n'est pas connu**, et rien non plus
- * si sa lecture échoue. Un bandeau qui annoncerait « 0 Grand Prix restant »
- * pendant le réveil de la base dirait le contraire de la vérité, sur le seul
- * élément de l'écran dont personne n'attend qu'il se corrige.
+ * **Le décompte est une constante, pas une lecture.** `public.grands_prix` ne
+ * contient que les Grands Prix déjà scrapés, et Unibet n'expose jamais que le
+ * suivant (section 3.1) : compter les lignes en base annonçait « 1 Grand Prix
+ * restant » au milieu d'une saison qui en compte douze. Un décompte faux est
+ * pire qu'un décompte figé — c'est la seule ligne de l'écran dont personne
+ * n'attend qu'elle se corrige.
  *
- * Aucun aplat, aucune ombre : ce n'est pas un bloc. C'est la même graisse et le
- * même gris que la ligne de version, quelques pixels plus haut.
+ * TODO: dynamique quand tous les GP sont en base. `chargerGrandsPrixRestants`
+ * (lib/pronostics.js) fait déjà exactement cette lecture et reste en place :
+ * le jour où le calendrier complet est enregistré, il n'y a qu'à la rebrancher
+ * ici, avec le repli « rien tant que le décompte est inconnu » qu'elle servait.
+ *
+ * Aucun aplat, aucune ombre : ce n'est pas un bloc. Mais le gris des lignes de
+ * version le rendait illisible sur le beige ; il porte donc le marron
+ * `secondaire` du design system, en graisse 500.
  */
 export function BlocSaison() {
-  const chargeur = useCallback((signal) => chargerGrandsPrixRestants(signal), []);
-  const { donnees } = useDonnees("gp-restants", chargeur);
-
-  if (typeof donnees !== "number") return null;
-
   const texte =
-    donnees === 0
+    GP_RESTANTS === 0
       ? "Saison 2026 terminée"
-      : `Saison 2026 · ${donnees} Grand${donnees > 1 ? "s" : ""} Prix restant${
-          donnees > 1 ? "s" : ""
+      : `Saison 2026 · ${GP_RESTANTS} Grand${GP_RESTANTS > 1 ? "s" : ""} Prix restant${
+          GP_RESTANTS > 1 ? "s" : ""
         }`;
 
   return (
-    <p className="text-texte-doux px-4 pt-1 text-center text-[13px]">{texte}</p>
+    <p className="text-secondaire px-4 pt-1 text-center text-[13px] font-medium">
+      {texte}
+    </p>
   );
 }
 
