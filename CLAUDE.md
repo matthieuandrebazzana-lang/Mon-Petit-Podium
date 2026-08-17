@@ -1996,6 +1996,64 @@ Correction d'un défaut relevé à l'œil sur le bloc du prochain Grand Prix. **
 | CSS de production | `bg-black/15` et `bg-white/10` générés |
 | `npm run build` | passe, 130 modules, version `0.16.1` dans le bundle |
 
+---
+
+**Refonte de l'écran Récap** (version `0.17.0`)
+
+La maquette 10 recomposée en quatre zones : hero au drapeau du pays hôte, carte de statut colorée, compte à rebours de fermeture, et une carte unique pour tous les pronostics. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0` et `0.16.x`).
+
+*Zone 1 — le hero, et pourquoi il est aussi la barre de navigation.* Il porte le drapeau du pays hôte par le **même chemin exactement** que le bloc du prochain Grand Prix de l'accueil : même clé (`slugCircuit`), même table (`DrapeauxGP`), même voile calculé, et la même surcouche uniforme de 15 % introduite en version `0.16.1`. Le récap et l'accueil parlent alors du même Grand Prix avec les mêmes couleurs, et la reconnaissance se fait avant d'avoir lu le nom.
+
+**Le bouton de retour vit dans le hero**, et non dans un en-tête au-dessus. Un bandeau beige portant « Récap » posé sur un hero qui nomme déjà le Grand Prix aurait donné **deux titres empilés pour un seul écran**, et 150px de chrome avant le premier contenu utile. C'est l'arbitrage déjà tranché pour l'en-tête teinté d'un championnat, à ceci près que la teinte y est une couleur unie que `EnTeteEcran` sait rendre, alors qu'ici c'est un drapeau — d'où un hero écrit sur place. `pleine-largeur` + `coiffe-ecran` laissent la couleur courir jusqu'aux deux bords et derrière la Dynamic Island, sans jamais y pousser de texte.
+
+**Conséquence assumée** : l'en-tête n'est plus collant sur cet écran, le bouton de retour défile donc avec la page. L'écran tient en quatre blocs, le défilement est court, et c'est le prix d'un hero qui porte une image plein cadre. `EnTeteEcran` reste en service sur les quatre écrans qui l'ont ; l'étendre ici demanderait qu'il sache rendre un fond en `style` et non en classe.
+
+Le nom du Grand Prix prend l'échelle des **titres de page** (`text-titre-lg`) et non les 26px du bloc de l'accueil : ici il n'y a pas d'autre titre, c'est lui le titre de l'écran. L'ombre portée conditionnelle de la version `0.15.0` est conservée — il traverse toujours la couture des bandes du drapeau, et un aplat uni n'en reçoit aucune.
+
+---
+
+***Zone 2 — la carte de statut, et l'écart d'encre.*** C'est le seul point où la demande est corrigée, et c'est le même arbitrage qu'en version `0.12.0`.
+
+Elle écrit « texte en blanc » pour les **deux** variantes. Sur le vert sauge `#4A7C59`, le blanc tient **4,72:1** et il est conservé tel quel. Sur l'amber `#E8A020`, il tombe à **2,17:1** — sous le plancher AA des grands textes — quand l'encre `#1A1A1A` monte à 7,72:1. `tonalites()` porte ce seuil une fois pour toutes : **l'écran ne choisit jamais `text-white` lui-même, il lit l'objet**. C'est ce qui empêche une carte amber de recevoir du texte blanc parce qu'un écran l'a écrit de mémoire, et un contrôle du jeu de tests vérifie qu'aucun `text-white` ne suit un `bg-accent`.
+
+Le sous-titre dit **le geste possible**, pas l'état déjà lu dans le titre. Une fois la fermeture passée il n'y a plus de geste : il annonce alors ce qui a changé plutôt que d'inviter à une modification impossible. La célébration « Pronos enregistrés ! » au retour de l'écran de saisie (écart 5 de l'étape 5) est **conservée** : elle ne s'affiche qu'avec `state.enregistre`, et l'arrivée à froid dit bien « Tes pronos sont en place ».
+
+*Zone 3 — le compte à rebours.* Carte blanche, label gris, temps restant en grand chiffre au rouge de la marque (`text-score`, 32px, graisse 500), bouton rouge plein pleine largeur. **Trois états, et ils ne disent pas la même chose** : un décompte quand la fermeture approche ; « Fermés » et **plus aucun bouton** une fois passée, puisqu'il n'y a plus rien à modifier ; et « À confirmer » pour un Grand Prix dont Unibet n'a pas publié l'horaire — qui **reste ouvert**, règle tenue aux trois étages depuis l'étape 5, mais n'a aucune durée à afficher. Écrire « 0s » y serait faux dans les deux sens. Le libellé du bouton suit sa destination, comme partout : « Modifier mes pronos » vers la saisie, « Faire mes pronos » vers le tableau des cotes quand rien n'est encore joué.
+
+*Zone 4 — une seule carte pour tous les pronostics.* Deux sections, un séparateur fin entre elles, et le total en bas.
+
+**Les deux étiquettes « Obligatoire » et « Bonus » qui suivaient chaque ligne sont supprimées** : elles répétaient mot pour mot le titre de la section juste au-dessus. C'est la **pastille de points** qui porte désormais le marché — rouge pour le vainqueur, bleu ardoise pour le podium, amber pour un bonus — et sa couleur est prise à la **même source que les en-têtes du tableau des cotes** (`couleurMarche`). Le rouge du vainqueur est donc exactement celui de sa section là-bas, et les deux ne peuvent pas diverger. La pastille amber reçoit son encre foncée du même `tonalites` que la carte de statut.
+
+Les points affichés restent ceux que le pronostic rapportera **s'il tombe** (règle 4.1) ; une cote retirée par le bookmaker laisse le pronostic visible sans inventer de montant, et sort du total. Le total (« Total si tout tombe ») est conservé de la version précédente et passe en grand chiffre rouge — c'est la question que tout le monde se pose devant un récapitulatif.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** L'écran réutilise celles déjà installées : *texts reveal* (18) pour l'entrée des blocs, *text states swap* (04) pour le décompte (il change toutes les secondes dans la dernière heure, un remplacement de texte nu le ferait clignoter), *skeleton loader and reveal* (14) pour l'attente. Un jeton de plus aurait été un jeton à maintenir sans rien gagner.
+
+*Le squelette suit la nouvelle silhouette.* La carte de statut y garde son aplat vert et n'en grise que le contenu, en blanc translucide — c'est la règle de l'étape 9 sur les aplats de couleur, et le gris des squelettes s'y lirait comme une tache. Les deux cartes blanches, elles, passent par les primitives partagées (`Barre`, `Pave`) : **la couleur des squelettes ne s'écrit toujours qu'à un seul endroit**. Le bouton garde sa hauteur tactile dans la silhouette, sans quoi l'écran sauterait de 44px à l'arrivée des données.
+
+*`IconeAlerte` est ajoutée à `composants/Icones.jsx`*, dans le style des autres (tracé au trait, `currentColor`, décorative). Le point du bas est un segment de longueur nulle rendu par `strokeLinecap="round"` plutôt qu'un `<circle>` de plus, pour que son diamètre suive l'épaisseur du trait. Le skill Taste proscrit les icônes dessinées à la main et recommande une bibliothèque tierce : c'est le point où le CLAUDE.md gagne, `Icones.jsx` étant tiré des maquettes depuis l'étape 2 — même arbitrage qu'en version `0.12.0`.
+
+*Apport d'`/apple-design`* — le hero répond aux quatre questions du wayfinding (§16) : où je suis (le nom du GP en titre), ce qu'est cet écran (le label « Récap »), et comment sortir (un bouton qui **nomme sa destination**, à 44px avec retour à l'appui). **Le hero est rendu même en attente et même en erreur** : une barre de retour qui disparaîtrait pendant le réveil de Supabase enfermerait le joueur. La lumière spéculaire du §12 est posée sur les deux aplats de couleur, tracé et voile restent `aria-hidden`, et l'ombre portée du titre suit la règle de vibrance sur fond changeant.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage pré-rempli) : **86 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Hero | peint par le **dégradé du drapeau** et non par un aplat rouge ; `pleine-largeur` + `coiffe-ecran`, arrondi en bas seulement, `shadow-aplat`, lumière spéculaire ; voile rendu à **l'opacité calculée** du drapeau ; surcouche uniforme de la `0.16.1` présente |
+| Contenu du hero | label « Récap » sur la pastille calculée ; nom du GP en `<h1>` à l'échelle des titres et centré ; date et heure de départ dessous en encre secondaire ; **ombre portée présente** (drapeau à bandes) ; sortie nommée « Accueil », 44px et retour à l'appui |
+| Statut, pronos en place | carte **verte**, titre et sous-titre demandés, blanc conservé (**4,72:1**), icône de coche |
+| Statut, aucun prono | carte **amber**, titre demandé, icône d'alerte ; **le blanc y serait à 2,17:1** donc `tonalites` impose l'encre foncée, et **aucun `text-white` ne suit un `bg-accent`** |
+| Compte à rebours | label en petit gris, temps en `text-score` rouge **centré**, échange de texte (transitions-dev 04) ; bouton rouge plein, pleine largeur, 44px ; « Faire mes pronos » quand rien n'est joué |
+| GP fermé | label « Pronostics », valeur « Fermés », **aucun bouton de modification**, statut cohérent, pronostics toujours lisibles |
+| GP sans horaire | **reste ouvert**, aucune durée fabriquée, « À confirmer » et « Date à confirmer » |
+| Pronostics | deux sections titrées, séparateur fin, marché au-dessus du pilote, les quatre choix rendus |
+| Pastilles | vainqueur → `#800111`, podium → `#2C4A6E`, bonus → `#E8A020` ; **les mêmes couleurs que les en-têtes du tableau des cotes** ; encre foncée sur l'amber ; points habillés |
+| Étiquettes retirées | **plus aucun « Obligatoire »**, et « Bonus » n'apparaît plus qu'en titre de section |
+| Total | libellé demandé en petit gris, **792 pts = 280 + 135 + 162 + 215** (podium compté pour ses deux cotes), en grand chiffre rouge |
+| Cote retirée | pronostic visible, **aucun montant inventé**, exclu du total |
+| États | aucun pronostic → message explicite et **aucun total à zéro** ; hero rendu **même sans donnée en cache** ; GP hors table de drapeaux → repli bordeaux sans voile |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique » ; entrée échelonnée conservée ; effets de profondeur décoratifs |
+| `npm run build` | passe, 130 modules, version `0.17.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2067,6 +2125,8 @@ Points non couverts, à traiter le moment venu :
 - **Marchés obligatoires liés au nom Unibet** — le vainqueur et le podium sont reconnus par les slugs `vainqueur` et `podium`, en dur à **trois** endroits depuis l'étape 6 : `backend/app/api/routes/pronostics.py`, `backend/app/calcul/points.py` et `frontend/src/lib/pronostics.js`. Si Unibet renomme un de ces marchés, la saisie s'arrête proprement en le disant, mais **les trois constantes doivent être corrigées ensemble**.
 - **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
+
+**Deux points depuis la version `0.17.0`**, tous deux sur l'écran Récap et tous deux liés au hero. **Le bouton de retour n'est plus collant** : il vit dans le hero, qui porte un drapeau qu'une barre translucide ne saurait pas reproduire, et il défile donc avec la page. L'écran tient en quatre blocs et le défilement est court — mais c'est exactement le genre de chose qui se juge au pouce, sur un appareil réel : si sortir de l'écran demande de remonter, la réponse est d'apprendre à `EnTeteEcran` à rendre un fond en `style` plutôt qu'en classe, pas de recoller le hero entier. Ensuite : **le hero coiffe la zone sûre** (`pleine-largeur` + `coiffe-ecran`), donc la couleur du drapeau court derrière la Dynamic Island — à vérifier en portrait **et en paysage** sur un iPhone à encoche, où la zone sûre latérale n'est plus nulle. Point secondaire : le nom du Grand Prix est en `line-clamp-2` et non tronqué sur une ligne, « GP Émirats arabes unis » est le cas à confronter à un iPhone étroit.
 
 **Trois points depuis la version `0.16.0`**, tous sur le bloc GP recomposé, et le premier est le plus important : **la hauteur du bloc**. La bande de 160px le porte à environ 380px, soit plus de la moitié de la hauteur utile d'un iPhone SE — les cartes de championnat passent nettement sous la ligne de flottaison. C'est la conséquence assumée de « le bloc est plus haut qu'actuellement », mais elle ne se juge que sur un appareil réel : si l'accueil demande trop de défilement avant la première carte, c'est `HAUTEUR_TRACE` (`frontend/src/ecrans/Accueil.jsx`) qu'il faut baisser, et le squelette suivra tout seul. Ensuite : **la lisibilité du trait sur les trois fonds les plus faibles** — Brésil 2,44:1, Azerbaïdjan 2,54:1, Espagne 2,55:1 (voir le tableau de la version `0.16.0`). Si le circuit y paraît fantomatique, deux leviers d'une ligne, dans cet ordre de préférence : monter le trait de 60 à 70 % de blanc (`text-white/60` dans la zone 3), ou approfondir la surcouche de 15 à 25 % (`bg-black/15`) — **depuis la version `0.16.1` elle peint tout le bloc et non plus la seule bande**, donc l'approfondir assombrit aussi le fond du texte, ce qui ne fait que renforcer sa lisibilité. Ne pas toucher au voile, calculé lui pour le texte. Enfin : **le nom du Grand Prix reste tronqué** (`truncate`) et il est maintenant centré à 26px — « GP Émirats arabes unis » est le cas à confronter à un iPhone étroit.
 

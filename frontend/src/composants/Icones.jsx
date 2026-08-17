@@ -98,6 +98,29 @@ export function IconeCoche(props) {
   );
 }
 
+/* Triangle d'avertissement — la carte de statut du récap quand rien n'est
+   encore pronostiqué. Le point du bas est un segment de longueur nulle : c'est
+   `strokeLinecap="round"` qui le rend, et non un `<circle>` de plus, pour que
+   son diamètre suive l'épaisseur du trait comme partout ailleurs. */
+export function IconeAlerte(props) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M12 3.5 2.7 19.5a1 1 0 0 0 .87 1.5h16.86a1 1 0 0 0 .87-1.5L12 3.5Z" />
+      <line x1="12" y1="10" x2="12" y2="14" />
+      <line x1="12" y1="17.6" x2="12" y2="17.6" />
+    </svg>
+  );
+}
+
 export function IconeSortie(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" {...props}>
