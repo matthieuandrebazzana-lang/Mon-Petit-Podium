@@ -7,7 +7,10 @@ import Pastille from "../composants/Pastille.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { Pave } from "../composants/Squelette.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
-import TraceCircuitGp, { slugCircuit } from "../composants/TracesCircuits.jsx";
+import TraceCircuitGp, {
+  aUnTrace,
+  slugCircuit,
+} from "../composants/TracesCircuits.jsx";
 import {
   APPARENCE_REPLI,
   drapeauDuGp,
@@ -39,6 +42,16 @@ import { APP_VERSION } from "../config.js";
  * TODO: dynamique quand tous les GP sont en base.
  */
 const GP_RESTANTS = 12;
+
+/**
+ * Hauteur de la bande du tracé de circuit, en pixels.
+ *
+ * **Écrite une fois et partagée avec le squelette**, jamais recopiée aux deux
+ * endroits. Sans cela l'accueil sursauterait de la différence à l'arrivée des
+ * données — c'est exactement le défaut corrigé sur les cartes de championnat en
+ * version `0.14.0`, où la silhouette a dû suivre la carte à 120px.
+ */
+const HAUTEUR_TRACE = 160;
 
 /**
  * Bloc rouge « PROCHAIN GP » de la maquette 04.
@@ -81,7 +94,16 @@ export function BlocProchainGp({ profilId }) {
             <div className="h-6 w-24 rounded-full bg-white/25" />
             <div className="h-3 w-20 rounded-full bg-white/20" />
           </div>
-          <div className="h-7 w-44 rounded-full bg-white/25" />
+          {/* Le nom du Grand Prix est centré : sa silhouette l'est aussi, sinon
+              l'écran se recale latéralement à l'arrivée des données. */}
+          <div className="mx-auto h-8 w-48 rounded-full bg-white/25" />
+          {/* La bande du tracé, à sa hauteur réelle. C'est la moitié du bloc :
+              l'omettre ferait sauter l'accueil de 160px au moment précis où le
+              joueur le regarde. */}
+          <div
+            className="mt-4 -mx-5 bg-black/15"
+            style={{ height: `${HAUTEUR_TRACE}px` }}
+          />
           <div className="mt-4 grid grid-cols-2 gap-2">
             <div className="rounded-champ h-[54px] bg-white/12" />
             <div className="rounded-champ h-[54px] bg-white/12" />
@@ -158,6 +180,10 @@ export function BlocProchainGp({ profilId }) {
   // libellé qu'Unibet aurait renommé.
   const slug = slugCircuit(gp.nom);
   const drapeau = drapeauDuGp(slug) ?? APPARENCE_REPLI;
+  // La bande du tracé n'existe que s'il y a un tracé à y mettre. Sans ce test,
+  // un Grand Prix hors planche laisserait 160px de fond assombri au milieu du
+  // bloc — un trou, là où le filigrane d'avant se contentait de disparaître.
+  const trace = aUnTrace(slug);
 
   return (
     <div
@@ -166,36 +192,30 @@ export function BlocProchainGp({ profilId }) {
       }`}
       style={drapeau.fond ? { background: drapeau.fond } : undefined}
     >
-      {/* Le tracé du circuit, posé en filigrane à droite, à 15 % de blanc. C'est
-          le vrai tracé du pays hôte (`assets/traces.svg`) : Zandvoort pour les
-          Pays-Bas, Monza pour l'Italie. Il ne s'affiche pas du tout quand le
-          circuit n'est pas dans la planche — un motif de repli laisserait croire
-          que ce Grand Prix se court sur cette forme-là.
-
-          `aspect-ratio` est porté par le composant, donc seule la hauteur est
-          fixée ici et la largeur suit : le filigrane garde la même présence d'un
-          circuit à l'autre, alors qu'ils vont de 1,1 à 3,4 de rapport. Il
-          dépasse par la droite et `overflow-hidden` le rogne, plutôt que de le
-          contraindre à tenir en entier, ce qui l'écraserait. */}
-      <TraceCircuitGp
-        slug={slug}
-        className="pointer-events-none absolute top-1/2 -right-10 h-[150%] w-auto -translate-y-1/2 text-white/15"
-      />
       {/* La lumière spéculaire d'/apple-design §12 : un aplat plein est une
-          surface morte, ce galbe très doux lui donne une source lumineuse. Il
-          est posé par-dessus le tracé pour éclairer les deux ensemble. */}
+          surface morte, ce galbe très doux lui donne une source lumineuse. */}
       <div
         aria-hidden="true"
         className="lueur-haute pointer-events-none absolute inset-0"
       />
       {/* Le voile, **par-dessus tout ce qui éclaircit** et sous le seul contenu.
-          C'est ce qui rend la garantie de 3:1 inconditionnelle : le tracé et la
-          lumière spéculaire passent dessous, donc ils ne peuvent pas remonter la
-          luminance là où le texte les croise. Son opacité est calculée par
-          drapeau, jamais choisie. */}
+          C'est ce qui rend la garantie de 3:1 inconditionnelle sur le texte : la
+          lumière spéculaire passe dessous, donc elle ne peut pas remonter la
+          luminance là où le texte la croise. Son opacité est calculée par
+          drapeau, jamais choisie.
+
+          Le tracé, lui, est passé **au-dessus** de ce voile en devenant un
+          élément de la composition. Ce n'est pas un contournement de la garantie
+          mais sa conséquence : le tracé occupe désormais sa propre bande, il ne
+          croise plus aucun texte, et le risque que la version `0.15.0` décrivait
+          (ses 15 % de blanc faisant retomber une bande voilée à 2,71:1 sous le
+          nom du Grand Prix) n'a plus de support. Le voile continue de peindre la
+          bande du tracé, et c'est ce qui rend le trait blanc lisible sur les
+          drapeaux clairs. */}
       <VoileDrapeau voile={drapeau.voile} />
 
       <div className="relative">
+        {/* Zone 1 — l'en-tête, inchangé. */}
         <div className="mb-3 flex items-center justify-between gap-3">
           <span
             className={`text-label-sm rounded-full px-2.5 py-1 uppercase ${drapeau.pastille} ${drapeau.texte}`}
@@ -209,16 +229,67 @@ export function BlocProchainGp({ profilId }) {
           </span>
         </div>
 
-        {/* Le nom du Grand Prix passe à l'échelle des titres de page : c'est ce
-            qu'on vient lire, il doit être le plus gros élément de l'écran. Sur un
-            drapeau à bandes, il en traverse la couture — d'où l'ombre portée,
-            qui lui garde son contour des deux côtés. */}
+        {/* Zone 2 — le nom du Grand Prix, centré au-dessus de son circuit. Les
+            deux se lisent alors comme un seul objet, titre et illustration, ce
+            qu'un nom aligné à gauche au-dessus d'un dessin centré ne donnerait
+            pas.
+
+            26px est la taille demandée. Elle n'a pas de jeton : l'échelle de la
+            section 5 passe de 15px (corps) à 28px (titre de page), et celui-ci
+            n'est pas un titre de page — l'écran en a déjà un. Le crénage négatif
+            est celui qu'/apple-design §15 impose au-delà de 24px : sans lui, les
+            lettres d'un titre s'éloignent à mesure qu'il grandit.
+
+            Sur un drapeau à bandes, le nom en traverse la couture — d'où l'ombre
+            portée, qui lui garde son contour des deux côtés. */}
         <p
-          className={`text-titre-lg truncate ${drapeau.texte} ${drapeau.ombreTexte}`}
+          className={`truncate text-center text-[26px] leading-tight font-medium tracking-[-0.02em] ${drapeau.texte} ${drapeau.ombreTexte}`}
         >
           {gp.nom}
         </p>
 
+        {/* Zone 3 — le circuit, et non plus un filigrane. C'est le vrai tracé du
+            pays hôte (`assets/traces.svg`) : Zandvoort pour les Pays-Bas, Monza
+            pour l'Italie.
+
+            Trois points de mise en œuvre :
+
+            - `-mx-5` annule le rembourrage du bloc : la bande touche les deux
+              bords, ce qui en fait un registre horizontal de la composition
+              plutôt qu'une image posée dans une marge. `overflow-hidden` sur le
+              bloc lui rend ses coins arrondis.
+            - **Le fond assombri de la bande fait le travail sur les drapeaux
+              clairs.** Un trait blanc à 60 % sur la bande blanche du drapeau
+              néerlandais, déjà voilée, passe de 2,11:1 à 2,70:1 grâce à ces
+              15 % — et à 3,80:1 sous `prefers-contrast: more`, où le voile
+              s'approfondit d'un cran sous lui. Sur les drapeaux sombres (Las
+              Vegas, Abu Dhabi) le trait est à 7:1 et plus.
+            - `boiteLibre` coupe le rapport de forme que le composant pose en
+              ligne, parce que la bande fixe ici les **deux** dimensions.
+              `xMidYMid meet` met alors chaque circuit à l'échelle dans cette
+              boîte et le centre : Bakou, 3,4 fois plus large que haut, remplit
+              la largeur ; Zandvoort, presque carré, remplit la hauteur. Chacun
+              garde sa vraie forme au lieu d'être étiré pour occuper la même
+              surface que son voisin.
+
+            L'épaisseur passe de 2,5 à 3px : à cette taille, le trait d'un
+            filigrane paraîtrait un cheveu. Elle reste en pixels d'écran
+            (`non-scaling-stroke`), donc identique d'un circuit à l'autre. */}
+        {trace && (
+          <div
+            className="pointer-events-none -mx-5 mt-4 bg-black/15"
+            style={{ height: `${HAUTEUR_TRACE}px` }}
+          >
+            <TraceCircuitGp
+              slug={slug}
+              epaisseur={3}
+              boiteLibre
+              className="h-full w-full text-white/60"
+            />
+          </div>
+        )}
+
+        {/* Zone 4 — les deux cases de statut, inchangées. */}
         <div className="mt-4 grid grid-cols-2 gap-2">
           {cases.map((donnee) => (
             <div
@@ -240,6 +311,7 @@ export function BlocProchainGp({ profilId }) {
           ))}
         </div>
 
+        {/* Zone 5 — le bouton, inchangé. */}
         <Link
           to={destination}
           className="rounded-champ bg-surface text-primaire pressable min-h-tactile mt-2.5 flex items-center justify-center px-4 text-center text-[15px] font-medium"

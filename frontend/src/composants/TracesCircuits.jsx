@@ -78,6 +78,22 @@ export function slugCircuit(nomGp) {
   return slug;
 }
 
+/**
+ * Un tracé existe-t-il pour ce slug ?
+ *
+ * Le composant sait déjà ne rien rendre quand il n'a pas le circuit, ce qui
+ * suffit à un filigrane. Ça ne suffit plus dès que le tracé occupe une **bande
+ * réservée** dans une composition : l'appelant doit pouvoir retirer la bande
+ * entière — et le fond qui l'assombrit — plutôt que de laisser 160px de vide
+ * assombri au milieu du bloc.
+ *
+ * Un prédicat exporté plutôt qu'un `Object.hasOwn(TRACES, slug)` chez
+ * l'appelant : la façon de stocker les tracés reste l'affaire de ce module.
+ */
+export function aUnTrace(slug) {
+  return Object.hasOwn(TRACES, slug);
+}
+
 /** Un tracé par circuit : sa boîte englobante et son chemin, prêts à être
  *  injectés dans un `<svg>`. Le `d` d'un circuit dessiné en plusieurs traits
  *  (Sakhir en compte quatre, dont la voie des stands) réunit ses sous-tracés en
@@ -176,9 +192,24 @@ export const TRACES = {
  *    laisserait `meet` centrer le dessin dans du vide, et le filigrane
  *    changerait de taille d'un circuit à l'autre sans raison visible.
  *
+ * `boiteLibre` retire ce troisième point, et c'est le cas d'un tracé qui n'est
+ * plus un filigrane mais l'élément central d'une composition : l'appelant fixe
+ * alors les **deux** dimensions (une bande pleine largeur, de hauteur donnée) et
+ * c'est précisément le travail de `xMidYMid meet` de mettre le circuit à
+ * l'échelle et de le centrer dedans. Chaque circuit garde sa vraie forme — un
+ * cadrage étiré remplit la largeur, un cadrage carré remplit la hauteur — au
+ * lieu d'être déformé pour occuper la même surface que son voisin. Le ratio en
+ * ligne devait sauter : un style en ligne l'emporte sur toute classe utilitaire,
+ * donc la hauteur demandée aurait été ignorée.
+ *
  * @param {string} slug  clé rendue par {@link slugCircuit}
  */
-export default function TraceCircuitGp({ slug, epaisseur = 2.5, className = "" }) {
+export default function TraceCircuitGp({
+  slug,
+  epaisseur = 2.5,
+  boiteLibre = false,
+  className = "",
+}) {
   const dessin = TRACES[slug];
   // Aucun tracé pour ce Grand Prix : on n'affiche rien. Un motif de repli
   // laisserait croire que ce circuit-là ressemble à ça.
@@ -192,7 +223,7 @@ export default function TraceCircuitGp({ slug, epaisseur = 2.5, className = "" }
       aria-hidden="true"
       focusable="false"
       preserveAspectRatio="xMidYMid meet"
-      style={{ aspectRatio: dessin.ratio }}
+      style={boiteLibre ? undefined : { aspectRatio: dessin.ratio }}
     >
       <path
         d={dessin.d}
