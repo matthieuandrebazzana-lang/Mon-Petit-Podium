@@ -91,3 +91,43 @@ export const ONGLETS = [
 export function ongletActif(chemin) {
   return ONGLETS.find((onglet) => onglet.actif(chemin))?.cle ?? null;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Retour contextuel                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Un même écran est atteint depuis plusieurs endroits, et son bouton de retour
+ * doit ramener d'où l'on vient. Le tableau des cotes s'ouvre depuis l'accueil
+ * **et** depuis le calendrier ; un retour qui ramènerait toujours à l'accueil
+ * ferait perdre sa place à qui parcourait la saison.
+ *
+ * L'origine voyage dans l'état de navigation de React Router, sous **deux clés
+ * distinctes qu'il ne faut pas confondre** :
+ *
+ * - `retour` — où va MON bouton de retour ;
+ * - `origine` — ce que je rends à cet écran quand j'y retourne, pour qu'il
+ *   retrouve sa propre origine. Sans elle, la chaîne se casse au premier
+ *   rebond : calendrier → cotes → pronos → retour → cotes → retour → **accueil**.
+ */
+
+/* Un chemin interne, et rien d'autre. L'état de navigation est écrit par les
+   écrans, mais il survit à un rechargement et se retrouve dans l'historique du
+   navigateur : une URL absolue glissée là ferait du bouton de retour une sortie
+   vers l'extérieur. */
+const CHEMIN_INTERNE = /^\/[\w\-/]*$/;
+
+/**
+ * La destination du bouton de retour, et son libellé.
+ *
+ * `defaut` est la destination hiérarchique de l'écran — celle qui s'applique
+ * quand on y arrive par un lien direct. Le libellé d'une origine connue vient
+ * des onglets : un bouton doit **nommer sa destination**, et « Accueil » posé
+ * sur un retour vers le calendrier serait une promesse fausse.
+ */
+export function origineRetour(etat, defaut) {
+  const vers = etat?.retour;
+  if (typeof vers !== "string" || !CHEMIN_INTERNE.test(vers)) return defaut;
+  const onglet = ONGLETS.find((element) => element.vers === vers);
+  return { vers, libelle: onglet?.libelle ?? defaut.libelle };
+}

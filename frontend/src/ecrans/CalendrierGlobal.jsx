@@ -87,14 +87,24 @@ export default function CalendrierGlobal() {
           </Bloc>
         )}
 
-        <Bloc rang={2} className="flex flex-col gap-3">
-          {grandsPrix.map((gp) => (
-            <CarteGpSaison
-              key={gp.slug}
-              gp={gp}
-              chargement={chargement && !donnees}
-            />
-          ))}
+        <Bloc rang={2}>
+          {/* Le conteneur flex est **à l'intérieur** du bloc, jamais le bloc
+              lui-même. `.t-stagger-line` pose `display: block` hors de toute
+              couche Tailwind : une classe utilitaire ne la bat pas, et un
+              `gap` posé sur le `Bloc` reste inerte — les cartes se collent.
+              C'est déjà le motif de l'accueil et de la liste des
+              championnats ; le calendrier était le seul à mapper ses cartes
+              directement dans le bloc. */}
+          <div className="flex flex-col gap-3">
+            {grandsPrix.map((gp) => (
+              <CarteGpSaison
+                key={gp.slug}
+                gp={gp}
+                chargement={chargement && !donnees}
+                retour="/calendrier"
+              />
+            ))}
+          </div>
         </Bloc>
 
         <div className="min-h-3 flex-1" />

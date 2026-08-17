@@ -35,6 +35,10 @@ export default function EnTeteEcran({
   sousTitre,
   retourVers,
   libelleRetour = "Retour",
+  /* État de navigation rendu à l'écran de retour. Il sert à lui restituer sa
+     propre origine : sans lui, un écran atteint depuis le calendrier puis
+     revisité par un rebond retomberait sur sa destination par défaut. */
+  retourEtat = null,
   action = null,
   teinte = null,
   children,
@@ -77,7 +81,9 @@ export default function EnTeteEcran({
           {retourVers ? (
             <button
               type="button"
-              onClick={() => naviguer(retourVers)}
+              onClick={() =>
+                naviguer(retourVers, retourEtat ? { state: retourEtat } : undefined)
+              }
               className={`pressable min-h-tactile -my-3 -ml-2 flex min-w-0 shrink items-center gap-1.5 py-3 pl-2 text-[13px] font-medium ${encre}`}
             >
               <IconeChevronGauche className="size-[15px] shrink-0" />

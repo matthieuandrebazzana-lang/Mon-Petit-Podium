@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTeteEcran from "../composants/EnTeteEcran.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
@@ -29,6 +29,7 @@ import {
 } from "../lib/pronostics.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 import { formaterDepart, formaterPoints } from "../lib/format.js";
+import { origineRetour } from "../lib/navigation.js";
 import { useFermeture } from "../lib/useFermeture.js";
 
 // Les trois aplats de l'écran, et leurs encres, calculés une fois pour toutes :
@@ -257,7 +258,22 @@ function BlocObligatoire({ titre, couleur, ton, children }) {
 export default function Pronostics() {
   const { gpId } = useParams();
   const naviguer = useNavigate();
+  const { state } = useLocation();
   const { utilisateur } = useAuth();
+
+  // Le tableau des cotes est la destination hiérarchique : on y choisit ses
+  // favoris avant de saisir. Un appelant peut la remplacer par `retour`.
+  const retour = origineRetour(state, {
+    vers: `/grands-prix/${gpId}/cotes`,
+    libelle: "Les cotes",
+  });
+  // Ce que le tableau des cotes nous a confié de sa propre origine : on le lui
+  // rend en repartant, pour que son bouton de retour ramène toujours au même
+  // endroit qu'à l'aller.
+  const origine = origineRetour(
+    { retour: state?.origine },
+    { vers: null, libelle: null },
+  ).vers;
 
   const cle = utilisateur ? `saisie:${utilisateur.id}:${gpId}` : null;
   const chargeur = useCallback(
@@ -381,8 +397,9 @@ export default function Pronostics() {
       <Ecran direction="avant">
         <EnTeteEcran
           titre="Mes pronos"
-          retourVers={`/grands-prix/${gpId}/cotes`}
-          libelleRetour="Les cotes"
+          retourVers={retour.vers}
+          libelleRetour={retour.libelle}
+          retourEtat={origine ? { retour: origine } : null}
         />
         <Bloc rang={1} className="mt-3">
           <BlocErreur
@@ -416,8 +433,9 @@ export default function Pronostics() {
     <Ecran direction="avant">
       <EnTeteEcran
         titre="Mes pronos"
-        retourVers={`/grands-prix/${gpId}/cotes`}
-        libelleRetour={gp?.nom ?? "Les cotes"}
+        retourVers={retour.vers}
+        libelleRetour={gp?.nom ?? retour.libelle}
+        retourEtat={origine ? { retour: origine } : null}
         sousTitre={
           gp
             ? depart.heure

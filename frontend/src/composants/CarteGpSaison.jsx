@@ -60,7 +60,7 @@ const HAUTEUR_BANDE = 46;
  *  — même valeur, pour que les deux écrans ne divergent pas. */
 const OMBRE_TEXTE = "[text-shadow:0_1px_3px_rgba(0,0,0,0.45)]";
 
-export default function CarteGpSaison({ gp, chargement = false }) {
+export default function CarteGpSaison({ gp, chargement = false, retour = null }) {
   const etat = etatDuGpSaison(gp);
   const action = actionDuGp(gp, etat);
   const jour = jourDe(gp.date);
@@ -202,6 +202,11 @@ export default function CarteGpSaison({ gp, chargement = false }) {
         {action && (
           <Link
             to={action.vers}
+            // L'origine voyage avec la navigation : l'écran d'arrivée en tire
+            // la destination de son bouton de retour, plutôt que de ramener
+            // toujours à l'accueil. La carte ne la fabrique pas — c'est
+            // l'écran qui la monte qui sait d'où l'on part.
+            state={retour ? { retour } : undefined}
             style={{ height: `${HAUTEUR_BANDE}px` }}
             className={`pressable-large relative flex w-full shrink-0 items-center justify-center text-[15px] font-medium ${action.style}`}
           >

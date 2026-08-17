@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTeteEcran from "../composants/EnTeteEcran.jsx";
 import Bouton from "../composants/Bouton.jsx";
@@ -14,6 +14,7 @@ import { couleurMarche, tonalites } from "../lib/couleurs.js";
 import { basculerFavori, chargerTableauCotes } from "../lib/pronostics.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 import { formaterDepart, formaterPoints } from "../lib/format.js";
+import { origineRetour } from "../lib/navigation.js";
 import { useFermeture } from "../lib/useFermeture.js";
 
 function SqueletteCotes() {
@@ -164,7 +165,13 @@ function RangeeFavoris({ favoris }) {
 export default function Cotes() {
   const { gpId } = useParams();
   const naviguer = useNavigate();
+  const { state } = useLocation();
   const { utilisateur } = useAuth();
+
+  // D'où l'on vient. L'accueil reste la destination par défaut : c'est de là
+  // que l'écran s'ouvre quand rien n'est précisé, et un lien direct ne doit
+  // jamais laisser le bouton de retour sans destination.
+  const retour = origineRetour(state, { vers: "/accueil", libelle: "Accueil" });
 
   const cle = utilisateur ? `cotes:${utilisateur.id}:${gpId}` : null;
   const chargeur = useCallback(
@@ -235,7 +242,11 @@ export default function Cotes() {
   if (echec && !donnees) {
     return (
       <Ecran direction="avant">
-        <EnTeteEcran titre="Les cotes" retourVers="/accueil" libelleRetour="Accueil" />
+        <EnTeteEcran
+          titre="Les cotes"
+          retourVers={retour.vers}
+          libelleRetour={retour.libelle}
+        />
         <Bloc rang={1} className="mt-3">
           <BlocErreur
             echec={echec}
@@ -253,8 +264,8 @@ export default function Cotes() {
     <Ecran direction="avant">
       <EnTeteEcran
         titre="Fais tes paris"
-        retourVers="/accueil"
-        libelleRetour={gp?.nom ?? "Accueil"}
+        retourVers={retour.vers}
+        libelleRetour={gp?.nom ?? retour.libelle}
         sousTitre={
           gp
             ? depart.heure
@@ -342,7 +353,14 @@ export default function Cotes() {
         <div className="barre-collee pleine-largeur px-4">
           <Bouton
             variante="principal"
-            onClick={() => naviguer(`/grands-prix/${gpId}/pronostics`)}
+            // L'écran de saisie revient ici par son bouton de retour ; il
+            // emporte donc notre propre origine pour nous la rendre, sans quoi
+            // le second passage sur cet écran retomberait sur l'accueil.
+            onClick={() =>
+              naviguer(`/grands-prix/${gpId}/pronostics`, {
+                state: { origine: retour.vers },
+              })
+            }
             disabled={!gp || marches.length === 0}
           >
             {ferme

@@ -2410,6 +2410,62 @@ Les deux bandes d'action gardent leur distinction : l'aplat bordeaux plein contr
 | Aperçu rendu avec la feuille compilée | les douze cartes dessinées à 390px de large : drapeaux reconnaissables, **tracés lisibles et à leur vraie forme**, quantièmes séparés de leur mois, les quatre états distincts au premier coup d'œil |
 | `npm run build` | passe, version `0.21.0` dans le bundle |
 
+---
+
+**Espacement des cartes du calendrier, et retour contextuel** (version `0.21.1`)
+
+Deux corrections relevées à l'usage. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+---
+
+***Correction 1 — un `gap` posé sur un `Bloc` est inerte.*** C'est le point de la version, et il ne se voyait pas à la lecture du code.
+
+Les douze cartes de l'onglet Calendrier se touchaient. Le `gap-3` était pourtant bien écrit — `<Bloc rang={2} className="flex flex-col gap-3">` — et c'est précisément ce qui rendait le défaut illisible : **la classe était là, elle ne s'appliquait pas**.
+
+`.t-stagger-line` (index.css) pose `display: block`, et cette règle est déclarée **hors de toute couche Tailwind**. En CSS en cascade par couches, une règle non affectée à une couche l'emporte sur **toutes** les règles empilées, quelle que soit leur spécificité : `.flex { display: flex }` vit dans `@layer utilities`, elle perd. Le bloc reste donc en `display: block`, où `gap` n'a aucun effet — vérifié sur la feuille compilée, la couche `utilities` se referme bien avant la déclaration.
+
+**C'est la même mécanique que celle déjà documentée pour `.t-skel-bar`** à la version `0.21.0`, où le style en ligne avait dû battre la classe utilitaire. Elle vaut pour **toute** propriété que ces règles hors couche écrivent, pas seulement `display`.
+
+*La correction* — le conteneur flex passe **à l'intérieur** du bloc. C'est déjà le motif de l'accueil et de la liste des championnats, qui enveloppent leurs cartes dans un `div` interne ; le calendrier global était le seul à mapper ses cartes directement dans le `Bloc`, et donc le seul à en souffrir. **Rien n'est touché à `index.css`** : déplacer `.t-stagger-line` dans une couche changerait la précédence de toutes les transitions de l'app d'un coup, pour réparer une gouttière.
+
+*Un cas restant, signalé plutôt que corrigé* — `Championnat.jsx` porte lui aussi un `gap-2.5` sur un `Bloc` dont les enfants sont directs (les deux boutons de la confirmation de départ). La gouttière y est donc morte elle aussi. C'est hors du périmètre demandé et sans conséquence visible sur un bouton principal suivi d'un lien discret ; **à reprendre avec le même motif** si l'empilement paraît serré sur un appareil réel.
+
+---
+
+***Correction 2 — le bouton de retour ramène d'où l'on vient.***
+
+Le tableau des cotes s'ouvre depuis l'accueil **et** depuis le calendrier, et son retour ramenait toujours à l'accueil : qui parcourait la saison y perdait sa place. L'origine voyage désormais dans l'état de navigation de React Router.
+
+`origineRetour(etat, defaut)` entre dans `frontend/src/lib/navigation.js`, **le module qui connaît déjà les quatre onglets** — c'est de là que vient le libellé du bouton. Un bouton doit nommer sa destination (règle tenue depuis l'étape 7) : « Accueil » posé sur un retour vers le calendrier serait une promesse fausse. Une origine inconnue des onglets garde le libellé par défaut plutôt que d'en inventer un.
+
+**Deux clés distinctes, et il ne faut pas les confondre :**
+
+| Clé | Sens |
+|---|---|
+| `retour` | où va **mon** bouton de retour |
+| `origine` | ce que je **rends** à cet écran en y retournant, pour qu'il retrouve la sienne |
+
+La seconde n'est pas un raffinement : sans elle la chaîne se casse au premier rebond — calendrier → cotes → pronos → retour → cotes → retour → **accueil**, c'est-à-dire l'exact défaut qu'on corrige, réapparu un écran plus loin. Le tableau des cotes confie donc son origine à l'écran de saisie, qui la lui rend en repartant. `EnTeteEcran` gagne pour cela une prop `retourEtat`, passée telle quelle à `navigate`.
+
+**Le chemin reçu est validé, et ce n'est pas décoratif.** `origineRetour` n'accepte qu'un chemin interne (`/…`) : l'état de navigation est écrit par les écrans, mais il survit à un rechargement et vit dans l'historique du navigateur — une URL absolue glissée là ferait du bouton de retour une sortie vers l'extérieur. Une valeur invalide retombe silencieusement sur la destination par défaut, jamais sur une erreur : un bouton de retour doit toujours mener quelque part.
+
+**Les destinations par défaut sont inchangées** — l'accueil pour les cotes, le tableau des cotes pour la saisie. C'est la hiérarchie de l'application, et c'est ce qui s'applique quand on arrive par un lien direct. `CarteGpSaison` reçoit son origine en prop plutôt que de l'écrire en dur : la carte ne sait pas d'où on la regarde, c'est l'écran qui la monte qui le sait.
+
+*Le libellé du retour reste le nom du Grand Prix* sur les deux écrans (`gp?.nom ?? retour.libelle`), comportement posé à la version `0.13.0` et non touché ici : le nom de l'origine ne sert que de repli, quand le Grand Prix n'est pas encore chargé.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.**
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite) : **26 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| `origineRetour` | état absent, état sans `retour` → destination par défaut ; `/calendrier` retenu **et nommé « Calendrier »** ; `/championnats` nommé ; **chemin inconnu des onglets → libellé par défaut conservé** |
+| Validation | **URL absolue, `javascript:`, chemin relatif et valeur non-chaîne rejetés**, tous quatre retombant sur la destination par défaut sans lever |
+| Carte de Grand Prix | bande d'action rendue, lien vers les cotes conservé, origine transmise en prop |
+| Écran de calendrier | **le conteneur flex est un `div` interne, plus aucun `gap` posé sur un `Bloc`** ; origine passée aux douze cartes |
+| Les deux écrans | lisent l'état de navigation, passent par `origineRetour`, **n'écrivent plus aucune destination en dur dans leur en-tête** ; les cotes confient leur origine à la saisie, la saisie la rend en repartant ; les deux se montent sans lever |
+| `npm run build` | passe, version `0.21.1` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2484,6 +2540,8 @@ Points non couverts, à traiter le moment venu :
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
 
 **Trois points depuis les versions `0.20.0` et `0.21.0`**, tous sur l'onglet Calendrier. **La longueur de l'écran** : la refonte de la `0.21.0` ramène la carte de ~300px à **200px**, ce qui divise le défilement par une fois et demie, mais douze cartes font toujours près de trois écrans sans en-tête collant pour dire où l'on est — c'est le premier point à juger au pouce, et le levier est `HAUTEUR_CARTE` (`frontend/src/composants/CarteGpSaison.jsx`), que le tracé, la bande d'action et le squelette suivent tout seuls. **L'entrée dans la saison** : l'écran s'ouvre sur le premier Grand Prix de la liste, y compris quand il est terminé ; faire défiler jusqu'au prochain à jouer serait plus juste, mais demande un `scrollIntoView` à l'arrivée, donc un choix explicite sur le comportement du retour. Et **le décompte de l'en-tête**, qui contredira le bandeau de l'accueil dès la première course courue tant que celui-ci n'est pas rebranché (voir plus haut).
+
+**Un point depuis la `0.21.1` — le piège des règles hors couche.** `.t-stagger-line` et `.t-skel-bar` sont déclarées hors de toute couche Tailwind : **elles battent n'importe quelle classe utilitaire**, quelle que soit sa spécificité. Un `flex`, un `gap` ou un `bg-*` posé sur un élément qui porte l'une de ces classes ne s'applique pas, et rien dans le JSX ne le laisse voir. Le motif à suivre est celui de l'accueil : **le conteneur flex vit à l'intérieur du `Bloc`, jamais sur le `Bloc` lui-même**. Un cas subsiste, sans conséquence visible : `Championnat.jsx` porte un `gap-2.5` mort sur le `Bloc` des deux boutons de confirmation de départ — à reprendre avec le même motif si l'empilement paraît serré sur un appareil réel.
 
 **Deux points propres à la `0.21.0`**, tous deux sur la lisibilité du tracé maintenant qu'il traverse le texte. **Sur les sept drapeaux à bande claire**, le trait blanc à 60 % passe sur une bande ramenée au gris moyen par le voile : mesuré à 2,70:1 au pire, comme sur l'accueil, donc lisible mais discret — s'il paraît fantomatique sur un vrai écran, deux leviers d'une ligne, dans cet ordre : monter le trait de 60 à 70 % de blanc, ou approfondir la surcouche de 15 à 25 % (elle assombrit alors aussi le fond du texte, ce qui ne fait que renforcer sa lisibilité). **Ne pas toucher au voile**, calculé pour le texte. Et **le croisement texte / tracé** : l'ombre portée le rend lisible en rendu statique, mais c'est exactement le genre de détail qui se juge à la lumière du jour, sur les cartes où le tracé passe pile derrière le quantième (Espagne, Azerbaïdjan, Brésil).
 
