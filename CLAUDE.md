@@ -2466,6 +2466,59 @@ La seconde n'est pas un raffinement : sans elle la chaîne se casse au premier r
 | Les deux écrans | lisent l'état de navigation, passent par `origineRetour`, **n'écrivent plus aucune destination en dur dans leur en-tête** ; les cotes confient leur origine à la saisie, la saisie la rend en repartant ; les deux se montent sans lever |
 | `npm run build` | passe, version `0.21.1` dans le bundle |
 
+---
+
+**Drapeaux manquants et incorrects — Malaisie, États-Unis, Brésil, Qatar, Abu Dhabi** (version `0.21.2`)
+
+Cinq drapeaux relus contre le drapeau réel, dans `frontend/src/composants/DrapeauxGP.jsx`. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`). **Un seul fichier change**, et rien d'autre : ni les écrans, ni le calcul du voile, ni les tracés.
+
+| Grand Prix | Avant | Après |
+|---|---|---|
+| **Malaisie** | aplat rouge `#CC0001` | horizontal, `#CC0001` / `#FFFFFF`, bandes égales |
+| **Abu Dhabi** | aplat vert `#00732F` | horizontal, `#00732F` / `#FFFFFF`, bandes égales |
+| **Qatar** | **horizontal** `#8D1B3D` / `#FFFFFF`, 3/1 | **vertical**, mêmes couleurs, mêmes parts |
+| **Las Vegas** | aplat noir `#000000` | aplat rouge `#B22234` |
+| **États-Unis** | aplat rouge `#B22234` | inchangé — déjà conforme |
+| **Brésil** | aplat vert `#009C3B` | inchangé — déjà conforme |
+
+*Ce que la relecture a corrigé, cas par cas.*
+
+**Malaisie et Abu Dhabi passaient pour des drapeaux « complexes ».** Ils le sont — quatorze bandes, un croissant et une étoile à quatorze branches dans un canton bleu pour l'un ; trois bandes et un quadrillage rouge à la hampe pour l'autre — mais la couleur dominante seule taisait **la bande blanche qui fait la moitié de leur lecture**, et donnait un aplat rouge ou vert que rien ne distinguait des autres cartes. La frontière entre `complexe` et une paire de bandes n'est donc pas le nombre de bandes : c'est **l'honnêteté du rendu**. Un drapeau qui se laisse ramener à deux bandes dominantes le devient ; la bannière étoilée et la sphère céleste brésilienne, qui n'ont pas de bandes dominantes à extraire, restent des aplats. Quatorze bandes de 7 % chacune se liraient d'ailleurs comme un motif de rayures, pas comme un drapeau, sur une carte de 200px.
+
+**Le Qatar redresse un écart signalé depuis la version `0.15.0`.** Il y était décrit en bandes horizontales, et le fichier le disait explicitement : « une orientation suit la demande plutôt que le drapeau réel […] cela se corrige en changeant le seul champ `type` ». C'est ce qui est fait — le vrai drapeau porte sa bande blanche **à la hampe**, donc verticalement. Le commentaire qui annonçait l'écart disparaît avec lui.
+
+**Las Vegas cesse d'être noir, et c'est le seul changement qui n'est pas une correction de fidélité.** Le noir était la couleur du circuit de nuit, une couleur d'ambiance et non un drapeau. Or **deux Grands Prix d'un même pays doivent porter la même couleur** : Austin et Las Vegas se courent tous deux aux États-Unis, et deux fonds différents pour un même drapeau font perdre le repère que ces couleurs existent pour donner. Les deux slugs restent distincts — ils ont deux tracés de circuit et deux dates — mais rendent désormais **exactement le même fond**, ce qu'un contrôle vérifie plutôt que de le supposer.
+
+---
+
+***Le voile n'a pas eu à être touché, et c'est la démonstration que le calcul de la version `0.15.0` fait son travail.***
+
+C'était le point à vérifier : trois drapeaux gagnent une bande blanche, sur laquelle du texte blanc ne se voit pas. Aucune valeur n'a été écrite à la main pour autant. `voileNecessaire` **dérive** l'opacité de la bande la plus claire, par pas de 0,05, en tenant compte de la lumière spéculaire posée par-dessus : la Malaisie, Abu Dhabi et le Qatar reçoivent donc `0,45` d'eux-mêmes, exactement comme les Pays-Bas et l'Italie, et le blanc y tient **3,36:1** — **4,48:1** une fois la surcouche uniforme de 15 % de la version `0.16.1` prise en compte. C'est précisément ce que l'en-tête du module annonçait : « un drapeau ajouté demain reçoit le bon voile sans que personne n'ait à refaire le calcul ».
+
+**Une conséquence à connaître, et elle est mesurée.** Le voile de 0,42 minimum n'est pas déclenché par la présence d'un `#FFFFFF` dans la table, mais par la luminance : le **vert du Brésil est assez clair pour demander 0,05** alors qu'il n'a aucune bande blanche. La règle n'est donc pas « une bande blanche ⇒ un voile », c'est « le calcul tranche ». Un contrôle du jeu de tests éprouvait initialement la mauvaise règle et échouait sur le Brésil — c'est l'assertion qui était fausse, pas le code.
+
+Deux effets secondaires, tous deux issus du même mécanisme et tous deux voulus :
+
+1. **Las Vegas passe d'un texte secondaire à 70 % au blanc plein en graisse 500.** Sur le noir, 70 % de blanc tenaient largement le seuil ; sur le rouge `#B22234`, ils tombent à 2,97:1 et `apparence()` bascule alors sur la règle de vibrance d'`/apple-design` §12 — la hiérarchie passe par la graisse, pas par l'opacité. Ses surfaces (pastille, cases de statut) restent claires, le rouge étant assez sombre : 3,22:1 sur la plus claire des deux.
+2. **La bande de titre du Qatar devient `null`** (écran Récap, version `0.18.0`). Un drapeau vertical n'a aucune bande horizontale à viser : le titre reprend le centrage habituel, cas déjà prévu et déjà couvert par les deux `clamp`. La Malaisie et Abu Dhabi, à l'inverse, en gagnent une — leur bande blanche du bas, centre à 75 %.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Un fond de drapeau ne change pas sous les yeux du joueur.
+
+*Vérifié* — modules chargés par le chargeur SSR de Vite, contrastes recalculés sur les treize fonds : **tous les contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Couverture | **les douze slugs du calendrier ont un drapeau ET un tracé** ; `etats-unis` et `las-vegas` servis tous les deux |
+| Couleurs | les six drapeaux du périmètre portent **exactement** le type, les couleurs et les parts demandés ; toutes les couleurs de la table au format `#RRGGBB` |
+| **Contraste du texte blanc** | **≥ 3:1 sur les douze drapeaux et sur le repli**, voile calculé compris ; pire cas 3,00:1 (Brésil), 3,36:1 sur les sept drapeaux à bande blanche, 4,44:1 sur les deux Grands Prix américains, 6,81:1 sur le repli ; la surcouche de 15 % porte le pire cas à 4,02:1 |
+| Voile | 0,45 sur Malaisie, Abu Dhabi et Qatar **sans qu'aucune valeur soit écrite à la main** ; 0 sur les deux fonds américains ; **0,05 sur le Brésil malgré l'absence de blanc** ; contrôle de non-régression : 0,30 sur une bande blanche resterait à 2,10:1 |
+| Deux GP, un pays | **`las-vegas` et `etats-unis` rendent le même fond et le même voile** |
+| Fonds CSS | **aucune `url()`, aucun `http`** ; Malaisie et Abu Dhabi en `to bottom` avec bornes à 50 % ; **Qatar en `to right`** avec bornes à 75 % et dernière borne à 100 % ; Las Vegas et États-Unis en aplat uni sans dégradé |
+| Ombre portée | présente sur les drapeaux à bandes (Malaisie, Abu Dhabi et Qatar l'acquièrent), **absente sur les aplats unis et sur le repli** |
+| Bande de titre | Malaisie et Abu Dhabi → bande blanche du bas (centre 75) ; **Qatar → `null`, le vertical n'a pas de bande à viser** ; Las Vegas → `null` |
+| Repli | fond `null`, aucun voile, surfaces claires, aucune ombre — **le bloc bordeaux garde exactement l'aspect qu'il avait** ; GP hors table → `null` |
+| `npm run build` | passe, version `0.21.2` et les six couleurs présentes dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2541,9 +2594,11 @@ Points non couverts, à traiter le moment venu :
 
 **Trois points depuis les versions `0.20.0` et `0.21.0`**, tous sur l'onglet Calendrier. **La longueur de l'écran** : la refonte de la `0.21.0` ramène la carte de ~300px à **200px**, ce qui divise le défilement par une fois et demie, mais douze cartes font toujours près de trois écrans sans en-tête collant pour dire où l'on est — c'est le premier point à juger au pouce, et le levier est `HAUTEUR_CARTE` (`frontend/src/composants/CarteGpSaison.jsx`), que le tracé, la bande d'action et le squelette suivent tout seuls. **L'entrée dans la saison** : l'écran s'ouvre sur le premier Grand Prix de la liste, y compris quand il est terminé ; faire défiler jusqu'au prochain à jouer serait plus juste, mais demande un `scrollIntoView` à l'arrivée, donc un choix explicite sur le comportement du retour. Et **le décompte de l'en-tête**, qui contredira le bandeau de l'accueil dès la première course courue tant que celui-ci n'est pas rebranché (voir plus haut).
 
+**Un point depuis la `0.21.2` — les cinq drapeaux relus.** La Malaisie, Abu Dhabi et le Qatar portent désormais une vraie bande blanche, et les deux Grands Prix américains le même rouge. Les contrastes sont mesurés et tiennent, mais **la reconnaissance d'un drapeau ne se juge qu'à l'œil** : c'est la seule chose à regarder sur ces cinq cartes du calendrier et sur le bloc de l'accueil le jour du GP concerné. Deux points précis — la bande blanche voilée à 0,45 se lit **gris argent** et non blanc (conséquence inhérente au couple « texte blanc partout » + « bande blanche », relevée dès la version `0.15.0`), ce qui pèse le plus sur la Malaisie et Abu Dhabi où elle occupe la moitié de la surface ; et **Austin et Las Vegas se ressemblent désormais complètement** — c'est voulu, ce sont deux courses d'un même pays, mais le tracé de circuit et le nom sont alors les seuls discriminants. Si l'un des deux doit se distinguer, c'est une décision à prendre explicitement, pas un défaut à corriger dans la table.
+
 **Un point depuis la `0.21.1` — le piège des règles hors couche.** `.t-stagger-line` et `.t-skel-bar` sont déclarées hors de toute couche Tailwind : **elles battent n'importe quelle classe utilitaire**, quelle que soit sa spécificité. Un `flex`, un `gap` ou un `bg-*` posé sur un élément qui porte l'une de ces classes ne s'applique pas, et rien dans le JSX ne le laisse voir. Le motif à suivre est celui de l'accueil : **le conteneur flex vit à l'intérieur du `Bloc`, jamais sur le `Bloc` lui-même**. Un cas subsiste, sans conséquence visible : `Championnat.jsx` porte un `gap-2.5` mort sur le `Bloc` des deux boutons de confirmation de départ — à reprendre avec le même motif si l'empilement paraît serré sur un appareil réel.
 
-**Deux points propres à la `0.21.0`**, tous deux sur la lisibilité du tracé maintenant qu'il traverse le texte. **Sur les sept drapeaux à bande claire**, le trait blanc à 60 % passe sur une bande ramenée au gris moyen par le voile : mesuré à 2,70:1 au pire, comme sur l'accueil, donc lisible mais discret — s'il paraît fantomatique sur un vrai écran, deux leviers d'une ligne, dans cet ordre : monter le trait de 60 à 70 % de blanc, ou approfondir la surcouche de 15 à 25 % (elle assombrit alors aussi le fond du texte, ce qui ne fait que renforcer sa lisibilité). **Ne pas toucher au voile**, calculé pour le texte. Et **le croisement texte / tracé** : l'ombre portée le rend lisible en rendu statique, mais c'est exactement le genre de détail qui se juge à la lumière du jour, sur les cartes où le tracé passe pile derrière le quantième (Espagne, Azerbaïdjan, Brésil).
+**Deux points propres à la `0.21.0`**, tous deux sur la lisibilité du tracé maintenant qu'il traverse le texte. **Sur les neuf drapeaux à bande claire** (la Malaisie et Abu Dhabi les ont rejoints en version `0.21.2`), le trait blanc à 60 % passe sur une bande ramenée au gris moyen par le voile : mesuré à 2,70:1 pour eux et 2,44:1 au pire (Brésil) — les valeurs n'ont pas bougé depuis la `0.21.0`, seul Las Vegas descend de 5,81 à 3,11:1 en passant du noir au rouge, ce qui reste au-dessus des neuf autres. Lisible, donc, mais discret — s'il paraît fantomatique sur un vrai écran, deux leviers d'une ligne, dans cet ordre : monter le trait de 60 à 70 % de blanc, ou approfondir la surcouche de 15 à 25 % (elle assombrit alors aussi le fond du texte, ce qui ne fait que renforcer sa lisibilité). **Ne pas toucher au voile**, calculé pour le texte. Et **le croisement texte / tracé** : l'ombre portée le rend lisible en rendu statique, mais c'est exactement le genre de détail qui se juge à la lumière du jour, sur les cartes où le tracé passe pile derrière le quantième (Espagne, Azerbaïdjan, Brésil).
 
 **Trois points depuis la version `0.19.0`**, tous sur les cartes du calendrier d'un championnat. **La hauteur des cartes** : 180px de drapeau plus une zone d'informations portent chaque carte à environ 300px, et douze Grands Prix font un écran très long — à juger au pouce, et si c'est trop, c'est `HAUTEUR_DRAPEAU` (`frontend/src/ecrans/Calendrier.jsx`) qu'il faut baisser, le squelette suivra tout seul. **La lisibilité du tracé** sur les drapeaux les plus clairs, mesurée à 2,70:1 au pire (Pays-Bas, Italie, Singapour, Mexique, Qatar) : deux leviers d'une ligne s'il paraît fantomatique — monter le trait de 60 à 70 % de blanc, ou approfondir la surcouche de 15 à 25 % — mais **ne pas toucher au voile**, calculé pour le texte. Et **les cartes pleine largeur** (`pleine-largeur`), à vérifier en paysage sur un iPhone à encoche, où la zone sûre latérale n'est plus nulle.
 

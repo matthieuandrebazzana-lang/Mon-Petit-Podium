@@ -30,15 +30,22 @@ import { luminance } from "../lib/palette.js";
  *   Mievaut une couleur juste qu'un drapeau approximatif.
  *
  * `parts` donne le poids relatif des bandes. Il est facultatif : à défaut, les
- * bandes sont égales. Deux drapeaux en ont besoin — l'Espagne (1/2/1) et le
- * Qatar (3/1) — et sans lui il faudrait les décrire en répétant des bandes, ce
- * qui ne dirait pas la même chose.
+ * bandes sont égales. Deux drapeaux ne peuvent pas s'en passer — l'Espagne
+ * (1/2/1) et le Qatar (3/1) — et sans lui il faudrait les décrire en répétant
+ * des bandes, ce qui ne dirait pas la même chose.
  *
- * *Une orientation suit la demande plutôt que le drapeau réel*, et c'est signalé
- * ici pour que ce soit une décision et non un oubli : le Qatar est décrit en
- * bandes **horizontales** bordeaux/blanc, alors que le vrai drapeau porte sa
- * bande blanche à la hampe, donc verticalement. Cela se corrige en changeant le
- * seul champ `type`.
+ * **Un drapeau `complexe` reste ramené à sa couleur dominante, jamais à une
+ * approximation.** La frontière entre les deux traitements est celle de
+ * l'honnêteté du rendu, pas celle du nombre de bandes : la Malaisie et Abu Dhabi
+ * portent une bande blanche qui fait la moitié de leur lecture, et la taire
+ * donnait un aplat rouge ou vert que rien ne distinguait des autres ; la
+ * bannière étoilée et la sphère céleste brésilienne, elles, n'ont pas de bandes
+ * dominantes à extraire.
+ *
+ * **Deux Grands Prix d'un même pays portent le même drapeau** : Austin et Las
+ * Vegas se courent tous deux aux États-Unis, donc tous deux sur le rouge
+ * `#B22234`. Le noir du circuit de nuit, qui tenait cette place, était une
+ * couleur d'ambiance et non un drapeau.
  */
 export const DRAPEAUX = {
   "pays-bas": {
@@ -58,11 +65,18 @@ export const DRAPEAUX = {
     type: "horizontal",
     couleurs: ["#0092BC", "#E8192C", "#00B050"],
   },
-  // Quatorze bandes rouges et blanches, un croissant et une étoile à quatorze
-  // branches dans un canton bleu : hors de portée d'un dégradé honnête. Rouge
-  // dominant. (Ce slug a remplacé `bahrein` : c'est Sepang, et non Sakhir, qui
-  // court à cette place du calendrier — voir `TracesCircuits.jsx`.)
-  malaisie: { type: "complexe", couleurs: ["#CC0001"] },
+  // Le vrai drapeau porte quatorze bandes rouges et blanches, un croissant et une
+  // étoile à quatorze branches dans un canton bleu. Il est ramené à ses **deux
+  // couleurs dominantes en bandes égales** : un aplat rouge uni ne disait rien du
+  // blanc qui occupe la moitié de la surface, et quatorze bandes de 7 % chacune
+  // se liraient comme un motif de rayures, pas comme un drapeau, à 200px de haut.
+  // (Ce slug a remplacé `bahrein` : c'est Sepang, et non Sakhir, qui court à
+  // cette place du calendrier — voir `TracesCircuits.jsx`.)
+  malaisie: {
+    type: "horizontal",
+    couleurs: ["#CC0001", "#FFFFFF"],
+    parts: [1, 1],
+  },
   singapour: {
     type: "horizontal",
     couleurs: ["#EF3340", "#FFFFFF"],
@@ -77,16 +91,28 @@ export const DRAPEAUX = {
   },
   // Sphère céleste, bandeau incurvé et vingt-sept étoiles. Vert dominant.
   bresil: { type: "complexe", couleurs: ["#009C3B"] },
-  // Las Vegas n'est pas un pays : pas de drapeau à reproduire. Noir, la couleur
-  // du circuit de nuit qui fait toute son identité.
-  "las-vegas": { type: "complexe", couleurs: ["#000000"] },
+  // Las Vegas n'est pas un pays, mais la course se court **aux États-Unis** :
+  // c'est le drapeau américain qui l'accueille, donc le même rouge dominant que
+  // le GP d'Austin. Le noir du circuit de nuit, qui tenait cette place, était une
+  // couleur d'ambiance et non un drapeau — deux Grands Prix d'un même pays
+  // doivent porter la même couleur, sans quoi le repère se perd.
+  "las-vegas": { type: "complexe", couleurs: ["#B22234"] },
+  // Bordeaux à la volée, bande blanche **à la hampe** : le drapeau est donc bien
+  // vertical, la version horizontale qui tenait cette place venait de la demande
+  // d'origine et non du drapeau réel.
   qatar: {
-    type: "horizontal",
+    type: "vertical",
     couleurs: ["#8D1B3D", "#FFFFFF"],
     parts: [3, 1],
   },
-  // Quadrillage rouge à la hampe sur trois bandes horizontales. Vert dominant.
-  "abu-dhabi": { type: "complexe", couleurs: ["#00732F"] },
+  // Trois bandes horizontales (vert, blanc, noir) et un quadrillage rouge à la
+  // hampe. Ramené à ses **deux couleurs dominantes en bandes égales** : le vert
+  // seul ne disait rien du blanc qui fait la moitié de la lecture du drapeau.
+  "abu-dhabi": {
+    type: "horizontal",
+    couleurs: ["#00732F", "#FFFFFF"],
+    parts: [1, 1],
+  },
 };
 
 /* --------------------------------------------------------------------------
@@ -94,7 +120,7 @@ export const DRAPEAUX = {
 
    Le texte du bloc reste **blanc dans tous les cas** : c'est la demande, et
    c'est aussi la seule façon de garder un bloc reconnaissable d'un Grand Prix à
-   l'autre. Mais cinq des douze drapeaux portent une bande blanche, sur laquelle
+   l'autre. Mais sept des douze drapeaux portent une bande blanche, sur laquelle
    du texte blanc ne se voit pas du tout. D'où le voile noir.
 
    **La demande annonçait `rgba(0, 0, 0, 0.3)` ; 0,30 ne suffit pas, et c'est
@@ -114,9 +140,11 @@ export const DRAPEAUX = {
       inconditionnelle : si le tracé était posé par-dessus, ses 15 % de blanc
       ramèneraient une bande voilée de `#8C8C8C` à `#9D9D9D`, où le blanc
       retombe à 2,71:1, précisément là où le texte le croise.
-   2. **Les cinq drapeaux assez sombres ne reçoivent aucun voile** (États-Unis,
-      Brésil hors lumière, Las Vegas, Abu Dhabi, et le repli bordeaux). Voiler
-      une couleur qui tient déjà le seuil ne ferait que l'éteindre.
+   2. **Les fonds assez sombres ne reçoivent aucun voile** (les deux Grands Prix
+      américains et le repli bordeaux). Voiler une couleur qui tient déjà le
+      seuil ne ferait que l'éteindre. Et **l'absence de bande blanche n'implique
+      pas l'absence de voile** : le vert du Brésil est assez clair pour en
+      demander 0,05. C'est le calcul qui tranche, jamais la lecture de la table.
    3. **Sur un drapeau voilé, l'encre secondaire passe au blanc plein** au lieu
       des 70 % habituels. Ce n'est pas un choix esthétique : une fois la bande la
       plus claire ramenée au gris moyen, *aucune* opacité intermédiaire n'atteint
