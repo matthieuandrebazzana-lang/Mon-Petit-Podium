@@ -40,8 +40,13 @@ export function couleurBloc(cle) {
  * Contraste WCAG entre deux couleurs `#rrggbb`.
  * Le `+ 0.05` des deux côtés est celui de la formule, il évite aussi la
  * division par zéro sur du noir pur.
+ *
+ * Exportée depuis les drapeaux de pays hôte (`composants/DrapeauxGP.jsx`), qui
+ * en dérivent l'opacité de leur voile : une seconde copie de la formule aurait
+ * fini par diverger de celle qui décide déjà des encres d'aplat, et les deux
+ * seuils doivent rester le même seuil.
  */
-function contraste(a, b) {
+export function contraste(a, b) {
   const clair = Math.max(luminance(a), luminance(b));
   const sombre = Math.min(luminance(a), luminance(b));
   return (clair + 0.05) / (sombre + 0.05);

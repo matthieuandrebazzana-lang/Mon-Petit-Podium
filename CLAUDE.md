@@ -1791,6 +1791,104 @@ La constante `GP_RESTANTS = 12` la remplace (des Pays-Bas à Abu Dhabi), avec un
 
 *Vérifié* : `npm run build` passe, 128 modules ; la constante est bien inlinée à 12 dans le bundle, l'utilitaire `text-secondaire` est généré, et la version `0.14.1` est présente.
 
+---
+
+**Tracés de circuits et drapeaux des pays hôtes sur le bloc GP** (version `0.15.0`)
+
+Le bloc « Prochain GP » de l'accueil portait un aplat rouge `#800111` et un ovale décoratif, identiques du premier au dernier Grand Prix de la saison. Il porte désormais **le vrai tracé du circuit** et **les couleurs du drapeau du pays hôte** : c'est la seule chose de l'écran d'entrée qui change d'un week-end à l'autre, et elle se reconnaît avant d'avoir lu le nom. Deux composants nouveaux, un utilitaire CSS, une fonction exportée. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x` et `0.14.1`).
+
+---
+
+***Les douze tracés — `assets/traces.svg` découpé en composant.***
+
+`frontend/src/composants/TracesCircuits.jsx`. La planche empile les douze circuits de la fin de saison, de Zandvoort à Yas Marina, dans un seul système de coordonnées de 669 × 5107 unités. Chacun est extrait **tel quel** : les données de chemin sont identiques au fichier d'origine, **aucune coordonnée n'est réécrite**. Le fichier a été découpé par un script, pas à la main — une transcription manuelle de douze chemins de 2 Ko chacun aurait introduit des fautes invisibles à la lecture.
+
+Quatre points de mise en œuvre à ne pas défaire :
+
+1. **Ce sont des traits, pas des silhouettes.** La planche les dessine en `fill: none` avec un contour de 2px : ils se rendent en `stroke`, jamais en `fill`, qui refermerait chaque circuit en tache noire. C'est la différence avec `composants/TraceCircuit.jsx` (planche `gp-cards.svg`), dont les deux tracés sont, eux, de vraies silhouettes pleines. **Les deux modules coexistent** et ne se remplacent pas : l'ancien sert les vignettes de 20 × 32px des deux calendriers, le nouveau le filigrane pleine hauteur du bloc de l'accueil.
+2. **Les `viewBox` sont les boîtes englobantes réelles**, mesurées en échantillonnant les courbes de Bézier (même méthode qu'à l'étape 9), élargies de 4 unités pour que le trait ne soit pas rogné par sa propre demi-épaisseur. Un cadrage arrondi à la main aurait décentré les circuits les plus étirés : **Bakou fait 3,4 fois plus large que haut, Zandvoort à peine 1,1**.
+3. **`vector-effect="non-scaling-stroke"`** — l'épaisseur du trait est en pixels d'écran, pas en unités du dessin. Avec une épaisseur exprimée en unités, le même trait sortirait deux fois plus épais sur Zandvoort que sur Bakou, les deux cadrages n'ayant pas du tout la même échelle.
+4. **Le rapport de forme est porté par le `<svg>` lui-même** (`aspect-ratio`), à la valeur du cadrage. C'est ce qui permet à l'écran de ne fixer **qu'une** dimension et de laisser l'autre suivre : une boîte aux proportions arbitraires laisserait `meet` centrer le dessin dans du vide, et le filigrane changerait de taille d'un circuit à l'autre sans raison visible.
+
+**Un circuit dessiné en plusieurs traits garde ses sous-tracés dans un seul `d`.** Sakhir en compte quatre, dont la voie des stands. Sans remplissage, un `d` qui enchaîne plusieurs `M` se rend exactement comme autant de `<path>` séparés — ce qui permet à la table de tenir la forme demandée (un chemin par circuit) sans rien perdre du dessin.
+
+*`slugCircuit(nomGp)`* fait le rapprochement : minuscules, accents ramenés à la lettre de base, préfixe « GP » retiré **en tête seulement** (un « GP » au milieu d'un libellé n'est pas un préfixe), tout le reste en tirets. « GP Azerbaïdjan » → `azerbaidjan`, « GP États-Unis » → `etats-unis`.
+
+**Une table d'alias complète la normalisation, et ce n'est pas une précaution en l'air.** Unibet écrit « GP Pays Bas » cette semaine et « GP Pays-Bas » la suivante — c'est déjà la raison pour laquelle `grands_prix` se rapproche par `id_unibet` et non par le nom (étape 4). Rien ne garantit non plus qu'un Grand Prix soit nommé par son pays : « GP Abou Dabi », « GP Émirats arabes unis » et « GP Yas Marina » désignent le même circuit, et la normalisation seule n'en retrouverait aucun. Les alias couvrent les orthographes et les noms de circuit ; le slug direct reste essayé d'abord.
+
+**Un tracé absent est un cas normal, pas une panne** : la planche ne couvre que la fin de saison, et le composant ne rend **rien du tout** plutôt qu'un motif de repli — celui-ci laisserait croire que ce Grand Prix se court sur cette forme-là. C'est exactement ce que la demande prescrivait.
+
+---
+
+***Les drapeaux — CSS pur, et un voile calculé.***
+
+`frontend/src/composants/DrapeauxGP.jsx`. Douze drapeaux, trois formes : `horizontal` (bandes horizontales, le dégradé descend), `vertical` (bandes verticales, il va vers la droite) et `complexe` — un drapeau qu'on ne reproduit pas honnêtement en CSS (étoiles, sphère céleste, quadrillage) devient un **aplat uni de sa couleur dominante**. Mieux vaut une couleur juste qu'un drapeau approximatif.
+
+**Périmètre, identique à celui de `lib/palette.js` et de `lib/couleurs.js`** : ces couleurs ne peignent que l'aplat de ce bloc. Jamais un fond d'écran, jamais un texte, jamais une bordure. Les sept couleurs de la section 5 gardent donc tous leurs rôles, et le bordeaux de la marque reste le repli. Un contrôle du jeu de tests vérifie qu'**aucune couleur de drapeau ne vit ailleurs que dans ce fichier**.
+
+**Aucune image, aucune requête** : tout est en `linear-gradient`. Un drapeau en image demanderait un fichier par pays, à charger avant que le premier écran de l'app puisse s'afficher.
+
+Deux points de mise en œuvre :
+- **Les bandes sont écrites en paires de bornes** (`#A 0%, #A 33.33%, #B 33.33%`) et non avec la syntaxe à double position (`#A 0% 33.33%`). Les deux disent la même chose, la première est comprise partout, et cette app vise Safari iOS.
+- **`parts` porte les ratios inégaux** — Espagne 1/2/1, Bahreïn 1/4, Qatar 3/1. Sans ce champ il faudrait les décrire en répétant des bandes, ce qui ne dirait pas la même chose.
+
+---
+
+***Le voile, et pourquoi `0,30` ne pouvait pas suffire.*** C'est le point de la version.
+
+Le texte du bloc reste **blanc dans tous les cas**, comme demandé : c'est aussi la seule façon de garder un bloc reconnaissable d'un Grand Prix à l'autre. Mais **sept des douze drapeaux portent une bande blanche**, sur laquelle du texte blanc ne se voit pas du tout. D'où le voile noir.
+
+La demande annonçait `rgba(0, 0, 0, 0.3)`. **Mesuré, 0,30 ne suffit pas** : un noir à 30 % sur une bande blanche la ramène à `#B2B2B2`, où le blanc plein ne vaut que **2,11:1** — sous le plancher AA des grands textes. Il faut **0,42** pour atteindre 3:1, et un cran de plus en tenant compte de la lumière spéculaire posée par-dessus. L'opacité est donc **dérivée de la bande la plus claire de chaque drapeau**, par pas de 0,05, exactement comme `encreSurAplat` dérive l'encre d'un aplat depuis la version `0.12.0`. Un drapeau ajouté demain reçoit le bon voile sans que personne n'ait à refaire le calcul.
+
+| Drapeaux | Voile | Blanc plein |
+|---|---|---|
+| Pays-Bas, Italie, Bahreïn, Singapour, Mexique, Qatar | 0,45 | 3,36:1 |
+| Espagne | 0,30 | 3,11:1 |
+| Azerbaïdjan | 0,15 | 3,17:1 |
+| Brésil | 0,05 | 3,00:1 |
+| États-Unis, Las Vegas, Abu Dhabi, **repli bordeaux** | aucun | 3,86 à 11,73:1 |
+
+**Quatre conséquences à ne pas défaire :**
+
+1. **Le voile est le calque le plus haut du bloc, sous le seul contenu.** Tout ce qui éclaircit la surface — le tracé du circuit, la lumière spéculaire — passe **dessous**. C'est ce qui rend la garantie inconditionnelle : si le tracé était posé par-dessus, ses 15 % de blanc ramèneraient une bande voilée de `#8C8C8C` à `#9D9D9D`, où le blanc **retombe à 2,71:1**, précisément là où le texte le croise. Le jeu de tests affiche cette valeur pour chaque drapeau, pour que l'ordre des calques reste une décision visible.
+2. **Les cinq fonds assez sombres ne reçoivent aucun voile.** Voiler une couleur qui tient déjà le seuil ne ferait que l'éteindre. Le repli bordeaux passe par **le même calcul** que les drapeaux plutôt que d'être décrété conforme : il ressort sans voile et avec ses surfaces blanches, donc le bloc « aucun Grand Prix » et la silhouette de chargement gardent **exactement** l'aspect qu'ils avaient.
+3. **Sur un drapeau voilé, l'encre secondaire passe au blanc plein et à la graisse 500** au lieu des 70 % habituels. Ce n'est pas un choix esthétique : une fois la bande la plus claire ramenée au gris moyen, **aucune opacité intermédiaire n'atteint 3:1** — seul le blanc plein y arrive. C'est la règle de vibrance d'`/apple-design` §12, qui demande sur un fond changeant un texte plus contrasté et légèrement plus gras plutôt qu'un gris translucide. La hiérarchie passe donc par la taille et la graisse, pas par l'opacité.
+4. **Les surfaces posées dans le bloc suivent la même règle que l'encre.** La pastille « Prochain GP » et les deux cases de statut étaient des voiles **blancs** ; elles vivent dans le contenu, donc au-dessus du voile, et un blanc translucide y annulerait localement ce que le voile venait de gagner — une case `bg-white/12` sur une bande blanche voilée **redescend à 2,81:1**. Sur un drapeau voilé elles passent au noir translucide, qui va dans le même sens que le voile ; sur les fonds sombres et sur le repli elles restent blanches.
+
+L'écran ne choisit donc **jamais** `text-white/70` ni `bg-white/12` lui-même : il lit l'objet que sert `drapeauDuGp`, exactement comme `tonalites()` le garantit pour les aplats depuis la version `0.12.0`.
+
+*L'ombre portée du titre, et pourquoi elle est conditionnelle.* Le nom du Grand Prix occupe toute la largeur du bloc : il **traverse** une frontière de bandes, et une lettre posée pile sur la couture perd son contour d'un côté ou de l'autre. C'est exactement la situation que la vue piste résout déjà de la même manière depuis l'étape 7 — sa légende passe tantôt sur l'asphalte, tantôt sur une bordure blanche. **Un aplat uni n'a pas de couture, donc pas d'ombre** : le bloc bordeaux garde son texte parfaitement net.
+
+*`.voile-drapeau` dans `index.css`* porte son opacité en variable CSS (`--voile`) et jamais en dur : une valeur écrite dans la feuille voilerait tous les drapeaux de la même quantité, donc trop les uns et pas assez les autres. Sous **`prefers-contrast: more`** le voile s'approfondit d'un cran — pendant exact du grain de fond, qui disparaît sous ce même réglage (`/apple-design` §14) — et `clamp` borne le résultat, un voile opaque effaçant le drapeau.
+
+*Deux orientations suivent la demande plutôt que le drapeau réel*, et c'est signalé pour que ce soit une décision et non un oubli : le **Qatar** est décrit en bandes **horizontales** bordeaux/blanc, alors que le vrai drapeau porte sa bande blanche à la hampe, donc verticalement. Bahreïn, lui, est bien vertical. Les deux se corrigent en changeant le seul champ `type` de la table.
+
+*Conséquence visuelle assumée* — sur les sept drapeaux à bande blanche, cette bande se lit **gris argent** et non blanc. C'est inhérent au couple « texte blanc partout » + « bande blanche » : la seule autre issue serait de l'encre foncée sur ces bandes-là, ce que la demande exclut explicitement. Les drapeaux restent reconnaissables ; Bahreïn (1/4) et Singapour (1/1) sont les deux où la bande grise pèse le plus.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau**, et c'est un choix. Le fond d'un Grand Prix ne change pas sous les yeux du joueur : il n'y a aucun changement d'état à accompagner, et le skill Transitions.dev n'a pas de correspondance pour une surface statique. Le bloc conserve celles qu'il portait — *texts reveal* (18) pour son entrée, *text states swap* (04) pour le compte à rebours et le libellé du bouton.
+
+*Apport d'`/apple-design`* — la vibrance du §12 sur fond changeant (point 3 ci-dessus) est l'apport principal ; s'y ajoutent le tracé et le voile posés `aria-hidden` et `pointer-events-none`, un lecteur d'écran n'ayant rien à annoncer d'un effet de profondeur, et le repli `prefers-contrast: more`. Les trois destinations du bouton, son libellé et sa zone tactile de 44px sont inchangés (versions `0.5.1` et `0.9.0`).
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage pré-rempli) : **167 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Tracés | douze tracés, **les douze slugs demandés dans l'ordre**, deux à deux distincts ; `viewBox` à quatre nombres et ratio concordant ; **aucune commande de chemin non gérée** ; Sakhir réunit bien ses quatre sous-tracés, les onze autres n'en ont qu'un |
+| `slugCircuit` | les douze noms de pays résolus, accents et casse compris ; « GP Pays Bas » **comme** « GP Pays-Bas » ; huit alias résolus (Abou Dabi, Émirats, Monza, Zandvoort, Bakou, Sao Paulo, Lusail, Austin) ; **un GP hors planche ne tombe sur aucun tracé** ; nom vide sans plantage ; **un « GP » au milieu d'un libellé n'est pas retiré** |
+| Composant | trait et non aplat (`fill="none"`, `stroke="currentColor"`, `non-scaling-stroke`), décoratif ; **rapport de forme porté par le `<svg>`** ; **circuit absent → rien du tout** ; les douze se rendent sans lever |
+| Drapeaux | douze entrées, une par tracé ; types attendus ; **les couleurs exactes de la demande, hexadécimal par hexadécimal** ; les trois ratios inégaux ; toutes au format `#RRGGBB` |
+| CSS pur | **aucune `url()`, aucun `http`** ; bandes horizontales → `to bottom`, verticales → `to right` ; bandes franches à deux bornes par couleur ; Espagne 25→75 %, Bahreïn 0→20 %, Qatar 0→75 %, Singapour 50 % ; dernière borne à 100 % ; `complexe` → aplat uni sans dégradé |
+| **Contraste, mesuré sur les treize fonds** | **blanc plein ≥ 3:1 partout** ; l'encre secondaire annoncée tient le seuil ; **le blanc posé dans la pastille et dans les deux cases tient le seuil** ; `0,30` prouvé insuffisant sur une bande blanche ; aucun voile sur les fonds sombres, ≥ 0,42 sur les sept bandes blanches ; **aucun voile n'atteint l'opacité** |
+| Ordre des calques | pour chaque drapeau voilé, le jeu de tests affiche ce que **vaudrait** le contraste si le tracé passait au-dessus du voile (2,52 à 2,71:1) — la démonstration que l'ordre n'est pas indifférent |
+| Ombre portée | présente sur les drapeaux à bandes, **absente sur les aplats unis et sur le repli** |
+| Bloc de l'accueil | le drapeau peint le bloc et **l'aplat rouge disparaît** ; voile rendu à la bonne opacité ; tracé de Zandvoort rendu, à 15 % de blanc, débordant par la droite ; surfaces sombres et encre secondaire en blanc plein sur drapeau voilé ; lumière spéculaire, élévation, nom, cases de statut et bouton conservés |
+| Repli | **pays hors table → aplat `bg-primaire`, aucun tracé, aucun voile, aucune ombre**, `text-white/70` et `bg-white/12` — le bloc d'avant, à l'identique ; drapeau `complexe` → aplat uni et surfaces claires conservées ; GP sans horaire → drapeau quand même et « Date à confirmer », **aucune date inventée** |
+| Cloisonnement | **les couleurs de drapeau ne vivent que dans `DrapeauxGP.jsx`** |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », sur les trois cas |
+| CSS | `.voile-drapeau` déclarée, opacité lue en variable, repli `prefers-contrast: more` présent et **borné** |
+| Aperçu rendu avec la feuille compilée | les treize cas dessinés à 390px de large : les douze drapeaux reconnaissables, les douze tracés lisibles en filigrane, aucun texte perdu sur une couture |
+| `npm run build` | passe, **130 modules**, version `0.15.0` et ombre portée présentes dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -1863,6 +1961,8 @@ Points non couverts, à traiter le moment venu :
 - **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
 
+**Trois points depuis la version `0.15.0`**, tous liés aux drapeaux du bloc GP, qui ne se jugent qu'à l'œil : **la force du voile** — elle est calculée pour tenir 3:1 et ne doit pas être baissée, mais si un drapeau à bande blanche paraît trop éteint, c'est la seule autre issue qui est à arbitrer (encre foncée sur les bandes claires, ce que la demande excluait) ; **la lisibilité du tracé à 15 % de blanc** sur les fonds les plus clairs, où il peut disparaître sous le voile — le monter à 20 % ne coûte rien à la garantie, le tracé passant sous le voile ; et le **repli `prefers-contrast: more`**, qui approfondit le voile d'un cran et qu'il faut vérifier avec « Augmenter le contraste » activé, en même temps que celui du grain de fond. Point secondaire : le nom du Grand Prix est tronqué (`truncate`) et les libellés d'Unibet peuvent s'allonger (« GP Émirats arabes unis ») — à confronter à un iPhone étroit.
+
 **Deux points depuis la version `0.14.0`**, tous deux liés au grain du fond, qui ne se juge qu'à l'œil sur un écran réel : **l'intensité du grain** — 4 % avec un contraste étiré dans le filtre, c'est le réglage qui devrait donner « du papier légèrement texturé » sans jamais salir le beige ; si le rendu paraît trop faible, monter `opacity` dans le SVG de `--grain-fond` plutôt que la taille de tuile, et si le grain se remarque, la descendre à 0,03 ; et le **coût au défilement** — le motif est une tuile rastérisée mise en cache, il ne devrait rien coûter, mais c'est exactement le genre d'effet qui se juge en faisant défiler une longue liste de cotes sur un vrai iPhone. Vérifier aussi le repli `prefers-contrast: more` (« Augmenter le contraste » dans les réglages d'accessibilité), qui doit rendre le fond parfaitement uni. Point secondaire : les **cartes de 120px** portent maintenant deux fois plus de contenu, à confronter à un pseudo de championnat long sur un iPhone étroit.
 
 **Quatre points depuis la refonte sans restriction (`0.13.0`)**, tous liés au collage et aux matériaux, c'est-à-dire à ce qui ne se vérifie pas au simulateur : l'**en-tête à grand titre rétractable** — regarder que la barre ne saute pas quand la barre d'adresse de Safari se rétracte, que le matériau apparaisse bien au bon moment (la marge de déclenchement est fixée à 64px, à réajuster si la zone sûre d'un modèle la décale), et que le flou d'un élément pleine largeur ne fasse pas saccader le défilement ; les **en-têtes de marché collants** du tableau des cotes, dont le décalage repose sur `--entete-hauteur` = zone sûre + 60px — à confronter à un vrai `env(safe-area-inset-top)` ; l'**en-tête teinté du championnat**, où la couleur de la barre et celle de l'aplat doivent se toucher sans laisser de ligne au premier pixel de défilement ; et les deux **nouvelles barres collées en bas** (cotes et pronostics), à vérifier avec un vrai home indicator. Vérifier aussi le repli `prefers-reduced-transparency` sur l'en-tête, en plus des deux matériaux déjà signalés.
@@ -1880,4 +1980,5 @@ Points non couverts, à traiter le moment venu :
 - **Grille des pilotes à mettre à jour chaque saison** — `backend/app/calcul/pilotes.py` décrit 2026. Une table périmée ne fait pas de dégât silencieux (`alias_unibet()` exige que le nom de famille concorde avec le numéro), mais les alias cessent de s'appliquer et les pronostics concernés restent à `NULL`. Les numéros se relisent sur `/drivers` d'OpenF1, les libellés dans `public.cotes`.
 - Composant React `<Voiture />` avec couleurs dynamiques — **créé à l'étape 7** (`composants/Voiture.jsx`), **porté dans les profils à l'étape 8** (bloc rouge d'en-tête des maquettes 12 et 14, et aperçu de la personnalisation). Il n'a pas eu à changer : il acceptait déjà `couleur1`, `couleur2`, `numero` et `nom`. `composants/Pastille.jsx` reste en place et n'est pas remplacée : elle porte la couleur de la voiture de son membre, ce qui suffit à le reconnaître dans une liste, là où une voiture complète serait illisible à 36px.
 - **`assets/gp-cards.svg` extrait en composant** — **fait à l'étape 9** (`composants/TraceCircuit.jsx`). La planche ne contenait que **deux tracés distincts** (Monza et Spa) répétés six fois, et non un circuit par Grand Prix : les deux sont extraits tels quels, les autres Grands Prix reçoivent un tracé générique. Si de vrais tracés arrivent un jour, ils s'ajoutent à la table `TRACES` et au tableau `PAR_MOTIF` du même fichier, sans toucher aux écrans.
+- **`assets/traces.svg` extrait en composant** — **fait en version `0.15.0`** (`composants/TracesCircuits.jsx`), et c'est le jeu de tracés qui manquait : **douze vrais circuits**, de Zandvoort à Yas Marina. Les deux modules coexistent et ne se remplacent pas — celui de l'étape 9 dessine des **silhouettes pleines** (vignettes de 20 × 32px des deux calendriers), celui-ci des **traits** (filigrane du bloc de l'accueil). Les tracés qui manquent encore sont ceux du début de saison ; ils s'ajoutent à la table `TRACES` du nouveau fichier, avec leur `viewBox` mesurée, sans toucher aux écrans. Les deux calendriers, eux, gagneraient à passer aux douze vrais tracés plutôt qu'au générique : c'est une substitution d'import et un passage du `fill` au `stroke`, non fait ici, le périmètre demandé étant le seul bloc de l'accueil.
 - **Voiture personnalisable dans le profil** (section 5) — **fait à l'étape 8** : deux couleurs choisies parmi vingt, un numéro libre de 1 à 99, modifiables à tout moment depuis `/profil`. Le rang affiché sur la voiture a disparu ; il ne sert plus que de repli tant qu'aucun numéro n'est choisi. Les livrées, elles, ont changé de place plutôt que de disparaître : le calcul frontend par ordre d'inscription (`lib/livrees.js`) est bien supprimé, mais la **version `0.8.1` les a reposées en base**, comme valeur initiale des deux colonnes à la création du profil. Le membre les écrase dès qu'il personnalise. Les deux points laissés ouverts sont tranchés et documentés au « Reste à faire » : deux membres d'un même championnat **peuvent** choisir les mêmes couleurs (conséquence assumée) et le même numéro (avertissement non bloquant).

@@ -7,7 +7,12 @@ import Pastille from "../composants/Pastille.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { Pave } from "../composants/Squelette.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
-import TraceCircuit, { traceDuGrandPrix } from "../composants/TraceCircuit.jsx";
+import TraceCircuitGp, { slugCircuit } from "../composants/TracesCircuits.jsx";
+import {
+  APPARENCE_REPLI,
+  drapeauDuGp,
+  VoileDrapeau,
+} from "../composants/DrapeauxGP.jsx";
 import {
   IconeChevronDroit,
   IconeLien,
@@ -147,18 +152,34 @@ export function BlocProchainGp({ profilId }) {
         },
       ];
 
+  // Le pays hôte donne à la fois le tracé du circuit et les couleurs du bloc.
+  // Une seule normalisation du nom pour les deux : ils partagent la même clé, et
+  // la faire deux fois laisserait les deux tables se désynchroniser sur un
+  // libellé qu'Unibet aurait renommé.
+  const slug = slugCircuit(gp.nom);
+  const drapeau = drapeauDuGp(slug) ?? APPARENCE_REPLI;
+
   return (
-    <div className="rounded-bloc bg-primaire shadow-aplat relative overflow-hidden p-5">
-      {/* Le tracé du circuit, posé en filigrane à droite. Il reprend le
-          composant du calendrier (étape 9) : le Grand Prix qui a un vrai tracé
-          montre le sien, les autres le tracé générique. À 8 % de blanc, il
-          donne de la matière à l'aplat sans jamais concurrencer le texte — et
-          l'aplat rouge reste seul en cas de repli, exactement comme demandé.
-          `overflow-hidden` sur le bloc le laisse déborder par la droite plutôt
-          que de le contraindre à tenir en entier, ce qui l'écraserait. */}
-      <TraceCircuit
-        trace={traceDuGrandPrix(gp.nom)}
-        className="pointer-events-none absolute top-1/2 -right-8 h-[150%] w-[60%] -translate-y-1/2 text-white/8"
+    <div
+      className={`rounded-bloc shadow-aplat relative overflow-hidden p-5 ${
+        drapeau.fond ? "" : "bg-primaire"
+      }`}
+      style={drapeau.fond ? { background: drapeau.fond } : undefined}
+    >
+      {/* Le tracé du circuit, posé en filigrane à droite, à 15 % de blanc. C'est
+          le vrai tracé du pays hôte (`assets/traces.svg`) : Zandvoort pour les
+          Pays-Bas, Monza pour l'Italie. Il ne s'affiche pas du tout quand le
+          circuit n'est pas dans la planche — un motif de repli laisserait croire
+          que ce Grand Prix se court sur cette forme-là.
+
+          `aspect-ratio` est porté par le composant, donc seule la hauteur est
+          fixée ici et la largeur suit : le filigrane garde la même présence d'un
+          circuit à l'autre, alors qu'ils vont de 1,1 à 3,4 de rapport. Il
+          dépasse par la droite et `overflow-hidden` le rogne, plutôt que de le
+          contraindre à tenir en entier, ce qui l'écraserait. */}
+      <TraceCircuitGp
+        slug={slug}
+        className="pointer-events-none absolute top-1/2 -right-10 h-[150%] w-auto -translate-y-1/2 text-white/15"
       />
       {/* La lumière spéculaire d'/apple-design §12 : un aplat plein est une
           surface morte, ce galbe très doux lui donne une source lumineuse. Il
@@ -167,28 +188,46 @@ export function BlocProchainGp({ profilId }) {
         aria-hidden="true"
         className="lueur-haute pointer-events-none absolute inset-0"
       />
+      {/* Le voile, **par-dessus tout ce qui éclaircit** et sous le seul contenu.
+          C'est ce qui rend la garantie de 3:1 inconditionnelle : le tracé et la
+          lumière spéculaire passent dessous, donc ils ne peuvent pas remonter la
+          luminance là où le texte les croise. Son opacité est calculée par
+          drapeau, jamais choisie. */}
+      <VoileDrapeau voile={drapeau.voile} />
 
       <div className="relative">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <span className="text-label-sm rounded-full bg-white/20 px-2.5 py-1 text-white uppercase">
+          <span
+            className={`text-label-sm rounded-full px-2.5 py-1 uppercase ${drapeau.pastille} ${drapeau.texte}`}
+          >
             {couru ? "Dernier GP" : "Prochain GP"}
           </span>
-          <span className="shrink-0 text-[11px] text-white/70">
+          <span
+            className={`shrink-0 text-[11px] ${drapeau.texteDoux} ${drapeau.ombreTexte}`}
+          >
             {depart.courte ?? "Date à confirmer"}
           </span>
         </div>
 
         {/* Le nom du Grand Prix passe à l'échelle des titres de page : c'est ce
-            qu'on vient lire, il doit être le plus gros élément de l'écran. */}
-        <p className="text-titre-lg truncate text-white">{gp.nom}</p>
+            qu'on vient lire, il doit être le plus gros élément de l'écran. Sur un
+            drapeau à bandes, il en traverse la couture — d'où l'ombre portée,
+            qui lui garde son contour des deux côtés. */}
+        <p
+          className={`text-titre-lg truncate ${drapeau.texte} ${drapeau.ombreTexte}`}
+        >
+          {gp.nom}
+        </p>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
           {cases.map((donnee) => (
             <div
               key={donnee.label}
-              className="rounded-champ bg-white/12 px-3.5 py-2.5"
+              className={`rounded-champ px-3.5 py-2.5 ${drapeau.surface}`}
             >
-              <p className="text-label-sm truncate uppercase text-white/70">
+              <p
+                className={`text-label-sm truncate uppercase ${drapeau.texteDoux}`}
+              >
                 {donnee.label}
               </p>
               <p className="mt-1 truncate text-[15px] font-medium text-white">

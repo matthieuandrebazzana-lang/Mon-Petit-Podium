@@ -389,6 +389,29 @@
   );
 }
 
+/* — Voile d'un drapeau de pays hôte —
+   Le bloc du prochain Grand Prix porte les couleurs du drapeau du pays qui
+   l'accueille, et son texte reste blanc dans tous les cas. Sept des douze
+   drapeaux ont une bande blanche : ce voile noir est ce qui rend le texte
+   lisible dessus.
+
+   **Son opacité est calculée, jamais écrite ici** — `composants/DrapeauxGP.jsx`
+   la dérive de la bande la plus claire du drapeau pour atteindre 3:1, et la pose
+   en `--voile`. Une valeur en dur dans cette feuille voilerait tous les drapeaux
+   de la même quantité, donc trop les uns et pas assez les autres.
+
+   Sous contraste renforcé, le voile s'approfondit d'un cran : c'est le pendant
+   exact du grain de fond, qui disparaît sous ce même réglage (/apple-design
+   §14). `clamp` borne le résultat, un voile opaque effacerait le drapeau. */
+.voile-drapeau {
+  background-color: rgb(0 0 0 / var(--voile, 0));
+}
+@media (prefers-contrast: more) {
+  .voile-drapeau {
+    background-color: rgb(0 0 0 / clamp(0.2, calc(var(--voile, 0) + 0.15), 0.7));
+  }
+}
+
 /* — Jauge de progression d'une carte de championnat —
    Où en est le membre par rapport au leader de son championnat.
 
