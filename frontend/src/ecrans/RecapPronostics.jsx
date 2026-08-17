@@ -10,6 +10,7 @@ import { Barre, Pave } from "../composants/Squelette.jsx";
 import {
   APPARENCE_REPLI,
   drapeauDuGp,
+  FondDrapeau,
   VoileDrapeau,
 } from "../composants/DrapeauxGP.jsx";
 import { slugCircuit } from "../composants/TracesCircuits.jsx";
@@ -113,6 +114,10 @@ function Hero({ gp, onRetour }) {
         ...(drapeau.fond ? { background: drapeau.fond } : null),
       }}
     >
+      {/* Le drapeau dessiné, quand le pays en a un — **le calque le plus bas**.
+          Il doit passer sous le voile : c'est le voile qui garantit que le titre
+          du Grand Prix, posé par-dessus, tient les 3:1 sur les bandes claires. */}
+      <FondDrapeau apparence={drapeau} />
       {/* La lumière spéculaire d'/apple-design §12 : un aplat plein est une
           surface morte, ce galbe très doux lui donne une source lumineuse. */}
       <span

@@ -1,6 +1,11 @@
 import { Link } from "react-router-dom";
 import TraceCircuitGp, { aUnTrace } from "./TracesCircuits.jsx";
-import { APPARENCE_REPLI, VoileDrapeau, drapeauDuGp } from "./DrapeauxGP.jsx";
+import {
+  APPARENCE_REPLI,
+  FondDrapeau,
+  VoileDrapeau,
+  drapeauDuGp,
+} from "./DrapeauxGP.jsx";
 import { actionDuGp, etatDuGpSaison, jourDe } from "../lib/calendrier2026.js";
 
 /**
@@ -81,7 +86,10 @@ export default function CarteGpSaison({ gp, chargement = false, retour = null })
         ...(drapeau.fond ? { background: drapeau.fond } : {}),
       }}
     >
-      {/* --- Les calques, dans l'ordre du bloc de l'accueil ---------------- */}
+      {/* --- Les calques, dans l'ordre du bloc de l'accueil ----------------
+          Le drapeau dessiné est le plus bas : le voile et l'assombrissement le
+          recouvrent, jamais l'inverse. */}
+      <FondDrapeau apparence={drapeau} />
       <div
         aria-hidden="true"
         className="lueur-haute pointer-events-none absolute inset-0"

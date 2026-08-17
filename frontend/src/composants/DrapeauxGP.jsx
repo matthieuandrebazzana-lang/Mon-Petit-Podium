@@ -12,40 +12,60 @@
  * CLAUDE.md gardent donc tous leurs rôles — et le rouge de la marque reste le
  * repli quand le pays n'est pas dans la table.
  *
- * **Aucune image, aucune requête** : tout est en CSS pur, `linear-gradient` à
- * bandes franches. Un drapeau en image demanderait un fichier par pays, à
- * charger avant que le premier écran de l'app puisse s'afficher.
+ * **Aucune requête réseau, jamais.** Deux traitements coexistent, et la frontière
+ * entre les deux est celle de l'honnêteté du rendu :
+ *
+ * - **`horizontal` / `vertical`** — deux ou trois bandes franches, en
+ *   `linear-gradient`. C'est exactement ce que le CSS sait dire, et un dessin
+ *   n'y apporterait rien.
+ * - **`svg`** — le drapeau **dessiné**, extrait de `assets/flags.svg` et servi
+ *   en SVG inline par `DrapeauxSVG.jsx`. C'est ce qui remplace le traitement
+ *   `complexe` : ramener la bannière étoilée à un aplat rouge, ou la Malaisie à
+ *   deux bandes, était le compromis qu'on faisait faute de dessin. Le dessin
+ *   existe désormais pour six pays, et l'approximation n'a plus de raison d'être.
+ *
+ * Un drapeau en **image** (PNG, ou SVG chargé par `url()`) demanderait un fichier
+ * par pays, donc autant d'allers-retours réseau avant que le premier écran de
+ * l'app puisse s'afficher. Le SVG inline, lui, part avec le bundle.
  */
 
 import { contraste } from "../lib/couleurs.js";
 import { luminance } from "../lib/palette.js";
+import DrapeauSVG, { aUnDrapeauSvg } from "./DrapeauxSVG.jsx";
 
 /**
  * Les douze drapeaux, par slug de `slugCircuit`.
  *
  * - `type: "horizontal"` — bandes horizontales, le dégradé descend.
  * - `type: "vertical"` — bandes verticales, le dégradé va vers la droite.
- * - `type: "complexe"` — drapeau qu'on ne reproduit pas honnêtement en CSS pur
- *   (étoiles, sphère céleste, cantons) : **aplat uni de la couleur dominante**.
- *   Mievaut une couleur juste qu'un drapeau approximatif.
+ * - `type: "svg"` — le drapeau **dessiné**, servi par `DrapeauxSVG.jsx`. `svg`
+ *   nomme le fragment, `base` donne l'aplat peint dessous.
  *
  * `parts` donne le poids relatif des bandes. Il est facultatif : à défaut, les
  * bandes sont égales. Deux drapeaux ne peuvent pas s'en passer — l'Espagne
  * (1/2/1) et le Qatar (3/1) — et sans lui il faudrait les décrire en répétant
  * des bandes, ce qui ne dirait pas la même chose.
  *
- * **Un drapeau `complexe` reste ramené à sa couleur dominante, jamais à une
- * approximation.** La frontière entre les deux traitements est celle de
- * l'honnêteté du rendu, pas celle du nombre de bandes : la Malaisie et Abu Dhabi
- * portent une bande blanche qui fait la moitié de leur lecture, et la taire
- * donnait un aplat rouge ou vert que rien ne distinguait des autres ; la
- * bannière étoilée et la sphère céleste brésilienne, elles, n'ont pas de bandes
- * dominantes à extraire.
+ * **`couleurs` n'est pas décoratif : c'est la matière du calcul de contraste.**
+ * Pour un drapeau dessiné, il porte **toutes** les teintes que le SVG peint, et
+ * pas seulement les dominantes — c'est de sa bande la plus claire que le voile
+ * est dérivé. Un drapeau dont on tairait le blanc recevrait un voile trop léger,
+ * et le texte blanc du bloc disparaîtrait dessus. C'est précisément ce qui
+ * arrivait aux États-Unis et au Brésil tant qu'ils étaient ramenés à un aplat
+ * uni : la table disait une seule couleur sombre, le calcul concluait qu'aucun
+ * voile n'était nécessaire, et la bannière étoilée dessinée aurait porté ses
+ * treize bandes blanches sous un texte blanc. **Toute forme peinte par le SVG
+ * doit avoir sa teinte ici.**
+ *
+ * **`base` est un filet de sécurité, pas une couleur visible.** Le SVG couvre
+ * toute la surface (`slice`), donc cet aplat ne se voit jamais ; il ne sert que
+ * si le fragment manquait. Il est choisi dans les teintes du drapeau, pour que
+ * l'accident reste plausible plutôt que bordeaux.
  *
  * **Deux Grands Prix d'un même pays portent le même drapeau** : Austin et Las
- * Vegas se courent tous deux aux États-Unis, donc tous deux sur le rouge
- * `#B22234`. Le noir du circuit de nuit, qui tenait cette place, était une
- * couleur d'ambiance et non un drapeau.
+ * Vegas se courent tous deux aux États-Unis, donc tous deux la bannière étoilée.
+ * Le noir du circuit de nuit, qui tenait cette place, était une couleur
+ * d'ambiance et non un drapeau.
  */
 export const DRAPEAUX = {
   "pays-bas": {
@@ -65,53 +85,71 @@ export const DRAPEAUX = {
     type: "horizontal",
     couleurs: ["#0092BC", "#E8192C", "#00B050"],
   },
-  // Le vrai drapeau porte quatorze bandes rouges et blanches, un croissant et une
-  // étoile à quatorze branches dans un canton bleu. Il est ramené à ses **deux
-  // couleurs dominantes en bandes égales** : un aplat rouge uni ne disait rien du
-  // blanc qui occupe la moitié de la surface, et quatorze bandes de 7 % chacune
-  // se liraient comme un motif de rayures, pas comme un drapeau, à 200px de haut.
+  // Quatorze bandes rouges et blanches, un croissant et une étoile à quatorze
+  // branches dans un canton bleu. Deux bandes égales n'en disaient rien.
   // (Ce slug a remplacé `bahrein` : c'est Sepang, et non Sakhir, qui court à
   // cette place du calendrier — voir `TracesCircuits.jsx`.)
   malaisie: {
-    type: "horizontal",
-    couleurs: ["#CC0001", "#FFFFFF"],
-    parts: [1, 1],
+    type: "svg",
+    svg: "malaisie",
+    base: "#CC3128",
+    couleurs: ["#CC3128", "#F8F9FB", "#262956", "#F3C839"],
   },
   singapour: {
     type: "horizontal",
     couleurs: ["#EF3340", "#FFFFFF"],
     parts: [1, 1],
   },
-  // Bannière étoilée : cinquante étoiles dans un canton, hors de portée d'un
-  // dégradé. Rouge dominant.
-  "etats-unis": { type: "complexe", couleurs: ["#B22234"] },
+  // Bannière étoilée : treize bandes et cinquante étoiles dans un canton.
+  "etats-unis": {
+    type: "svg",
+    svg: "etats-unis",
+    base: "#B42C47",
+    couleurs: ["#B42C47", "#F8F9FB", "#23365C"],
+  },
+  // Trois bandes verticales que le CSS savait dire — mais pas l'aigle et le
+  // serpent au centre, qui sont l'essentiel de ce drapeau.
   mexique: {
-    type: "vertical",
-    couleurs: ["#006847", "#FFFFFF", "#CE1126"],
+    type: "svg",
+    svg: "mexique",
+    base: "#036939",
+    couleurs: ["#036939", "#FEFEFE", "#D02E26", "#AC692B"],
   },
-  // Sphère céleste, bandeau incurvé et vingt-sept étoiles. Vert dominant.
-  bresil: { type: "complexe", couleurs: ["#009C3B"] },
+  // Losange jaune, sphère céleste et vingt-sept étoiles.
+  bresil: {
+    type: "svg",
+    svg: "bresil",
+    base: "#408C43",
+    couleurs: ["#408C43", "#F9DF3B", "#0C5282", "#FFFFFF"],
+  },
   // Las Vegas n'est pas un pays, mais la course se court **aux États-Unis** :
-  // c'est le drapeau américain qui l'accueille, donc le même rouge dominant que
-  // le GP d'Austin. Le noir du circuit de nuit, qui tenait cette place, était une
-  // couleur d'ambiance et non un drapeau — deux Grands Prix d'un même pays
-  // doivent porter la même couleur, sans quoi le repère se perd.
-  "las-vegas": { type: "complexe", couleurs: ["#B22234"] },
-  // Bordeaux à la volée, bande blanche **à la hampe** : le drapeau est donc bien
-  // vertical, la version horizontale qui tenait cette place venait de la demande
-  // d'origine et non du drapeau réel.
-  qatar: {
-    type: "vertical",
-    couleurs: ["#8D1B3D", "#FFFFFF"],
-    parts: [3, 1],
+  // c'est la même bannière étoilée qu'à Austin, au fragment près. Deux Grands
+  // Prix d'un même pays doivent porter le même drapeau, sans quoi le repère se
+  // perd — le noir du circuit de nuit, qui tenait cette place avant, était une
+  // couleur d'ambiance.
+  "las-vegas": {
+    type: "svg",
+    svg: "etats-unis",
+    base: "#B42C47",
+    couleurs: ["#B42C47", "#F8F9FB", "#23365C"],
   },
-  // Trois bandes horizontales (vert, blanc, noir) et un quadrillage rouge à la
-  // hampe. Ramené à ses **deux couleurs dominantes en bandes égales** : le vert
-  // seul ne disait rien du blanc qui fait la moitié de la lecture du drapeau.
+  // Bordeaux à la volée, bande blanche à la hampe, et la **dentelure** entre les
+  // deux : c'est elle qui identifie ce drapeau, et aucune borne de dégradé ne
+  // sait la dessiner. Les bandes verticales franches qui tenaient cette place la
+  // taisaient entièrement.
+  qatar: {
+    type: "svg",
+    svg: "qatar",
+    base: "#8B253D",
+    couleurs: ["#8B253D", "#FFFFFF"],
+  },
+  // Trois bandes horizontales (vert, blanc, noir) et le quadrillage rouge à la
+  // hampe, que deux bandes égales taisaient entièrement.
   "abu-dhabi": {
-    type: "horizontal",
-    couleurs: ["#00732F", "#FFFFFF"],
-    parts: [1, 1],
+    type: "svg",
+    svg: "abu-dhabi",
+    base: "#078544",
+    couleurs: ["#078544", "#FFFFFF", "#C92F35", "#010101"],
   },
 };
 
@@ -218,8 +256,16 @@ function voileNecessaire(couleurs) {
  *
  * Un drapeau à une seule couleur rend cette couleur telle quelle, sans dégradé :
  * un dégradé d'une couleur vers elle-même serait un calque à composer pour rien.
+ *
+ * Un drapeau **dessiné** rend son aplat de repli : le SVG le couvre entièrement,
+ * cette couleur ne se voit donc pas. Elle est là pour que le bloc reste peint si
+ * le fragment venait à manquer, et surtout pour que `fond` reste **toujours
+ * renseigné** — c'est lui qui dit aux écrans « ce bloc porte un drapeau », donc
+ * qu'ils ne doivent ni retomber sur le bordeaux de la marque ni sauter
+ * l'assombrissement uniforme.
  */
-function fondCss({ couleurs, type, parts }) {
+function fondCss({ couleurs, type, parts, base }) {
+  if (type === "svg") return base;
   if (couleurs.length === 1) return couleurs[0];
 
   const sens = type === "vertical" ? "to right" : "to bottom";
@@ -255,6 +301,14 @@ function fondCss({ couleurs, type, parts }) {
  * `null` pour un drapeau **vertical** ou un aplat uni : ses bandes sont
  * côte à côte, ou il n'y en a qu'une — il n'existe aucune bande horizontale à
  * viser, et l'appelant garde son centrage habituel.
+ *
+ * `null` aussi pour un drapeau **dessiné**, et pour une raison de plus : ses
+ * bandes ne sont pas une donnée mais un dessin, et `slice` les décale dès que le
+ * conteneur n'a pas le rapport de forme du drapeau. Viser une bande qu'on ne
+ * sait pas placer poserait le titre n'importe où ; le centrage, lui, est juste
+ * dans tous les cas. La Malaisie et Abu Dhabi, qui portaient une bande visée
+ * tant qu'ils étaient décrits en CSS, la perdent donc — le voile calculé
+ * continue seul de garantir la lisibilité du titre, comme sur les sept autres.
  */
 function bandeTitre({ couleurs, type, parts }) {
   if (type !== "horizontal" || couleurs.length < 2) return null;
@@ -294,6 +348,11 @@ const APPARENCES = Object.fromEntries(
       ...apparence(drapeau.couleurs),
       fond: fondCss(drapeau),
       bandeTitre: bandeTitre(drapeau),
+      // Le fragment à dessiner par-dessus l'aplat, ou `null` pour un drapeau
+      // décrit en CSS. Vérifié contre `DrapeauxSVG.jsx` plutôt que recopié de
+      // confiance : une faute de frappe dans la table laisserait sinon le bloc
+      // sur son aplat de repli, sans que rien ne le signale.
+      svg: drapeau.svg && aUnDrapeauSvg(drapeau.svg) ? drapeau.svg : null,
     },
   ]),
 );
@@ -363,7 +422,27 @@ export const APPARENCE_REPLI = {
   fond: null,
   // Un aplat uni n'a pas de bande à viser : l'appelant garde son centrage.
   bandeTitre: null,
+  svg: null,
 };
+
+/**
+ * Le drapeau dessiné, quand il y en a un.
+ *
+ * Il vit ici et non chez les écrans pour la même raison que `VoileDrapeau` : un
+ * écran qui monterait `DrapeauSVG` lui-même devrait savoir quel fragment
+ * demander, donc relire la table — et deux lectures finiraient par diverger.
+ *
+ * **C'est le calque le plus bas du bloc.** Il se pose avant la lumière
+ * spéculaire, avant le voile et avant l'assombrissement uniforme : ce sont eux
+ * qui doivent le recouvrir, jamais l'inverse. Posé plus haut, il repeindrait ses
+ * bandes blanches par-dessus le voile et le texte du bloc y retomberait sous le
+ * seuil des 3:1 — exactement le dégât que la version `0.15.0` décrit pour le
+ * tracé du circuit.
+ */
+export function FondDrapeau({ apparence: drapeau }) {
+  if (!drapeau?.svg) return null;
+  return <DrapeauSVG slug={drapeau.svg} />;
+}
 
 /**
  * Le voile lui-même. Rien à l'écran ne le désigne, il n'a pas de contenu, et un

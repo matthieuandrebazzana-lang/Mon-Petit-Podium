@@ -14,6 +14,7 @@ import TraceCircuitGp, {
 import {
   APPARENCE_REPLI,
   drapeauDuGp,
+  FondDrapeau,
   VoileDrapeau,
 } from "../composants/DrapeauxGP.jsx";
 import {
@@ -197,6 +198,12 @@ export function BlocProchainGp({ profilId }) {
       }`}
       style={drapeau.fond ? { background: drapeau.fond } : undefined}
     >
+      {/* Le drapeau dessiné, quand le pays en a un — **le calque le plus bas**.
+          Tout ce qui suit doit le recouvrir : la lumière spéculaire, le voile et
+          l'assombrissement. Posé plus haut, il ramènerait ses bandes claires
+          par-dessus le voile et le texte y retomberait sous les 3:1. */}
+      <FondDrapeau apparence={drapeau} />
+
       {/* La lumière spéculaire d'/apple-design §12 : un aplat plein est une
           surface morte, ce galbe très doux lui donne une source lumineuse. */}
       <div

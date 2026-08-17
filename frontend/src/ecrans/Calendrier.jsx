@@ -12,6 +12,7 @@ import TraceCircuitGp, {
 } from "../composants/TracesCircuits.jsx";
 import {
   APPARENCE_REPLI,
+  FondDrapeau,
   VoileDrapeau,
   drapeauDuGp,
 } from "../composants/DrapeauxGP.jsx";
@@ -141,6 +142,9 @@ export function CarteGrandPrix({ gp }) {
           ...(drapeau.fond ? { background: drapeau.fond } : {}),
         }}
       >
+        {/* Le drapeau dessiné, calque le plus bas : le voile et
+            l'assombrissement le recouvrent, jamais l'inverse. */}
+        <FondDrapeau apparence={drapeau} />
         <div
           aria-hidden="true"
           className="lueur-haute pointer-events-none absolute inset-0"

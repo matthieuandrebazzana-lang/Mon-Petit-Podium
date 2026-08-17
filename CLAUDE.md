@@ -2629,6 +2629,84 @@ L'effet attend donc **`window.load`** quand `document.readyState` n'est pas enco
 
 ---
 
+**Drapeaux SVG réels pour six pays hôtes** (version `0.24.0`)
+
+Les six drapeaux que le CSS ne reproduisait pas honnêtement sont désormais **dessinés**, extraits de `assets/flags.svg` : Malaisie, États-Unis (donc aussi Las Vegas), Mexique, Brésil, Qatar et Abu Dhabi. Les cinq autres du calendrier — Pays-Bas, Italie, Espagne, Azerbaïdjan, Singapour — **gardent leur `linear-gradient`** : deux ou trois bandes franches sont exactement ce que le CSS sait dire, et un dessin n'y apporterait rien. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+*Le traitement `complexe` disparaît.* Ramener la bannière étoilée à un aplat rouge, ou la Malaisie à deux bandes égales, était le compromis qu'on faisait **faute de dessin** — la version `0.15.0` l'énonçait ainsi (« mieux vaut une couleur juste qu'un drapeau approximatif ») et la `0.21.2` l'avait déjà entamé en rendant leur bande blanche à trois d'entre eux. Le dessin existe maintenant : l'approximation n'a plus de raison d'être, et `type: "complexe"` n'a plus aucun porteur.
+
+*Extraction, jamais reproduction* — `frontend/src/composants/DrapeauxSVG.jsx`. Chemins, rectangles et polygones sont ceux de la planche, coordonnée pour coordonnée ; seule la couleur change de porteur, de la classe `cls-N` de la feuille de style vers un attribut `fill`. Le découpage a été fait **par script**, comme les tracés de circuits de la version `0.15.0` et les icônes de la `0.22.0`, et pour la même raison : transcrire à la main quarante-huit formes de plusieurs milliers de caractères introduit des fautes invisibles à la lecture. Les formes en `fill: none` de la planche sont écartées — elles ne peignent rien, et les garder aurait chargé le DOM de nœuds sans effet.
+
+***Écart assumé sur les `viewBox`, et c'est le point de la version.*** La demande donnait six tranches égales de 463 unités (`0 0 1017.37 463`, `0 463 …`, et ainsi de suite), la planche faisant 2779,75 de haut pour six drapeaux. **Les drapeaux n'y sont ni jointifs, ni de même hauteur, ni régulièrement espacés** :
+
+| Slug | `viewBox` mesurée | Hauteur | Rapport |
+|---|---|---|---|
+| `malaisie` | `277.76 104.27 585.18 353.48` | 353 | 1,655 |
+| `etats-unis` | `277.76 513.87 585.18 353.48` | 353 | 1,655 |
+| `mexique` | `272.27 937.41 587.46 335.49` | 335 | 1,751 |
+| `bresil` | `265.12 1333.34 612 417` | 417 | 1,468 |
+| `qatar` | `272.42 1847.44 590.52 345.14` | 345 | 1,711 |
+| `abu-dhabi` | `269.67 2288 611.49 305.49` | 305 | 2,002 |
+
+Les tranches arithmétiques auraient coupé les uns et laissé du vide autour des autres — le drapeau brésilien commence à 1333 quand sa tranche commence à 1389, et celui d'Abu Dhabi finit à 2593 quand sa tranche va jusqu'à 2779. Ce sont donc les **vraies boîtes englobantes** qui font foi, mesurées en échantillonnant les courbes de Bézier, exactement comme les tracés de circuits de la version `0.15.0` et les icônes de la `0.22.0` : **aucune coordonnée n'est réécrite, c'est le cadrage qui bouge**. Aucune marge n'est ajoutée, les formes étant des aplats sans contour.
+
+*`xMidYMid slice` fait le reste.* Chaque drapeau garde son rapport de forme, du 1,47 brésilien au 2,00 émirati, et couvre toute la surface de son conteneur, rogné sur son plus grand côté, jamais déformé. C'est le pendant exact d'`object-fit: cover`.
+
+---
+
+***`couleurs` n'est pas décoratif : c'est la matière du calcul de contraste.*** C'est la conséquence la plus importante du passage au dessin, et celle qu'on ne voit pas en relisant le JSX.
+
+Le voile noir de la version `0.15.0` est **dérivé de la bande la plus claire** du drapeau. Tant que les États-Unis et le Brésil étaient déclarés `complexe` avec une seule couleur dominante (`#B22234`, `#009C3B`), le calcul concluait qu'aucun voile — ou presque — n'était nécessaire. **Le dessin, lui, peint treize bandes blanches sur la bannière étoilée.** Servi sous l'ancienne déclaration, il aurait porté du texte blanc sur du blanc pur.
+
+La table porte donc désormais **toutes** les teintes que le SVG peint, et pas seulement les dominantes. Le voile s'ajuste de lui-même, sans qu'une valeur soit écrite à la main :
+
+| Slug | Voile avant | Voile après | Blanc plein |
+|---|---|---|---|
+| `etats-unis`, `las-vegas` | **0,00** | **0,45** | 3,45:1 |
+| `bresil` | **0,05** | **0,45** | 3,36:1 |
+| `malaisie` | 0,45 | 0,45 | 3,45:1 |
+| `mexique` | 0,45 | 0,45 | 3,36:1 |
+| `qatar`, `abu-dhabi` | 0,45 | 0,45 | 3,36:1 |
+
+Avec la surcouche uniforme de 15 % de la version `0.16.1`, le pire cas monte à **4,48:1**. **Règle à ne pas défaire : toute forme peinte par le SVG doit avoir sa teinte dans `couleurs`.** Un contrôle du jeu de tests compare les deux tables forme par forme et échoue sur la moindre teinte tue.
+
+*`fond` reste toujours renseigné*, et c'est ce qui évite de toucher aux quatre écrans plus qu'il ne faut. Pour un drapeau dessiné il vaut `base`, un aplat pris dans les teintes du drapeau. **Il ne se voit jamais** — le SVG couvre tout — mais il porte deux rôles : filet de sécurité si le fragment manquait, et surtout **le drapeau de « ce bloc porte un drapeau »**, celui que les écrans lisent depuis la version `0.15.0` pour savoir s'ils doivent retomber sur le bordeaux de la marque et s'ils doivent poser l'assombrissement uniforme. Le rendre `null` aurait fait basculer les six blocs sur le repli.
+
+*`FondDrapeau` vit dans `DrapeauxGP.jsx`*, à côté de `VoileDrapeau`, et non chez les écrans : un écran qui monterait `DrapeauSVG` lui-même devrait savoir quel fragment demander, donc relire la table — et deux lectures finiraient par diverger. Le slug est **vérifié contre `DrapeauxSVG.jsx`** (`aUnDrapeauSvg`) plutôt que recopié de confiance : une faute de frappe laisserait sinon le bloc sur son aplat de repli sans que rien ne le signale.
+
+***Le drapeau est le calque le plus bas des quatre blocs***, et c'est la seule chose que les écrans avaient à apprendre. L'ordre devient : **drapeau → lueur spéculaire → voile calculé → surcouche de 15 % → contenu**. Posé plus haut, il repeindrait ses bandes claires par-dessus le voile et le texte retomberait sous les 3:1 — exactement le dégât que la version `0.15.0` décrit pour le tracé du circuit. Un contrôle vérifie l'ordre par position dans le DOM.
+
+*`bandeTitre` passe à `null` pour les six.* La Malaisie et Abu Dhabi, qui visaient leur bande blanche tant qu'ils étaient décrits en CSS, la perdent — et pour une raison de plus que les drapeaux verticaux : **leurs bandes ne sont plus une donnée mais un dessin**, et `slice` les décale dès que le conteneur n'a pas le rapport de forme du drapeau. Viser une bande qu'on ne sait pas placer poserait le titre du récap n'importe où ; le centrage, lui, est juste dans tous les cas, et le voile calculé continue seul de garantir la lisibilité.
+
+*Las Vegas et Austin partagent le fragment `etats-unis`*, dans le prolongement de la version `0.21.2` : deux Grands Prix d'un même pays portent le même drapeau, sinon le repère se perd. Les deux slugs restent distincts — deux tracés, deux dates.
+
+---
+
+*Limite de la planche, à connaître.* `assets/flags.svg` est un dessin **stylisé**, pas une reproduction officielle : la Malaisie y porte sept bandes et non quatorze, la bannière étoilée treize étoiles et non cinquante, et la sphère céleste brésilienne n'a ni étoiles ni devise. C'est la planche du projet, elle est extraite telle quelle et rien n'y est ajouté — chaque drapeau reste parfaitement reconnaissable à la taille où il est servi (180 à 280px de haut), ce qu'un aperçu rendu à 358 × 180px confirme.
+
+*`assets/flags.svg` est copié dans `frontend/public/flags.svg`*, comme demandé. **Il n'est utilisé par aucun écran** : les drapeaux partent avec le bundle en SVG inline, précisément pour n'ajouter aucun aller-retour réseau avant le premier affichage. La copie sert de référence à une ré-extraction et coûte 30 Ko au précache du service worker (17 entrées au lieu de 16). **La retirer est sans effet sur l'application** si ce poids n'est pas souhaité.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Un fond de drapeau ne change pas d'état sous les yeux du joueur : il n'y a rien à accompagner, et le skill Transitions.dev n'a pas de correspondance pour une surface statique. Les quatre blocs conservent celles qu'ils portaient — *texts reveal* (18) pour leur entrée, *text states swap* (04) pour les libellés qui changent, *skeleton loader* (14) pour l'attente.
+
+*Apport d'`/apple-design`* — les six drapeaux sont `aria-hidden` et `focusable="false"`, le nom du Grand Prix étant écrit juste à côté : un lecteur d'écran n'a rien à annoncer d'un fond, et un SVG focusable ajouterait six arrêts de tabulation muets sur le seul écran de calendrier. `pointer-events: none` les tient hors du chemin du bouton d'action. La règle de vibrance du §12 continue de s'appliquer telle quelle : sur les six drapeaux voilés, l'encre secondaire est en blanc plein et graisse 500, jamais en gris translucide.
+
+*Vérifié* — modules chargés par le chargeur SSR de Vite, contrastes recalculés sur les treize fonds, rendu hors navigateur (`react-dom/server`) : **tous les contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Fragments | 6 fragments, les six slugs attendus ; `viewBox` à quatre nombres ; **une seule géométrie par forme** ; couleurs toutes en `#RRGGBB` majuscules ; **aucune classe `cls-N` de la planche ne subsiste**, aucune forme `fill: none` |
+| Table | les sept slugs en `type: "svg"` avec un fragment existant ; **toute teinte peinte par le SVG est déclarée dans `couleurs`**, vérifié forme par forme ; `base` prise dans le dessin ; **plus aucun `type: "complexe"`** ; les cinq drapeaux CSS intacts et sans fragment |
+| Couverture | les douze Grands Prix du calendrier ont un drapeau ; `slugCircuit(nom)` retrouve les douze slugs ; clé héritée d'`Object` → `false` |
+| **Contraste** | **blanc plein ≥ 3:1 sur les douze drapeaux et sur le repli**, pire cas 3,11:1 (Espagne), 3,36:1 sur les drapeaux dessinés à bande blanche ; **États-Unis et Brésil reçoivent bien 0,45 là où ils n'avaient rien**, sans qu'aucune valeur soit écrite à la main ; repli bordeaux inchangé (0,00 et 6,81:1) |
+| Rendu isolé | les six se rendent ; `preserveAspectRatio="xMidYMid slice"`, `width`/`height` à 100 %, posés en `absolute inset-0`, décoratifs ; **le compte de formes rendues égale le compte de la table** ; slug sans fragment → **rien du tout** ; repli → aucun drapeau |
+| **Ordre des calques** | **drapeau → lueur → voile → surcouche → contenu**, vérifié par position dans le DOM ; voile rendu à l'opacité calculée (0,45) ; aplat `base` peint dessous ; aucun repli bordeaux sur un pays connu |
+| Non-régression | GP hors table → repli bordeaux, aucun voile, carte quand même complète ; **Pays-Bas toujours en `linear-gradient`, sans aucun drapeau dessiné** ; `bandeTitre` conservée pour les Pays-Bas et l'Espagne (centre 50), `null` pour les sept slugs dessinés |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », sur les trois cartes rendues |
+| Aperçu rendu à 358 × 180px, voile et surcouche compris | les six drapeaux **reconnaissables**, chacun à sa vraie forme, cadrage juste, aucun vide ni coupe ; l'aigle mexicain, la sphère brésilienne, le croissant malaisien et la dentelure qatarie lisibles |
+| `npm run build` | passe, version `0.24.0` dans le bundle |
+
+---
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2704,7 +2782,13 @@ Points non couverts, à traiter le moment venu :
 
 **Trois points depuis les versions `0.20.0` et `0.21.0`**, tous sur l'onglet Calendrier. **La longueur de l'écran** : la refonte de la `0.21.0` ramène la carte de ~300px à **200px**, ce qui divise le défilement par une fois et demie, mais douze cartes font toujours près de trois écrans sans en-tête collant pour dire où l'on est — c'est le premier point à juger au pouce, et le levier est `HAUTEUR_CARTE` (`frontend/src/composants/CarteGpSaison.jsx`), que le tracé, la bande d'action et le squelette suivent tout seuls. **L'entrée dans la saison** : l'écran s'ouvre sur le premier Grand Prix de la liste, y compris quand il est terminé ; faire défiler jusqu'au prochain à jouer serait plus juste, mais demande un `scrollIntoView` à l'arrivée, donc un choix explicite sur le comportement du retour. Et **le décompte de l'en-tête**, qui contredira le bandeau de l'accueil dès la première course courue tant que celui-ci n'est pas rebranché (voir plus haut).
 
-**Un point depuis la `0.21.2` — les cinq drapeaux relus.** La Malaisie, Abu Dhabi et le Qatar portent désormais une vraie bande blanche, et les deux Grands Prix américains le même rouge. Les contrastes sont mesurés et tiennent, mais **la reconnaissance d'un drapeau ne se juge qu'à l'œil** : c'est la seule chose à regarder sur ces cinq cartes du calendrier et sur le bloc de l'accueil le jour du GP concerné. Deux points précis — la bande blanche voilée à 0,45 se lit **gris argent** et non blanc (conséquence inhérente au couple « texte blanc partout » + « bande blanche », relevée dès la version `0.15.0`), ce qui pèse le plus sur la Malaisie et Abu Dhabi où elle occupe la moitié de la surface ; et **Austin et Las Vegas se ressemblent désormais complètement** — c'est voulu, ce sont deux courses d'un même pays, mais le tracé de circuit et le nom sont alors les seuls discriminants. Si l'un des deux doit se distinguer, c'est une décision à prendre explicitement, pas un défaut à corriger dans la table.
+**Trois points depuis la `0.24.0` — les six drapeaux dessinés.** Malaisie, États-Unis, Las Vegas, Mexique, Brésil, Qatar et Abu Dhabi portent désormais leur vrai dessin, extrait de `assets/flags.svg`. Les contrastes sont mesurés et tiennent partout (≥ 3:1, ≥ 4,48:1 surcouche comprise), mais **la reconnaissance d'un drapeau ne se juge qu'à l'œil sur un vrai écran** :
+
+1. **Le voile pèse plus qu'avant sur deux d'entre eux.** Les États-Unis et le Brésil passent de 0,00 et 0,05 à **0,45** — le prix de leurs bandes claires enfin dessinées. Sur ces deux cartes, le drapeau est nettement plus sombre qu'avant, et le blanc s'y lit **gris argent**. C'est inhérent au couple « texte blanc partout » + « bande blanche », relevé dès la version `0.15.0` ; la seule autre issue serait de l'encre foncée sur les bandes claires, ce que la demande d'origine exclut. **À trancher explicitement si le rendu paraît éteint**, pas à corriger en baissant le voile — il est calculé pour le texte.
+2. **La planche est stylisée** (sept bandes malaisiennes au lieu de quatorze, treize étoiles américaines au lieu de cinquante, sphère brésilienne sans étoiles). Chaque drapeau reste reconnaissable à 180px, vérifié en aperçu — mais c'est le genre de chose qui se confirme sur un iPhone, pas sur un écran de bureau. Si un drapeau doit gagner en fidélité, c'est **la planche** qu'il faut reprendre, jamais `DrapeauxSVG.jsx`, qui n'en est que le découpage.
+3. **Austin et Las Vegas sont désormais rigoureusement identiques** — même fragment, même voile. C'est voulu, ce sont deux courses d'un même pays, mais le tracé de circuit et le nom sont alors les seuls discriminants. Si l'un des deux doit se distinguer, c'est une décision à prendre explicitement.
+
+Point secondaire : `frontend/public/flags.svg` **n'est utilisé par aucun écran** (les drapeaux partent en SVG inline avec le bundle) et coûte 30 Ko au précache du service worker. Le retirer est sans effet sur l'application.
 
 **Un point depuis la `0.21.1` — le piège des règles hors couche.** `.t-stagger-line` et `.t-skel-bar` sont déclarées hors de toute couche Tailwind : **elles battent n'importe quelle classe utilitaire**, quelle que soit sa spécificité. Un `flex`, un `gap` ou un `bg-*` posé sur un élément qui porte l'une de ces classes ne s'applique pas, et rien dans le JSX ne le laisse voir. Le motif à suivre est celui de l'accueil : **le conteneur flex vit à l'intérieur du `Bloc`, jamais sur le `Bloc` lui-même**. Un cas subsiste, sans conséquence visible : `Championnat.jsx` porte un `gap-2.5` mort sur le `Bloc` des deux boutons de confirmation de départ — à reprendre avec le même motif si l'empilement paraît serré sur un appareil réel.
 
