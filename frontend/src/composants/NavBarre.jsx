@@ -1,12 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { ONGLETS, barreVisible, ongletActif } from "../lib/navigation.js";
-import {
-  IconeCalendrier,
-  IconeMaison,
-  IconePersonne,
-  IconeTrophee,
-} from "./Icones.jsx";
+import IconeAccueil from "./icones/IconeAccueil.jsx";
+import IconeCalendrier from "./icones/IconeCalendrier.jsx";
+import IconeChampionnats from "./icones/IconeChampionnats.jsx";
+import IconeProfil from "./icones/IconeProfil.jsx";
 
 /**
  * Barre de navigation basse à quatre onglets (maquette 04).
@@ -29,11 +27,18 @@ import {
  */
 
 const ICONES = {
-  accueil: IconeMaison,
-  championnats: IconeTrophee,
+  accueil: IconeAccueil,
+  championnats: IconeChampionnats,
   calendrier: IconeCalendrier,
-  profil: IconePersonne,
+  profil: IconeProfil,
 };
+
+// Les deux couleurs sont celles du design system (section 5) : le bordeaux de
+// la marque et le gris du texte secondaire. Elles sont écrites en clair et non
+// lues dans un jeton Tailwind parce qu'elles partent dans un attribut `fill`,
+// que les utilitaires de couleur ne touchent pas.
+const COULEUR_ACTIF = "#800111";
+const COULEUR_INACTIF = "#999999";
 
 function Onglet({ onglet, actif }) {
   const Icone = ICONES[onglet.cle];
@@ -47,10 +52,11 @@ function Onglet({ onglet, actif }) {
         // plancher, et la rangée doit pouvoir grandir si le corps de texte est
         // agrandi dans les réglages du téléphone.
         //
-        // La couleur est posée **sur le lien**, pas sur l'icône et le libellé
-        // séparément : les tracés sont en `currentColor`, les deux héritent, et
-        // la transition n'a qu'un seul endroit où s'appliquer — donc aucun
-        // risque de voir le texte virer avant le dessin.
+        // La couleur du **libellé** reste posée sur le lien. Celle de l'icône
+        // voyage par une prop, les tracés de `logo-02.svg` portant un `fill` et
+        // non `currentColor` ; les deux se rejoignent dans `.t-nav`, qui
+        // interpole `color` et `fill` sur la même durée et la même courbe —
+        // sinon l'œil voit le texte virer avant le dessin.
         className={`t-nav-onglet pressable min-h-tactile flex flex-col items-center justify-center gap-1 px-1 py-1.5 ${
           actif ? "text-primaire" : "text-texte-doux"
         }`}
@@ -63,18 +69,15 @@ function Onglet({ onglet, actif }) {
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
       >
-        {/* Échange d'icônes (transitions-dev 09), déjà installé pour l'étoile
-            de favori : le contour et l'aplat partagent la même cellule, l'un
-            entre pendant que l'autre sort. La couleur reste le signal
-            principal ; l'aplat l'appuie, comme le fait iOS. */}
-        <span
-          className="t-icon-swap size-[22px]"
-          data-state={actif ? "b" : "a"}
-          aria-hidden="true"
-        >
-          <Icone className="t-icon size-[22px]" data-icon="a" />
-          <Icone pleine className="t-icon size-[22px]" data-icon="b" />
-        </span>
+        {/* L'échange contour ↔ aplat (transitions-dev 09) n'a plus d'objet :
+            les icônes de `logo-02.svg` n'existent qu'en une seule forme. La
+            couleur redevient donc le signal unique, comme elle l'était déjà à
+            titre principal. Le snippet reste installé, et sert toujours à
+            l'étoile de favori. */}
+        <Icone
+          couleur={actif ? COULEUR_ACTIF : COULEUR_INACTIF}
+          className="size-7"
+        />
 
         <span className="text-label-sm text-center leading-none">
           {onglet.libelle}

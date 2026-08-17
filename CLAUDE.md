@@ -2519,6 +2519,53 @@ Deux effets secondaires, tous deux issus du même mécanisme et tous deux voulus
 | Repli | fond `null`, aucun voile, surfaces claires, aucune ombre — **le bloc bordeaux garde exactement l'aspect qu'il avait** ; GP hors table → `null` |
 | `npm run build` | passe, version `0.21.2` et les six couleurs présentes dans le bundle |
 
+---
+
+**Icônes custom SVG dans la barre de navigation** (version `0.22.0`)
+
+Les quatre icônes de la barre de navigation basse viennent désormais de `assets/logo-02.svg`, la planche dessinée pour le projet, et non plus de `composants/Icones.jsx`, tiré des maquettes. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+*Extraction, jamais reproduction.* Un nouveau dossier `frontend/src/composants/icones/` porte un composant par icône : `IconeAccueil` (maison), `IconeChampionnats` (trophée), `IconeCalendrier`, `IconeProfil` (personne). **Les données de chemin sont identiques à la planche, octet pour octet** — un contrôle du jeu de tests compare les huit chemins aux huit de `logo-02.svg` et vérifie l'égalité stricte. Le découpage a été fait par script, comme pour les tracés de circuits de la version `0.15.0` et pour la même raison : transcrire à la main huit chemins de plusieurs centaines de caractères introduit des fautes invisibles à la lecture.
+
+***La `viewBox` est un carré de 74 unités, le même pour les quatre, et c'est le point à ne pas défaire.*** Les boîtes englobantes réelles ont été mesurées en échantillonnant les courbes de Bézier :
+
+| Icône | Boîte englobante | Largeur × hauteur |
+|---|---|---|
+| Accueil | x 24,36 → 94,64 · y 28,37 → 95,67 | 70,28 × 67,30 |
+| Championnats | x 157,47 → 206,24 · y 28,21 → 101,07 | 48,77 × 72,86 |
+| Calendrier | x 273,84 → 334,52 · y 28,22 → 95,84 | 60,68 × 67,62 |
+| Profil | x 396,20 → 456,88 · y 25,98 → 98,83 | 60,68 × 72,85 |
+
+Un cadrage serré sur chaque boîte aurait été le réflexe — et il aurait été faux. Les quatre icônes vivent dans **le même système de coordonnées** dans la planche : leurs tailles relatives sont celles que le dessin a voulues, un trophée étroit et haut à côté d'une maison large et basse. Serrer chaque cadrage les ramènerait toutes à la même taille apparente et écraserait cette intention. Le carré de 74 unités — la plus grande dimension rencontrée, 72,86, plus un souffle — est donc **centré sur la boîte de chaque icône** : le cadrage bouge, aucune coordonnée n'est réécrite, et les proportions relatives sont exactement celles de la planche.
+
+**Les deux barres du toit de la maison figurent deux fois dans le fichier, à l'identique** (lignes 17-18 puis 19-20 de la planche). Un seul exemplaire est repris : les chaînes sont strictement égales, le dessin est rigoureusement le même, et le contrôle d'égalité octet pour octet couvre les quatre chemins restants. Les deux anneaux du calendrier sont des `<rect>` et non des chemins ; ils sont repris tels quels, rayons de coin compris.
+
+*La couleur passe par une prop, jamais par `currentColor`.* Chaque composant accepte `couleur` (défaut `#999999`) et la pose sur le `fill` de **toutes** ses formes — un contrôle vérifie que le compte de `fill` colorés égale le compte de formes, sur chacune des quatre. La barre passe `#800111` à l'onglet actif et `#999999` aux autres, les deux couleurs du design system (section 5). Le `#1d1d1b` de la planche ne survit nulle part : il ne se verrait pas tant que la barre est claire, et il ne dirait rien de l'onglet actif.
+
+**Une seconde règle CSS accompagne ce changement, et elle n'est pas décorative.** Depuis l'étape 10, `.t-nav .t-nav-onglet` interpole `color` — ce qui suffisait tant que les tracés étaient en `currentColor` et que le libellé et le dessin héritaient tous deux du lien. Ce n'est plus le cas : le libellé hérite encore, le dessin reçoit un `fill`. Sans une transition posée sur les formes, la couleur du texte glisserait pendant que celle de l'icône basculerait d'un coup, et l'œil verrait deux événements là où il n'y en a qu'un. `.t-nav .t-nav-onglet :is(path, rect)` interpole donc `fill` **sur la même durée et la même courbe** (`--icon-swap-dur`, `--icon-swap-ease`). Un `fill` posé en attribut de présentation entre bien dans la cascade, donc il s'interpole comme une propriété ordinaire. Les deux règles sont coupées ensemble sous `prefers-reduced-motion`.
+
+*Écart assumé — l'échange contour ↔ aplat disparaît.* La barre montait chaque icône deux fois, en contour et en aplat, et les échangeait par transitions-dev 09 (version `0.10.0`). **Les icônes de la planche n'existent qu'en une seule forme** : il n'y a plus rien à échanger, et la couleur redevient le signal unique — ce qu'elle était déjà à titre principal. Le snippet reste installé et sert toujours à l'étoile de favori du tableau des cotes.
+
+*Les quatre anciennes icônes restent dans `composants/Icones.jsx`* (`IconeMaison`, `IconeTrophee`, `IconeCalendrier`, `IconePersonne`) : elles servent ailleurs — `IconeMembres` aux cartes de championnat, les autres à divers écrans — et le fichier n'est pas touché. Attention au nom : `IconeCalendrier` existe désormais **des deux côtés**, dans `composants/Icones.jsx` (contour, avec variante `pleine`) et dans `composants/icones/IconeCalendrier.jsx` (planche, avec prop `couleur`). Ce sont deux dessins différents et l'import doit dire lequel.
+
+*Taille* — 28 × 28px (`size-7`), contre 22px auparavant. La rangée gagne donc 6px ; `min-h-tactile` étant un plancher et non une hauteur fixe, elle grandit d'elle-même et la zone tactile de 44px est conservée.
+
+*Apport d'`/apple-design`* — les quatre icônes sont `aria-hidden` et `focusable="false"` : le libellé de l'onglet dit déjà où mène le lien, et un lecteur d'écran n'a pas à l'entendre deux fois. Zone tactile de 44px, retour tactile à l'appui, `aria-current` sur l'onglet courant, zone sûre basse et matériau translucide sont inchangés (version `0.10.0`), et retoucher l'onglet déjà ouvert ramène toujours en haut de l'écran.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** La règle ajoutée réutilise les deux jetons de l'échange d'icônes déjà installé.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite) : **48 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Fidélité à la planche | **les 8 chemins sont strictement identiques à `logo-02.svg`**, octet pour octet ; les 2 doublons exacts de la maison fondus en un |
+| Les quatre composants | chacun se rend ; **`viewBox` carrée de 74 unités**, la même pour les quatre ; décoratives (`aria-hidden`, `focusable="false"`) ; défaut `#999999` ; **aucun `#1d1d1b` ni aucune classe `cls-1` héritée** ; `className` transmis ; **la couleur atteint toutes les formes**, rects du calendrier compris |
+| Barre | quatre onglets, quatre icônes, **un seul `aria-current`** ; l'onglet actif en `#800111` et les autres en `#999999`, vérifié écran par écran sur les quatre onglets ; icônes à 28px ; **plus aucun `t-icon-swap`** ; les quatre libellés ; zone tactile, retour à l'appui, matériau, zone sûre, aucune bordure |
+| Absences | **rien sans session**, rien sur la vue piste |
+| Bundle de production | les quatre `viewBox`, les deux couleurs, la transition du `fill`, l'utilitaire 28px et le repli mouvement réduit bien générés ; **aucun `#1d1d1b`** |
+| Aperçu rendu | les quatre icônes dessinées à six fois la taille réelle **et** à 28px : chacune reconnaissable, bien cadrée, et les tailles relatives de la planche conservées |
+| `npm run build` | passe, version `0.22.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
