@@ -1959,6 +1959,43 @@ Le bloc conserve donc les transitions qu'il portait — *texts reveal* (18) pour
 | Aperçu rendu avec la feuille compilée | les treize cas dessinés à 390px de large : **les douze circuits lisibles au premier plan**, chacun à sa vraie forme, aucun texte perdu sur une couture, et le repli Monaco sans bande |
 | `npm run build` | passe, 130 modules, version `0.16.0` dans le bundle |
 
+---
+
+**Voile uniforme sur le bloc GP** (version `0.16.1`)
+
+Correction d'un défaut relevé à l'œil sur le bloc du prochain Grand Prix. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0` et `0.16.0`).
+
+*Le défaut* — l'assombrissement de 15 % introduit en version `0.16.0` ne peignait que la **bande du tracé**, 160px au milieu du bloc. Sur un drapeau à bande répétée, il coupait la surface en deux : les Pays-Bas en sont le cas d'école — rouge, blanc, bleu, puis rouge à nouveau — et la bande rouge du haut paraissait **plus vive que celle du bas**, alors que c'est la même couleur. L'œil y lisait un défaut de calage, pas une intention.
+
+*La correction* — les 15 % passent du conteneur de la bande au **conteneur du bloc**. Une seule surcouche uniforme, la zone du tracé n'a plus son propre assombrissement. Le drapeau reste d'une seule pièce et chaque couleur garde exactement la même valeur du haut au bas du bloc.
+
+**Trois points de mise en œuvre à ne pas défaire :**
+
+1. **La surcouche est posée au-dessus du voile et sous le contenu**, à la place exacte qu'occupait celle de la bande. L'ordre des calques reste donc celui que la version `0.15.0` a fixé et documenté — lueur spéculaire, voile du drapeau, assombrissement, contenu — et rien de ce qui éclaircit la surface ne remonte au-dessus du texte.
+2. **Elle ne s'applique qu'aux blocs peints par un drapeau.** Le repli bordeaux n'a ni bande ni rupture à corriger, et le CLAUDE.md demande depuis la version `0.15.0` qu'il garde *exactement* l'aspect qu'il avait ; le voiler d'un cran de plus l'éteindrait pour rien. Table des drapeaux et table des tracés portant les mêmes douze slugs, « peint par un drapeau » et « a un tracé » désignent le même ensemble — la condition est donc aussi celle qui existait avant, simplement remontée d'un niveau.
+3. **Le squelette suit.** Sa bande de 160px n'est plus assombrie non plus : un rectangle sombre y annoncerait une rupture que la surface d'arrivée n'a pas. Elle garde une silhouette claire (`bg-white/10`), comme les autres formes du squelette, et surtout **sa hauteur** — c'est elle qui empêche l'accueil de sursauter de 160px à l'arrivée des données.
+
+*Ce que la correction fait au contraste, mesuré.* Elle ne peut que l'améliorer : on ajoute du noir sous le texte, jamais du blanc.
+
+- **Le texte** gagne un cran sur tous les drapeaux. Le pire cas passe de **3,36:1 à 4,48:1** (Pays-Bas, Italie, Bahreïn, Singapour, Mexique, Qatar), le meilleur reste à 21:1 (Las Vegas). Le repli bordeaux, non voilé, reste à 10,88:1. Les seuils calculés par `apparence()` — encre secondaire à 70 % ou blanc plein, surfaces claires ou sombres — sont mesurés sur le substrat **sans** cette surcouche : ils sont donc désormais conservateurs, jamais optimistes, et n'avaient pas à être recalculés.
+- **Le trait du tracé est inchangé au bit près.** Il voit la même pile qu'avant — drapeau, voile, 15 % de noir — dans le même ordre : les valeurs du tableau de la version `0.16.0` (2,44:1 au pire sur le Brésil, 5,81:1 sur Las Vegas) restent exactes.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Une surcouche fixe n'accompagne aucun changement d'état.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage pré-rempli) : **24 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Surcouche | **une seule occurrence sur tout le bloc**, en `absolute inset-0`, décorative (`aria-hidden`, `pointer-events-none`) |
+| Ordre des calques | **lueur → voile → surcouche → contenu**, vérifié par position dans le DOM ; voile du drapeau conservé et rendu à son opacité calculée (0,45 pour les Pays-Bas) |
+| Bande du tracé | toujours présente et **sans aucun assombrissement propre** ; 160px conservés ; tracé toujours rendu en trait (`fill="none"`, `stroke="currentColor"`) à 60 % de blanc |
+| Repli bordeaux | **aucune surcouche, aucun voile**, aplat `bg-primaire` conservé, aucune bande de 160px — le bloc d'avant, à l'identique |
+| Squelette | **aucune surcouche sombre**, bande à 160px conservée, silhouette claire |
+| Contraste, calculé sur les treize fonds | blanc plein : pire cas **3,36 → 4,48:1**, aucun fond en recul ; substrat du trait **identique à la version `0.16.0`** |
+| Non-régression | nom centré à 26px, les deux cases de statut, bouton et destination, **aucune cote brute « ×N »**, ni « ligue », ni « historique » |
+| CSS de production | `bg-black/15` et `bg-white/10` générés |
+| `npm run build` | passe, 130 modules, version `0.16.1` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2031,7 +2068,7 @@ Points non couverts, à traiter le moment venu :
 - **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
 
-**Trois points depuis la version `0.16.0`**, tous sur le bloc GP recomposé, et le premier est le plus important : **la hauteur du bloc**. La bande de 160px le porte à environ 380px, soit plus de la moitié de la hauteur utile d'un iPhone SE — les cartes de championnat passent nettement sous la ligne de flottaison. C'est la conséquence assumée de « le bloc est plus haut qu'actuellement », mais elle ne se juge que sur un appareil réel : si l'accueil demande trop de défilement avant la première carte, c'est `HAUTEUR_TRACE` (`frontend/src/ecrans/Accueil.jsx`) qu'il faut baisser, et le squelette suivra tout seul. Ensuite : **la lisibilité du trait sur les trois fonds les plus faibles** — Brésil 2,44:1, Azerbaïdjan 2,54:1, Espagne 2,55:1 (voir le tableau de la version `0.16.0`). Si le circuit y paraît fantomatique, deux leviers d'une ligne, dans cet ordre de préférence : monter le trait de 60 à 70 % de blanc (`text-white/60` dans la zone 3), ou approfondir la bande de 15 à 25 % (`bg-black/15`). Ne pas toucher au voile, calculé lui pour le texte. Enfin : **le nom du Grand Prix reste tronqué** (`truncate`) et il est maintenant centré à 26px — « GP Émirats arabes unis » est le cas à confronter à un iPhone étroit.
+**Trois points depuis la version `0.16.0`**, tous sur le bloc GP recomposé, et le premier est le plus important : **la hauteur du bloc**. La bande de 160px le porte à environ 380px, soit plus de la moitié de la hauteur utile d'un iPhone SE — les cartes de championnat passent nettement sous la ligne de flottaison. C'est la conséquence assumée de « le bloc est plus haut qu'actuellement », mais elle ne se juge que sur un appareil réel : si l'accueil demande trop de défilement avant la première carte, c'est `HAUTEUR_TRACE` (`frontend/src/ecrans/Accueil.jsx`) qu'il faut baisser, et le squelette suivra tout seul. Ensuite : **la lisibilité du trait sur les trois fonds les plus faibles** — Brésil 2,44:1, Azerbaïdjan 2,54:1, Espagne 2,55:1 (voir le tableau de la version `0.16.0`). Si le circuit y paraît fantomatique, deux leviers d'une ligne, dans cet ordre de préférence : monter le trait de 60 à 70 % de blanc (`text-white/60` dans la zone 3), ou approfondir la surcouche de 15 à 25 % (`bg-black/15`) — **depuis la version `0.16.1` elle peint tout le bloc et non plus la seule bande**, donc l'approfondir assombrit aussi le fond du texte, ce qui ne fait que renforcer sa lisibilité. Ne pas toucher au voile, calculé lui pour le texte. Enfin : **le nom du Grand Prix reste tronqué** (`truncate`) et il est maintenant centré à 26px — « GP Émirats arabes unis » est le cas à confronter à un iPhone étroit.
 
 **Trois points depuis la version `0.15.0`**, tous liés aux drapeaux du bloc GP, qui ne se jugent qu'à l'œil : **la force du voile** — elle est calculée pour tenir 3:1 et ne doit pas être baissée, mais si un drapeau à bande blanche paraît trop éteint, c'est la seule autre issue qui est à arbitrer (encre foncée sur les bandes claires, ce que la demande excluait) ; **la lisibilité du tracé à 15 % de blanc** sur les fonds les plus clairs, où il peut disparaître sous le voile — le monter à 20 % ne coûte rien à la garantie, le tracé passant sous le voile ; et le **repli `prefers-contrast: more`**, qui approfondit le voile d'un cran et qu'il faut vérifier avec « Augmenter le contraste » activé, en même temps que celui du grain de fond. Point secondaire : le nom du Grand Prix est tronqué (`truncate`) et les libellés d'Unibet peuvent s'allonger (« GP Émirats arabes unis ») — à confronter à un iPhone étroit.
 

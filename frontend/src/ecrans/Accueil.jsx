@@ -99,9 +99,14 @@ export function BlocProchainGp({ profilId }) {
           <div className="mx-auto h-8 w-48 rounded-full bg-white/25" />
           {/* La bande du tracé, à sa hauteur réelle. C'est la moitié du bloc :
               l'omettre ferait sauter l'accueil de 160px au moment précis où le
-              joueur le regarde. */}
+              joueur le regarde.
+
+              Elle n'est plus assombrie : le bloc chargé n'assombrit plus sa
+              bande non plus, et un rectangle sombre ici annoncerait une rupture
+              que la surface d'arrivée n'a pas. Elle garde une silhouette claire,
+              comme les autres formes du squelette. */}
           <div
-            className="mt-4 -mx-5 bg-black/15"
+            className="mt-4 -mx-5 bg-white/10"
             style={{ height: `${HAUTEUR_TRACE}px` }}
           />
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -214,6 +219,36 @@ export function BlocProchainGp({ profilId }) {
           drapeaux clairs. */}
       <VoileDrapeau voile={drapeau.voile} />
 
+      {/* L'assombrissement de 15 %, **sur tout le bloc et non sur la seule bande
+          du tracé**, où il vivait jusqu'ici.
+
+          C'est la correction de cette version. Sur un drapeau à bande répétée —
+          les Pays-Bas en sont le cas d'école, rouge / blanc / bleu / rouge — une
+          bande assombrie sur 160px au milieu du bloc coupait la surface en deux :
+          la bande rouge du haut paraissait plus vive que celle du bas, et l'œil
+          lisait un défaut de calage plutôt qu'une intention. Une seule surcouche
+          uniforme fait disparaître la rupture, le drapeau reste d'une seule
+          pièce, et chaque couleur garde exactement la même valeur du haut au bas
+          du bloc.
+
+          Elle est posée **au-dessus du voile et sous le contenu**, à la place
+          exacte qu'occupait celle de la bande : elle ne fait donc qu'assombrir
+          davantage le substrat du texte, et la garantie de 3:1 de la version
+          `0.15.0` en sort renforcée, jamais entamée.
+
+          **Elle ne s'applique qu'aux blocs peints par un drapeau.** Le repli
+          bordeaux n'a ni bande ni rupture à corriger, et le CLAUDE.md demande
+          qu'il garde exactement l'aspect qu'il avait — le voiler d'un cran de
+          plus l'éteindrait pour rien. Table des drapeaux et table des tracés
+          portant les mêmes douze slugs, « peint par un drapeau » et « a un
+          tracé » désignent le même ensemble. */}
+      {drapeau.fond && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-black/15"
+        />
+      )}
+
       <div className="relative">
         {/* Zone 1 — l'en-tête, inchangé. */}
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -258,12 +293,14 @@ export function BlocProchainGp({ profilId }) {
               bords, ce qui en fait un registre horizontal de la composition
               plutôt qu'une image posée dans une marge. `overflow-hidden` sur le
               bloc lui rend ses coins arrondis.
-            - **Le fond assombri de la bande fait le travail sur les drapeaux
-              clairs.** Un trait blanc à 60 % sur la bande blanche du drapeau
-              néerlandais, déjà voilée, passe de 2,11:1 à 2,70:1 grâce à ces
-              15 % — et à 3,80:1 sous `prefers-contrast: more`, où le voile
-              s'approfondit d'un cran sous lui. Sur les drapeaux sombres (Las
-              Vegas, Abu Dhabi) le trait est à 7:1 et plus.
+            - **La bande n'a plus son propre assombrissement** : les 15 % sont
+              passés sur le conteneur du bloc (voir plus haut), où ils rendent
+              exactement le même service au trait blanc — le substrat sous le
+              tracé est assombri de la même quantité qu'avant, simplement sans
+              couper le drapeau en deux. Un trait blanc à 60 % sur la bande
+              blanche du drapeau néerlandais, déjà voilée, reste donc à 2,70:1,
+              et à 3,80:1 sous `prefers-contrast: more`. Sur les drapeaux
+              sombres (Las Vegas, Abu Dhabi) il est à 7:1 et plus.
             - `boiteLibre` coupe le rapport de forme que le composant pose en
               ligne, parce que la bande fixe ici les **deux** dimensions.
               `xMidYMid meet` met alors chaque circuit à l'échelle dans cette
@@ -277,7 +314,7 @@ export function BlocProchainGp({ profilId }) {
             (`non-scaling-stroke`), donc identique d'un circuit à l'autre. */}
         {trace && (
           <div
-            className="pointer-events-none -mx-5 mt-4 bg-black/15"
+            className="pointer-events-none -mx-5 mt-4"
             style={{ height: `${HAUTEUR_TRACE}px` }}
           >
             <TraceCircuitGp
