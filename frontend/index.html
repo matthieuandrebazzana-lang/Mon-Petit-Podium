@@ -26,9 +26,29 @@
     <!-- Empêche iOS de transformer les nombres en liens d'appel
          (les scores et numéros de voiture en sont truffés). -->
     <meta name="format-detection" content="telephone=no" />
+
+    <!-- TEST Liquid Glass (version 0.23.0) — dashersw/liquid-glass-js.
+         Tout ce bloc est jetable : le retirer, avec les trois fichiers de
+         `public/` et le `useEffect` de `NavBarre.jsx`, rend l'app à son état
+         antérieur. Voir CLAUDE.md, section « Liquid Glass ». -->
+    <link rel="stylesheet" href="/glass.css" />
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- L'ordre est contraint : html2canvas d'abord (la librairie l'appelle
+         pour photographier la page), puis container.js, puis button.js —
+         `class Button extends Container` exige que Container soit déjà évalué.
+         `defer` sur les trois : ils s'exécutent alors dans l'ordre du document
+         et **avant** le script de module ci-dessous (lui aussi différé par
+         nature), sans bloquer l'analyse du HTML. -->
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"
+    ></script>
+    <script defer src="/container.js"></script>
+    <script defer src="/button.js"></script>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

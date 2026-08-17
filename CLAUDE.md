@@ -2566,6 +2566,69 @@ Un cadrage serré sur chaque boîte aurait été le réflexe — et il aurait é
 | Aperçu rendu | les quatre icônes dessinées à six fois la taille réelle **et** à 28px : chacune reconnaissable, bien cadrée, et les tailles relatives de la planche conservées |
 | `npm run build` | passe, version `0.22.0` dans le bundle |
 
+**TEST — Liquid Glass sur la barre de navigation** (version `0.23.0`)
+
+**Essai visuel, à juger sur iPhone réel et à annuler si le rendu ne convient pas.** Ce n'est pas une étape du projet : c'est un test isolé, conçu pour être retiré d'un `git revert` sans rien emporter d'autre. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+*Le dépôt indiqué n'existe pas.* `sricharankrishnan/liquid-glass-js` répond `404` sur les trois fichiers, et ce compte n'a aucun dépôt de ce nom. La librairie réelle est **`dashersw/liquid-glass-js`** — mêmes trois fichiers (`container.js`, `button.js`, `glass.css`), même API (`Container`, `Button`, html2canvas), c'est manifestement celle qui était visée. Les trois fichiers sont copiés **tels quels** dans `frontend/public/`, jamais retouchés : une correction locale se perdrait à la première mise à jour, et un test doit porter sur la librairie telle qu'elle est.
+
+---
+
+***Les deux classes ne sont pas sur `window`, et le garde demandé aurait rendu le test inopérant.*** C'est le point de la version.
+
+`container.js` et `button.js` déclarent `class Container {}` et `class Button {}` au premier niveau d'un **script classique**. Une déclaration `class` crée une liaison dans l'environnement **lexical** global, jamais une propriété de l'objet global — seuls `var` et les déclarations de fonction font cette dernière. `window.Container` vaut donc `undefined` en permanence, librairie chargée ou non, et le repli demandé se serait déclenché à chaque fois sans que rien ne le signale : on aurait conclu que l'effet ne rend rien alors qu'il n'aurait jamais été monté.
+
+`classesVerre()` lit donc `globalThis.Container` d'abord (au cas où une version ultérieure exporterait explicitement), puis retombe sur `typeof Container !== "undefined" ? Container : null`. **`typeof` est la seule lecture sûre** : une référence nue à un identifiant absent lève une `ReferenceError`. Le comportement demandé — repli silencieux, aucune erreur — est conservé ; seule la façon de tester change.
+
+***Second piège, du même ordre : l'ordre d'exécution.*** Vite hisse le script de module dans le `<head>` ; les trois scripts de la librairie vivent en fin de `<body>`. Tous étant différés, ils s'exécutent dans l'ordre du document : `main.jsx` d'abord. React rend donc, et l'effet tourne, **avant** que `Container` existe — second chemin vers un repli permanent, cette fois indépendant du premier.
+
+L'effet attend donc **`window.load`** quand `document.readyState` n'est pas encore `complete`. C'est le seul signal qui tranche : il suit l'exécution de tous les scripts différés, celui du CDN compris, et il est émis **même quand l'un d'eux échoue** — un chargement lent est attendu, une absence réelle est constatée. Bénéfice second, non recherché mais réel : html2canvas photographie alors une page rendue et stabilisée, au lieu d'un écran à moitié peint.
+
+---
+
+*Ce qui est monté.* Un `Container` en fond de barre (rayon nul : elle touche les deux bords et le bas de l'écran, une capsule y laisserait des coins beiges) et **quatre `Button` de type `pill`, `tintOpacity: 0.15`**, un par onglet, posés sous les icônes.
+
+**Les pastilles ne passent pas par `fond.addChild()`**, et c'est l'arbitrage principal. La méthode déplace l'élément **dans** le conteneur : les quatre pastilles sortiraient des `<Link>` et emporteraient la navigation avec elles. Elles échantillonnent donc la photographie de page plutôt que la sortie du conteneur — **le verre imbriqué est perdu, la navigation est intacte**, ce qui est le bon sens pour un essai qu'on doit pouvoir retirer sans rien casser.
+
+**L'icône SVG reste dans l'arbre React**, au-dessus du verre, plutôt que déplacée dans le `textElement` de la librairie. Un nœud rendu par React qui change de parent est un nœud que React ne sait plus retirer au démontage. Le verre est déposé dans un `<span>` vide dédié, dont **React possède le nœud et jamais le contenu** : c'est la seule insertion de DOM étranger qui n'expose pas la réconciliation à un `insertBefore` sur un parent qui a changé. Visuellement le résultat est celui demandé — l'icône est le contenu de la pastille.
+
+**Quatre points de mise en œuvre à ne pas défaire :**
+
+1. **`text: " "` et non `text: ""`.** La librairie écrit `options.text || 'Button'` : une chaîne vide est falsy, et le mot **« Button » s'afficherait au milieu de chaque pastille**. Une espace passe le test de vérité, et le nœud de texte est retiré juste après.
+2. **`updateSizeFromDOM()` après avoir imposé les dimensions.** C'est une méthode publique et documentée : elle relit la boîte réelle, y recale le canevas, le rayon de la capsule et les uniformes du shader. Sans elle, la pastille garderait la taille dérivée de son texte.
+3. **Les ombres portées de la librairie sont neutralisées.** Elle pose `0 25px 50px rgba(0,0,0,.25)` sur chaque canevas, calibré pour une pastille flottant au milieu d'une page. Sous une barre déjà élevée par `shadow-flottant`, cela noircirait le bas de l'écran.
+4. **Le démontage retire les instances de `Container.instances` et perd les contextes WebGL.** Ce tableau statique n'est jamais purgé par la librairie : chaque montage de la barre y laisserait cinq entrées de plus. Et cinq contextes WebGL par montage épuiseraient le quota du navigateur en quelques allers-retours — Safari détruit alors le plus ancien, et des pastilles s'éteignent au hasard, sans que rien ne le signale.
+
+*`materiau-chrome` cède la place au verre une fois celui-ci monté*, et revient au moindre échec. Les deux superposés donneraient un flou par-dessus un flou, et la réfraction ne se verrait plus. **Le repli est total, jamais une barre à moitié vitrée** : si une seule pastille échoue, `construire()` défait tout et rend une liste vide.
+
+*Rien d'autre ne bouge.* Aucun autre écran, aucune route, aucune logique de navigation. Zone tactile de 44px, retour tactile à l'appui, `aria-current`, zone sûre basse, remontée en haut de l'écran sur l'onglet déjà ouvert, couleurs des icônes : tout est inchangé. Les pastilles sont en `pointer-events: none` — `.glass-button` réactive les événements et pose un curseur de main, et le lien doit rester la seule cible.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite) : **28 contrôles passent**, tous sur le chemin de repli, qui est celui de Node.
+
+| Contrôle | Résultat |
+|---|---|
+| Repli | la barre se rend sans lever ; **`materiau-chrome` conservé**, `shadow-flottant`, zone sûre basse, aucune bordure — l'apparence est strictement celle d'avant |
+| Structure | quatre onglets, **un seul `aria-current`**, 44px et retour tactile sur chacun, barre nommée pour le lecteur d'écran |
+| Icônes | les quatre rendues, actif en `#800111` et les autres en `#999999`, toujours décoratives, toujours à 28px |
+| Créneaux | quatre créneaux vides et muets pour le lecteur d'écran ; **le mot « Button » n'apparaît nulle part** |
+| Onglet actif | juste sur les quatre écrans ; **rien sans session**, rien sur la vue piste ni sur le tableau des cotes |
+| Règles permanentes | aucune cote brute « ×N », ni « ligue », ni « historique » |
+| Fichiers servis | `/container.js`, `/button.js` et `/glass.css` en `200`, précachés par le service worker (16 entrées) |
+| Ordre des scripts | confirmé dans le build : le module Vite précède les trois scripts différés — **la raison d'être de l'attente de `load`** |
+| `npm run build` | passe, 135 modules, version `0.23.0` dans le bundle |
+
+**Ce que ce test ne peut pas prouver hors navigateur, et qu'il faut regarder sur iPhone :**
+
+1. **La fraîcheur du fond.** `Container.pageSnapshot` est **statique et capturé une seule fois** : la librairie ne rephotographie jamais la page. Le verre réfractera donc l'écran qui était affiché au premier montage de la barre, et non celui qu'on regarde. C'est inhérent à la librairie, et c'est probablement le premier motif de retour en arrière.
+2. **Le coût.** html2canvas parcourt tout le `document.body`, puis cinq contextes WebGL vivent en permanence sous une barre fixe. À surveiller : la fluidité du défilement d'une longue liste de cotes, et la consommation.
+3. **Les couleurs de la photographie.** La feuille compilée contient **62 `color-mix(in oklab, …)`** (Tailwind 4). html2canvas 1.4.1 ne sait pas analyser les syntaxes de couleur modernes que `getComputedStyle` peut lui rendre : les zones concernées risquent de sortir transparentes ou fausses dans le fond réfracté.
+4. **Le hors-ligne.** Les trois fichiers de la librairie sont précachés par le service worker, **pas html2canvas**, servi par CDN. Hors ligne, le verre retombe donc silencieusement sur la barre standard — comportement voulu, mais à savoir.
+5. **Les réglages d'accessibilité.** Le verre remplace `materiau-chrome`, donc **les replis `prefers-reduced-transparency` et `prefers-contrast: more` de la version `0.12.1` ne s'appliquent plus** quand il est monté. C'est un point à trancher si le test est conservé, pas à corriger dans le test.
+
+***Pour annuler.*** `git revert` du commit suffit. À la main : supprimer `frontend/public/{container,button,glass.css}`, retirer le bloc `TEST Liquid Glass` d'`index.html` (le `<link>` et les trois `<script>`), et retirer de `NavBarre.jsx` tout ce qui porte le commentaire `TEST Liquid Glass` — l'import de `useEffect`/`useRef`/`useState`, `classesVerre`, `PASTILLE`, `demonter`, `construire`, l'effet, la variable `visible`, le `ref` et le ternaire du `className`, ainsi que le `<span>` créneau et le `relative` de l'icône.
+
+---
+
 ### Bugs connus
 
 *(Aucun.)*
