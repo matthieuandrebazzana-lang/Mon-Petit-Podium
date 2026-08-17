@@ -51,6 +51,34 @@ export function formaterDepart(iso) {
   return { jour: jour.charAt(0).toUpperCase() + jour.slice(1), heure, courte };
 }
 
+/**
+ * Le jour et le mois d'un départ, séparés — la date en gros chiffre des cartes
+ * de Grand Prix, avec son mois en dessous.
+ *
+ * `null` quand l'horaire n'est pas encore annoncé : c'est à l'appelant de dire
+ * « date à confirmer » à sa manière, jamais à cette fonction d'inventer un
+ * chiffre. C'est la même règle que `formaterDepart`, qui rend `courte: null`
+ * dans ce cas.
+ *
+ * Le mois est capitalisé ici et non par une classe `uppercase` : `août` porte un
+ * accent que `text-transform` gère bien, mais le rendre en JavaScript garde le
+ * texte lisible tel quel pour un lecteur d'écran.
+ */
+export function formaterJourMois(iso) {
+  if (!iso) return null;
+  const depart = new Date(iso);
+  if (Number.isNaN(depart.getTime())) return null;
+
+  const jour = new Intl.DateTimeFormat("fr-FR", { day: "numeric" }).format(depart);
+  const mois = new Intl.DateTimeFormat("fr-FR", { month: "short" })
+    .format(depart)
+    // « août » → « AOÛT ». Le point de « sept. » n'apporte rien sous un chiffre.
+    .replace(".", "")
+    .toUpperCase();
+
+  return { jour, mois };
+}
+
 /** Instant de fermeture des pronostics, ou `null` si l'heure est inconnue. */
 export function instantFermeture(iso) {
   if (!iso) return null;

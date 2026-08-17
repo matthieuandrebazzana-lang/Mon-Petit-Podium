@@ -2144,6 +2144,112 @@ Rien d'autre ne bouge : `pleine-largeur` et `coiffe-ecran` étaient déjà en pl
 
 *Vérifié* — rendu hors navigateur : **335 contrôles passent**, dont trois refaits sur le hero — aucun arrondi (ni `rounded-b-bloc`, ni `rounded-carte`, ni aucun autre), **aucune classe d'ombre**, et le drapeau, le voile, la surcouche, le titre calé, la date ancrée et l'horloge inchangés. `npm run build` passe, 130 modules, version `0.18.1` dans le bundle.
 
+---
+
+**Calendrier — cartes de Grand Prix pleine largeur, drapeau et tracé de circuit** (version `0.19.0`)
+
+L'écran de calendrier d'un championnat (maquette 15) passe de rangées blanches à **une carte pleine largeur par Grand Prix**, en deux zones : le drapeau du pays hôte et le tracé du circuit en haut, les informations en bas. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x` et `0.18.x`).
+
+*La référence est `assets/calendrier.svg`* — la planche des douze widgets de la fin de saison, avec pour chacun son pays, son circuit, sa date et son tracé. Elle a servi à la fois de référence visuelle et de **source de données**.
+
+---
+
+***Bahreïn sort du calendrier, la Malaisie y entre.*** C'est la correction que la planche a révélée, et elle touche les deux tables.
+
+`assets/traces.svg` (version `0.15.0`) et `assets/calendrier.svg` donnent la même liste de circuits, dans le même ordre, à un près : **à la cinquième place, la nouvelle planche porte Sepang là où la première portait Sakhir**. C'est le calendrier réel de la fin de saison 2026 qui tranche, et Sakhir n'y figure pas.
+
+- `DrapeauxGP.jsx` : `bahrein` devient **`malaisie`**, en aplat uni **`#CC0001`**. Le drapeau malaisien porte quatorze bandes, un croissant et une étoile à quatorze branches dans un canton bleu : c'est un `type: "complexe"` au sens de la version `0.15.0` — mieux vaut une couleur juste qu'un drapeau approximatif.
+- `TracesCircuits.jsx` : le tracé de Sakhir est remplacé par celui de **Sepang**, extrait tel quel de la nouvelle planche, avec sa boîte englobante mesurée en échantillonnant les courbes de Bézier (même méthode qu'à l'étape 9). **Ses coordonnées sont celles de l'autre planche** — 1078 unités de large au lieu de 669 — et c'est sans importance : chaque entrée porte son propre cadrage.
+- `slugCircuit` reconnaît « GP Malaisie », « GP Sepang », « Malaysian Grand Prix » et « GP Kuala Lumpur ».
+
+**Les deux tables devaient bouger ensemble**, et un contrôle le vérifie désormais : `TRACES` et `DRAPEAUX` portent exactement les mêmes douze slugs. Laisser un drapeau sans tracé donnerait une bande de 180px vide au milieu de la carte ; laisser un tracé sans drapeau donnerait un circuit posé sur le bordeaux de repli au milieu de onze cartes colorées.
+
+---
+
+*`IDENTITES` — le pays et le circuit de chaque Grand Prix.* Une table à part dans `TracesCircuits.jsx`, et non deux champs de plus dans `TRACES` : celle-ci est purement géométrique (cadrage et chemin), celle-là purement éditoriale. Les deux ne bougent jamais ensemble — un tracé se remesure, un libellé se corrige — et les mélanger obligerait à relire un chemin de 2 Ko pour changer un accent.
+
+**Trois libellés s'écartent de la planche, et c'est signalé pour que ce soit une décision.** Elle est dessinée en anglais par endroits (« Azerbaijan », « Baku ») là où toute l'interface est en français : ils sont francisés. Et elle nomme le circuit de Singapour « Singapour », ce qui ferait une carte disant trois fois le même mot : c'est **Marina Bay**, le vrai nom du tracé, qui est retenu.
+
+***Le pays ne s'affiche que lorsqu'il ajoute quelque chose.*** La demande veut trois lignes à gauche — pays en petit gris, nom du GP en 18px, circuit en petit gris. Mais le nom d'un Grand Prix **est** son pays : « GP Pays Bas » au-dessus de « Pays-Bas » écrit deux fois la même chose. `paysDuCircuit` le tait dans ce cas, et le sert quand il apprend quelque chose — « GP Las Vegas » se court aux États-Unis, « GP Sepang » en Malaisie.
+
+**La comparaison passe par la normalisation nue et non par `slugCircuit`**, dont ce serait pourtant l'usage évident : `slugCircuit` applique les alias, donc ramène « GP Sepang » à `malaisie`, les deux chaînes deviendraient égales et le pays serait tu précisément là où il compte. La normalisation nue compare bien ce qui est écrit, tout en rapprochant « GP Pays Bas » de « Pays-Bas ».
+
+---
+
+***La carte, et le voile qui ne pouvait pas être uniforme tout seul.***
+
+Elle touche les deux bords (`pleine-largeur`), porte les 24px de rayon du design system et 12px de gouttière (`gap-3`) — c'est cette gouttière, et non un trait, qui sépare deux cartes. `overflow-hidden` rend au drapeau les coins arrondis de la carte.
+
+**Zone haute — 180px de drapeau.** La pile de calques est **exactement celle du bloc de l'accueil**, dans le même ordre : lumière spéculaire, voile calculé du drapeau, surcouche uniforme de 15 %, puis le tracé. Le tracé est centré par `xMidYMid meet` en trait blanc à 60 %, avec `boiteLibre` — la bande fixant les deux dimensions, le rapport de forme que le composant pose en ligne devait sauter. Chaque circuit garde donc sa vraie forme : Bakou, 3,4 fois plus large que haut, remplit la largeur ; Zandvoort, presque carré, remplit la hauteur.
+
+**Les 15 % demandés ne suffisent pas seuls, et c'est mesuré.** Sur la bande blanche d'un drapeau néerlandais, un blanc à 60 % posé sur du blanc assombri de 15 % ne vaut que **1,24:1** — le tracé serait invisible. Le voile calculé par drapeau (version `0.15.0`) est donc conservé **dessous** : il ramène cette bande au gris moyen, et le trait y tient alors le même **2,70:1** que sur l'accueil, **5,81:1** sur Las Vegas. Aucun texte ne traverse cette zone, la garantie de 3:1 de l'accueil n'a donc rien à y protéger — elle sert ici le seul tracé.
+
+**Sans tracé, la zone reste le drapeau seul.** Contrairement au bloc de l'accueil, où l'absence de tracé retire la bande entière, ici elle ne peut pas disparaître : c'est elle qui porte la couleur du Grand Prix. Un motif de repli, lui, laisserait croire que ce circuit ressemble à ça. Le repli bordeaux (Grand Prix hors planche) garde exactement l'aspect qu'il a partout ailleurs : ni voile, ni surcouche.
+
+**Zone basse — deux colonnes.** À gauche le pays (quand il ajoute quelque chose), le nom du Grand Prix en 18px, le circuit, puis la pastille de statut. À droite le jour en grand chiffre bordeaux et le mois dessous.
+
+*Un Grand Prix dont Unibet n'a pas annoncé l'horaire n'a pas de date à afficher* : la colonne dit « Date à confirmer » plutôt que d'inventer un chiffre. C'est la règle tenue depuis l'étape 9 — un Grand Prix sans date reste servi, en fin de liste, parce qu'un Grand Prix manquant dans un calendrier se voit tout de suite.
+
+---
+
+***Quatre états, jamais déduits du statut en base.*** `cotes_disponibles` et `resultats_disponibles` sont lus dans leurs tables, et la fermeture se calcule sur l'heure de départ (règle 4.3) : rien ne fait passer un Grand Prix en `cotes_figees` avant le samedi des qualifications, et le job de résultats passe un Grand Prix à `termine` même s'il reste des pronostics sans points. L'ordre des tests compte — un Grand Prix couru est « terminé » quoi qu'il arrive, et une fermeture passée l'emporte sur des cotes disponibles.
+
+| État | Pastille | Contraste mesuré | Bouton |
+|---|---|---|---|
+| À venir | gris translucide, encre marron | 8,46:1 | aucun |
+| Pronos ouverts | amber `#E8A020`, **encre `#1A1A1A`** | 7,86:1 | « Pronostiquer » |
+| Fermé | bordeaux `#800111` | 10,88:1 | aucun |
+| Terminé | vert sauge `#4A7C59` | 4,86:1 | « Voir les résultats » |
+
+**Deux écarts de couleur, tous deux mesurés.** La demande écrit les quatre pastilles sans dire leur encre : sur l'amber, le blanc tombe à **2,22:1** quand `#1A1A1A` monte à 7,86:1 — c'est le même arbitrage qu'aux versions `0.12.0` et `0.17.0`, et `#999999` en texte plein ne valant que 2,0:1 sur une carte blanche, l'état « à venir » prend un gris translucide avec le marron `secondaire` du design system pour encre. **Le vert `#4A7C59` est celui du design system depuis la version `0.12.0`** : la remarque de l'étape 9, qui notait qu'aucun vert n'existait dans la section 5, n'a plus lieu d'être.
+
+**L'état ne se rafraîchit pas tout seul, et c'est voulu.** La carte lit `etatFermeture` au rendu, sans minuterie : elle n'affiche pas de compte à rebours, seulement un état qui bascule une fois. Douze cartes portant chacune leur `useFermeture` feraient douze minuteries pour une information qui ne change qu'une fois par week-end.
+
+*Le bouton n'existe que là où il y a quelque chose à faire* — c'est la demande, et elle se tient : un Grand Prix à venir n'a pas encore de cotes, un Grand Prix fermé n'accepte plus rien. **Deux styles plutôt qu'un** : « Pronostiquer » est un aplat bordeaux plein, « Voir les résultats » du bordeaux sur le beige du fond. Douze cartes terminées feraient sinon douze barres rouges, et l'urgence ne se distinguerait plus de l'archive.
+
+*Le score du membre* s'affiche sous la date pour un Grand Prix terminé. `mes_points` vaut `null` tant qu'aucun de ses pronostics n'a été noté : la carte dit alors « Pronos pas encore validés », et « Aucun prono » s'il n'a rien joué — jamais « 0 pts ». C'est la convention de l'étape 6, tenue depuis.
+
+---
+
+*Écarts assumés par rapport à la version précédente* :
+
+1. **Le mini-classement à trois membres disparaît de la carte.** La maquette 15 le dessine, et la composition demandée ne lui laisse pas de place — trois rangées sous un hero de 180px donneraient une carte de 400px, soit deux tiers d'un iPhone SE pour un seul Grand Prix. **L'information n'est pas perdue** : « Voir les résultats » ouvre l'écran de résultats (maquette 11), qui sert le classement complet des membres avec leurs pronostics. Le bloc « leader général » de l'écran, lui, est conservé — il s'additionne toujours à partir des mêmes `classement`, servis par la route.
+2. **Les cartes ne mènent plus nulle part par elles-mêmes** : seul le bouton est un lien. Un Grand Prix fermé n'a donc plus d'accès direct à son récapitulatif depuis le calendrier ; il en garde un depuis l'accueil, dont le bloc rouge mène au récap dès que la fermeture est passée (version `0.5.1`).
+3. **La zone du drapeau est grise dans le squelette**, là où les autres squelettes de l'app gardent la couleur de leur aplat (règle de l'étape 9). On ne sait pas encore quel pays arrive : le gris est la seule réponse honnête. C'est le même arbitrage que pour les cartes de championnat de la version `0.14.0`.
+
+*`Pave` accepte désormais le reste de ses propriétés* (`Squelette.jsx`) : c'est ce qui permet au squelette de fixer sa hauteur depuis `HAUTEUR_DRAPEAU`, la constante que la carte réelle utilise, plutôt que depuis une classe qui la dupliquerait. Sans cette hauteur partagée, la liste sauterait de 180px par carte à l'arrivée des données — le défaut déjà corrigé sur les cartes de championnat en version `0.14.0`.
+
+*`formaterJourMois` entre dans `lib/format.js`*, où vit toute la mise en forme. Elle rend `null` quand l'horaire n'est pas annoncé, comme `formaterDepart` rend `courte: null` : ce n'est pas à une fonction de mise en forme d'inventer un chiffre.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Les cartes entrent avec le bloc qui les porte (*texts reveal*, transitions-dev 18) et l'attente passe par *skeleton loader and reveal* (14), toutes deux déjà installées. Une carte de calendrier ne change pas d'état sous les yeux du joueur : il n'y a aucun changement à accompagner, et un jeton de plus aurait été un jeton à maintenir sans rien gagner.
+
+*Apport d'`/apple-design`* — le bouton garde ses 44px et son retour à l'appui ; le drapeau, le voile, la surcouche et le tracé sont `aria-hidden` et `pointer-events-none`, un lecteur d'écran n'ayant rien à annoncer d'une illustration ; le nom du Grand Prix est un `<h2>`, ce qui donne à la liste une vraie structure de titres ; et le squelette suit la silhouette réelle (§7, cohérence spatiale).
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage doublé) : **148 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Les deux tables | 12 tracés, 12 drapeaux, **exactement les mêmes slugs**, les douze attendus dans l'ordre ; **`bahrein` a disparu des deux** |
+| Sepang | `viewBox` à quatre nombres et ratio concordant, chemin non vide, **aucune commande de chemin non gérée**, un seul sous-tracé ; les douze tracés restent deux à deux distincts |
+| Malaisie | aplat uni, `#CC0001` exact, servi sans dégradé ; toutes les couleurs de drapeau au format `#RRGGBB` |
+| `slugCircuit` | les onze libellés éprouvés résolus, « GP Sepang » et « Malaysian Grand Prix » compris ; **« GP Bahreïn » et « GP Sakhir » ne tombent plus sur aucun tracé** ; GP hors planche → rien ; clé héritée d'`Object` → `false` |
+| Pays et circuits | les douze circuits nommés et distincts, Marina Bay et Hermanos Rodríguez servis ; **le pays est tu quand il redit le nom du GP** (Pays-Bas, Malaisie, Abou Dabi) et **dit quand il ajoute quelque chose** (Las Vegas, Sepang) ; slug inconnu → `null` |
+| Jour et mois | 23 août → « 23 » / « AOÛT », 6 septembre → « SEPT » **sans point** ; date absente ou illisible → `null` |
+| Les quatre états | ni cotes ni résultats → à venir ; cotes et départ à venir → ouvert ; départ passé → fermé ; **résultats → terminé même après fermeture** ; **GP sans horaire reste ouvert** ; les quatre libellés demandés |
+| Contraste | les quatre pastilles ≥ 4,5:1 ; **le blanc serait à 2,22:1 sur l'amber**, d'où l'encre foncée |
+| Tracé | **≥ 2,4:1 sur les treize fonds**, 2,70:1 au pire ; **les 15 % seuls resteraient à 1,24:1** sur une bande blanche |
+| Structure de la carte | pleine largeur, 24px de rayon, élevée, sur surface blanche, débordement coupé, **zone du drapeau à 180px**, aucun rayon latéral propre |
+| Drapeau | dégradé néerlandais rendu, **voile calculé à 0,45**, surcouche de 15 %, lumière spéculaire ; Malaisie en aplat rouge sans dégradé ; **GP hors table → repli bordeaux, ni voile ni surcouche** |
+| Tracé rendu | trait et non aplat, `currentColor`, 60 % de blanc, décoratif, `xMidYMid meet`, **aucun `aspect-ratio` en ligne** ; Sepang rendu pour le GP de Malaisie ; **GP hors table → aucun `<svg>`, mais la zone garde ses 180px** |
+| Informations | nom en `<h2>` à 18px, circuit nommé, **le pays n'est pas répété** ; jour en grand chiffre bordeaux, mois en petit ; **sans horaire → « Date à confirmer » et aucun grand chiffre** |
+| Pastilles | les quatre rendues avec leur aplat, **`bg-accent text-texte` sur l'amber** |
+| Score | 792 pts et « 2e de ce GP » ; **non jugés → « pas encore validés », jamais « 0 pts »** ; aucun pronostic dit comme tel ; **aucun score sur un GP non terminé** |
+| Bouton | « Pronostiquer » vers les cotes, « Voir les résultats » vers les résultats, **aucun bouton à venir ni fermé** ; pleine largeur, 44px, retour à l'appui |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », sur les six cartes rendues |
+| Écran | se rend sans lever, **le mot « Historique » n'apparaît nulle part**, squelette pleine largeur **à la hauteur réelle de la carte** |
+| CSS de production | `bg-vert-sauge`, `text-white/60`, `bg-black/15`, `font-size:32px`, `letter-spacing:-.025em`, `border-radius:10px`, `rounded-carte-sm` et `min-h-tactile` bien générés |
+| `npm run build` | passe, version `0.19.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2216,6 +2322,8 @@ Points non couverts, à traiter le moment venu :
 - **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
 
+**Trois points depuis la version `0.19.0`**, tous sur les cartes du calendrier d'un championnat. **La hauteur des cartes** : 180px de drapeau plus une zone d'informations portent chaque carte à environ 300px, et douze Grands Prix font un écran très long — à juger au pouce, et si c'est trop, c'est `HAUTEUR_DRAPEAU` (`frontend/src/ecrans/Calendrier.jsx`) qu'il faut baisser, le squelette suivra tout seul. **La lisibilité du tracé** sur les drapeaux les plus clairs, mesurée à 2,70:1 au pire (Pays-Bas, Italie, Singapour, Mexique, Qatar) : deux leviers d'une ligne s'il paraît fantomatique — monter le trait de 60 à 70 % de blanc, ou approfondir la surcouche de 15 à 25 % — mais **ne pas toucher au voile**, calculé pour le texte. Et **les cartes pleine largeur** (`pleine-largeur`), à vérifier en paysage sur un iPhone à encoche, où la zone sûre latérale n'est plus nulle.
+
 **Trois points depuis la version `0.18.0`**, tous sur l'écran Récap. **La hauteur du hero** — 280px plus la zone sûre, soit près de 330px sur un iPhone à encoche : c'est la valeur qui donne au titre la place de tomber dans sa bande sans heurter la rangée de retour, mais elle ne se juge qu'au pouce. Si l'écran demande trop de défilement avant la carte de statut, c'est `HAUTEUR_HERO` (`frontend/src/ecrans/RecapPronostics.jsx`) qu'il faut baisser — **et il faut alors revérifier les deux bornes des `clamp`**, calibrées sur cette hauteur ; la simulation du jeu de contrôles les éprouve pour trois zones sûres et deux hauteurs de titre, il suffit de la rejouer. Ensuite : **le calage du titre dans sa bande**, à confronter aux vrais drapeaux — les Pays-Bas sont le cas d'école, l'Azerbaïdjan, Singapour et le Qatar les trois cas où la borne basse rabat le titre hors de sa bande, ce qui est voulu mais se voit. Enfin : **la lisibilité des tuiles sombres** sur la carte beige, et surtout le glissement des unités à T-1h, qui fait passer le premier bloc de « Jours » à « Heures » — un changement d'unité sous les yeux du joueur, à vérifier une fois en conditions réelles.
 
 **Deux points depuis la version `0.17.0`**, tous deux sur l'écran Récap et tous deux liés au hero. **Le bouton de retour n'est plus collant** : il vit dans le hero, qui porte un drapeau qu'une barre translucide ne saurait pas reproduire, et il défile donc avec la page. L'écran tient en quatre blocs et le défilement est court — mais c'est exactement le genre de chose qui se juge au pouce, sur un appareil réel : si sortir de l'écran demande de remonter, la réponse est d'apprendre à `EnTeteEcran` à rendre un fond en `style` plutôt qu'en classe, pas de recoller le hero entier. Ensuite : **le hero coiffe la zone sûre** (`pleine-largeur` + `coiffe-ecran`), donc la couleur du drapeau court derrière la Dynamic Island — à vérifier en portrait **et en paysage** sur un iPhone à encoche, où la zone sûre latérale n'est plus nulle. Point secondaire : le nom du Grand Prix est en `line-clamp-2` et non tronqué sur une ligne, « GP Émirats arabes unis » est le cas à confronter à un iPhone étroit.
@@ -2241,5 +2349,5 @@ Points non couverts, à traiter le moment venu :
 - **Grille des pilotes à mettre à jour chaque saison** — `backend/app/calcul/pilotes.py` décrit 2026. Une table périmée ne fait pas de dégât silencieux (`alias_unibet()` exige que le nom de famille concorde avec le numéro), mais les alias cessent de s'appliquer et les pronostics concernés restent à `NULL`. Les numéros se relisent sur `/drivers` d'OpenF1, les libellés dans `public.cotes`.
 - Composant React `<Voiture />` avec couleurs dynamiques — **créé à l'étape 7** (`composants/Voiture.jsx`), **porté dans les profils à l'étape 8** (bloc rouge d'en-tête des maquettes 12 et 14, et aperçu de la personnalisation). Il n'a pas eu à changer : il acceptait déjà `couleur1`, `couleur2`, `numero` et `nom`. `composants/Pastille.jsx` reste en place et n'est pas remplacée : elle porte la couleur de la voiture de son membre, ce qui suffit à le reconnaître dans une liste, là où une voiture complète serait illisible à 36px.
 - **`assets/gp-cards.svg` extrait en composant** — **fait à l'étape 9** (`composants/TraceCircuit.jsx`). La planche ne contenait que **deux tracés distincts** (Monza et Spa) répétés six fois, et non un circuit par Grand Prix : les deux sont extraits tels quels, les autres Grands Prix reçoivent un tracé générique. Si de vrais tracés arrivent un jour, ils s'ajoutent à la table `TRACES` et au tableau `PAR_MOTIF` du même fichier, sans toucher aux écrans.
-- **`assets/traces.svg` extrait en composant** — **fait en version `0.15.0`** (`composants/TracesCircuits.jsx`), et c'est le jeu de tracés qui manquait : **douze vrais circuits**, de Zandvoort à Yas Marina. Les deux modules coexistent et ne se remplacent pas — celui de l'étape 9 dessine des **silhouettes pleines** (vignettes de 20 × 32px des deux calendriers), celui-ci des **traits** (bande du bloc de l'accueil, où il est passé du filigrane au premier plan en version `0.16.0`). Les tracés qui manquent encore sont ceux du début de saison ; ils s'ajoutent à la table `TRACES` du nouveau fichier, avec leur `viewBox` mesurée, sans toucher aux écrans — **`aUnTrace` fait alors disparaître la bande d'elle-même** pour un Grand Prix qui n'y est pas encore. Les deux calendriers, eux, gagneraient à passer aux douze vrais tracés plutôt qu'au générique : c'est une substitution d'import et un passage du `fill` au `stroke`, non fait ici, le périmètre demandé étant le seul bloc de l'accueil.
+- **`assets/traces.svg` extrait en composant** — **fait en version `0.15.0`** (`composants/TracesCircuits.jsx`), et c'est le jeu de tracés qui manquait : **douze vrais circuits**, de Zandvoort à Yas Marina. Les deux modules coexistent et ne se remplacent pas — celui de l'étape 9 dessine des **silhouettes pleines** (vignettes de 20 × 32px des deux calendriers), celui-ci des **traits** (bande du bloc de l'accueil, où il est passé du filigrane au premier plan en version `0.16.0`). Les tracés qui manquent encore sont ceux du début de saison ; ils s'ajoutent à la table `TRACES` du nouveau fichier, avec leur `viewBox` mesurée, sans toucher aux écrans — **`aUnTrace` fait alors disparaître la bande d'elle-même** pour un Grand Prix qui n'y est pas encore. Le **calendrier d'un championnat** est passé aux douze vrais tracés en version `0.19.0` ; `TraceCircuit.jsx` (silhouettes pleines de `gp-cards.svg`) ne sert donc plus qu'aux vignettes du **calendrier global**, qui gagnerait à suivre : c'est une substitution d'import et un passage du `fill` au `stroke`.
 - **Voiture personnalisable dans le profil** (section 5) — **fait à l'étape 8** : deux couleurs choisies parmi vingt, un numéro libre de 1 à 99, modifiables à tout moment depuis `/profil`. Le rang affiché sur la voiture a disparu ; il ne sert plus que de repli tant qu'aucun numéro n'est choisi. Les livrées, elles, ont changé de place plutôt que de disparaître : le calcul frontend par ordre d'inscription (`lib/livrees.js`) est bien supprimé, mais la **version `0.8.1` les a reposées en base**, comme valeur initiale des deux colonnes à la création du profil. Le membre les écrase dès qu'il personnalise. Les deux points laissés ouverts sont tranchés et documentés au « Reste à faire » : deux membres d'un même championnat **peuvent** choisir les mêmes couleurs (conséquence assumée) et le même numéro (avertissement non bloquant).

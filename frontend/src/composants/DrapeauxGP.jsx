@@ -30,15 +30,15 @@ import { luminance } from "../lib/palette.js";
  *   Mievaut une couleur juste qu'un drapeau approximatif.
  *
  * `parts` donne le poids relatif des bandes. Il est facultatif : à défaut, les
- * bandes sont égales. Trois drapeaux en ont besoin — l'Espagne (1/2/1), Bahreïn
- * (1/4) et le Qatar (3/1) — et sans lui il faudrait les décrire en répétant des
- * bandes, ce qui ne dirait pas la même chose.
+ * bandes sont égales. Deux drapeaux en ont besoin — l'Espagne (1/2/1) et le
+ * Qatar (3/1) — et sans lui il faudrait les décrire en répétant des bandes, ce
+ * qui ne dirait pas la même chose.
  *
- * *Deux orientations suivent la demande plutôt que le drapeau réel*, et c'est
- * signalé ici pour que ce soit une décision et non un oubli : le Qatar est décrit
- * en bandes **horizontales** bordeaux/blanc, alors que le vrai drapeau porte sa
- * bande blanche à la hampe, donc verticalement. Bahreïn, lui, est bien vertical.
- * Les deux se corrigent en changeant le seul champ `type`.
+ * *Une orientation suit la demande plutôt que le drapeau réel*, et c'est signalé
+ * ici pour que ce soit une décision et non un oubli : le Qatar est décrit en
+ * bandes **horizontales** bordeaux/blanc, alors que le vrai drapeau porte sa
+ * bande blanche à la hampe, donc verticalement. Cela se corrige en changeant le
+ * seul champ `type`.
  */
 export const DRAPEAUX = {
   "pays-bas": {
@@ -58,11 +58,11 @@ export const DRAPEAUX = {
     type: "horizontal",
     couleurs: ["#0092BC", "#E8192C", "#00B050"],
   },
-  bahrein: {
-    type: "vertical",
-    couleurs: ["#FFFFFF", "#CE1126"],
-    parts: [1, 4],
-  },
+  // Quatorze bandes rouges et blanches, un croissant et une étoile à quatorze
+  // branches dans un canton bleu : hors de portée d'un dégradé honnête. Rouge
+  // dominant. (Ce slug a remplacé `bahrein` : c'est Sepang, et non Sakhir, qui
+  // court à cette place du calendrier — voir `TracesCircuits.jsx`.)
+  malaisie: { type: "complexe", couleurs: ["#CC0001"] },
   singapour: {
     type: "horizontal",
     couleurs: ["#EF3340", "#FFFFFF"],
@@ -94,7 +94,7 @@ export const DRAPEAUX = {
 
    Le texte du bloc reste **blanc dans tous les cas** : c'est la demande, et
    c'est aussi la seule façon de garder un bloc reconnaissable d'un Grand Prix à
-   l'autre. Mais sept des douze drapeaux portent une bande blanche, sur laquelle
+   l'autre. Mais cinq des douze drapeaux portent une bande blanche, sur laquelle
    du texte blanc ne se voit pas du tout. D'où le voile noir.
 
    **La demande annonçait `rgba(0, 0, 0, 0.3)` ; 0,30 ne suffit pas, et c'est

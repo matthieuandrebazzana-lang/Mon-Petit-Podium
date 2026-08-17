@@ -4,79 +4,98 @@ import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
-import Pastille from "../composants/Pastille.jsx";
-import TraceCircuit, { traceDuGrandPrix } from "../composants/TraceCircuit.jsx";
-import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
-import { IconeChevronDroit } from "../composants/Icones.jsx";
+import TraceCircuitGp, {
+  aUnTrace,
+  nomCircuit,
+  paysDuCircuit,
+  slugCircuit,
+} from "../composants/TracesCircuits.jsx";
+import {
+  APPARENCE_REPLI,
+  VoileDrapeau,
+  drapeauDuGp,
+} from "../composants/DrapeauxGP.jsx";
+import { Barre, Pave } from "../composants/Squelette.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerCalendrier, cleCalendrier } from "../lib/calendrier.js";
 import { chargerChampionnat } from "../lib/championnats.js";
 import { useDonnees } from "../lib/useDonnees.js";
-import { formaterDepart, formaterPoints } from "../lib/format.js";
-import { couleurLisible } from "../lib/palette.js";
+import {
+  etatFermeture,
+  formaterJourMois,
+  formaterPoints,
+} from "../lib/format.js";
 
 /**
  * Maquette 15 — le calendrier d'un championnat, Grand Prix par Grand Prix.
  *
  * **Le vocabulaire de la section 1 s'applique et la maquette y déroge** : son
  * titre est « Historique », et le CLAUDE.md interdit ce mot au profit de
- * **calendrier**. L'écran, la route et l'onglet disent donc « Calendrier ». Le
- * contenu ne change pas pour autant : ce sont bien les Grands Prix passés et à
- * venir de la saison, dans l'ordre.
+ * **calendrier**. L'écran, la route et l'onglet disent donc « Calendrier ».
  *
- * **Trois états par carte**, et ils ne se déduisent jamais du seul statut du
- * Grand Prix (voir la migration `20260814213000`) :
+ * Chaque Grand Prix est une **carte pleine largeur** en deux zones : le drapeau
+ * du pays hôte et le tracé du circuit en haut, les informations en bas. Le
+ * fichier de référence est `assets/calendrier.svg`, qui dessine les douze
+ * widgets de la fin de saison avec leur pays, leur circuit et leur date.
  *
- * - **terminé** — `resultats_disponibles`. La carte porte le vainqueur de la
- *   course, le mini-classement du championnat et mène aux résultats ;
- * - **cotes disponibles** — `cotes_disponibles`. La carte mène au tableau des
- *   cotes ;
- * - **à venir** — ni l'un ni l'autre. La carte reste sobre et ne mène nulle
- *   part : il n'y a rien à y faire tant que le scraper n'a pas tourné.
- *
- * Un statut ne suffirait pas : rien ne fait passer un GP en `cotes_figees`
- * aujourd'hui, et le job de résultats passe un GP à `termine` même s'il reste
- * des pronostics sans points.
+ * La carte reprend **exactement le mécanisme de couleur du bloc de l'accueil** :
+ * même clé (`slugCircuit`), même table de drapeaux, même voile calculé, même
+ * surcouche uniforme. Un Grand Prix se reconnaît donc à ses couleurs d'un écran
+ * à l'autre, ce qui n'arriverait pas si le calendrier se peignait tout seul.
  */
 
+/** Hauteur de la zone du drapeau. Écrite une fois : le squelette la reprend,
+ *  sans quoi la liste sauterait de 180px par carte à l'arrivée des données. */
+const HAUTEUR_DRAPEAU = 180;
+
 /* -------------------------------------------------------------------------- */
-/*  États visuels                                                             */
+/*  L'état d'un Grand Prix                                                    */
 /* -------------------------------------------------------------------------- */
 
 /**
- * L'état d'un Grand Prix, et la couleur qui le dit.
+ * Les quatre états d'un Grand Prix, et la pastille qui les dit.
  *
- * **Écart assumé sur les couleurs demandées.** La demande veut « à venir
- * (gris), cotes disponibles (amber), terminé (vert) ». Le gris et l'amber sont
- * ceux du design system (`texte-doux`, `accent`). Le **vert n'existe pas dans
- * la section 5** et la palette n'est pas négociable : « terminé » prend donc le
- * bordeaux `primaire`, qui est déjà la couleur des points et des scores dans
- * toute l'application — un Grand Prix terminé est précisément celui qui en a
- * rapporté. La distinction reste franche entre les trois états, ce qui est ce
- * que la demande cherchait.
+ * **Ils ne se déduisent jamais du seul statut en base** (voir la migration
+ * `20260814213000`) : rien ne fait passer un GP en `cotes_figees` avant le
+ * samedi des qualifications, et le job de résultats passe un GP à `termine`
+ * même s'il reste des pronostics sans points. La disponibilité des cotes et
+ * celle des résultats sont donc lues dans leurs tables, et la fermeture se
+ * calcule sur l'heure de départ (règle 4.3).
+ *
+ * L'ordre des tests compte : un Grand Prix couru est « terminé » quoi qu'il
+ * arrive, et une fermeture passée l'emporte sur des cotes disponibles.
+ *
+ * **Les couleurs sont mesurées, pas choisies.** Chaque pastille est un aplat
+ * plein portant l'encre qui contraste avec lui : `#1A1A1A` sur l'amber (7,7:1,
+ * là où le blanc tomberait à 2,2:1), blanc sur le bordeaux et sur le vert
+ * sauge. L'état « à venir » est le seul sans couleur propre — il n'annonce rien
+ * — et prend un gris translucide avec le marron du design system pour encre,
+ * `#999999` en texte plein ne valant que 2,0:1 sur une carte blanche.
  */
-function etatDuGp(gp) {
+export function etatDuGp(gp, maintenant = Date.now()) {
   if (gp.resultats_disponibles) {
     return {
       cle: "termine",
       libelle: "Terminé",
-      pastille: "bg-primaire/10 text-primaire",
-      trace: "text-primaire/30",
+      pastille: "bg-vert-sauge text-white",
     };
+  }
+
+  const { ferme } = etatFermeture(gp.date_course, maintenant);
+  if (ferme) {
+    return { cle: "ferme", libelle: "Fermé", pastille: "bg-primaire text-white" };
   }
   if (gp.cotes_disponibles) {
     return {
-      cle: "cotes",
-      libelle: "Cotes dispo",
-      pastille: "bg-accent/20 text-secondaire",
-      trace: "text-accent/40",
+      cle: "ouvert",
+      libelle: "Pronos ouverts",
+      pastille: "bg-accent text-texte",
     };
   }
   return {
     cle: "a_venir",
     libelle: "À venir",
-    pastille: "bg-fond text-texte-doux",
-    trace: "text-texte-doux/25",
+    pastille: "bg-texte-doux/25 text-secondaire",
   };
 }
 
@@ -84,128 +103,172 @@ function etatDuGp(gp) {
 /*  Une carte de Grand Prix                                                   */
 /* -------------------------------------------------------------------------- */
 
-/** Une ligne du mini-classement de la maquette : rang, pastille, pseudo, points. */
-function MiniLigne({ ligne, estMoi }) {
-  return (
-    <li className="flex items-center gap-2.5 py-1.5">
-      <span
-        className={`w-4 shrink-0 text-center text-[13px] font-medium ${
-          ligne.rang <= 2 ? "text-primaire" : "text-texte-doux"
-        }`}
-      >
-        {ligne.rang}
-      </span>
-      <Pastille
-        nom={ligne.pseudo}
-        graine={ligne.profil_id}
-        taille="sm"
-        couleur={couleurLisible(ligne)}
-      />
-      <span className="text-texte min-w-0 flex-1 truncate text-[13px] font-medium">
-        {ligne.pseudo}
-      </span>
-      <span className="text-primaire shrink-0 text-[13px] font-medium">
-        {formaterPoints(ligne.points)}
-      </span>
-      {/* Le point ambré de la maquette : il repère l'utilisateur dans la liste
-          sans écrire son pseudo deux fois. */}
-      {estMoi && (
-        <span
-          aria-label="Toi"
-          className="bg-accent size-1.5 shrink-0 rounded-full"
-        />
-      )}
-    </li>
-  );
-}
-
-export function CarteGrandPrix({ gp, championnatId, profilId }) {
+export function CarteGrandPrix({ gp }) {
   const etat = etatDuGp(gp);
-  const depart = formaterDepart(gp.date_course);
+  const date = formaterJourMois(gp.date_course);
 
-  // Le tracé de circuit, extrait de `assets/gp-cards.svg`. La planche n'en
-  // contient que deux (Monza et Spa) : tous les autres Grands Prix reçoivent le
-  // tracé générique, ce qui garde la même silhouette d'une carte à l'autre.
-  const trace = traceDuGrandPrix(gp.nom);
+  // Le pays hôte donne à la fois les couleurs de la carte et le tracé du
+  // circuit. Une seule normalisation du nom pour les deux : ils partagent la
+  // même clé, et la faire deux fois laisserait les deux tables se
+  // désynchroniser sur un libellé qu'Unibet aurait renommé.
+  const slug = slugCircuit(gp.nom);
+  const drapeau = drapeauDuGp(slug) ?? APPARENCE_REPLI;
+  const trace = aUnTrace(slug);
+  const circuit = nomCircuit(slug);
+  const pays = paysDuCircuit(slug, gp.nom);
 
-  const destination = gp.resultats_disponibles
-    ? `/championnats/${championnatId}/grands-prix/${gp.gp_id}/resultats`
-    : gp.cotes_disponibles
-      ? `/grands-prix/${gp.gp_id}/cotes`
-      : null;
-
-  const entete = (
-    <div className="flex items-start gap-3">
-      {/* Le tracé est décoratif : il porte `aria-hidden` et n'entre pas dans le
-          nom accessible de la carte, qui est déjà celui du Grand Prix. */}
-      <span
-        className={`bg-fond rounded-champ flex size-11 shrink-0 items-center justify-center ${etat.trace}`}
-      >
-        <TraceCircuit trace={trace} className="h-5 w-8" />
-      </span>
-
-      <span className="min-w-0 flex-1">
-        <span className="text-corps text-texte block truncate font-medium">
-          {gp.nom}
-        </span>
-        <span className="text-texte-doux mt-0.5 block truncate text-[11px]">
-          {depart.courte ?? "Date à confirmer"}
-          {gp.vainqueur ? ` · ${gp.vainqueur}` : ""}
-        </span>
-      </span>
-
-      <span
-        className={`rounded-[10px] shrink-0 px-2.5 py-1 text-[11px] font-medium ${etat.pastille}`}
-      >
-        {etat.libelle}
-      </span>
-    </div>
-  );
+  // Le bouton n'existe que là où il y a quelque chose à faire. Un Grand Prix à
+  // venir n'a pas encore de cotes ; un Grand Prix fermé n'accepte plus rien.
+  const action =
+    etat.cle === "termine"
+      ? {
+          vers: `/grands-prix/${gp.gp_id}/resultats`,
+          libelle: "Voir les résultats",
+          // Consultation : le bordeaux sur le beige du fond, pas un aplat
+          // plein. Douze cartes terminées feraient sinon douze barres rouges,
+          // et l'urgence ne se distinguerait plus de l'archive.
+          style: "bg-fond text-primaire",
+        }
+      : etat.cle === "ouvert"
+        ? {
+            vers: `/grands-prix/${gp.gp_id}/cotes`,
+            libelle: "Pronostiquer",
+            style: "bg-primaire text-white",
+          }
+        : null;
 
   return (
-    <div className="rounded-carte bg-surface shadow-carte overflow-hidden">
-      <div className="p-4">{entete}</div>
+    <article className="pleine-largeur rounded-bloc bg-surface shadow-carte overflow-hidden">
+      {/* ------------------------------------------------------------------
+          Zone haute — le drapeau et le tracé.
 
-      {/* Mini-classement : seulement pour un Grand Prix couru. Avant la course,
-          tout le monde est à zéro et la liste ne dirait rien. */}
-      {gp.resultats_disponibles && gp.classement.length > 0 && (
-        <div className="px-4">
-          <div className="bg-fond h-px" />
-          <ul className="py-1">
-            {gp.classement.map((ligne) => (
-              <MiniLigne
-                key={ligne.profil_id}
-                ligne={ligne}
-                estMoi={ligne.profil_id === profilId}
-              />
-            ))}
-          </ul>
+          La pile de calques est celle du bloc de l'accueil, dans le même
+          ordre : lumière spéculaire, voile calculé du drapeau, surcouche
+          uniforme de 15 %, puis le tracé.
+
+          **Les 15 % demandés ne suffisent pas seuls, et c'est mesuré.** Sur la
+          bande blanche d'un drapeau néerlandais, un trait blanc à 60 % posé
+          sur du blanc à peine assombri reste invisible. Le voile calculé par
+          drapeau (version `0.15.0`) est donc conservé dessous : il ramène cette
+          bande au gris moyen, et le trait y tient alors le même 2,70:1 que sur
+          l'accueil. Aucun texte ne traverse cette zone, la garantie de 3:1 de
+          l'accueil n'a donc rien à protéger ici.
+          ------------------------------------------------------------------ */}
+      <div
+        className={`relative ${drapeau.fond ? "" : "bg-primaire"}`}
+        style={{
+          height: `${HAUTEUR_DRAPEAU}px`,
+          ...(drapeau.fond ? { background: drapeau.fond } : {}),
+        }}
+      >
+        <div
+          aria-hidden="true"
+          className="lueur-haute pointer-events-none absolute inset-0"
+        />
+        <VoileDrapeau voile={drapeau.voile} />
+        {drapeau.fond && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-black/15"
+          />
+        )}
+
+        {/* `boiteLibre` coupe le rapport de forme que le composant pose en
+            ligne : la bande fixe ici les deux dimensions, et c'est le travail
+            de `xMidYMid meet` de mettre chaque circuit à l'échelle dedans.
+            Bakou, 3,4 fois plus large que haut, remplit la largeur ;
+            Zandvoort, presque carré, remplit la hauteur. Chacun garde sa vraie
+            forme au lieu d'être étiré pour occuper la même surface.
+
+            Sans tracé, la zone reste le drapeau seul : un motif de repli
+            laisserait croire que ce Grand Prix se court sur cette forme-là. */}
+        {trace && (
+          <TraceCircuitGp
+            slug={slug}
+            epaisseur={3}
+            boiteLibre
+            className="pointer-events-none absolute inset-0 h-full w-full px-6 py-5 text-white/60"
+          />
+        )}
+      </div>
+
+      {/* ------------------------------------------------------------------
+          Zone basse — les informations, en deux colonnes.
+          ------------------------------------------------------------------ */}
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {/* Le pays n'apparaît que lorsqu'il ajoute quelque chose : « GP
+                Pays Bas » se court aux Pays-Bas, et l'écrire deux fois sur la
+                même carte serait du bruit. Restent les deux Grands Prix
+                américains, où il est une vraie information. */}
+            {pays && (
+              <p className="text-texte-doux truncate text-[11px]">{pays}</p>
+            )}
+            <h2 className="text-texte truncate text-[18px] font-medium">
+              {gp.nom}
+            </h2>
+            {circuit && (
+              <p className="text-texte-doux mt-0.5 truncate text-[11px]">
+                {circuit}
+              </p>
+            )}
+            <span
+              className={`rounded-[10px] mt-2 inline-block px-2.5 py-1 text-[11px] font-medium ${etat.pastille}`}
+            >
+              {etat.libelle}
+            </span>
+          </div>
+
+          <div className="shrink-0 text-right">
+            {date ? (
+              <>
+                <p className="text-primaire text-[32px] leading-none font-medium tracking-[-0.025em]">
+                  {date.jour}
+                </p>
+                <p className="text-texte-doux text-label-sm mt-1">{date.mois}</p>
+              </>
+            ) : (
+              /* Unibet publie parfois un Grand Prix avant d'en annoncer
+                 l'horaire. Aucun chiffre n'est inventé : la colonne le dit. */
+              <p className="text-texte-doux max-w-[9ch] text-[11px] leading-snug">
+                Date à confirmer
+              </p>
+            )}
+
+            {/* Mon score sur ce Grand Prix, sous la date. `mes_points` vaut
+                `null` tant qu'aucun de mes pronostics n'a été noté : « en
+                attente » et « zéro » ne se disent pas pareil (convention de
+                l'étape 6). */}
+            {etat.cle === "termine" && (
+              <p className="text-texte-doux mt-2.5 text-[11px] leading-snug">
+                {gp.mes_points !== null && gp.mes_points !== undefined ? (
+                  <>
+                    <span className="text-primaire block text-[15px] font-medium">
+                      {formaterPoints(gp.mes_points)}
+                    </span>
+                    {gp.mon_rang ? `${gp.mon_rang}e de ce GP` : null}
+                  </>
+                ) : gp.mes_pronostics > 0 ? (
+                  "Pronos pas encore validés"
+                ) : (
+                  "Aucun prono"
+                )}
+              </p>
+            )}
+          </div>
         </div>
-      )}
 
-      {/* Mon score sur ce GP. `mes_points` vaut `null` tant qu'aucun de mes
-          pronostics n'a été noté : « en attente » et « zéro » ne se disent pas
-          pareil (convention de l'étape 6). */}
-      {gp.resultats_disponibles && (
-        <div className="text-texte-doux px-4 pb-1 text-[11px]">
-          {gp.mes_points !== null && gp.mes_points !== undefined
-            ? `Toi : ${formaterPoints(gp.mes_points)}${gp.mon_rang ? ` · ${gp.mon_rang}e de ce GP` : ""}`
-            : gp.mes_pronostics > 0
-              ? "Tes pronostics ne sont pas encore validés."
-              : "Tu n'as rien pronostiqué sur ce Grand Prix."}
-        </div>
-      )}
-
-      {destination && (
-        <Link
-          to={destination}
-          className="pressable min-h-tactile text-primaire flex items-center justify-center gap-1.5 px-4 py-3 text-[14px] font-medium"
-        >
-          {gp.resultats_disponibles ? "Résultats" : "Pronostiquer"}
-          <IconeChevronDroit className="size-3.5" />
-        </Link>
-      )}
-    </div>
+        {action && (
+          <Link
+            to={action.vers}
+            className={`rounded-carte-sm pressable min-h-tactile mt-4 flex w-full items-center justify-center px-5 py-3.5 text-center text-[15px] font-medium ${action.style}`}
+          >
+            {action.libelle}
+          </Link>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -213,6 +276,15 @@ export function CarteGrandPrix({ gp, championnatId, profilId }) {
 /*  Squelette                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * La silhouette de la liste. Elle suit la carte à la hauteur près : sans les
+ * 180px de la zone du drapeau, l'écran sauterait à l'arrivée des données.
+ *
+ * La zone du drapeau y est **grise et non colorée**, contrairement aux aplats de
+ * couleur des autres squelettes de l'app : on ne sait pas encore quel pays
+ * arrive, et le gris est la seule réponse honnête. C'est le même arbitrage que
+ * pour les cartes de championnat de l'accueil.
+ */
 function SqueletteCalendrier() {
   return (
     <div className="flex flex-col gap-3">
@@ -222,20 +294,28 @@ function SqueletteCalendrier() {
           <div className="mt-2.5 h-4 w-28 rounded-full bg-white/25" />
           <div className="mt-2 h-2.5 w-20 rounded-full bg-white/20" />
         </div>
-        <div className="h-10 w-12 rounded-champ bg-white/15" />
+        <div className="rounded-champ h-10 w-12 bg-white/15" />
       </div>
 
-      {[0, 1, 2].map((rang) => (
-        <Carte key={rang}>
-          <div className="flex items-start gap-3">
-            <Pave className="size-11 shrink-0" />
+      {[0, 1].map((rang) => (
+        <div
+          key={rang}
+          className="pleine-largeur rounded-bloc bg-surface shadow-carte overflow-hidden"
+        >
+          <Pave
+            arrondi="rounded-none"
+            className="w-full"
+            style={{ height: `${HAUTEUR_DRAPEAU}px` }}
+          />
+          <div className="flex items-start justify-between gap-3 p-4">
             <div className="min-w-0 flex-1">
               <Barre largeur="w-2/5" />
-              <Barre largeur="w-3/5" hauteur="h-2.5" className="mt-2" />
+              <Barre largeur="w-1/4" hauteur="h-2.5" className="mt-2" />
+              <Pave className="mt-3 h-6 w-24" arrondi="rounded-[10px]" />
             </div>
-            <Pave className="h-6 w-16 shrink-0" arrondi="rounded-[10px]" />
+            <Pave className="h-11 w-12 shrink-0" />
           </div>
-        </Carte>
+        </div>
       ))}
     </div>
   );
@@ -371,12 +451,7 @@ export default function Calendrier() {
                   </div>
                 ) : (
                   grandsPrix.map((gp) => (
-                    <CarteGrandPrix
-                      key={gp.gp_id}
-                      gp={gp}
-                      championnatId={id}
-                      profilId={utilisateur?.id}
-                    />
+                    <CarteGrandPrix key={gp.gp_id} gp={gp} />
                   ))
                 )}
               </div>

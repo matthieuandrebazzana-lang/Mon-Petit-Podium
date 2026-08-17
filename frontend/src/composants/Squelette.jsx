@@ -23,9 +23,14 @@ export function Barre({ largeur = "w-1/2", hauteur = "h-3.5", className = "" }) 
   );
 }
 
-/** Un aplat : pastille, vignette, bloc de score. */
-export function Pave({ className = "", arrondi = "rounded-champ" }) {
-  return <div className={`t-skel-bar ${arrondi} ${className}`} />;
+/** Un aplat : pastille, vignette, bloc de score.
+ *
+ *  Le reste des propriétés est transmis tel quel — c'est ce qui permet à un
+ *  appelant de fixer une hauteur en pixels (`style`) quand elle vient d'une
+ *  constante partagée avec le contenu réel, plutôt que d'une classe qui la
+ *  dupliquerait. */
+export function Pave({ className = "", arrondi = "rounded-champ", ...reste }) {
+  return <div className={`t-skel-bar ${arrondi} ${className}`} {...reste} />;
 }
 
 /**
