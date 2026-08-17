@@ -211,6 +211,47 @@ function fondCss({ couleurs, type, parts }) {
 }
 
 /**
+ * La bande sur laquelle poser le titre d'un écran, en pourcentages de la hauteur
+ * du bloc.
+ *
+ * Un titre centré sur toute la hauteur d'un drapeau tombe là où le hasard des
+ * bandes le met : sur les Pays-Bas, il chevauche la couture rouge/blanc. Posé au
+ * milieu de la bande la plus claire, il tient dans une seule couleur, et le
+ * sous-titre descend naturellement dans la bande suivante.
+ *
+ * **La bande retenue est la plus claire**, et c'est le même critère que celui du
+ * voile : c'est elle qui contraint le contraste, donc c'est elle que le voile a
+ * calibrée pour porter du texte blanc. Choisir la plus sombre placerait le titre
+ * sur une couleur que personne n'a mesurée.
+ *
+ * `null` pour un drapeau **vertical** ou un aplat uni : ses bandes sont
+ * côte à côte, ou il n'y en a qu'une — il n'existe aucune bande horizontale à
+ * viser, et l'appelant garde son centrage habituel.
+ */
+function bandeTitre({ couleurs, type, parts }) {
+  if (type !== "horizontal" || couleurs.length < 2) return null;
+
+  const poids = parts ?? couleurs.map(() => 1);
+  const total = poids.reduce((somme, p) => somme + p, 0);
+
+  let debut = 0;
+  let choisie = null;
+  couleurs.forEach((couleur, i) => {
+    const fin = debut + (poids[i] / total) * 100;
+    const lum = luminance(couleur);
+    if (!choisie || lum > choisie.lum) choisie = { lum, debut, fin };
+    debut = fin;
+  });
+
+  const arrondi = (v) => Math.round(v * 100) / 100;
+  return {
+    debut: arrondi(choisie.debut),
+    fin: arrondi(choisie.fin),
+    centre: arrondi((choisie.debut + choisie.fin) / 2),
+  };
+}
+
+/**
  * Tout ce qu'un bloc a besoin de savoir pour se peindre aux couleurs d'un pays.
  *
  * Le calcul est fait **une fois au chargement du module** et figé : douze
@@ -221,7 +262,11 @@ function fondCss({ couleurs, type, parts }) {
 const APPARENCES = Object.fromEntries(
   Object.entries(DRAPEAUX).map(([slug, drapeau]) => [
     slug,
-    { ...apparence(drapeau.couleurs), fond: fondCss(drapeau) },
+    {
+      ...apparence(drapeau.couleurs),
+      fond: fondCss(drapeau),
+      bandeTitre: bandeTitre(drapeau),
+    },
   ]),
 );
 
@@ -288,6 +333,8 @@ export function drapeauDuGp(slug) {
 export const APPARENCE_REPLI = {
   ...apparence(["#800111"]),
   fond: null,
+  // Un aplat uni n'a pas de bande à viser : l'appelant garde son centrage.
+  bandeTitre: null,
 };
 
 /**

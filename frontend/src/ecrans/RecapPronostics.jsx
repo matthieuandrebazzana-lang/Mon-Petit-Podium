@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import Bouton from "../composants/Bouton.jsx";
+import Compteur from "../composants/Compteur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
@@ -27,7 +28,7 @@ import {
 } from "../lib/pronostics.js";
 import { couleurBloc, couleurMarche, tonalites } from "../lib/couleurs.js";
 import { useDonnees } from "../lib/useDonnees.js";
-import { formaterDepart, formaterPoints } from "../lib/format.js";
+import { blocsRestant, formaterDepart, formaterPoints } from "../lib/format.js";
 import { useFermeture } from "../lib/useFermeture.js";
 
 /* --------------------------------------------------------------------------
@@ -50,6 +51,11 @@ import { useFermeture } from "../lib/useFermeture.js";
    `pleine-largeur` + `coiffe-ecran` laissent la couleur courir jusqu'aux deux
    bords et derrière la Dynamic Island, sans jamais y pousser de texte.
    -------------------------------------------------------------------------- */
+/** Hauteur du hero hors zone sûre. La zone sûre s'ajoute par-dessus, si bien
+ *  que les pourcentages de bande portent sur la même boîte que le dégradé du
+ *  drapeau — c'est ce qui fait tomber le titre pile dans sa bande. */
+const HAUTEUR_HERO = 280;
+
 function Hero({ gp, onRetour }) {
   // Un Grand Prix pas encore chargé garde le bordeaux de la marque : c'est le
   // repli documenté de `DrapeauxGP`, et il passe par le même calcul de voile
@@ -57,12 +63,47 @@ function Hero({ gp, onRetour }) {
   const drapeau = (gp ? drapeauDuGp(slugCircuit(gp.nom)) : null) ?? APPARENCE_REPLI;
   const depart = formaterDepart(gp?.date_course);
 
+  /* Le titre se cale au centre de la bande la plus claire du drapeau (voir
+     `bandeTitre` dans `DrapeauxGP.jsx`) : sur les Pays-Bas, il tient dans le
+     blanc du milieu au lieu de chevaucher la couture rouge/blanc, et la date
+     descend d'elle-même dans le bleu.
+
+     **Le calage est borné, et cette borne n'est pas cosmétique.** Trois
+     drapeaux ont leur bande claire tout en bas (Azerbaïdjan, Singapour,
+     Qatar) : centré dessus, le titre sortirait du hero. Le `clamp` le retient
+     entre la rangée de retour et le bas du bloc — il reste dans sa bande quand
+     c'est possible, et s'en approche au plus près quand ça ne l'est pas.
+     Sans bande visée (drapeau vertical, aplat uni), la moitié du bloc est le
+     repli, c'est-à-dire exactement le centrage d'avant. */
+  const centreTitre = drapeau.bandeTitre?.centre ?? 50;
+  const hautTitre = `clamp(calc(var(--spacing-safe-top) + 106px), ${centreTitre}%, calc(100% - 110px))`;
+
+  /* La date descend au **bas** de la bande visée, donc dans la bande suivante :
+     sur les Pays-Bas, le nom tient dans le blanc et la date passe dans le bleu.
+     Laissée dans le flux sous le titre, elle retombait à cheval sur la couture.
+
+     Les deux bornes font tout le travail dans les cas limites. La borne basse
+     est calculée **depuis la position du titre** : quel que soit le rabattement
+     que le `clamp` ci-dessus lui a imposé, la date reste dessous. La borne haute
+     la retient dans le bloc pour les trois drapeaux dont la bande claire finit
+     à 100 % (Azerbaïdjan, Singapour, Qatar). Sans bande visée, `fin` vaut le
+     centre : la borne basse l'emporte, et la date reprend exactement la place
+     qu'elle occupait dans le flux. */
+  const finBande = drapeau.bandeTitre?.fin ?? centreTitre;
+  const hautDate = `clamp(calc(${hautTitre} + 42px), ${finBande}%, calc(100% - 42px))`;
+
   return (
     <div
-      className={`pleine-largeur coiffe-ecran rounded-b-bloc shadow-aplat relative overflow-hidden px-4 pb-6 ${
+      /* Correction : aucun arrondi en haut ni sur les côtés. La couleur touche
+         les deux bords et court derrière la Dynamic Island ; seul le bas garde
+         les 24px du design system, pour la transition vers le contenu. */
+      className={`pleine-largeur coiffe-ecran rounded-t-none rounded-b-bloc shadow-aplat relative overflow-hidden px-4 ${
         drapeau.fond ? "" : "bg-primaire"
       }`}
-      style={drapeau.fond ? { background: drapeau.fond } : undefined}
+      style={{
+        height: `calc(var(--spacing-safe-top) + ${HAUTEUR_HERO}px)`,
+        ...(drapeau.fond ? { background: drapeau.fond } : null),
+      }}
     >
       {/* La lumière spéculaire d'/apple-design §12 : un aplat plein est une
           surface morte, ce galbe très doux lui donne une source lumineuse. */}
@@ -86,10 +127,14 @@ function Hero({ gp, onRetour }) {
         />
       )}
 
-      <div className="relative">
-        {/* La rangée de retour : c'est la seule sortie de l'écran, elle doit
-            donc nommer sa destination (/apple-design §16). Les marges
-            négatives lui rendent ses 44px sans décaler son calage visuel. */}
+      {/* La rangée de navigation : sortie à gauche, nom de l'écran à droite,
+          sur une seule ligne. Les deux tenaient l'un sous l'autre tant que le
+          titre suivait dans le flux ; maintenant qu'il est calé sur une bande,
+          empiler trois éléments en haut le pousserait à le rejoindre. C'est
+          aussi la disposition d'une barre de navigation iOS (/apple-design §16).
+          Les marges négatives rendent au bouton ses 44px sans décaler son
+          calage visuel. */}
+      <div className="relative flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={onRetour}
@@ -100,28 +145,38 @@ function Hero({ gp, onRetour }) {
         </button>
 
         <p
-          className={`text-label-sm mt-1 inline-block rounded-full px-2.5 py-1 uppercase ${drapeau.pastille} ${drapeau.texte}`}
+          className={`text-label-sm shrink-0 rounded-full px-2.5 py-1 uppercase ${drapeau.pastille} ${drapeau.texte}`}
         >
           Récap
         </p>
+      </div>
 
-        {/* Le nom du Grand Prix est le titre de la page : il prend l'échelle
-            des titres de la section 5, et son crénage négatif avec.
+      {/* Le nom du Grand Prix est le titre de la page : il prend l'échelle
+          des titres de la section 5, et son crénage négatif avec.
 
-            Sur un drapeau à bandes, il en traverse la couture — d'où l'ombre
-            portée, qui lui garde son contour des deux côtés. Un aplat uni n'en
-            reçoit aucune : `ombreTexte` est vide pour lui. */}
+          Sur un drapeau à bandes, il en traverse la couture — d'où l'ombre
+          portée, qui lui garde son contour des deux côtés. Un aplat uni n'en
+          reçoit aucune : `ombreTexte` est vide pour lui.
+
+          Le titre est remonté d'une demi-hauteur : c'est **son** centre qui
+          doit tomber au centre de la bande, pas le haut de sa boîte. */}
+      <div
+        className="absolute inset-x-0 -translate-y-1/2 px-4"
+        style={{ top: hautTitre }}
+      >
         <h1
-          className={`text-titre-lg mt-3 line-clamp-2 text-center ${drapeau.texte} ${drapeau.ombreTexte}`}
+          className={`text-titre-lg line-clamp-2 text-center ${drapeau.texte} ${drapeau.ombreTexte}`}
         >
           {gp?.nom ?? "Grand Prix"}
         </h1>
-        <p
-          className={`mt-1.5 text-center text-[13px] ${drapeau.texteDoux} ${drapeau.ombreTexte}`}
-        >
-          {depart.heure ? `${depart.jour} · Départ ${depart.heure}` : depart.jour}
-        </p>
       </div>
+
+      <p
+        className={`absolute inset-x-0 px-4 text-center text-[13px] ${drapeau.texteDoux} ${drapeau.ombreTexte}`}
+        style={{ top: hautDate }}
+      >
+        {depart.heure ? `${depart.jour} · Départ ${depart.heure}` : depart.jour}
+      </p>
     </div>
   );
 }
@@ -146,7 +201,7 @@ function CarteStatut({ aPronostique, juste, ferme }) {
   const titre = aPronostique
     ? juste
       ? "Pronos enregistrés !"
-      : "Tes pronos sont en place"
+      : "Tes pronos sont validés"
     : "Tu n'as pas encore pronostiqué";
 
   // Le sous-titre dit le geste possible, pas l'état déjà lu dans le titre.
@@ -190,8 +245,43 @@ function CarteStatut({ aPronostique, juste, ferme }) {
 }
 
 /* --------------------------------------------------------------------------
-   Zone 3 — le compte à rebours de fermeture (règle 4.3).
+   Zone 3 — le compte à rebours de fermeture (règle 4.3), en horloge.
+
+   Une phrase (« 5j 23h 53min ») demande d'être lue en entier pour en extraire
+   trois nombres. Trois tuiles sombres les posent chacun sous son unité, et se
+   lisent d'un coup d'œil. C'est le même arbitrage que les deux cases de statut
+   du bloc d'accueil.
+
+   **La carte qui les porte prend le beige du fond**, pas le blanc des autres
+   cartes : sur une surface blanche, trois aplats presque noirs se découpent
+   comme des trous. Sur le beige ils se lisent comme des objets posés, et c'est
+   `shadow-bloc` qui dit alors que la carte est une carte.
    -------------------------------------------------------------------------- */
+
+/** Une tuile : le nombre, son unité dessous.
+ *
+ *  **Écart assumé sur la graisse** — la section 5 réserve la graisse 700 aux
+ *  numéros de voiture ; ces chiffres l'emploient, sur demande explicite. C'est
+ *  la seule dérogation de l'écran, et elle est bornée à ces trois tuiles.
+ *
+ *  Le rayon de 12px n'est pas dans l'échelle de la section 5 non plus (14px est
+ *  le plus petit). Il est demandé, et il reste dans l'esprit : plus l'élément
+ *  est petit, plus le rayon l'est. */
+function BlocTemps({ valeur, label, anime }) {
+  return (
+    <div className="bg-texte shadow-carte flex flex-1 flex-col items-center gap-1.5 rounded-[12px] py-3.5">
+      <span className="text-[30px] leading-none font-bold tracking-[-0.02em] text-white tabular-nums">
+        {/* Le nombre se remet en place à chaque changement (transitions-dev 02,
+            déjà installé pour le compteur de bonus). Les secondes en sont
+            exclues : une animation par seconde n'accuse plus rien, elle
+            tourne en boucle. */}
+        {anime ? <Compteur valeur={valeur} /> : valeur}
+      </span>
+      <span className="text-label-sm text-white/60 uppercase">{label}</span>
+    </div>
+  );
+}
+
 function CarteFermeture({ etat, aPronostique, onModifier }) {
   // Trois états, et ils ne disent pas la même chose. Un Grand Prix dont Unibet
   // n'a pas annoncé l'horaire **reste ouvert** — c'est la règle tenue aux trois
@@ -199,17 +289,40 @@ function CarteFermeture({ etat, aPronostique, onModifier }) {
   // « 0s » serait faux dans les deux sens.
   const inconnue = !etat.ferme && !etat.texte;
   const label = etat.ferme ? "Pronostics" : inconnue ? "Départ" : "Fermeture dans";
-  const valeur = etat.ferme ? "Fermés" : inconnue ? "À confirmer" : etat.texte;
+  const blocs = etat.ferme ? null : blocsRestant(etat.restant);
 
   return (
-    <div className="rounded-bloc bg-surface shadow-bloc p-5">
+    <div className="rounded-bloc bg-fond shadow-bloc p-5">
       <p className="text-label text-texte-doux text-center uppercase">{label}</p>
-      <p className="text-score text-primaire mt-2 text-center">
-        {/* Le décompte change toutes les secondes dans la dernière heure :
-            l'échange en place (transitions-dev 04) évite le clignotement que
-            donnerait un simple remplacement de texte. */}
-        <TexteEchange valeur={valeur} />
-      </p>
+
+      {blocs ? (
+        <div className="mt-3 flex items-start justify-center gap-2">
+          {blocs.map((bloc, rang) => (
+            <Fragment key={bloc.cle}>
+              {rang > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="text-texte-doux pt-4 text-[22px] leading-none font-medium"
+                >
+                  :
+                </span>
+              )}
+              <BlocTemps
+                valeur={bloc.valeur}
+                label={bloc.label}
+                anime={bloc.anime}
+              />
+            </Fragment>
+          ))}
+        </div>
+      ) : (
+        <p className="text-score text-primaire mt-2 text-center">
+          {/* Les deux états sans décompte gardent l'échange en place
+              (transitions-dev 04) : le passage de l'horloge à « Fermés » se
+              produit sous les yeux du joueur, à cinq minutes du départ. */}
+          <TexteEchange valeur={etat.ferme ? "Fermés" : "À confirmer"} />
+        </p>
+      )}
 
       {!etat.ferme && (
         <Bouton variante="principal" className="mt-4" onClick={onModifier}>
@@ -290,12 +403,18 @@ function SqueletteRecap() {
         </div>
       </div>
 
-      {/* Les deux cartes blanches, elles, prennent les primitives partagées :
-          la couleur des squelettes ne s'écrit qu'à un seul endroit. Le bouton
-          garde sa hauteur tactile, sans quoi l'écran sauterait de 44px. */}
-      <div className="rounded-bloc bg-surface shadow-bloc p-5">
+      {/* La carte du compte à rebours garde son beige et la silhouette de ses
+          trois tuiles : sans elles, l'écran sauterait d'une soixantaine de
+          pixels à l'arrivée des données. Les primitives partagées portent le
+          gris, qui ne s'écrit toujours qu'à un seul endroit. Le bouton garde
+          sa hauteur tactile, pour la même raison. */}
+      <div className="rounded-bloc bg-fond shadow-bloc p-5">
         <Barre largeur="w-24" hauteur="h-2.5" className="mx-auto" />
-        <Barre largeur="w-40" hauteur="h-7" className="mx-auto mt-3" />
+        <div className="mt-3 flex gap-2">
+          {[0, 1, 2].map((rang) => (
+            <Pave key={rang} className="h-[72px] flex-1" arrondi="rounded-[12px]" />
+          ))}
+        </div>
         <Pave className="h-tactile mt-4 w-full" arrondi="rounded-carte-sm" />
       </div>
 
@@ -453,7 +572,7 @@ export default function RecapPronostics() {
                       <Separateur />
                       <div className="flex items-baseline justify-between gap-3 pt-0.5">
                         <span className="text-label text-texte-doux uppercase">
-                          Total si tout tombe
+                          Total de points disponibles
                         </span>
                         <span className="text-score text-primaire">
                           {formaterPoints(potentiel)}

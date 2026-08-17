@@ -76,13 +76,57 @@ export function etatFermeture(iso, maintenant = Date.now()) {
   return { ferme: false, restant, texte: formaterRestant(restant) };
 }
 
+/** Le temps restant découpé en unités. Une seule source pour les deux
+ *  présentations : la phrase et les blocs du compte à rebours. */
+export function decouperRestant(millisecondes) {
+  const total = Math.max(0, Math.floor(millisecondes / 1000));
+  return {
+    jours: Math.floor(total / 86400),
+    heures: Math.floor((total % 86400) / 3600),
+    minutes: Math.floor((total % 3600) / 60),
+    secondes: total % 60,
+  };
+}
+
+/**
+ * Le compte à rebours en trois blocs, pour l'affichage horloge de l'écran
+ * récapitulatif. `null` tant que la fermeture n'est pas datée.
+ *
+ * **Trois blocs, toujours, mais pas toujours les trois mêmes unités.** Au-delà
+ * d'une heure ce sont les jours, les heures et les minutes. En deçà, l'horloge
+ * glisse d'un cran vers les secondes : à quinze minutes du départ, un bloc
+ * « jours » figé à zéro ne dit rien, et un compte à rebours dont la plus petite
+ * unité ne bouge plus qu'une fois par minute paraît arrêté. C'est déjà la règle
+ * de `formaterRestant`, qui passe à « 32min 10s » dans la dernière heure.
+ *
+ * `anime` dit quels blocs rejouent le mouvement à chaque changement : les
+ * secondes en sont exclues, une animation par seconde étant une animation
+ * perpétuelle, pas un accusé de changement.
+ */
+export function blocsRestant(millisecondes) {
+  if (millisecondes === null || millisecondes === undefined) return null;
+
+  const { jours, heures, minutes, secondes } = decouperRestant(millisecondes);
+  const pad = (n) => String(n).padStart(2, "0");
+
+  if (jours === 0 && heures === 0) {
+    return [
+      { cle: "h", valeur: pad(heures), label: "Heures", anime: true },
+      { cle: "m", valeur: pad(minutes), label: "Minutes", anime: true },
+      { cle: "s", valeur: pad(secondes), label: "Secondes", anime: false },
+    ];
+  }
+
+  return [
+    { cle: "j", valeur: pad(jours), label: "Jours", anime: true },
+    { cle: "h", valeur: pad(heures), label: "Heures", anime: true },
+    { cle: "m", valeur: pad(minutes), label: "Minutes", anime: true },
+  ];
+}
+
 /** « 2j 14h 32min », puis « 32min 10s » dans la dernière heure. */
 export function formaterRestant(millisecondes) {
-  const total = Math.max(0, Math.floor(millisecondes / 1000));
-  const jours = Math.floor(total / 86400);
-  const heures = Math.floor((total % 86400) / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const secondes = total % 60;
+  const { jours, heures, minutes, secondes } = decouperRestant(millisecondes);
 
   if (jours > 0) return `${jours}j ${heures}h ${minutes}min`;
   if (heures > 0) return `${heures}h ${minutes}min`;

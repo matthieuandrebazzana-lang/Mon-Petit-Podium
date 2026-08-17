@@ -2054,6 +2054,82 @@ Les points affichés restent ceux que le pronostic rapportera **s'il tombe** (r�
 | Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique » ; entrée échelonnée conservée ; effets de profondeur décoratifs |
 | `npm run build` | passe, 130 modules, version `0.17.0` dans le bundle |
 
+---
+
+**Récap — hero plein cadre, titre dans la bande du drapeau, compte à rebours en horloge** (version `0.18.0`)
+
+Cinq corrections ciblées sur l'écran récapitulatif, relevées à l'œil sur le rendu de la version précédente. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x` et `0.17.0`).
+
+*Correction 1 — le hero touche les trois bords.* Aucun arrondi en haut ni sur les côtés, les 24px du design system conservés en bas pour la transition vers le contenu. La composition portait déjà `pleine-largeur` et `coiffe-ecran` ; `rounded-t-none` rend l'intention explicite plutôt que de la laisser reposer sur l'absence d'une classe, qu'un ajout ultérieur suffirait à défaire.
+
+---
+
+***Correction 2 — le nom du Grand Prix se pose dans une bande, pas au milieu du drapeau.*** C'est le point de la version.
+
+Centré sur toute la hauteur du hero, le titre tombait là où le hasard des bandes le mettait : sur les Pays-Bas, à cheval sur la couture rouge/blanc, avec une moitié de lettre sur chaque couleur. `bandeTitre` est ajouté à `composants/DrapeauxGP.jsx` et rend, pour chaque drapeau **horizontal**, les bornes de la bande à viser en pourcentages de la hauteur du bloc.
+
+**La bande retenue est la plus claire, et ce n'est pas un choix esthétique** : c'est déjà elle qui détermine le voile depuis la version `0.15.0`, donc la seule dont on ait mesuré qu'elle porte du texte blanc à 3:1. Viser la plus sombre poserait le titre sur une couleur que personne n'a éprouvée.
+
+Un drapeau **vertical** (Italie, Bahreïn, Mexique) ou un aplat uni rend `null` : ses bandes sont côte à côte, il n'existe aucune bande horizontale à viser, et l'écran garde son centrage habituel. Le repli bordeaux aussi — le bloc « Grand Prix hors table » est donc rigoureusement celui d'avant.
+
+**Le calage est borné par deux `clamp`, et ces bornes ne sont pas de la prudence décorative** — sans elles, trois des douze drapeaux cassent la composition :
+
+| Borne | Ce qu'elle empêche |
+|---|---|
+| Titre ≥ `safe + 106px` | le titre remonterait dans la rangée de retour sur un drapeau à bande claire en haut |
+| Titre ≤ `100% - 110px` | **Azerbaïdjan (bande verte en bas), Singapour et Qatar** : centré sur leur bande, le titre sortirait du hero |
+| Date ≥ `titre + 42px` | la date passerait **au-dessus** du titre dès que celui-ci est rabattu par la borne précédente |
+| Date ≤ `100% - 42px` | la date sortirait du bloc pour les trois mêmes drapeaux, dont la bande claire finit à 100 % |
+
+**La date est ancrée au bas de la bande visée, et non laissée dans le flux sous le titre.** C'est ce qui la fait tomber dans la bande *suivante* — le bleu, sur les Pays-Bas. Dans le flux, elle retombait à cheval sur la couture, à 205px pour une frontière à 218px. Sans bande visée, `fin` vaut le centre : la borne basse l'emporte alors, et la date reprend exactement la place qu'elle occupait — un seul jeu d'expressions couvre les treize cas, sans branche.
+
+La borne basse de la date est calculée **depuis la position du titre**, `clamp` imbriqué dans le `calc` : quel que soit le rabattement imposé au titre, la date reste dessous. La recalculer à partir du pourcentage de bande aurait été fausse dans exactement les cas où la borne joue.
+
+*Le hero prend donc une hauteur fixe* — `HAUTEUR_HERO = 280px`, plus la zone sûre. C'est ce qui donne un sens aux pourcentages : la boîte du bloc est celle-là même sur laquelle le dégradé du drapeau s'étale, si bien que « 50 % de la hauteur » désigne le même endroit pour le titre et pour la bande blanche. La zone sûre s'ajoute aux deux à la fois.
+
+*Conséquence sur la rangée du haut* — le bouton de retour et la pastille « Récap » passent **sur une seule ligne**, la sortie à gauche et le nom de l'écran à droite. Ils tenaient l'un sous l'autre tant que le titre suivait dans le flux ; empiler trois éléments au-dessus d'un titre désormais calé sur une bande l'aurait forcé à les rejoindre. C'est aussi la disposition d'une barre de navigation iOS (`/apple-design` §16), et la sortie garde ses 44px et son retour à l'appui.
+
+---
+
+***Correction 4 — le compte à rebours devient une horloge.***
+
+« 5j 23h 53min » demande d'être lu en entier pour en extraire trois nombres. Trois tuiles sombres (`#1A1A1A`, rayon 12px, ombre de carte) posent chacune son nombre sous son unité, séparées par un « : » gris décoratif. **La carte qui les porte prend le beige du fond** et non le blanc des autres cartes : sur du blanc, trois aplats presque noirs se découpent comme des trous ; sur le beige ils se lisent comme des objets posés, et c'est `shadow-bloc` qui dit alors que la carte est une carte.
+
+**Deux écarts au design system, tous deux demandés explicitement et tous deux bornés à ces trois tuiles** : la graisse **700**, que la section 5 réserve aux numéros de voiture, et le rayon de **12px**, absent de l'échelle (14px est le plus petit). Le second reste dans l'esprit de la section — plus l'élément est petit, plus son rayon l'est.
+
+**Trois blocs, toujours, mais pas toujours les trois mêmes unités.** Au-delà d'une heure : jours, heures, minutes. En deçà, l'horloge glisse d'un cran vers les secondes. Ce n'est pas une liberté prise avec la demande : à quinze minutes du départ, un bloc « jours » figé à zéro ne dit rien, et un compte à rebours dont la plus petite unité ne bouge qu'une fois par minute paraît arrêté — au moment précis où il compte le plus. C'est déjà la règle de `formaterRestant`, qui passe à « 32min 10s » dans la dernière heure, et celle de `useFermeture`, qui bat à la seconde à partir de là.
+
+`blocsRestant` et `decouperRestant` sont ajoutés à `lib/format.js`, où vit déjà toute la mise en forme. `formaterRestant` est réécrite par-dessus `decouperRestant` : les deux présentations du même compte à rebours ne peuvent pas diverger.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Les nombres se remettent en place par *number pop-in* (transitions-dev 02), déjà installé pour le compteur de bonus de la maquette 09, et réutilisé tel quel via `composants/Compteur.jsx`. **Les secondes en sont exclues** : une animation par seconde n'accuse plus un changement, elle tourne en boucle — c'est la règle « le mouvement doit être motivé » du skill Taste. Les deux états sans décompte (« Fermés », « À confirmer ») gardent l'échange en place (transitions-dev 04) : le passage de l'horloge à « Fermés » se produit sous les yeux du joueur, à cinq minutes du départ.
+
+*Le squelette suit la nouvelle silhouette* : carte beige, trois tuiles de 72px, bouton à sa hauteur tactile. Sans elles, l'écran sauterait d'une soixantaine de pixels à l'arrivée des données — le défaut déjà corrigé sur les cartes de championnat en version `0.14.0`.
+
+---
+
+*Corrections 3 et 5 — deux libellés.* « Tes pronos sont en place » devient « Tes pronos sont validés » ; « Total si tout tombe » devient « Total de points disponibles ». La célébration « Pronos enregistrés ! » au retour de l'écran de saisie est **conservée** : elle ne s'affiche qu'avec `state.enregistre`, et l'arrivée à froid dit bien l'état, sans rien célébrer.
+
+*Apport d'`/apple-design`* — la rangée de navigation répond aux quatre questions du wayfinding (§16) sur une seule ligne ; le hero est rendu **même en attente et même en erreur**, une barre de retour qui disparaîtrait pendant le réveil de Supabase enfermerait le joueur ; les tuiles sont des surfaces de lecture et non des cibles, donc sans retour tactile ; le voile, la lueur et les séparateurs restent `aria-hidden`.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage pré-rempli) : **335 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Découpage du temps | jours, heures, minutes, secondes justes ; **`formaterRestant` rend exactement la même chose qu'avant** ; valeurs paddées à deux chiffres ; aucun bloc sans fermeture datée ; zéro reste lisible (`00:00:00`) |
+| Glissement des unités | J/H/M au-delà d'une heure, **H/M/S en deçà** ; **les secondes ne sont jamais animées**, les deux autres le sont |
+| Bande visée | Pays-Bas → la bande blanche du milieu (33,33–66,67 %), Espagne → la bande jaune deux fois plus large (25–75 %), Qatar → la bande blanche du bas (75–100 %) ; **pour chacun des cinq drapeaux horizontaux, la bande visée est bien la plus claire**, vérifié par le calcul ; drapeau vertical, aplat uni et repli → aucune bande, centrage conservé |
+| **Géométrie, simulée comme le ferait le moteur de rendu** | les deux `clamp` évalués pour les **treize** fonds, **trois zones sûres** (0, 47, 59px) et **deux hauteurs de titre** (une et deux lignes) : le titre passe toujours sous la rangée de retour, la date reste toujours sous le titre, et tout tient dans le hero — **78 contrôles** ; le titre tombe dans sa bande chaque fois que la borne le permet |
+| Contraste | chiffres blancs sur la tuile (17,4:1), libellé à 60 % sur la tuile (6,6:1), tuile détachée du beige de la carte, bordeaux toujours lisible sur la carte beige |
+| Hero | pleine largeur, sous la zone sûre, **`rounded-t-none` et arrondi conservé en bas seulement**, hauteur assise sur la zone sûre, drapeau en dégradé, voile et surcouche de la `0.16.1` conservés |
+| Titre et date | titre calé par `clamp` et remonté d'une demi-hauteur, `<h1>` à l'échelle des titres, centré, ombre portée conservée sur drapeau à bandes ; **date ancrée à 66,67 % sur les Pays-Bas, donc dans le bleu** ; Qatar → date retenue dans le bloc ; repli → date à sa place d'avant |
+| Navigation | sortie nommée « Accueil » à 44px, pastille « Récap » sur la même ligne |
+| Horloge | carte beige, **trois tuiles sombres**, rayon 12px, graisse 700, chiffres blancs, libellés en gris clair letterspacés, **deux séparateurs décoratifs**, *number pop-in* branché, **plus aucune phrase de compte à rebours** |
+| États | GP fermé → aucune tuile, « Fermés », aucun bouton de modification, hero toujours rendu ; sans horaire → **reste ouvert**, aucune durée fabriquée, « À confirmer » ; aucun pronostic → carte amber, **encre foncée imposée par `tonalites`**, aucun total à zéro, horloge quand même ; retour de saisie → célébration conservée |
+| Libellés | « Tes pronos sont validés » et « Total de points disponibles » servis, **les deux anciens absents** ; total juste (**792 pts**) |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », sur les sept cas rendus |
+| CSS de production | `border-radius:12px`, `bg-texte`, `text-white/60`, `font-bold`, `text-[30px]` et `tabular-nums` bien générés |
+| `npm run build` | passe, 130 modules, version `0.18.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2125,6 +2201,8 @@ Points non couverts, à traiter le moment venu :
 - **Marchés obligatoires liés au nom Unibet** — le vainqueur et le podium sont reconnus par les slugs `vainqueur` et `podium`, en dur à **trois** endroits depuis l'étape 6 : `backend/app/api/routes/pronostics.py`, `backend/app/calcul/points.py` et `frontend/src/lib/pronostics.js`. Si Unibet renomme un de ces marchés, la saisie s'arrête proprement en le disant, mais **les trois constantes doivent être corrigées ensemble**.
 - **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
+
+**Trois points depuis la version `0.18.0`**, tous sur l'écran Récap. **La hauteur du hero** — 280px plus la zone sûre, soit près de 330px sur un iPhone à encoche : c'est la valeur qui donne au titre la place de tomber dans sa bande sans heurter la rangée de retour, mais elle ne se juge qu'au pouce. Si l'écran demande trop de défilement avant la carte de statut, c'est `HAUTEUR_HERO` (`frontend/src/ecrans/RecapPronostics.jsx`) qu'il faut baisser — **et il faut alors revérifier les deux bornes des `clamp`**, calibrées sur cette hauteur ; la simulation du jeu de contrôles les éprouve pour trois zones sûres et deux hauteurs de titre, il suffit de la rejouer. Ensuite : **le calage du titre dans sa bande**, à confronter aux vrais drapeaux — les Pays-Bas sont le cas d'école, l'Azerbaïdjan, Singapour et le Qatar les trois cas où la borne basse rabat le titre hors de sa bande, ce qui est voulu mais se voit. Enfin : **la lisibilité des tuiles sombres** sur la carte beige, et surtout le glissement des unités à T-1h, qui fait passer le premier bloc de « Jours » à « Heures » — un changement d'unité sous les yeux du joueur, à vérifier une fois en conditions réelles.
 
 **Deux points depuis la version `0.17.0`**, tous deux sur l'écran Récap et tous deux liés au hero. **Le bouton de retour n'est plus collant** : il vit dans le hero, qui porte un drapeau qu'une barre translucide ne saurait pas reproduire, et il défile donc avec la page. L'écran tient en quatre blocs et le défilement est court — mais c'est exactement le genre de chose qui se juge au pouce, sur un appareil réel : si sortir de l'écran demande de remonter, la réponse est d'apprendre à `EnTeteEcran` à rendre un fond en `style` plutôt qu'en classe, pas de recoller le hero entier. Ensuite : **le hero coiffe la zone sûre** (`pleine-largeur` + `coiffe-ecran`), donc la couleur du drapeau court derrière la Dynamic Island — à vérifier en portrait **et en paysage** sur un iPhone à encoche, où la zone sûre latérale n'est plus nulle. Point secondaire : le nom du Grand Prix est en `line-clamp-2` et non tronqué sur une ligne, « GP Émirats arabes unis » est le cas à confronter à un iPhone étroit.
 
