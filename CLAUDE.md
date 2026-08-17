@@ -2120,7 +2120,7 @@ La borne basse de la date est calculée **depuis la position du titre**, `clamp`
 | Bande visée | Pays-Bas → la bande blanche du milieu (33,33–66,67 %), Espagne → la bande jaune deux fois plus large (25–75 %), Qatar → la bande blanche du bas (75–100 %) ; **pour chacun des cinq drapeaux horizontaux, la bande visée est bien la plus claire**, vérifié par le calcul ; drapeau vertical, aplat uni et repli → aucune bande, centrage conservé |
 | **Géométrie, simulée comme le ferait le moteur de rendu** | les deux `clamp` évalués pour les **treize** fonds, **trois zones sûres** (0, 47, 59px) et **deux hauteurs de titre** (une et deux lignes) : le titre passe toujours sous la rangée de retour, la date reste toujours sous le titre, et tout tient dans le hero — **78 contrôles** ; le titre tombe dans sa bande chaque fois que la borne le permet |
 | Contraste | chiffres blancs sur la tuile (17,4:1), libellé à 60 % sur la tuile (6,6:1), tuile détachée du beige de la carte, bordeaux toujours lisible sur la carte beige |
-| Hero | pleine largeur, sous la zone sûre, **`rounded-t-none` et arrondi conservé en bas seulement**, hauteur assise sur la zone sûre, drapeau en dégradé, voile et surcouche de la `0.16.1` conservés |
+| Hero | pleine largeur, sous la zone sûre, arrondi haut retiré (le bas suivra en `0.18.1`), hauteur assise sur la zone sûre, drapeau en dégradé, voile et surcouche de la `0.16.1` conservés |
 | Titre et date | titre calé par `clamp` et remonté d'une demi-hauteur, `<h1>` à l'échelle des titres, centré, ombre portée conservée sur drapeau à bandes ; **date ancrée à 66,67 % sur les Pays-Bas, donc dans le bleu** ; Qatar → date retenue dans le bloc ; repli → date à sa place d'avant |
 | Navigation | sortie nommée « Accueil » à 44px, pastille « Récap » sur la même ligne |
 | Horloge | carte beige, **trois tuiles sombres**, rayon 12px, graisse 700, chiffres blancs, libellés en gris clair letterspacés, **deux séparateurs décoratifs**, *number pop-in* branché, **plus aucune phrase de compte à rebours** |
@@ -2129,6 +2129,20 @@ La borne basse de la date est calculée **depuis la position du titre**, `clamp`
 | Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », sur les sept cas rendus |
 | CSS de production | `border-radius:12px`, `bg-texte`, `text-white/60`, `font-bold`, `text-[30px]` et `tabular-nums` bien générés |
 | `npm run build` | passe, 130 modules, version `0.18.0` dans le bundle |
+
+---
+
+**Hero du récap — une image, plus un widget** (version `0.18.1`)
+
+Correction de la version précédente, relevée à l'œil. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, pour la raison désormais habituelle.
+
+*Le défaut* — la version `0.18.0` avait retiré les arrondis du haut et des côtés mais **gardé les 24px du bas et l'élévation `shadow-aplat`**. Le drapeau se lisait donc encore comme un bloc du design system posé sur le fond : un rectangle aux coins ronds, avec un halo sur le beige juste dessous. Ce n'est pas ce qu'est ce hero — c'est l'**image d'ouverture de l'écran**, elle doit toucher les quatre bords.
+
+*La correction* — aucun arrondi nulle part (`rounded-none`), aucune ombre. **Les deux sautent ensemble, et c'est le point à ne pas défaire à moitié** : un aplat sans ombre mais aux coins arrondis flotterait encore, une ombre sans arrondi ne ferait que souligner une coupe franche. C'est aussi ce qui distingue ce hero de l'en-tête coloré d'un championnat (version `0.12.0`), qui reste un bloc — arrondi et élevé — parce qu'il n'a jamais prétendu être autre chose.
+
+Rien d'autre ne bouge : `pleine-largeur` et `coiffe-ecran` étaient déjà en place, la couleur courait déjà jusque derrière la Dynamic Island, et le calage du titre sur la bande du drapeau, le voile calculé et la surcouche uniforme de la `0.16.1` sont conservés tels quels. Le contenu de l'écran reprend franchement sous l'image, à 12px, comme tous les blocs entre eux.
+
+*Vérifié* — rendu hors navigateur : **335 contrôles passent**, dont trois refaits sur le hero — aucun arrondi (ni `rounded-b-bloc`, ni `rounded-carte`, ni aucun autre), **aucune classe d'ombre**, et le drapeau, le voile, la surcouche, le titre calé, la date ancrée et l'horloge inchangés. `npm run build` passe, 130 modules, version `0.18.1` dans le bundle.
 
 ### Bugs connus
 

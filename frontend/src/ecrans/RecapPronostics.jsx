@@ -94,10 +94,18 @@ function Hero({ gp, onRetour }) {
 
   return (
     <div
-      /* Correction : aucun arrondi en haut ni sur les côtés. La couleur touche
-         les deux bords et court derrière la Dynamic Island ; seul le bas garde
-         les 24px du design system, pour la transition vers le contenu. */
-      className={`pleine-largeur coiffe-ecran rounded-t-none rounded-b-bloc shadow-aplat relative overflow-hidden px-4 ${
+      /* **Aucun arrondi nulle part, et aucune ombre.** Ce hero n'est pas un
+         bloc du design system posé sur le fond : c'est l'image d'ouverture de
+         l'écran. Elle touche les quatre bords — les deux côtés, le haut derrière
+         la Dynamic Island, et le bas où le contenu la reprend franchement.
+
+         Les 24px du bas et l'élévation `shadow-aplat` en faisaient un widget :
+         un rectangle détaché, avec un halo sur le beige en dessous. C'est
+         exactement ce que la section 5 demande pour un bloc, et exactement ce
+         qu'il ne faut pas pour une image de couverture. Les deux sautent
+         ensemble — un aplat sans ombre mais aux coins arrondis flotterait
+         encore, une ombre sans arrondi soulignerait une coupe franche. */
+      className={`pleine-largeur coiffe-ecran relative overflow-hidden rounded-none px-4 ${
         drapeau.fond ? "" : "bg-primaire"
       }`}
       style={{
