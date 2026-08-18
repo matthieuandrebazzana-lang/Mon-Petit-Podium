@@ -609,6 +609,18 @@
   --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: ease-in-out;
   --ease-out: ease-out;
+  /* Ease-in-out **fort**, ajouté par la passe /animate. Les easings intégrés
+     de CSS sont trop mous pour un mouvement à l'écran : `ease-in-out` démarre
+     et s'arrête sans intention. Celui-ci est la courbe canonique d'Emil
+     Kowalski pour un élément qui se déplace ou se retourne sur place — le
+     chevron d'un accordéon, une bascule.
+
+     C'est le seul jeton d'easing que la passe ajoute, et c'est délibéré :
+     `--ease-smooth-out` ci-dessus **est déjà** un ease-out fort, à un cheveu
+     de la valeur canonique (0.22/0.36 contre 0.23/0.32, indiscernables à
+     l'œil). En poser un second à côté serait forker le vocabulaire du projet
+     au lieu de l'étendre. */
+  --ease-in-out-fort: cubic-bezier(0.77, 0, 0.175, 1);
   /* Ressort léger — l'équivalent CSS d'un amortissement ~0,8 d'/apple-design §4.
      Il ne s'emploie que là où un geste a précédé le mouvement : le relâchement
      d'un appui, l'arrivée d'un élément qu'on vient de sélectionner. Jamais sur
@@ -645,9 +657,19 @@
   --text-swap-blur: 2px;
   --text-swap-ease: ease-in-out;
 
-  /* Page side-by-side — passage d'un écran à l'autre */
-  --page-slide-dur: 250ms;
-  --page-fade-dur: 250ms;
+  /* Page side-by-side — passage d'un écran à l'autre.
+
+     **200ms et non 250**, décidé par la passe /animate sur le critère de
+     fréquence : le passage d'écran est de la navigation, vue des dizaines de
+     fois par jour, le palier où la règle est « mouvement quasi imperceptible,
+     ou rien ». Une durée de 250ms est celle d'un menu déroulant, qu'on ouvre
+     bien moins souvent. Le geste reste lisible — 8px de glissement et une
+     opacité — mais cesse de se faire attendre à chaque appui d'onglet.
+
+     La courbe, elle, ne bouge pas : c'est déjà un ease-out fort, exactement ce
+     que demande une entrée. */
+  --page-slide-dur: 200ms;
+  --page-fade-dur: 200ms;
   --page-slide-distance: 8px;
   --page-blur: 3px;
   --page-slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -1034,9 +1056,17 @@
    change d'un marché à l'autre. Le rembourrage vit sur `-inner`, jamais sur
    la piste — sur `0fr`, il laisserait une bande résiduelle. */
 :root {
-  --acc-expand: 250ms;
-  --acc-collapse: 250ms;
-  --acc-chevron: 250ms;
+  /* **Le repli est plus rapide que le dépli**, revu par la passe /animate.
+     C'était la même durée dans les deux sens, et c'est le défaut le plus
+     courant d'un accordéon : le dépli est le moment où le joueur découvre une
+     liste et la parcourt des yeux — il peut prendre son temps ; le repli est
+     une réponse du système à un choix déjà fait, il doit s'effacer. Lent là où
+     l'on décide, vif là où le système répond.
+
+     Les deux restent sous les 300ms d'une interface, et dans la fourchette
+     150-250ms d'un menu déroulant. */
+  --acc-expand: 240ms;
+  --acc-collapse: 170ms;
   --acc-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -1073,23 +1103,50 @@
   display: inline-flex;
   transform: scaleY(1);
   transform-origin: center;
-  transition: transform var(--acc-chevron) var(--acc-ease);
+  /* Le chevron emprunte les durées du panneau plutôt que la sienne : il se
+     retourne **avec** lui, dans les deux sens. Une durée propre lui donnait un
+     rythme distinct, et l'œil voyait deux événements là où il n'y en a qu'un.
+     La courbe, elle, est l'ease-in-out fort : le chevron ne rentre ni ne sort,
+     il pivote sur place — le seul cas où l'accélération puis la décélération
+     sont justes. */
+  transition: transform var(--acc-collapse) var(--ease-in-out-fort);
 }
 .t-acc-chevron path {
   vector-effect: non-scaling-stroke;
 }
 .t-acc[data-open="true"] .t-acc-chevron {
   transform: scaleY(-1);
+  transition: transform var(--acc-expand) var(--ease-in-out-fort);
 }
 
 /* — Icon swap (transitions-dev 09) —
    L'étoile de favori : contour ↔ pleine, dans le même emplacement. Les deux
    icônes restent montées et partagent une cellule de grille. */
 :root {
-  --icon-swap-dur: 250ms;
+  /* Trois valeurs revues par la passe /animate, chacune sur une règle nommée :
+
+     - **180ms au lieu de 250.** L'étoile est touchée une vingtaine de fois par
+       Grand Prix, sur un écran de 22 widgets : c'est le palier « dizaines de
+       fois par jour », où le retour doit être quasi imperceptible. La règle des
+       retours d'appui donne 100-160ms, celle d'un changement d'état 150-250 ;
+       180 les concilie. Les onglets de la barre basse, qui partagent ces
+       jetons depuis la version `0.22.0`, y gagnent la même vivacité.
+
+     - **`scale(0.8)` au lieu de `scale(0.25)`.** Rien, dans le monde réel,
+       n'apparaît à partir de rien : une icône qui naît au quart de sa taille se
+       lit comme un surgissement, pas comme un remplacement. 0,8 laisse une
+       silhouette déjà présente que l'échange vient relayer.
+
+     - **Ease-out fort au lieu d'`ease-in-out`.** Les deux icônes entrent et
+       sortent ; une entrée démarre vite, elle ne s'échauffe pas. `ease-in-out`
+       retenait le départ au moment précis où l'œil regarde le doigt.
+
+     Le flou reste : c'est lui qui empêche l'œil de voir deux objets distincts
+     se croiser pendant le fondu. */
+  --icon-swap-dur: 180ms;
   --icon-swap-blur: 2px;
-  --icon-swap-start-scale: 0.25;
-  --icon-swap-ease: ease-in-out;
+  --icon-swap-start-scale: 0.8;
+  --icon-swap-ease: var(--ease-smooth-out);
 }
 
 .t-icon-swap {
@@ -1156,6 +1213,90 @@
 }
 .t-digit-group.is-animating .t-digit {
   animation: t-digit-pop-in var(--digit-dur) var(--digit-ease) both;
+}
+
+/* — Flip clock — les tuiles du compte à rebours (passe /animate) —
+   Le chiffre ne rebondit plus sur place : le sortant descend, l'entrant tombe
+   d'au-dessus, et la tuile les rogne. C'est la lecture d'un tableau à
+   palettes, obtenue sans la moindre 3D.
+
+   **Pourquoi pas une vraie bascule 3D**, que la version `0.18.0` avait déjà
+   écartée et qui reste écartée : elle demande `transform-style: preserve-3d`
+   et `backface-visibility`, or chaque bloc de l'app vit sous `.t-stagger-line`,
+   qui porte `will-change: transform` en permanence — précisément la
+   configuration où Safari iOS, la cible, aplatit les faces ou les fait
+   clignoter. Le glissement vertical donne la même lecture avec deux
+   propriétés composées, sans aucun de ces risques.
+
+   **Pourquoi le sens est celui-là.** L'entrant vient du haut et le sortant
+   part vers le bas : un compte à rebours descend, et c'est aussi le sens dans
+   lequel tombe la palette d'un tableau mécanique. L'inverse se lirait comme un
+   compteur qui monte.
+
+   **Pourquoi 260ms et une courbe d'entrée.** La tuile des minutes change une
+   fois par minute, sous les yeux de quelqu'un qui ne l'a pas déclenchée : le
+   mouvement doit dire « ce nombre a changé » puis disparaître, jamais réclamer
+   l'attention. Sous les 300ms d'une interface, et sur un ease-out fort — les
+   deux chiffres entrent et sortent, ils ne pivotent pas.
+
+   **Pourquoi le flou.** Sans lui, l'œil suit deux chiffres distincts qui se
+   croisent. Le flou les fond en une seule transformation perçue. 2px : au-delà,
+   le coût devient réel sur Safari.
+
+   Les secondes, elles, ne sont jamais animées — `blocsRestant` les rend avec
+   `anime: false`. Un mouvement une fois par seconde n'accuse plus un
+   changement, il tourne en boucle. */
+:root {
+  --flip-dur: 260ms;
+  --flip-blur: 2px;
+  --flip-ease: var(--ease-smooth-out);
+}
+
+.t-flip {
+  display: inline-grid;
+  /* La fenêtre de la tuile : c'est ce rognage qui fait la palette. Les
+     chiffres n'ont pas de jambage, la boîte de ligne à `leading-none` les
+     contient donc entièrement — rien d'utile n'est coupé. */
+  overflow: hidden;
+}
+
+.t-flip-chiffre {
+  grid-area: 1 / 1;
+  will-change: transform, opacity;
+}
+
+.t-flip-entrant {
+  animation: t-flip-entree var(--flip-dur) var(--flip-ease) both;
+}
+
+.t-flip-sortant {
+  animation: t-flip-sortie var(--flip-dur) var(--flip-ease) both;
+}
+
+@keyframes t-flip-entree {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+    filter: blur(var(--flip-blur));
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes t-flip-sortie {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+    filter: blur(var(--flip-blur));
+  }
 }
 
 /* ---------------------------------------------------------------
@@ -1350,5 +1491,14 @@
   .t-shimmer::before,
   .t-digit-group .t-digit {
     animation: none !important;
+  }
+  /* Le chiffre entrant reste montré, sans voyager ni se flouter ; le sortant
+     est simplement retiré. Mouvement réduit veut dire moins de mouvement, pas
+     un compte à rebours qui cesse de se mettre à jour. */
+  .t-flip-entrant {
+    animation: none !important;
+  }
+  .t-flip-sortant {
+    display: none !important;
   }
 }

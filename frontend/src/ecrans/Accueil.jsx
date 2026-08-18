@@ -25,6 +25,7 @@ import { listerMesChampionnats } from "../lib/championnats.js";
 import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
 import { chargerAccueilGp, cleAccueilGp } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
+import { usePseudoCourant } from "../lib/usePseudo.js";
 import { formaterDepart } from "../lib/format.js";
 import { useFermeture } from "../lib/useFermeture.js";
 import { APP_VERSION } from "../config.js";
@@ -608,7 +609,14 @@ export function BlocSaison() {
 
 /** Maquette 04 — accueil connecté : mes championnats et les deux actions. */
 export default function Accueil() {
-  const { pseudo, utilisateur } = useAuth();
+  const { pseudo: pseudoJeton, utilisateur } = useAuth();
+
+  // Le pseudo affiché est relu **en base à chaque montage**, jamais pris dans
+  // le jeton. `useAuth().pseudo` ne lit pas `public.profils` : il lit
+  // `user_metadata`, une copie figée à l'inscription qu'un renommage direct en
+  // base ne touche pas. Le jeton reste le repli — pendant la lecture, et si
+  // elle échoue. Voir `lib/usePseudo.js` pour les trois décisions.
+  const pseudo = usePseudoCourant(utilisateur?.id ?? null, pseudoJeton);
 
   // La clé porte l'identifiant du compte : deux personnes qui se relaient sur
   // le même téléphone ne doivent jamais voir la liste de l'autre, même une

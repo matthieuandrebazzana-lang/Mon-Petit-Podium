@@ -62,20 +62,23 @@ function Tuile({ valeur, label, anime, taille }) {
       <span
         className={`${taille.chiffre} leading-none font-bold tracking-[-0.02em] text-white tabular-nums`}
       >
-        {/* Le nombre se remet en place à chaque changement (transitions-dev 02,
-            déjà installé pour le compteur de bonus). Les secondes en sont
-            exclues : une animation par seconde n'accuse plus rien, elle tourne
-            en boucle.
+        {/* La tuile bascule : le chiffre sortant descend, l'entrant tombe
+            d'au-dessus, la tuile les rogne (variante `flip`, passe /animate).
+            Elle remplace le rebond du snippet 02, qui durait 500ms avec un
+            dépassement — trop long et trop gai pour un nombre que personne n'a
+            touché et qui change chaque minute.
 
-            C'est aussi la raison pour laquelle il n'y a **pas** de bascule 3D
-            façon calendrier mécanique, que la demande donnait pour facultative.
-            Une vraie bascule demande `transform-style: preserve-3d` et
-            `backface-visibility`, et chaque bloc de l'app vit sous
-            `.t-stagger-line`, qui porte `will-change: transform` en permanence :
-            c'est précisément la configuration où Safari iOS — la cible — aplatit
-            ou fait clignoter les faces. La composition prime, elle est ici
-            entière ; le mouvement reste celui, éprouvé, du snippet 02. */}
-        {anime ? <Compteur valeur={valeur} /> : valeur}
+            **Toujours pas de vraie bascule 3D**, et pour la raison déjà donnée
+            en version `0.18.0` : elle demande `transform-style: preserve-3d` et
+            `backface-visibility`, or chaque bloc vit sous `.t-stagger-line`, qui
+            porte `will-change: transform` en permanence — la configuration où
+            Safari iOS aplatit ou fait clignoter les faces. Le glissement
+            vertical donne la même lecture sans aucun de ces risques.
+
+            Les secondes restent exclues (`anime: false` dans `blocsRestant`) :
+            un mouvement une fois par seconde n'accuse plus un changement, il
+            tourne en boucle. */}
+        {anime ? <Compteur valeur={valeur} variante="flip" /> : valeur}
       </span>
       <span className="text-label-sm text-white/60 uppercase">{label}</span>
     </div>

@@ -301,3 +301,52 @@ function etiquetteDuType(type) {
   if (type === "podium") return "Podium";
   return "Bonus";
 }
+
+// --------------------------------------------------------------------------
+//  Le pseudo courant — lu en base, jamais dans le jeton
+// --------------------------------------------------------------------------
+
+/**
+ * Le pseudo tel qu'il est **en base**, pour ce profil.
+ *
+ * **Pourquoi cette lecture existe.** `useAuth().pseudo` ne lit pas la table
+ * `public.profils` : il lit `user_metadata.pseudo`, c'est-à-dire une copie
+ * figée dans le jeton au moment de l'inscription. Renommer quelqu'un
+ * directement en base — ou par n'importe quel chemin qui ne repasse pas par
+ * `auth.updateUser` — ne touche pas cette copie, et l'accueil continuait
+ * d'afficher l'ancien pseudo aussi longtemps que la session vivait. C'est le
+ * défaut corrigé ici.
+ *
+ * **Directement dans Supabase, et non par l'API**, pour les deux raisons qui
+ * gouvernent ce partage depuis l'étape 3 : la politique « Profils lisibles par
+ * les membres connectés » décrit exactement ce cas, et l'accueil est le premier
+ * écran de l'app — lui faire attendre le réveil de Railway pour écrire « Salut
+ * X » serait le pire endroit où payer ce délai.
+ *
+ * La lecture ne porte que la colonne utile : le reste du profil (couleurs,
+ * numéro) a ses propres écrans, qui le chargent quand ils en ont besoin.
+ */
+export async function chargerPseudo(profilId, signal) {
+  if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
+  if (!profilId) return { ok: true, message: null, donnees: null };
+
+  try {
+    const requete = supabase
+      .from("profils")
+      .select("pseudo")
+      .eq("id", profilId)
+      .maybeSingle();
+
+    const { data, error } = await (signal ? requete.abortSignal(signal) : requete);
+    if (error) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
+
+    // `maybeSingle` rend `null` plutôt que de lever quand la ligne n'existe
+    // pas : un profil absent n'est pas une panne, c'est un compte dont le
+    // trigger d'inscription n'a rien écrit. L'appelant retombera alors sur le
+    // pseudo du jeton, qui vaut mieux que rien.
+    return { ok: true, message: null, donnees: data?.pseudo ?? null };
+  } catch (erreur) {
+    if (erreur.name === "AbortError") throw erreur;
+    return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
+  }
+}

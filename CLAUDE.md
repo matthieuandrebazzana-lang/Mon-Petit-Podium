@@ -220,21 +220,29 @@ Modifiable à tout moment depuis le profil.
 
 Barre de navigation basse à 4 onglets : **Accueil**, **Championnats**, **Calendrier**, **Profil**.
 
-### Skills de design installés — règle de priorité
+### Skills Claude Code — règle de priorité
 
-Trois skills sont installés sur ce projet : **Apple Design**, **Taste** et **Transitions.dev**.
+Cinq skills sont installés sur ce projet : **Apple Design**, **Taste**, **Transitions.dev**, et depuis la version `0.32.0` les deux skills d'**Emil Kowalski** — **Design Engineering** et **Animate** (installés par `npx skills add emilkowalski/skill`, avec `find-animation-opportunities` en complément).
 
-> **Règle de priorité pour le chantier design en cours** : les skills `/apple-design`, `/design-taste-frontend` et `/transitions-dev` ont la main sur les **compositions, espacements, ombres, matériaux, animations et hiérarchie visuelle**. Le design system de la section 5 reste la référence pour la **palette de couleurs et la typographie uniquement**. Claude Code applique les suggestions des skills **sans demander de validation ni signaler de conflit** — il tranche seul en faveur des skills sur tout ce qui n'est pas couleur ou typographie.
+> **Règle de priorité** : les skills `/apple-design`, `/design-taste-frontend`, `/transitions-dev`, `/emil-design-eng` et `/animate` ont la main sur les **compositions, espacements, ombres, matériaux, animations, courbes, durées, micro-interactions et hiérarchie visuelle**. Le design system de la section 5 reste la référence pour la **palette de couleurs et la typographie uniquement**. Claude Code applique les suggestions des skills **sans demander de validation ni signaler de conflit** — il tranche seul en faveur des skills sur tout ce qui n'est pas couleur ou typographie.
 
 **`/apple-design` doit être invoqué sur chaque écran codé, sans exception.** Son périmètre : les principes iOS — zones sûres, élévation, matériaux, animations fluides de facture native, hiérarchie visuelle, gestes, home indicator.
 
 **Taste** intervient comme directeur artistique sur la hiérarchie visuelle, le rythme des espacements, la qualité des micro-détails, l'équilibre des compositions et le choix des proportions. Il ne propose jamais une autre palette ni une autre typographie — c'est la seule borne.
 
-**Transitions.dev** intervient sur le mouvement : transitions d'écran, apparition des blocs, changements d'onglet, états de chargement, retours tactiles.
+**Transitions.dev** intervient sur le mouvement : transitions d'écran, apparition des blocs, changements d'onglet, états de chargement, retours tactiles. Il fournit les **snippets** — les vingt et une transitions installées dans `index.css` en portent les jetons.
 
-Ordre d'invocation avant de coder un écran : **`/apple-design`, puis `/design-taste-frontend`, puis `/transitions-dev`.**
+**`/emil-design-eng`** est le directeur de la micro-interaction : il tranche les questions de *feel* — retour d'appui, détails invisibles qui se cumulent, cohérence du mouvement avec la personnalité du produit. **Il est invoqué pour toute décision d'animation ou de micro-interaction**, y compris quand aucun écran n'est recodé.
+
+**`/animate`** construit l'animation, et son apport principal est un **portier** : il commence par demander si la chose doit animer *du tout*. Sa grille de fréquence — 100+ fois par jour → jamais d'animation ; dizaines de fois par jour → quasi imperceptible ou rien — est ce qui a fait raccourcir le passage d'écran et l'échange d'icônes en version `0.32.0`, et refuser la moitié des candidats du balayage. Il impose aussi les valeurs : jamais de `scale(0)`, jamais d'`ease-in` sur une interface, jamais `transition: all`, `transform` et `opacity` seuls, sous les 300ms, et le repli `prefers-reduced-motion` livré avec l'animation et non après.
+
+**Ordre d'invocation pour chaque écran codé ou retouché** : **`/apple-design`, puis `/design-taste-frontend`, puis `/transitions-dev`, puis `/emil-design-eng`, puis `/animate`.**
+
+**Deux skills d'audit, à ne pas confondre avec les précédents** : `/find-animation-opportunities` cherche ce qui *devrait* bouger et ne bouge pas — il est **en lecture seule**, il propose et n'implémente jamais ; `/improve-animations` produit un plan de correction sur l'existant. Le premier a été passé sur toute la codebase frontend en version `0.32.0` ; son résultat vit à la section 11.
 
 Les rayons de coins, l'échelle des espacements et l'esprit widget de la section 5 sont désormais des **valeurs par défaut**, pas des contraintes : les skills peuvent s'en écarter quand la composition le demande. Seules la palette et la typographie ne bougent pas.
+
+**Un jeton de mouvement ne s'ajoute pas sans nécessité.** Le vocabulaire de `index.css` est déjà large ; la règle des skills est d'**étendre les jetons du projet, jamais de les forker**. La version `0.32.0` n'en a ajouté qu'un seul — `--ease-in-out-fort` — parce que `--ease-in-out: ease-in-out` était l'easing intégré, trop mou, et qu'aucun ease-in-out fort n'existait. Elle n'a **pas** ajouté de second ease-out : `--ease-smooth-out` en est déjà un.
 
 ---
 
@@ -3155,6 +3163,105 @@ L'étoile est le point qu'il faut vérifier à chaque changement de palette : el
 | Règles permanentes | **aucune cote brute « ×N »**, ni « ligue » |
 | `npm run build` | passe, version `0.31.0` dans le bundle |
 
+---
+
+**Pseudo relu en base, et intégration des skills Emil Kowalski** (version `0.32.0`)
+
+Une correction de bug, une passe d'animation sur quatre surfaces, et un balayage de toute la codebase frontend. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+---
+
+***Le pseudo de l'accueil ne venait pas de la base — il venait du jeton.***
+
+C'est la cause du bug, et elle explique pourquoi le symptôme était si tenace : renommer quelqu'un directement dans `public.profils` ne changeait rien à l'écran, quel que soit le nombre de rechargements.
+
+`useAuth().pseudo` (`auth/AuthContexte.jsx`) ne lit pas la table. Il lit `utilisateur.user_metadata.pseudo`, c'est-à-dire la copie déposée dans les métadonnées de l'utilisateur **au moment de l'inscription** (étape 2). Cette copie vit dans le jeton et n'est réécrite que par `auth.updateUser` : un `update` SQL, le trigger d'inscription, ou n'importe quel chemin qui ne repasse pas par GoTrue la laissent intacte. L'accueil affichait donc « Salut *ancien pseudo* » aussi longtemps que la session vivait — et une session Supabase se rafraîchit toute seule, indéfiniment.
+
+**Le défaut était strictement borné à l'accueil**, et c'est vérifié plutôt que supposé : `pseudo` n'est déstructuré de `useAuth()` qu'à un seul endroit de toute la codebase. Tous les autres écrans qui affichent un pseudo — mon profil, le profil d'un membre, les classements, le calendrier — le lisent déjà dans `public.profils`, par l'API ou en direct sous RLS. Aucun d'eux n'a eu à changer.
+
+*La correction* — `chargerPseudo` (`lib/profils.js`) et le hook `usePseudoCourant` (`lib/usePseudo.js`), branché sur l'accueil.
+
+**Trois décisions, et aucune n'est arbitraire :**
+
+1. **Aucun cache.** Le hook ne passe volontairement **pas** par `useDonnees`, qui mémorise en `localStorage` en *stale-while-revalidate*. Ce cache est exactement le bon outil pour la liste des championnats — c'est lui qui fait tenir l'accueil pendant le réveil de Railway — et exactement le mauvais ici : il réintroduirait au montage suivant la valeur périmée qu'on vient de corriger. Un pseudo est un mot, et sa lecture est une requête indexée sur clé primaire.
+
+2. **À chaque montage, et non une fois par session.** Poser la lecture dans `AuthProvider` l'aurait fait tourner une seule fois, au moment où la session se résout : un pseudo changé en cours de session serait resté périmé jusqu'au prochain rafraîchissement du jeton — c'est-à-dire le bug, déplacé. Le montage de l'accueil est le bon déclencheur : c'est l'écran où le pseudo s'affiche, et on y revient à chaque passage par l'onglet.
+
+3. **Repli sur le jeton, jamais sur le vide.** Pendant la lecture et si elle échoue, c'est la valeur du jeton qui est rendue. Un pseudo légèrement périmé vaut mieux qu'un « Salut  » vide, ou qu'un titre qui clignoterait de « Mon Petit Podium » vers « Salut X » à chaque arrivée sur l'écran. C'est le bon sens du doute, celui déjà appliqué au bloc du prochain Grand Prix depuis la version `0.5.1` : l'échec d'une lecture de confort ne casse pas l'écran qui la porte.
+
+**La lecture va directement à Supabase**, et non par l'API — les deux raisons qui gouvernent ce partage depuis l'étape 3 : la politique « Profils lisibles par les membres connectés » décrit exactement ce cas, et l'accueil est le premier écran de l'app. Lui faire attendre le réveil de Railway pour écrire « Salut X » serait le pire endroit où payer ce délai. Seule la colonne `pseudo` est demandée.
+
+**L'état est remis à zéro au changement de compte**, avant même la nouvelle lecture : deux personnes qui se relaient sur le même téléphone ne doivent jamais lire le pseudo de l'autre, fût-ce une image. C'est la règle posée à l'étape 3 pour les clés de cache, et elle vaut aussi sans cache.
+
+*Le piège est désormais écrit là où il se tend* — `AuthContexte.jsx` documente que son `pseudo` est une copie figée dans le jeton, et que tout écran qui **affiche** le pseudo doit passer par `usePseudoCourant`. Sans cette note, le prochain écran qui affichera un pseudo referait le même bug.
+
+---
+
+*Skills Emil Kowalski — installés et intégrés.* `npx skills add emilkowalski/skill` ajoute `/emil-design-eng`, `/animate` et les skills d'audit associés. La section 5 est réécrite : ils rejoignent les trois skills existants **au même niveau de priorité**, avec carte blanche sur animations, courbes, durées et micro-interactions, et la palette et la typographie du design system toujours intouchables. L'ordre d'invocation devient, pour chaque écran codé ou retouché : **`/apple-design` → `/design-taste-frontend` → `/transitions-dev` → `/emil-design-eng` → `/animate`.**
+
+---
+
+***La passe `/animate` sur quatre surfaces.*** Son apport n'a pas été d'ajouter du mouvement : c'est d'en retirer. Le portier de fréquence du skill — 100+ fois par jour → jamais d'animation ; dizaines de fois par jour → quasi imperceptible ou rien — a fait raccourcir trois des quatre cibles.
+
+**1. Passage d'écran — 250ms → 200ms.** Le passage d'écran est de la navigation : on le voit des dizaines de fois par jour, le palier où la règle est « quasi imperceptible, ou rien ». 250ms est la durée d'un menu déroulant, qu'on ouvre bien moins souvent. Le geste reste lisible — 8px de glissement et une opacité — mais cesse de se faire attendre à chaque appui d'onglet. La courbe ne bouge pas : c'est déjà un ease-out fort, exactement ce que demande une entrée.
+
+**2. Toggles (échange d'icônes) — trois valeurs revues.** L'étoile de favori est touchée une vingtaine de fois par Grand Prix, sur un écran de 22 widgets.
+
+| Jeton | Avant | Après | Pourquoi |
+|---|---|---|---|
+| `--icon-swap-dur` | 250ms | **180ms** | Palier « dizaines de fois par jour ». Concilie les 100-160ms d'un retour d'appui et les 150-250 d'un changement d'état |
+| `--icon-swap-start-scale` | **0,25** | **0,8** | Rien, dans le monde réel, n'apparaît à partir de rien. Une icône qui naît au quart de sa taille se lit comme un surgissement, pas comme un remplacement |
+| `--icon-swap-ease` | `ease-in-out` | `--ease-smooth-out` | Les deux icônes entrent et sortent ; une entrée démarre vite. `ease-in-out` retenait le départ au moment précis où l'œil regarde le doigt |
+
+Les onglets de la barre basse partagent ces jetons depuis la version `0.22.0` : ils y gagnent la même vivacité, ce qui va dans le bon sens — c'est de la navigation.
+
+**3. Dropdown de sélection pilote — le repli devient plus rapide que le dépli.** 240ms à l'ouverture, **170ms** à la fermeture, là où les deux valaient 250. C'est le défaut le plus courant d'un accordéon : le dépli est le moment où le joueur découvre une liste et la parcourt des yeux — il peut prendre son temps ; le repli est une réponse du système à un choix déjà fait, il doit s'effacer. Lent là où l'on décide, vif là où le système répond. **Le chevron emprunte désormais les durées du panneau** au lieu de la sienne : il se retourne avec lui, dans les deux sens, là où un rythme distinct faisait voir deux événements au lieu d'un. Sa courbe passe à l'ease-in-out fort — il ne rentre ni ne sort, il pivote sur place, le seul cas où l'accélération puis la décélération sont justes.
+
+**4. Flip clock — le compte à rebours bascule au lieu de rebondir.** C'est le seul endroit où du mouvement a été *ajouté*.
+
+Les tuiles reprenaient le *number pop-in* du compteur de bonus : 500ms, courbe à dépassement, le chiffre remontait en rebondissant. Ce mouvement est juste pour le compteur de bonus — geste du joueur, rare — et faux pour une horloge : personne ne l'a déclenchée, elle se répète chaque minute, et une demi-seconde de rebond réclame une attention que l'événement ne mérite pas.
+
+`Compteur` porte désormais **deux variantes**. `pop` est l'original, inchangé, toujours servi au compteur de bonus. `flip` est la bascule : le chiffre sortant descend, l'entrant tombe d'au-dessus, la tuile les rogne — la lecture d'un tableau à palettes, obtenue sans la moindre 3D. 260ms, ease-out fort, flou de 2px.
+
+Quatre points de mise en œuvre à ne pas défaire :
+
+- **Toujours pas de vraie bascule 3D**, et pour la raison exacte que la version `0.18.0` donnait déjà : elle demande `transform-style: preserve-3d` et `backface-visibility`, or chaque bloc de l'app vit sous `.t-stagger-line`, qui porte `will-change: transform` en permanence — précisément la configuration où Safari iOS, la cible, aplatit les faces ou les fait clignoter. Le glissement vertical donne la même lecture avec deux propriétés composées et aucun de ces risques.
+- **Le sens n'est pas indifférent.** L'entrant vient du haut, le sortant part vers le bas : un compte à rebours descend, et c'est aussi le sens dans lequel tombe la palette d'un tableau mécanique. L'inverse se lirait comme un compteur qui monte.
+- **Le sortant est retiré une fois sa sortie finie**, par un minuteur calé sur `--flip-dur`. Le laisser en place empilerait une ardoise de chiffres morts au fil des minutes, chacun gardant son `will-change`. Il est aussi `aria-hidden` : pendant 260ms deux nombres coexistent dans le DOM, et un lecteur d'écran annoncerait « 05 04 ».
+- **Rien ne bascule au premier rendu.** Une tuile qui se retournerait à l'arrivée de l'écran annoncerait un changement qui n'a pas eu lieu — et l'écran a déjà son entrée à lui.
+
+Les secondes restent exclues, comme depuis la version `0.18.0` : `blocsRestant` les rend avec `anime: false`, parce qu'un mouvement une fois par seconde n'accuse plus un changement, il tourne en boucle.
+
+---
+
+*Un seul jeton d'easing ajouté, et c'est délibéré.* `--ease-in-out-fort: cubic-bezier(0.77, 0, 0.175, 1)`, parce que `--ease-in-out` valait l'easing intégré de CSS, trop mou pour un mouvement à l'écran, et qu'aucun ease-in-out fort n'existait dans le projet. **Aucun second ease-out n'a été ajouté** : `--ease-smooth-out` en est déjà un, à un cheveu de la valeur canonique du skill (0,22/0,36 contre 0,23/0,32, indiscernables à l'œil). En poser un à côté aurait été forker le vocabulaire du projet au lieu de l'étendre — ce que les skills interdisent explicitement.
+
+*Mouvement réduit* — les deux nouvelles classes rejoignent le bloc `prefers-reduced-motion`. Le chiffre entrant reste **montré**, sans voyager ni se flouter ; le sortant est simplement retiré. Mouvement réduit veut dire moins de mouvement, pas un compte à rebours qui cesse de se mettre à jour.
+
+---
+
+*Balayage `/find-animation-opportunities` sur toute la codebase frontend.* **Aucune opportunité n'est implémentée dans ce commit** — le skill est en lecture seule. Les cinq retenues, les six candidats écartés avec la raison de leur refus, et le verdict vivent à la **section 11** de ce fichier.
+
+Le résultat le plus utile du balayage est le verdict lui-même : **cette interface est déjà proche du compte**. Le retour d'appui est présent partout, les attentes sont des silhouettes et non des textes, `prefers-reduced-motion` couvre l'intégralité des transitions installées, et aucune animation ne se déclenche sur une action au clavier. Il n'y a pas de dette de mouvement à combler ; les cinq lignes retenues sont des finitions. La plus rentable est la carte « Pronos enregistrés ! » du récapitulatif, seul moment franchement émotionnel de l'app et l'un de ses écrans les plus plats — et le snippet *success check* qu'elle demande est installé dans `index.css` depuis longtemps sans avoir jamais servi.
+
+*Vérifié* :
+
+| Contrôle | Résultat |
+|---|---|
+| Pseudo, contre une doublure Supabase | `chargerPseudo` et `usePseudoCourant` exportés ; **sans identifiant, aucune lecture et aucune erreur** |
+| Accueil rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage doublé) | l'écran se rend sans lever ; **repli sur le pseudo du jeton pendant la lecture** ; jamais de « Salut » vide ; sans pseudo connu, titre de repli et **aucun « Salut » orphelin** |
+| Portée du défaut | `pseudo` n'est déstructuré de `useAuth()` **qu'à un seul endroit** de la codebase — les autres écrans lisent déjà `public.profils` |
+| Compteur, variante `pop` | groupe de chiffres rendu, valeur servie, **aucune classe `flip`** — le compteur de bonus est inchangé |
+| Compteur, variante `flip` | conteneur rogné, valeur servie, **un seul chiffre au premier rendu**, ni entrant ni sortant animé à l'arrivée |
+| Horloge | **trois tuiles basculantes**, les trois libellés, **plus aucun rebond sur les tuiles** ; glisse vers les secondes sous l'heure et **les secondes ne basculent pas** ; fermée → aucune tuile et « Fermés » ; horaire inconnu → « À confirmer » et **aucune durée fabriquée** |
+| Étoile de favori | échange d'icônes conservé, état annoncé (`aria-pressed`) |
+| CSS de production | `.t-flip`, `.t-flip-entrant`, `.t-flip-sortant` et les deux jeux d'images-clés générés ; `--flip-dur: .26s`, `--ease-in-out-fort`, `--icon-swap-dur: .18s`, `--icon-swap-start-scale: .8`, `--acc-expand: .24s`, `--acc-collapse: .17s`, `--page-slide-dur: .2s` bien compilés |
+| Mouvement réduit | `t-flip-entrant { animation: none }` et `t-flip-sortant { display: none }` présents dans le bloc `prefers-reduced-motion` |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique » |
+| `npm run build` | passe, 141 modules, version `0.32.0` dans le bundle |
+
+**Ce qui reste à juger à l'œil, et que le code ne peut pas trancher** : le croisement des deux chiffres de la bascule. Pendant 260ms deux nombres coexistent dans la tuile, l'un descendant et l'autre tombant, et l'équilibre entre le flou, l'opacité et la vitesse ne se règle qu'en regardant. À vérifier sur un iPhone réel, en ralentissant l'animation d'un facteur 3 ou 4, et à revoir le lendemain — c'est le genre de détail dont on voit les défauts avec des yeux frais, jamais pendant qu'on l'écrit. Deux points précis à surveiller : que le rognage de la tuile ne coupe pas le haut des chiffres à 48px, et que la minute qui change ne tire pas l'œil pendant qu'on lit autre chose.
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -3273,3 +3380,43 @@ Point secondaire : `frontend/public/flags.svg` **n'est utilisé par aucun écran
 - **`assets/gp-cards.svg` extrait en composant** — **fait à l'étape 9** (`composants/TraceCircuit.jsx`). La planche ne contenait que **deux tracés distincts** (Monza et Spa) répétés six fois, et non un circuit par Grand Prix : les deux sont extraits tels quels, les autres Grands Prix reçoivent un tracé générique. Si de vrais tracés arrivent un jour, ils s'ajoutent à la table `TRACES` et au tableau `PAR_MOTIF` du même fichier, sans toucher aux écrans.
 - **`assets/traces.svg` extrait en composant** — **fait en version `0.15.0`** (`composants/TracesCircuits.jsx`), et c'est le jeu de tracés qui manquait : **douze vrais circuits**, de Zandvoort à Yas Marina. Les deux modules coexistent et ne se remplacent pas — celui de l'étape 9 dessine des **silhouettes pleines** (vignettes de 20 × 32px des deux calendriers), celui-ci des **traits** (bande du bloc de l'accueil, où il est passé du filigrane au premier plan en version `0.16.0`). Les tracés qui manquent encore sont ceux du début de saison ; ils s'ajoutent à la table `TRACES` du nouveau fichier, avec leur `viewBox` mesurée, sans toucher aux écrans — **`aUnTrace` fait alors disparaître la bande d'elle-même** pour un Grand Prix qui n'y est pas encore. Le **calendrier d'un championnat** est passé aux douze vrais tracés en version `0.19.0`, et le **calendrier global** en version `0.20.0`. **`TraceCircuit.jsx` n'est donc plus monté nulle part** : le fichier et ses deux silhouettes restent en place, comme `Onglets.jsx` depuis la version `0.12.0` et le code OAuth depuis la `0.2.2` — c'est la seule réponse déjà écrite et vérifiée le jour où une vignette de 20 × 32px redevient nécessaire, taille à laquelle un trait de 1px se lit moins bien qu'un aplat.
 - **Voiture personnalisable dans le profil** (section 5) — **fait à l'étape 8** : deux couleurs choisies parmi vingt, un numéro libre de 1 à 99, modifiables à tout moment depuis `/profil`. Le rang affiché sur la voiture a disparu ; il ne sert plus que de repli tant qu'aucun numéro n'est choisi. Les livrées, elles, ont changé de place plutôt que de disparaître : le calcul frontend par ordre d'inscription (`lib/livrees.js`) est bien supprimé, mais la **version `0.8.1` les a reposées en base**, comme valeur initiale des deux colonnes à la création du profil. Le membre les écrase dès qu'il personnalise. Les deux points laissés ouverts sont tranchés et documentés au « Reste à faire » : deux membres d'un même championnat **peuvent** choisir les mêmes couleurs (conséquence assumée) et le même numéro (avertissement non bloquant).
+
+---
+
+## 11. Opportunités d'animation identifiées
+
+Résultat du balayage `/find-animation-opportunities` passé sur l'ensemble de `frontend/src` en version `0.32.0`. **Aucune n'est implémentée** — ce skill est en lecture seule, il propose et n'écrit rien. Cette liste est un stock à consommer, pas un cahier des charges : chaque ligne se reprend avec `/animate`, qui repassera le portier de fréquence avant d'écrire quoi que ce soit.
+
+Les valeurs données sont exactes et puisent dans les jetons de `index.css` — aucune n'est approximée. Toutes n'animent que `transform` et `opacity` (plus `grid-template-rows`, toléré pour un dépli, faute d'équivalent en `transform`), et chacune se livre avec son repli `prefers-reduced-motion`.
+
+### Les cinq opportunités retenues
+
+| # | Endroit | Aujourd'hui | Raison | Fréquence | Mouvement proposé |
+|---|---|---|---|---|---|
+| 1 | `ecrans/RecapPronostics.jsx:212` — carte « Pronos enregistrés ! » | La carte verte et sa coche apparaissent d'un bloc, sans rien accuser | Délice + indication d'état | **Rare** (une fois par Grand Prix) | *Success check* (transitions-dev 10, **installé et jamais utilisé**) : la coche se dessine, `stroke-dashoffset` sur 300ms `--ease-smooth-out`, la carte entrant de `scale(0.97)` + `opacity: 0` sur 220ms. **Uniquement sous `state.enregistre`** — arrivée à froid, la carte ne célèbre rien, elle constate (écart 5 de l'étape 5) |
+| 2 | `ecrans/Pronostics.jsx:726` — total dans la barre collée | La ligne « Total si tout tombe » surgit au premier pilote choisi et **pousse le bouton vers le bas** d'un coup | Éviter un saut | Occasionnelle | Le mécanisme d'accordéon déjà en place : `grid-template-rows: 0fr → 1fr` + `opacity`, `--acc-expand` à l'ouverture, `--acc-collapse` à la fermeture. Le chiffre lui-même a déjà son échange (transitions-dev 04) |
+| 3 | `ecrans/Championnat.jsx:470` — confirmation « Quitter le championnat » | Les deux boutons sont remplacés par deux autres, instantanément | Éviter un saut + indication d'état | Rare | Même accordéon, 200ms. **À faire en même temps que la correction du `gap-2.5` mort** sur ce `Bloc` (piège des règles hors couche, § « Reste à faire ») : les deux vivent sur la même ligne |
+| 4 | `composants/SelecteurCouleur.jsx:84` — coche du choix de couleur | Elle apparaît d'un coup dans la case touchée | Retour | Rare | `scale(0.8)` + `opacity: 0` → repos, 160ms `--ease-smooth-out`. **Jamais `scale(0)`** : la case doit avoir une silhouette avant d'être remplie |
+| 5 | `composants/Voiture.jsx` — changement de livrée | Les aplats de la coque et des ailerons changent sèchement pendant que le joueur parcourt la palette | Indication d'état | Rare | `transition: fill 200ms ease` sur les formes de `couleur1` et `couleur2` — un changement de couleur prend `ease`, pas `ease-out`. Le SVG est déjà peint par attribut, donc `fill` entre bien dans la cascade (mécanisme éprouvé sur les icônes de la barre en version `0.22.0`) |
+
+### Candidats écartés — et ce qui les a écartés
+
+Cette section est ce qui sépare un balayage d'une liste de souhaits. Les cinq ci-dessus ont survécu ; ceux-ci ont été examinés puis refusés.
+
+- **`ecrans/Cotes.jsx` — apparition échelonnée des widgets de cote.** *Refusé : la liste est trop longue.* 22 widgets par marché, 66 en tout ; à 40ms de décalage, le dernier arriverait au bout de 2,6 secondes. Le décalage est décoratif et ne doit **jamais** retarder une interaction.
+- **`ecrans/Championnat.jsx` — apparition échelonnée des lignes de classement.** *Refusé : donnée fonctionnelle.* C'est le classement qu'on vient lire ; ce qu'on lit ne bouge pas pour faire joli.
+- **`composants/NavBarre.jsx` — passage d'un onglet à l'autre.** *Refusé : navigation, des dizaines de fois par jour.* C'est le palier « quasi imperceptible ou rien ». L'échange de couleur existant, ramené à 180ms en version `0.32.0`, est déjà au plafond de ce que ce palier autorise.
+- **`ecrans/Piste.jsx` — déplacement des voitures quand un rang change.** *Refusé : il n'y a pas d'état « avant » à l'écran.* Les voitures s'élancent déjà à l'arrivée sur l'écran ; un rang qui a changé entre deux visites n'a aucune position de départ que le joueur ait vue.
+- **`composants/ChampCode.jsx` — retour visuel à chaque caractère du code d'invitation.** *Refusé : action au clavier.* Le clavier iOS est ouvert, les six caractères s'enchaînent ; une animation par frappe se met en travers de la saisie.
+- **`ecrans/ListeChampionnats.jsx:80` — état vide « Aucun championnat pour l'instant ».** *Refusé : déjà couvert.* Le bloc entre par *texts reveal* (18) comme tous les autres ; en rajouter ne ferait que doubler un mouvement existant.
+
+### Ce que dit ce balayage
+
+**Cette interface est déjà proche du compte, et c'est le résultat le plus utile du balayage.** Le retour d'appui est présent partout (`pressable` / `pressable-large`), les attentes sont des silhouettes et non des textes, `prefers-reduced-motion` couvre l'intégralité des transitions installées, et aucune animation ne se déclenche sur une action au clavier. Il n'y a **pas** de dette de mouvement à combler ici : les cinq lignes ci-dessus sont des finitions, pas des manques.
+
+La plus rentable est la **n° 1**. C'est le seul moment franchement émotionnel de l'application — les pronostics viennent de partir, la course est dans deux jours — et c'est aujourd'hui l'un des écrans les plus plats. Le snippet *success check* est déjà installé dans `index.css` et n'a jamais servi ; c'est du budget délice déjà payé.
+
+Deux notes qui ne sont pas des opportunités mais qui vivent au même endroit :
+
+1. **`.t-ecran` porte `will-change: transform, opacity` en permanence**, sur le conteneur plein écran de chaque écran. Le navigateur promeut déjà une couche pendant une animation active : ce `will-change` ne gagne rien après les 200ms d'entrée et garde une couche plein cadre en mémoire pour toute la vie de l'écran. **Non retiré ici, délibérément** : `will-change` crée un contexte d'empilement, et l'empilement de cette app est documenté cas par cas depuis l'étape 10 (barre basse chassée des écrans, en-têtes collants, `z-index` d'un `Bloc`). Le retirer se fait avec un contrôle de tous ces cas, pas au détour d'une passe d'animation.
+2. **`--text-swap-ease` vaut `ease-in-out`**, l'easing intégré, sur un échange de texte qui est une entrée/sortie — il devrait être un ease-out fort. Il est employé par une dizaine d'écrans : le changer est une décision à prendre pour elle-même, avec un contrôle visuel sur chacun.

@@ -189,6 +189,14 @@ export function AuthProvider({ children }) {
       utilisateur,
       // Le pseudo saisi à l'inscription ; Google et Apple ne le fournissent pas,
       // on retombe alors sur le nom du compte puis sur la partie locale de l'email.
+      //
+      // **C'est une copie figée dans le jeton, pas la valeur en base.** Elle est
+      // écrite à l'inscription et ne bouge plus : renommer quelqu'un dans
+      // `public.profils` — à la main, ou par tout chemin qui ne repasse pas par
+      // `auth.updateUser` — ne la met pas à jour, et elle reste périmée aussi
+      // longtemps que la session vit. Tout écran qui **affiche** le pseudo doit
+      // donc passer par `usePseudoCourant` (`lib/usePseudo.js`), qui relit la
+      // table ; celui-ci ne sert plus que de repli le temps de cette lecture.
       pseudo:
         utilisateur?.user_metadata?.pseudo ||
         utilisateur?.user_metadata?.full_name ||
