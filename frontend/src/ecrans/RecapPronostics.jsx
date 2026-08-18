@@ -1,11 +1,10 @@
-import { Fragment, useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import Bouton from "../composants/Bouton.jsx";
-import Compteur from "../composants/Compteur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import Horloge from "../composants/Horloge.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
-import TexteEchange from "../composants/TexteEchange.jsx";
 import { Barre, Pave } from "../composants/Squelette.jsx";
 import {
   APPARENCE_REPLI,
@@ -30,7 +29,6 @@ import {
 import { couleurBloc, couleurMarche, tonalites } from "../lib/couleurs.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import {
-  blocsRestant,
   formaterDepart,
   formaterPilote,
   formaterPoints,
@@ -276,71 +274,14 @@ function CarteStatut({ aPronostique, juste, ferme }) {
    `shadow-bloc` qui dit alors que la carte est une carte.
    -------------------------------------------------------------------------- */
 
-/** Une tuile : le nombre, son unité dessous.
- *
- *  **Écart assumé sur la graisse** — la section 5 réserve la graisse 700 aux
- *  numéros de voiture ; ces chiffres l'emploient, sur demande explicite. C'est
- *  la seule dérogation de l'écran, et elle est bornée à ces trois tuiles.
- *
- *  Le rayon de 12px n'est pas dans l'échelle de la section 5 non plus (14px est
- *  le plus petit). Il est demandé, et il reste dans l'esprit : plus l'élément
- *  est petit, plus le rayon l'est. */
-function BlocTemps({ valeur, label, anime }) {
-  return (
-    <div className="bg-texte shadow-carte flex flex-1 flex-col items-center gap-1.5 rounded-[12px] py-3.5">
-      <span className="text-[30px] leading-none font-bold tracking-[-0.02em] text-white tabular-nums">
-        {/* Le nombre se remet en place à chaque changement (transitions-dev 02,
-            déjà installé pour le compteur de bonus). Les secondes en sont
-            exclues : une animation par seconde n'accuse plus rien, elle
-            tourne en boucle. */}
-        {anime ? <Compteur valeur={valeur} /> : valeur}
-      </span>
-      <span className="text-label-sm text-white/60 uppercase">{label}</span>
-    </div>
-  );
-}
-
+/** L'horloge elle-même vit désormais dans `composants/Horloge.jsx` : l'écran de
+ *  saisie la demande aussi, et deux compositions écrites séparément auraient
+ *  divergé au premier ajustement. **Le rendu de cet écran est inchangé** — il
+ *  garde la variante compacte et le glissement vers les secondes. */
 function CarteFermeture({ etat, aPronostique, onModifier }) {
-  // Trois états, et ils ne disent pas la même chose. Un Grand Prix dont Unibet
-  // n'a pas annoncé l'horaire **reste ouvert** — c'est la règle tenue aux trois
-  // étages depuis l'étape 5 — mais il n'a aucun décompte à afficher : écrire
-  // « 0s » serait faux dans les deux sens.
-  const inconnue = !etat.ferme && !etat.texte;
-  const label = etat.ferme ? "Pronostics" : inconnue ? "Départ" : "Fermeture dans";
-  const blocs = etat.ferme ? null : blocsRestant(etat.restant);
-
   return (
     <div className="rounded-bloc bg-fond shadow-bloc p-5">
-      <p className="text-label text-texte-doux text-center uppercase">{label}</p>
-
-      {blocs ? (
-        <div className="mt-3 flex items-start justify-center gap-2">
-          {blocs.map((bloc, rang) => (
-            <Fragment key={bloc.cle}>
-              {rang > 0 && (
-                <span
-                  aria-hidden="true"
-                  className="text-texte-doux pt-4 text-[22px] leading-none font-medium"
-                >
-                  :
-                </span>
-              )}
-              <BlocTemps
-                valeur={bloc.valeur}
-                label={bloc.label}
-                anime={bloc.anime}
-              />
-            </Fragment>
-          ))}
-        </div>
-      ) : (
-        <p className="text-score text-primaire mt-2 text-center">
-          {/* Les deux états sans décompte gardent l'échange en place
-              (transitions-dev 04) : le passage de l'horloge à « Fermés » se
-              produit sous les yeux du joueur, à cinq minutes du départ. */}
-          <TexteEchange valeur={etat.ferme ? "Fermés" : "À confirmer"} />
-        </p>
-      )}
+      <Horloge etat={etat} taille="compacte" />
 
       {!etat.ferme && (
         <Bouton variante="principal" className="mt-4" onClick={onModifier}>

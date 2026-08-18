@@ -1,5 +1,6 @@
 import { appelApi } from "./api.js";
 import { supabase } from "./supabase.js";
+import { clePilote } from "./format.js";
 import {
   GENRE_DONNEES,
   GENRE_SESSION,
@@ -350,6 +351,90 @@ export function indexerCotes(gp) {
 
 export function marcheDe(gp, slug) {
   return (gp?.marches ?? []).find((marche) => marche.marche === slug) ?? null;
+}
+
+/* --------------------------------------------------------------------------
+   Exclusion croisée — un même pilote ne peut pas occuper deux places.
+
+   Un pilote choisi comme vainqueur est déjà premier, donc déjà sur le podium :
+   le reproposer aux deux emplacements suivants revient à proposer de miser deux
+   fois sur le même événement. Même chose entre les deux emplacements du podium,
+   que le schéma de l'étape 5 interdit d'ailleurs en base (`check` sur
+   `pronostic_podium`). Écarter de la liste vaut mieux que laisser choisir puis
+   refuser après coup.
+
+   **La comparaison se fait sur le LIBELLÉ du pilote, jamais sur
+   `id_outcome_unibet`.** C'est le point à ne pas défaire : un même pilote ne
+   porte pas le même identifiant d'issue selon le marché — Antonelli vaut
+   `o701093319` au marché « Vainqueur » et `o701094802` au marché « Podium » du
+   même Grand Prix (relevé à la version `0.6.1`). Un filtre par identifiant
+   n'exclurait donc **jamais** le vainqueur du podium, alors même qu'il
+   fonctionne entre les deux emplacements du podium, tirés du même marché.
+   `clePilote` normalise (minuscules, accents, espaces) : c'est la clé même dont
+   `formaterPilote` se sert pour nommer, les deux ne peuvent pas diverger.
+
+   Ces deux fonctions vivent ici et non dans l'écran parce qu'elles sont du
+   rapprochement de données, pas de la mise en page — au même titre
+   qu'`organiserPronostics` juste en dessous.
+   -------------------------------------------------------------------------- */
+
+/**
+ * Les options d'un emplacement, débarrassées des pilotes déjà pris ailleurs.
+ *
+ * `conserver` est l'identifiant du choix courant de cet emplacement-là : il
+ * reste dans sa propre liste quoi qu'il arrive. Sans lui, un emplacement en
+ * conflit verrait sa ligne disparaître de l'accordéon ouvert, et le joueur ne
+ * verrait plus ce qu'il est en train de remplacer.
+ */
+export function optionsDisponibles(options, prises, conserver = null) {
+  const exclues = new Set(
+    (prises ?? [])
+      .filter((cote) => cote?.pilote)
+      .map((cote) => clePilote(cote.pilote)),
+  );
+  return (options ?? []).filter(
+    (option) =>
+      option.id === conserver || !exclues.has(clePilote(option.pilote)),
+  );
+}
+
+/* --------------------------------------------------------------------------
+   Les bonus **encore épinglés**, et le défaut que cela corrige.
+
+   L'écran de saisie comptait ses bonus sur l'état prérempli depuis les
+   pronostics déjà enregistrés. Or **un bonus enregistré n'est pas forcément
+   encore un favori** : le joueur peut avoir dépunaisé la cote dans le tableau
+   des cotes après avoir validé, et le pronostic, lui, reste en base. La rangée
+   correspondante n'est alors plus affichée — la liste ne montre que les favoris
+   — mais son identifiant restait compté. D'où « 3 sur 3 max » avec deux cases
+   cochées, et, pire, les autres favoris grisés par une saturation que rien à
+   l'écran n'expliquait.
+
+   Ce n'était pas seulement un compteur faux : **la saisie aurait été refusée**.
+   La route vérifie que chaque bonus est bien dans les favoris (règle 4.2) et
+   nomme la cote fautive ; le joueur aurait vu un message désignant une cote
+   absente de son écran.
+
+   Une dérivation, et non un filtrage à l'initialisation : elle reste juste
+   quand `useDonnees` sert d'abord le cache puis les données fraîches, où les
+   favoris peuvent changer **après** le préremplissage. Et l'état brut est
+   conservé côté écran — un bonus dont la cote est réépinglée redevient coché de
+   lui-même, ce qu'il est toujours en base.
+   -------------------------------------------------------------------------- */
+export function bonusEpingles(bonus, favoris) {
+  const epingles = new Set(
+    (favoris ?? []).map((favori) => favori.id_outcome_unibet),
+  );
+  return (bonus ?? []).filter((idOutcome) => epingles.has(idOutcome));
+}
+
+/** Un choix entre-t-il en conflit avec l'un de ceux déjà pris ailleurs ? */
+export function enConflit(choix, prises) {
+  if (!choix?.pilote) return false;
+  const cle = clePilote(choix.pilote);
+  return (prises ?? []).some(
+    (cote) => cote?.pilote && clePilote(cote.pilote) === cle,
+  );
 }
 
 /**

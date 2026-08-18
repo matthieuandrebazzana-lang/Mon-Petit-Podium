@@ -63,7 +63,22 @@ const LIBELLES_PILOTES = {
   "franco colapinto": "F.Colapinto",
 };
 
-function clePilote(nom) {
+/**
+ * La clé de comparaison d'un libellé de pilote.
+ *
+ * Exportée parce qu'elle sert à **deux** choses, et que les deux doivent se
+ * faire sur exactement la même clé : nommer un pilote (`formaterPilote`), et le
+ * reconnaître d'un marché à l'autre.
+ *
+ * Ce second usage n'est pas un raffinement. **Un même pilote ne porte pas le
+ * même `id_outcome_unibet` selon le marché** — Antonelli vaut `o701093319` au
+ * marché « Vainqueur » et `o701094802` au marché « Podium » du même Grand Prix
+ * (relevé à la version `0.6.1`). Comparer deux identifiants d'issue pour savoir
+ * s'il s'agit du même pilote ne marcherait donc jamais entre deux marchés : la
+ * seule chose que les deux partagent est le libellé.
+ */
+export function clePilote(nom) {
+  if (nom === null || nom === undefined) return "";
   return String(nom)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -187,17 +202,23 @@ export function decouperRestant(millisecondes) {
  * unité ne bouge plus qu'une fois par minute paraît arrêté. C'est déjà la règle
  * de `formaterRestant`, qui passe à « 32min 10s » dans la dernière heure.
  *
+ * **`avecSecondes: false` interdit ce glissement** : les trois blocs restent
+ * alors toujours jours / heures / minutes. C'est ce que demande l'écran de
+ * saisie, dont l'horloge est un repère de planification — on y vient pour
+ * savoir s'il reste du temps, pas pour compter les dernières secondes, et une
+ * unité qui change de nature sous les yeux y serait un mouvement pour rien.
+ *
  * `anime` dit quels blocs rejouent le mouvement à chaque changement : les
  * secondes en sont exclues, une animation par seconde étant une animation
  * perpétuelle, pas un accusé de changement.
  */
-export function blocsRestant(millisecondes) {
+export function blocsRestant(millisecondes, { avecSecondes = true } = {}) {
   if (millisecondes === null || millisecondes === undefined) return null;
 
   const { jours, heures, minutes, secondes } = decouperRestant(millisecondes);
   const pad = (n) => String(n).padStart(2, "0");
 
-  if (jours === 0 && heures === 0) {
+  if (avecSecondes && jours === 0 && heures === 0) {
     return [
       { cle: "h", valeur: pad(heures), label: "Heures", anime: true },
       { cle: "m", valeur: pad(minutes), label: "Minutes", anime: true },

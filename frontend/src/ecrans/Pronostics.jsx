@@ -9,22 +9,25 @@ import ZoneChargement from "../composants/ZoneChargement.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import { Pave } from "../composants/Squelette.jsx";
 import Compteur from "../composants/Compteur.jsx";
+import Horloge from "../composants/Horloge.jsx";
 import {
   IconeChevronAccordeon,
   IconeCoche,
-  IconeHorloge,
 } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { couleurBloc, tonalites } from "../lib/couleurs.js";
 import {
   BONUS_MAXIMUM,
+  bonusEpingles,
   MARCHE_PODIUM,
   MARCHE_VAINQUEUR,
   chargerSaisie,
   cleAccueilGp,
   enregistrerPronostics,
+  enConflit,
   indexerCotes,
   marcheDe,
+  optionsDisponibles,
   organiserPronostics,
 } from "../lib/pronostics.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
@@ -42,6 +45,24 @@ import { useFermeture } from "../lib/useFermeture.js";
 const COULEUR_VAINQUEUR = couleurBloc("rouge");
 const COULEUR_PODIUM = couleurBloc("bleu-ardoise");
 const COULEUR_BONUS = couleurBloc("amber");
+
+/**
+ * Le titre du bloc podium, et pourquoi il n'est plus celui du bookmaker.
+ *
+ * Unibet intitule son marché « Podium », et l'écran servait ce libellé tel
+ * quel. Il était trompeur : le vainqueur est déjà sur le podium, et un bloc
+ * « Podium » posé sous un bloc « Vainqueur » se lit comme s'il fallait y
+ * remettre les trois places — dont la première, déjà jouée juste au-dessus.
+ * Les deux emplacements sont en réalité les **deuxième et troisième** de la
+ * course.
+ *
+ * C'est le seul libellé de marché que l'écran réécrit, et le seul qu'il peut
+ * réécrire sans risque : `MARCHE_PODIUM` est une constante partagée avec le
+ * backend (règle 4.2), donc ce bloc-là ne peut désigner que ce marché-là. Les
+ * autres marchés continuent d'afficher le nom du bookmaker, seule source
+ * légitime du nom d'un marché découvert dynamiquement.
+ */
+const TITRE_PODIUM = "2e et 3e du podium";
 const tonVainqueur = tonalites(COULEUR_VAINQUEUR.hex);
 const tonPodium = tonalites(COULEUR_PODIUM.hex);
 const tonBonus = tonalites(COULEUR_BONUS.hex);
@@ -52,12 +73,25 @@ function SqueletteSaisie() {
       {/* Les blocs gardent leurs aplats de couleur : c'est la surface, pas le
           contenu, et les voir virer au gris puis revenir ferait clignoter
           l'écran au lieu de le remplir. */}
-      <div className="rounded-carte bg-primaire shadow-carte flex items-center justify-between gap-3 px-4.5 py-3.5">
-        <div className="flex-1">
-          <div className="h-2.5 w-24 rounded-full bg-white/25" />
-          <div className="mt-2 h-4 w-32 rounded-full bg-white/25" />
+      {/* L'horloge, à sa silhouette réelle : la carte beige, son label centré et
+          ses trois tuiles à leur hauteur. Sans elle, l'écran sauterait d'une
+          centaine de pixels à l'arrivée des données — le défaut déjà corrigé
+          sur les cartes de championnat en version `0.14.0`. Les tuiles gardent
+          leur aplat sombre, comme les blocs de couleur ci-dessous : seul leur
+          contenu est grisé. */}
+      <div className="rounded-bloc bg-fond shadow-bloc p-5">
+        <div className="bg-squelette mx-auto h-2.5 w-28 rounded-full" />
+        <div className="mt-3 flex items-start justify-center gap-2.5">
+          {[0, 1, 2].map((rang) => (
+            <div
+              key={rang}
+              className="bg-texte shadow-carte rounded-widget flex flex-1 flex-col items-center gap-2 py-4"
+            >
+              <div className="h-[48px] w-12 rounded-lg bg-white/15" />
+              <div className="h-2 w-12 rounded-full bg-white/15" />
+            </div>
+          ))}
         </div>
-        <div className="rounded-champ size-8 bg-white/15" />
       </div>
 
       <div className="rounded-carte bg-primaire shadow-carte p-4">
@@ -74,33 +108,29 @@ function SqueletteSaisie() {
   );
 }
 
-/** Bloc rouge du compte à rebours, maquette 09. */
+/**
+ * Le compte à rebours, en horloge à trois tuiles.
+ *
+ * Il tenait jusqu'ici sur une ligne d'un aplat rouge — « 2j 14h 32min »,
+ * tronqué au besoin —, ce qui demandait de lire une phrase pour en extraire
+ * trois nombres. Les tuiles les posent chacun sous son unité : c'est le même
+ * arbitrage qu'au bloc d'accueil et à l'écran récapitulatif, et c'est
+ * désormais **la même composition**, partagée (`composants/Horloge.jsx`).
+ *
+ * **La carte prend le beige du fond**, pas le blanc des autres cartes : sur une
+ * surface blanche, trois aplats presque noirs se découpent comme des trous. Sur
+ * le beige ils se lisent comme des objets posés, et c'est `shadow-bloc` qui dit
+ * alors que la carte est une carte. Même traitement qu'au récapitulatif.
+ *
+ * **Sans secondes** : cet écran est celui où l'on compose ses pronostics, on y
+ * vient savoir s'il reste du temps. Le récapitulatif, lui, garde le glissement
+ * vers les secondes — c'est l'écran où l'on revient vérifier juste avant la
+ * fermeture.
+ */
 function BlocFermeture({ etat }) {
   return (
-    <div className="rounded-carte bg-primaire shadow-aplat relative flex items-center justify-between gap-3 overflow-hidden px-4.5 py-3.5">
-      <span
-        aria-hidden="true"
-        className="lueur-haute pointer-events-none absolute inset-0"
-      />
-      <div className="relative min-w-0">
-        <p className="text-label uppercase text-white/70">
-          {etat.ferme ? "Pronostics" : "Fermeture dans"}
-        </p>
-        <p className="mt-0.5 truncate text-[20px] font-medium text-white">
-          {/* Le compte à rebours change toutes les secondes dans la dernière
-              heure : l'échange en place (transitions-dev 04) évite le
-              clignotement d'un simple remplacement de texte. */}
-          <TexteEchange
-            valeur={etat.ferme ? "Fermés" : (etat.texte ?? "Date à confirmer")}
-          />
-        </p>
-      </div>
-      <span
-        aria-hidden="true"
-        className="relative flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15"
-      >
-        <IconeHorloge className="size-[18px] text-white" />
-      </span>
+    <div className="rounded-bloc bg-fond shadow-bloc p-5">
+      <Horloge etat={etat} taille="grande" avecSecondes={false} />
     </div>
   );
 }
@@ -119,23 +149,23 @@ function Emplacement({
   onChoisir,
   ouvert,
   onBasculer,
-  etiquette,
   ton,
   couleur,
   verrouille,
 }) {
-  // Le choix, ou son absence, dit toujours la même chose au même endroit : une
-  // étiquette de place à gauche (elle seule distingue les deux pilotes du
-  // podium), la valeur au centre, les points à droite.
+  // Le choix, ou son absence, dit toujours la même chose au même endroit : la
+  // valeur à gauche, les points à droite.
+  //
+  // **Les deux emplacements du podium ne sont plus numérotés.** Ils portaient
+  // une pastille « 1er » et « 2e », qui désignaient leur rang dans le bloc et
+  // non dans la course — alors qu'ils valent les 2e et 3e places. Les numéroter
+  // laissait croire à un ordre à respecter, que le schéma de l'étape 5 exclut
+  // explicitement : il n'y a **aucun ordre** entre `pilote_1` et `pilote_2`, et
+  // la validation de l'étape 6 demande « ces deux pilotes sont-ils sur le
+  // podium ? », jamais « lequel devant ». Rien ne les distingue donc, et rien
+  // ne doit prétendre le contraire.
   const valeur = (
     <span className="flex min-w-0 flex-1 items-center gap-2">
-      {etiquette && (
-        <span
-          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${ton.surfaceForte} ${ton.texte}`}
-        >
-          {etiquette}
-        </span>
-      )}
       <span
         className={`min-w-0 flex-1 truncate text-[15px] ${
           choisi ? `font-medium ${ton.texte}` : ton.texteDoux
@@ -327,6 +357,15 @@ export default function Pronostics() {
   const favoris = donnees?.favoris ?? [];
   const cote = (id) => (id ? (index.get(id) ?? null) : null);
 
+  // Le compteur, la saturation et l'envoi ne comptent que les bonus **encore
+  // épinglés** : un bonus enregistré dont la cote a été dépunaisée depuis
+  // n'occupe aucune des trois places. La règle et sa raison vivent dans
+  // `lib/pronostics.js`, avec la fonction qui la porte.
+  const bonusRetenus = useMemo(
+    () => bonusEpingles(bonus, favoris),
+    [bonus, favoris],
+  );
+
   function choisirVainqueur(option) {
     setVainqueur(option.id);
     setOuvert(null);
@@ -350,11 +389,42 @@ export default function Pronostics() {
         return actuel.filter((choix) => choix !== idOutcome);
       }
       // Le maximum est une limite, pas un quota : au-delà, l'appui ne fait
-      // rien plutôt que de remplacer en douce un bonus déjà choisi.
-      if (actuel.length >= BONUS_MAXIMUM) return actuel;
+      // rien plutôt que de remplacer en douce un bonus déjà choisi. Il se
+      // compte sur les seuls bonus **encore épinglés**, pour la même raison que
+      // le compteur : un bonus orphelin ne remplit aucune des trois places, il
+      // ne peut donc pas en bloquer une.
+      if (bonusEpingles(actuel, favoris).length >= BONUS_MAXIMUM) return actuel;
       return [...actuel, idOutcome];
     });
   }
+
+  /* ------------------------------------------------------------------------
+     Exclusion croisée — un pilote déjà pris ailleurs ne se propose plus.
+
+     La règle et sa raison vivent dans `lib/pronostics.js`, avec les deux
+     fonctions qui la portent : c'est du rapprochement de données, et l'écran
+     n'a plus qu'à dire *quelles* places s'excluent.
+
+     L'exclusion est **réactive et non destructive** : elle se recalcule à
+     chaque rendu, si bien que changer de vainqueur rend aussitôt l'ancien aux
+     listes du podium et en retire le nouveau, sans toucher aux sélections déjà
+     faites. Une sélection devenue conflictuelle n'est pas effacée en silence —
+     elle reste affichée et c'est `conflits` qui la signale à la validation.
+     Vider un choix que le joueur a fait, sans rien dire, serait pire que le lui
+     montrer.
+     ------------------------------------------------------------------------ */
+  const prisesAilleurs = (place) => [cote(vainqueur), cote(podium[1 - place])];
+
+  const optionsPodium = (place) =>
+    optionsDisponibles(
+      marchePodium?.cotes ?? [],
+      prisesAilleurs(place),
+      podium[place],
+    );
+
+  const conflits = [0, 1].some((place) =>
+    enConflit(cote(podium[place]), prisesAilleurs(place)),
+  );
 
   async function valider() {
     setErreurEnvoi(null);
@@ -369,12 +439,22 @@ export default function Pronostics() {
       setErreurEnvoi("Le podium demande deux pilotes.");
       return;
     }
+    // Le joueur a changé de vainqueur après avoir rempli son podium. La base
+    // refuserait de toute façon deux fois le même pilote ; le dire ici évite
+    // l'aller-retour et nomme le geste à faire.
+    if (conflits) {
+      setTentative((n) => n + 1);
+      setErreurEnvoi(
+        "Ton vainqueur est déjà sur le podium : choisis deux autres pilotes.",
+      );
+      return;
+    }
 
     setEnvoi(true);
     const resultat = await enregistrerPronostics(gpId, {
       vainqueur,
       podium: { pilote_1: podium[0], pilote_2: podium[1] },
-      bonus,
+      bonus: bonusRetenus,
     });
     setEnvoi(false);
 
@@ -424,14 +504,9 @@ export default function Pronostics() {
   // somme de ses deux pilotes (règle tranchée à l'étape 6). Il est affiché dans
   // la barre collée plutôt qu'en fin de page — c'est le chiffre qui fait
   // changer d'avis, il doit bouger sous les yeux au moment du choix.
-  const potentiel = [vainqueur, ...podium, ...bonus]
+  const potentiel = [vainqueur, ...podium, ...bonusRetenus]
     .map((id) => cote(id)?.points ?? 0)
     .reduce((total, points) => total + points, 0);
-
-  // Le second pilote du podium ne peut pas être le premier : l'écarter de la
-  // liste vaut mieux que de le laisser choisir puis de le refuser.
-  const optionsPodium = (place) =>
-    (marchePodium?.cotes ?? []).filter((option) => option.id !== podium[1 - place]);
 
   return (
     <Ecran direction="avant">
@@ -502,7 +577,7 @@ export default function Pronostics() {
                     </BlocObligatoire>
 
                     <BlocObligatoire
-                      titre={marchePodium.libelle}
+                      titre={TITRE_PODIUM}
                       couleur={COULEUR_PODIUM}
                       ton={tonPodium}
                     >
@@ -518,7 +593,6 @@ export default function Pronostics() {
                               ouvert === `podium-${place}` ? null : `podium-${place}`,
                             )
                           }
-                          etiquette={place === 0 ? "1er" : "2e"}
                           couleur={COULEUR_PODIUM}
                           ton={tonPodium}
                           verrouille={etat.ferme}
@@ -532,7 +606,7 @@ export default function Pronostics() {
                       </p>
                       <p className="text-texte-doux text-[12px]">
                         <Compteur
-                          valeur={bonus.length}
+                          valeur={bonusRetenus.length}
                           className="text-primaire font-medium"
                         />{" "}
                         sur {BONUS_MAXIMUM} max
@@ -560,8 +634,11 @@ export default function Pronostics() {
                       // elle-même : le blanc y tombe à 2,2:1 de contraste.
                       <div className="flex flex-col gap-2">
                         {favoris.map((favori) => {
-                          const actif = bonus.includes(favori.id_outcome_unibet);
-                          const sature = !actif && bonus.length >= BONUS_MAXIMUM;
+                          const actif = bonusRetenus.includes(
+                            favori.id_outcome_unibet,
+                          );
+                          const sature =
+                            !actif && bonusRetenus.length >= BONUS_MAXIMUM;
                           return (
                             <button
                               key={favori.id_outcome_unibet}

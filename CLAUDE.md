@@ -2932,6 +2932,90 @@ Le second commence à y=154,50 quand sa tranche commence à 121 : les cadrages p
 | Aperçu rendu | les deux logos dessinés à 400px : trophée et étincelle pour Créer, deux silhouettes pour Rejoindre, **centrés et non rognés** |
 | `npm run build` | passe, 14 entrées au précache, version `0.28.0` dans le bundle |
 
+---
+
+**Écran de saisie — libellé du podium, exclusion croisée, compteur de favoris, horloge** (version `0.29.0`)
+
+Cinq corrections sur la maquette 09, dont deux défauts de logique. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+---
+
+***Correction 1 — le bloc « Podium » ne s'appelle plus comme le marché.***
+
+L'écran servait le libellé du bookmaker tel quel. Il était trompeur : le vainqueur est déjà sur le podium, et un bloc « Podium » posé sous un bloc « Vainqueur » se lit comme s'il fallait y remettre les trois places — dont la première, jouée juste au-dessus. Les deux emplacements sont en réalité les **deuxième et troisième** de la course, et le titre le dit désormais : **« 2e et 3e du podium »**.
+
+C'est le seul libellé de marché que l'écran réécrit, et le seul qu'il **peut** réécrire sans risque : `MARCHE_PODIUM` est une constante partagée avec le backend (règle 4.2), donc ce bloc-là ne peut désigner que ce marché-là. Les autres continuent d'afficher le nom du bookmaker, seule source légitime du nom d'un marché découvert dynamiquement (section 3.1). L'étiquette « Obligatoire » est inchangée.
+
+***Correction 2 — les deux emplacements du podium ne sont plus numérotés.***
+
+Ils portaient une pastille « 1er » et « 2e », qui désignaient leur rang dans le bloc et non dans la course. Elles disparaissent, et pas seulement parce qu'elles induisaient en erreur : **le schéma de l'étape 5 pose qu'il n'y a aucun ordre entre `pilote_1` et `pilote_2`**, et la validation de l'étape 6 demande « ces deux pilotes sont-ils sur le podium ? », jamais « lequel devant ». C'est aussi ce qui a fait trancher, à l'étape 6, qu'un podium réussi rapporte la **somme** des deux cotes. Rien ne distingue les deux emplacements, et rien ne doit prétendre le contraire.
+
+---
+
+***Correction 3 — l'exclusion croisée, et pourquoi un filtre par identifiant n'aurait rien exclu du tout.*** C'est le point de la version.
+
+Un pilote choisi comme vainqueur est déjà premier, donc déjà sur le podium : le reproposer aux deux emplacements suivants revient à proposer de miser deux fois sur le même événement. Il disparaît désormais des deux listes, et un pilote pris à l'un des emplacements du podium disparaît de l'autre.
+
+**La comparaison se fait sur le LIBELLÉ du pilote, jamais sur `id_outcome_unibet`, et c'est ce qu'il ne faut pas défaire.** Un même pilote ne porte pas le même identifiant d'issue selon le marché — Antonelli vaut `o701093319` au marché « Vainqueur » et `o701094802` au marché « Podium » du même Grand Prix, relevé à la version `0.6.1`. Un filtre par identifiant fonctionne entre les deux emplacements du podium, tirés du même marché, et **n'exclut donc jamais le vainqueur** : c'était exactement l'écriture en place, et elle donnait l'illusion de marcher. Un contrôle du jeu de tests le démontre en montrant que le filtre par identifiant laisse bien les trois pilotes.
+
+`clePilote` est **exportée** de `lib/format.js` pour cela. Elle y était privée, au service de `formaterPilote` : c'est la même clé qui sert maintenant à nommer un pilote et à le reconnaître d'un marché à l'autre, les deux ne peuvent donc pas diverger. Elle normalise casse, accents et espaces — Unibet écrit tantôt « Pays Bas » tantôt « Pays-Bas » sur ses Grands Prix, rien ne garantit qu'il soit plus régulier sur ses pilotes.
+
+Trois points de mise en œuvre :
+
+1. **L'exclusion est réactive et non destructive.** Elle se recalcule à chaque rendu : changer de vainqueur après avoir rempli le podium rend aussitôt l'ancien aux deux listes et en retire le nouveau, **sans toucher aux sélections déjà faites**. Une sélection devenue conflictuelle n'est pas effacée en silence — elle reste affichée, et la validation la nomme (« Ton vainqueur est déjà sur le podium »). Vider un choix que le joueur a fait, sans rien dire, serait pire que le lui montrer ; et la base refuserait de toute façon, la garde évite l'aller-retour.
+2. **Le choix courant d'un emplacement reste dans sa propre liste.** Sans ce `conserver`, un emplacement en conflit verrait sa ligne disparaître de l'accordéon ouvert, et le joueur ne verrait plus ce qu'il est en train de remplacer.
+3. **`optionsDisponibles` et `enConflit` vivent dans `lib/pronostics.js`**, pas dans l'écran : c'est du rapprochement de données, au même titre qu'`organiserPronostics`. L'écran n'a plus qu'à dire *quelles* places s'excluent — et la règle devient vérifiable sans monter React.
+
+---
+
+***Correction 4 — le compteur de favoris comptait des bonus qui n'en étaient plus.***
+
+Il affichait « 3 sur 3 max » avec deux cases cochées. La cause : il lisait l'état prérempli depuis les pronostics **enregistrés**, or **un bonus enregistré n'est pas forcément encore un favori**. Le joueur peut avoir dépunaisé la cote dans le tableau des cotes après avoir validé ; le pronostic, lui, reste en base. La rangée n'est alors plus affichée — la liste ne montre que les favoris — mais son identifiant restait compté.
+
+Ce n'était pas seulement un compteur faux. Il entraînait deux dégâts en cascade :
+
+- **Les autres favoris étaient grisés** par une saturation que rien à l'écran n'expliquait : trois places prises, dont une invisible.
+- **La saisie aurait été refusée.** La route vérifie que chaque bonus est bien dans les favoris (règle 4.2) et nomme la cote fautive ; le joueur aurait vu un message désignant une cote absente de son écran.
+
+`bonusEpingles(bonus, favoris)` porte la correction, dans `lib/pronostics.js`. **Une dérivation, et non un filtrage à l'initialisation** : c'est ce qui la rend juste quand `useDonnees` sert d'abord le cache puis les données fraîches, où les favoris peuvent changer **après** le préremplissage. L'état brut est conservé côté écran — un bonus dont la cote est réépinglée redevient coché de lui-même, ce qu'il est toujours en base. Le compteur, la saturation **et le corps envoyé à la route** en dérivent tous les trois : les trois divergeraient s'ils comptaient chacun de leur côté.
+
+---
+
+***Correction 5 — l'horloge, et son extraction.***
+
+Le compte à rebours tenait sur une ligne d'un aplat rouge — « 2j 14h 32min », tronqué au besoin —, ce qui demandait de lire une phrase pour en extraire trois nombres. Il devient l'horloge à trois tuiles : label « FERMETURE DANS » centré en petites capitales espacées, trois tuiles `#1A1A1A` au rayon `widget` (16px), chiffres blancs à **48px graisse 700**, libellés JOURS / HEURES / MINUTES en blanc à 60 % sous chacun, et deux « : » en texte sombre entre les tuiles.
+
+**La composition n'est pas réécrite : elle est partagée.** L'écran récapitulatif en avait déjà une (version `0.18.0`) ; elle passe dans `composants/Horloge.jsx`, avec deux tailles. Deux compositions écrites séparément auraient divergé au premier ajustement, et le symptôme aurait été discret — le même Grand Prix affichant deux fois le même temps restant de deux façons différentes, à un écran d'écart. **Le rendu du récapitulatif est inchangé**, vérifié caractère par caractère contre son HTML d'avant l'extraction.
+
+*Trois écarts assumés, tous bornés à ces tuiles* : la graisse **700**, que la section 5 réserve aux numéros de voiture ; le 48px, hors de l'échelle typographique ; et le rayon de 12px de la variante compacte (14px est le plus petit de l'échelle). Les trois étaient déjà ceux du récapitulatif, à la taille près, et le rayon de la grande variante rentre lui dans les jetons.
+
+**La carte prend le beige du fond**, pas le blanc des autres cartes : sur une surface blanche, trois aplats presque noirs se découpent comme des trous. Sur le beige ils se lisent comme des objets posés, et c'est `shadow-bloc` qui dit alors que la carte est une carte. Contrastes mesurés sur `#1A1A1A` : chiffre blanc plein **17,4:1**, libellé à 60 % **6,6:1**.
+
+***Sans secondes, et c'est un paramètre, pas une réécriture.*** `blocsRestant` glisse vers les secondes sous l'heure — c'est la règle du récapitulatif, l'écran où l'on revient vérifier juste avant la fermeture. L'écran de saisie est celui où l'on **compose** ses pronostics : on y vient savoir s'il reste du temps, et une unité qui change de nature sous les yeux y serait un mouvement pour rien. `avecSecondes: false` fige donc les trois blocs sur jours / heures / minutes. **Le défaut est inchangé**, le récapitulatif ne bouge pas.
+
+*Le squelette suit la nouvelle silhouette* — carte beige, label centré, trois tuiles à leur hauteur réelle. Sans lui l'écran sauterait d'une centaine de pixels à l'arrivée des données, le défaut déjà corrigé sur les cartes de championnat en version `0.14.0`. Les tuiles y gardent leur aplat sombre, comme les blocs de couleur voisins : seul leur contenu est grisé (règle de l'étape 9).
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Les chiffres se remettent en place par *number pop-in* (transitions-dev 02), déjà installé pour le compteur de bonus, et les deux états sans décompte gardent *text states swap* (04). **La bascule 3D façon calendrier mécanique, que la demande donnait pour facultative, n'est pas faite** : elle demande `transform-style: preserve-3d` et `backface-visibility`, or chaque bloc de l'app vit sous `.t-stagger-line`, qui porte `will-change: transform` en permanence — c'est précisément la configuration où Safari iOS, la cible, aplatit ou fait clignoter les faces. C'est le même piège de contexte d'empilement que celui documenté à l'étape 10, à la version `0.13.0` et à la `0.28.0`. La composition prime, elle est ici entière ; le mouvement reste celui, éprouvé, du snippet 02.
+
+*Apport d'`/apple-design`* — les trois tuiles sont des surfaces de lecture et non des cibles, donc sans retour tactile ; les deux « : » sont `aria-hidden` ; l'horloge répond au « combien de temps me reste-t-il » sans faire lire une phrase (§16) ; et le squelette suit la silhouette réelle (§7, cohérence spatiale). Les zones tactiles de 44px, le retour à l'appui, la barre collée et l'accordéon des emplacements sont inchangés.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage pré-rempli) : **86 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| `clePilote` | casse, accents et espaces normalisés ; deux orthographes d'un même pilote se rejoignent ; `null` sans lever |
+| `blocsRestant` | **défaut inchangé** — glisse vers les secondes sous l'heure ; `avecSecondes:false` → toujours J/H/M, **aucun bloc « Secondes »** ; identique dans les deux modes au-delà d'une heure ; valeurs paddées ; **les secondes ne sont jamais animées** ; `formaterRestant` et `decouperRestant` intacts |
+| Horloge | label centré en petites capitales ; **trois tuiles** `bg-texte`, rayon 16px ; chiffres 48px graisse 700 blancs en chasse tabulaire ; libellés à 60 % ; **deux « : » sombres et décoratifs** ; fermé → « Fermés » sans tuile ; horaire inconnu → « À confirmer », **aucune durée fabriquée** ; taille inconnue → repli compacte |
+| **Non-régression du récapitulatif** | l'horloge compacte rend **exactement le HTML d'avant l'extraction** ; rayon 12px et chiffre 30px conservés, jamais le 48px ; carte beige, bouton, pronostics et total (617 pts) intacts ; **aucune cote brute « ×N »** |
+| Podium | titre « 2e et 3e du podium » servi, **le libellé nu « Podium » n'est plus un titre de bloc** ; le marché Vainqueur garde celui du bookmaker ; **plus aucune pastille « 1er » ni « 2e »** ; les trois emplacements restent rendus ; « Obligatoire » conservé |
+| **Exclusion croisée** | vainqueur choisi → **il disparaît des deux listes du podium** ; **preuve qu'un filtre par identifiant laisserait les trois pilotes** ; l'autre emplacement du podium exclut aussi ; les deux exclusions se cumulent ; **le choix courant reste dans sa propre liste** ; changement de vainqueur → l'ancien revient, le nouveau part, **la sélection existante n'est pas vidée** ; orthographes différentes reconnues ; cote retirée (sans pilote) n'exclut rien ; listes vides sans lever ; `enConflit` juste dans les quatre cas |
+| **Compteur de favoris** | deux épinglés → deux comptés ; **bonus orphelin → deux et non trois**, et c'est bien l'orphelin qui sort ; **la saturation ne se déclenche plus** ; réépingler le rend ; ordre de sélection conservé ; entrées absentes sans lever |
+| Écran | horloge à trois tuiles rendue, **aucune seconde**, carte beige à ombre de bloc, **plus d'aplat rouge de compte à rebours** ; les trois favoris rendus et aucun grisé |
+| CSS de production | `rounded-widget`, 48px, 26px, `bg-squelette`, `text-white/60` et `rounded-bloc` bien générés |
+| `npm run build` | passe, version `0.29.0` dans le bundle |
+
+**Une limite du banc d'essai, à connaître** — c'est la même qu'à la version `0.12.0` : le rendu statique n'exécute aucun effet, donc le préremplissage des bonus ne peut pas y apparaître et le compteur y part toujours de zéro. C'est précisément pourquoi les trois règles corrigées (`optionsDisponibles`, `enConflit`, `bonusEpingles`) ont été sorties de l'écran vers `lib/pronostics.js` : elles sont désormais vérifiables directement, sans monter React, et c'est là que le jeu de tests les éprouve.
+
 ### Bugs connus
 
 *(Aucun.)*
