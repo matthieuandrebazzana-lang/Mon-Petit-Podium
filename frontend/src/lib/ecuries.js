@@ -28,25 +28,27 @@
  */
 
 /**
- * Les onze écuries de la grille 2026, dans l'ordre du championnat constructeurs
- * de fin de saison précédente. Une couleur par écurie, écrite **une seule
- * fois** : les deux tables exportées et les alias y puisent, si bien qu'aucune
+ * Les onze écuries de la grille 2026 et leur teinte. Une couleur par écurie,
+ * écrite **une seule fois** : les deux tables exportées et les alias y puisent, si bien qu'aucune
  * écurie ne peut recevoir deux teintes différentes selon le libellé qui la
  * désigne. C'était le cas avant, et c'est ce qui avait laissé passer huit
  * pilotes rangés dans la mauvaise écurie.
  */
 const ECURIES = {
-  Mercedes: "#00D2BE",
-  Ferrari: "#E8002D",
-  "Red Bull": "#3671C6",
+  Ferrari: "#FF2800",
   McLaren: "#FF8000",
-  Alpine: "#FF87BC",
-  Audi: "#6E6E6E",
-  "Racing Bulls": "#1B3A6B",
-  "Aston Martin": "#358C75",
-  Haas: "#B6BABD",
+  Mercedes: "#00D2BE",
+  "Aston Martin": "#006F44",
+  "Red Bull": "#1E3A8A",
   Williams: "#37BEDD",
-  Cadillac: "#C41230",
+  Alpine: "#0090FF",
+  Haas: "#212121",
+  "Racing Bulls": "#6CBBEE",
+  // La clé canonique reste « Audi », la forme qu'écrit
+  // `backend/app/calcul/pilotes.py` ; « Audi F1 Team » est servie par les alias
+  // juste en dessous et rend exactement la même teinte.
+  Audi: "#FF4D4D",
+  Cadillac: "#9CA3AF",
 };
 
 /**

@@ -3101,6 +3101,60 @@ L'étoile est le point qu'il fallait vérifier : elle est le **seul** indicateur
 | Règles permanentes | **aucune cote brute « ×N »**, ni « ligue » |
 | `npm run build` | passe, version `0.30.0` dans le bundle |
 
+---
+
+**Teintes d'écurie revenues à la palette précédente** (version `0.31.0`)
+
+Les onze couleurs de `frontend/src/lib/ecuries.js` reprennent **exactement les valeurs qui étaient en place avant la version `0.30.0`**. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`.
+
+***Les associations pilote → écurie ne bougent pas, et c'est tout l'intérêt de la séparation faite en `0.30.0`.*** La correction de fond de cette version — les huit pilotes rangés dans la mauvaise écurie, Hamilton chez Mercedes, Antonelli chez Cadillac, Ocon chez Alpine… — est **intégralement conservée**. Seul `ECURIES` change, la table des onze teintes ; `GRILLE`, les alias et les deux tables exportées en dérivent sans une ligne modifiée. C'est précisément ce que la refonte en une source unique permettait : **changer la palette ne peut plus, mécaniquement, réintroduire une erreur d'association**.
+
+| Écurie | `0.30.0` | `0.31.0` |
+|---|---|---|
+| Ferrari | `#E8002D` | **`#FF2800`** |
+| McLaren | `#FF8000` | `#FF8000` |
+| Mercedes | `#00D2BE` | `#00D2BE` |
+| Aston Martin | `#358C75` | **`#006F44`** |
+| Red Bull | `#3671C6` | **`#1E3A8A`** |
+| Williams | `#37BEDD` | `#37BEDD` |
+| Alpine | `#FF87BC` | **`#0090FF`** |
+| Haas | `#B6BABD` | **`#212121`** |
+| Racing Bulls | `#1B3A6B` | **`#6CBBEE`** |
+| Audi | `#6E6E6E` | **`#FF4D4D`** |
+| Cadillac | `#C41230` | **`#9CA3AF`** |
+
+**La clé canonique d'Audi reste « Audi » et non « Audi F1 Team »**, bien que la table fournie emploie la seconde forme. C'est « Audi » qu'écrit `backend/app/calcul/pilotes.py`, donc la forme que le marché « Ecurie Vainqueur » doit retrouver de part et d'autre ; « Audi F1 Team » est servie par les alias et rend **exactement la même teinte**. Un contrôle vérifie les deux. Inverser les deux rôles n'aurait rien changé à l'écran, mais aurait fait diverger la clé du frontend de celle du backend pour rien.
+
+*Périmètre inchangé*, identique à celui de `lib/palette.js`, `lib/couleurs.js` et `DrapeauxGP.jsx` : ces couleurs ne peignent que le fond d'un widget de cote (9,4 %) et son liseré (60 %). Jamais un fond d'écran, jamais un texte, jamais une bordure de bloc.
+
+*Contrastes recalculés sur les onze teintes*, aux deux opacités d'usage :
+
+| Élément | Pire cas | Écurie |
+|---|---|---|
+| Nom du pilote `#1A1A1A` | **14,48:1** | Haas |
+| Points `#800111` | **9,05:1** | Haas |
+| Étoile au repos `secondaire/60` | **3,17:1** | Haas |
+
+L'étoile est le point qu'il faut vérifier à chaque changement de palette : elle est le **seul** indicateur de l'état « pas en favori » depuis la version `0.26.0`, donc soumise au plancher de 3:1 de WCAG 1.4.11. Elle le tient sur les onze, au plus juste sur le noir Haas — c'est la valeur que la version `0.27.0` mesurait déjà (3,16:1), la palette étant la même.
+
+**Ce que le changement de palette déplace, mesuré.** La collision Ferrari / Cadillac signalée en `0.30.0` (4 niveaux d'écart sur 255 au fond teinté, deux rouges) **disparaît** : Cadillac redevient gris. En contrepartie, quatre écuries se regroupent dans les cyans et les bleus — Mercedes / Williams (5 niveaux), Williams / Alpine (5), Williams / Racing Bulls (5), Mercedes / Alpine (6). Le liseré à 60 % les écarte de 34 à 42 niveaux, et le nom du pilote est écrit juste dessous : la règle posée en `0.27.0` tient, **la teinte est un renfort, jamais le seul porteur de l'information**.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.**
+
+*Vérifié* — modules chargés par le chargeur SSR de Vite, contrastes recalculés, rendu hors navigateur (`react-dom/server`, cache localStorage pré-rempli) : **101 contrôles passent**, le même jeu qu'en `0.30.0` avec ses valeurs attendues mises à jour.
+
+| Contrôle | Résultat |
+|---|---|
+| Écuries | onze, **les onze hexadécimaux exacts un à un**, deux à deux distincts, tous au format `#RRGGBB` |
+| Pilotes | vingt-deux, chacun rattaché à la bonne écurie, deux par écurie |
+| **Les huit corrections de la `0.30.0`** | **toujours en place** — pour chacun, la bonne écurie est servie et l'ancienne ne l'est plus ; le contrôle est écrit en écuries et non en hexadécimaux, il survit donc à tout changement de palette |
+| **Accord avec le backend** | les 22 lignes de `pilotes.py` relues et comparées : **aucun désaccord** |
+| Alias | les neuf formes longues résolues ; **« Audi F1 Team » et « Audi » rendent la même teinte** ; « A.Antonelli » comme « AK.Antonelli » ; casse, accents et espaces normalisés |
+| Repli | marché spécial, pilote inconnu, entrées vides et clé héritée d'`Object` → `null` |
+| Écran des cotes | neuf widgets appariés entre ce qu'ils affichent et ce qu'ils peignent ; Verstappen bleu marine, Hamilton rouge Ferrari, Antonelli turquoise, Colapinto bleu Alpine, **Ocon noir Haas**, **Perez gris Cadillac** ; liseré à 60 % de la teinte propre à chaque widget ; **aucune teinte de la `0.30.0` ne subsiste** |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue » |
+| `npm run build` | passe, version `0.31.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
