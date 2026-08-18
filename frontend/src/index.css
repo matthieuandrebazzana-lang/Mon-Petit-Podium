@@ -374,6 +374,26 @@
    groupées d'iOS. Sur le tableau des cotes, où chaque marché aligne vingt-deux
    pilotes, c'est ce qui empêche de perdre le nom du marché qu'on est en train
    de lire. */
+/* Hauteur d'un en-tête de marché : ses deux rembourrages de 10px et la
+   pastille de compteur. Elle sert d'ancre de défilement, pas de mise en page —
+   l'en-tête se dimensionne toujours sur son contenu. */
+:root {
+  --marche-hauteur: 46px;
+}
+
+/* Ce sur quoi un défilement programmé doit s'arrêter : sous la barre d'écran
+   ET sous l'en-tête de marché, qui est lui-même collant. Sans elle, un
+   `scrollIntoView` ou le défilement automatique du navigateur vers un bouton
+   reçu au clavier posent la cible pile sous les deux barres, qui la recouvrent.
+   C'est le cas concret sur le tableau des cotes : atteindre l'étoile d'une
+   première ligne de marché à la tabulation la faisait passer derrière
+   l'en-tête. */
+@utility ancre-collante {
+  scroll-margin-top: calc(
+    var(--entete-hauteur, 0px) + var(--marche-hauteur) + --spacing(3)
+  );
+}
+
 @utility section-collante {
   position: sticky;
   top: var(--entete-hauteur, 0px);
@@ -871,6 +891,15 @@
    réserver sa hauteur. */
 .t-skel--flux {
   display: grid;
+  /* La piste est bornée à zéro, jamais laissée en `auto`. Une colonne implicite
+     `auto` vaut au moins le min-content de son contenu : il suffit qu'un
+     descendant refuse de se comprimer (un widget de cote en `min-width: auto`,
+     un libellé en `white-space: nowrap`) pour que la couche s'élargisse au-delà
+     de l'écran et fasse défiler la page à l'horizontale. `minmax(0, 1fr)` la
+     colle à la largeur du parent quoi qu'elle contienne — c'est la même
+     protection que `grid-cols-2` de Tailwind, qui compile déjà en
+     `repeat(2, minmax(0, 1fr))` et non en `1fr 1fr`. */
+  grid-template-columns: minmax(0, 1fr);
 }
 .t-skel--flux > .t-skel-skeleton,
 .t-skel--flux > .t-skel-content {

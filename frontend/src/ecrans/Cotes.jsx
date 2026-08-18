@@ -12,6 +12,7 @@ import { Barre, Pave } from "../composants/Squelette.jsx";
 import { IconeCroix, IconeEtoile } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { couleurMarche, encreSurBlanc, tonalites } from "../lib/couleurs.js";
+import { couleurEcurie } from "../lib/ecuries.js";
 import { basculerFavori, chargerTableauCotes } from "../lib/pronostics.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 import {
@@ -28,6 +29,11 @@ import { useFermeture } from "../lib/useFermeture.js";
    `0.14.0`. */
 const HAUTEUR_WIDGET = 90;
 
+/* Les deux opacités de la teinte d'écurie, en canal alpha hexadécimal.
+   `18` vaut 9,4 %, `99` vaut 60 %. */
+const TEINTE_FOND = "18";
+const TEINTE_LISERE = "99";
+
 /**
  * Un widget de cote — la brique de la grille à deux colonnes.
  *
@@ -41,16 +47,54 @@ const HAUTEUR_WIDGET = 90;
  * tactile de 44px est plus haute que la ligne des points, et la mettre dans le
  * flux ferait grandir le widget de 20px pour rien. Elle chevauche le
  * rembourrage, jamais le texte — les points lui laissent la place à droite.
+ *
+ * **`min-w-0` est ce qui garantit que la grille ne déborde jamais.** Un élément
+ * de grille vaut par défaut `min-width: auto`, c'est-à-dire au moins la largeur
+ * minimale de son contenu : il dépasse alors sa colonne même quand la colonne,
+ * elle, est correctement bornée. C'est le pendant côté élément de ce que
+ * `grid-cols-2` fait côté piste.
+ *
+ * **La teinte d'écurie est un dégradé, pas une couleur de fond.** Un
+ * `background-color` semi-transparent posé en ligne remplacerait le blanc de
+ * `bg-surface` au lieu de s'y superposer, et laisserait passer le beige de la
+ * page : le widget cesserait d'être une carte blanche et tous les contrastes
+ * mesurés ci-dessous changeraient. Un dégradé plat de la même couleur se pose
+ * **par-dessus** le blanc, qui reste la base.
+ *
+ * Contrastes mesurés sur les onze teintes, fond compris : le nom tient au pire
+ * 14,5:1, les points 9,0:1, et l'étoile au repos 3,16:1 — au-dessus du plancher
+ * de 3:1 exigé d'un élément graphique porteur de sens, qu'elle est ici.
  */
 function WidgetCote({ cote, epingle, ferme, onBasculer }) {
   const points = decouperPoints(cote.points);
   const nom = formaterPilote(cote.pilote);
+  // La teinte suit le libellé **affiché**, pas le libellé brut d'Unibet : c'est
+  // « F.Colapinto » qui est dans la table, comme à l'écran.
+  const ecurie = couleurEcurie(nom);
 
   return (
     <li
-      className="rounded-widget bg-surface shadow-carte relative"
-      style={{ height: `${HAUTEUR_WIDGET}px` }}
+      className="rounded-widget bg-surface shadow-carte ancre-collante relative min-w-0 overflow-hidden"
+      style={{
+        height: `${HAUTEUR_WIDGET}px`,
+        ...(ecurie && {
+          backgroundImage: `linear-gradient(${ecurie}${TEINTE_FOND}, ${ecurie}${TEINTE_FOND})`,
+        }),
+      }}
     >
+      {/* Le liseré reste discret sur les livrées claires (1,5:1 sur le turquoise
+          Mercedes) et aucune opacité n'y change rien — à 100 % il ne monterait
+          qu'à 1,8:1, la couleur étant intrinsèquement pâle, pendant que les
+          livrées sombres se mettraient à crier. 60 % est le compromis juste :
+          c'est un renfort, jamais le seul porteur de l'information, le nom du
+          pilote étant écrit juste dessous. */}
+      {ecurie && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[3px]"
+          style={{ backgroundColor: `${ecurie}${TEINTE_LISERE}` }}
+        />
+      )}
       <div className="flex h-full flex-col justify-between p-3">
         <p className="text-texte truncate text-[14px] font-medium">{nom}</p>
 
@@ -263,7 +307,7 @@ function SectionMarche({ marche, rang, epingles, ferme, onBasculer }) {
   const epinglesIci = marche.cotes.filter((cote) => epingles.has(cote.id)).length;
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="ancre-collante flex flex-col gap-3">
       <header
         className={`section-collante rounded-carte shadow-carte relative flex items-center justify-between gap-3 overflow-hidden px-4 py-2.5 ${couleur.fond}`}
       >

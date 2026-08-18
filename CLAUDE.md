@@ -2771,6 +2771,94 @@ Ils gagnent une **pastille blanche** portant le nombre de favoris épinglés dan
 | Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », ni tiret cadratin, sur les cinq rendus ; barre collée et entrée échelonnée conservées |
 | `npm run build` | passe, 136 modules ; `--radius-widget`, `#FDF3E0`, `.border-accent`, `text-secondaire/60` et les quatre encres de marché bien générés ; version `0.26.0` dans le bundle |
 
+---
+
+**Widgets de cotes — grille responsive, ancre de défilement, couleurs d'écurie** (version `0.27.0`)
+
+Trois corrections sur le tableau des cotes, relevées à l'œil sur **iPhone réel** : les widgets débordaient de l'écran, l'en-tête de marché collant recouvrait les premières cotes, et rien ne rattachait visuellement un pilote à son écurie. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+---
+
+***Correction 1 — le débordement ne venait pas de la grille, mais de ce qu'elle contient.*** C'est le point de la version, et il ne se voyait pas à la lecture du code.
+
+La demande prescrivait de remplacer une largeur fixe par `grid-template-columns: 1fr 1fr`. **Il n'y avait aucune largeur fixe** : la grille était déjà déclarée en `grid grid-cols-2 gap-3` depuis la version `0.26.0`. Et suivre la lettre de la demande aurait **aggravé** le défaut : `1fr` est l'abréviation de `minmax(auto, 1fr)`, dont la borne basse est le min-content de la piste, tandis que le `grid-cols-2` de Tailwind compile en `repeat(2, minmax(0, 1fr))`, qui ne peut pas déborder. La grille est donc **conservée telle quelle** et c'est ailleurs que la correction porte.
+
+Le débordement vient de deux endroits, tous deux en dehors de la déclaration de grille :
+
+1. **Les éléments de grille valent `min-width: auto`**, c'est-à-dire au moins la largeur minimale de leur contenu. Une piste correctement bornée n'empêche pas l'élément de dépasser *de* sa piste : un nom de pilote non sécable pousse le widget hors de sa colonne, et la page défile à l'horizontale. `min-w-0` sur chaque widget est le pendant, côté élément, de ce que `minmax(0, 1fr)` fait côté piste. `overflow-hidden` s'y ajoute, qui ramène de toute façon la taille minimale automatique à zéro et donne au liseré les coins arrondis de la carte.
+
+2. **`.t-skel--flux` était une grille sans piste déclarée.** Sa colonne implicite valait `auto`, donc au moins le min-content de son contenu — et cette couche enveloppe **le contenu de tous les écrans de l'app**, pas seulement celui-ci. Il suffisait qu'un seul descendant refuse de se comprimer pour que la couche s'élargisse au-delà de l'écran. Elle est désormais bornée en `grid-template-columns: minmax(0, 1fr)`. **C'est une correction globale**, et elle ne peut que contraindre à la largeur du parent, ce que chaque écran suppose déjà.
+
+---
+
+***Correction 2 — l'ancre de défilement, et l'ordre des calques vérifié.***
+
+`--marche-hauteur: 46px` et l'utilitaire `ancre-collante` entrent dans `index.css` : `scroll-margin-top: calc(var(--entete-hauteur) + var(--marche-hauteur) + 12px)`. Il est posé **sur la section de marché et sur chaque widget**, et le second point est celui qui compte en pratique : le cas réel n'est pas un `scrollIntoView` — l'écran n'en fait aucun depuis que les onglets ont disparu — mais le **défilement automatique du navigateur vers un élément reçu au clavier**. Atteindre à la tabulation l'étoile d'une première ligne de marché la posait pile derrière les deux barres collantes. Une ancre sur la seule section n'aurait rien réglé là.
+
+**L'ordre des calques était déjà juste, et il est documenté ici pour qu'il ne soit pas « corrigé » à tort.** Barre de navigation `z-30` (fixe, au niveau du document), en-tête d'écran `z-30`, en-tête de marché `z-20`, barre d'action collée `z-10`, widgets en `z-index: auto`. L'en-tête de marché passe donc bien au-dessus des widgets et sous la barre de navigation.
+
+**Le piège à connaître : monter ce `z-20` ne servirait à rien.** `.t-stagger-line` porte `will-change: transform` en permanence, ce qui fait de chaque `Bloc` un **contexte d'empilement**. Tous les `z-index` posés à l'intérieur — celui de l'en-tête de marché compris — sont donc comparés entre eux seulement, jamais aux barres qui vivent à l'extérieur. C'est le cousin du piège déjà documenté à l'étape 10 (un `position: fixed` posé dans un `Bloc`) et à la version `0.13.0` (un `position: sticky` idem).
+
+---
+
+***Correction 3 — les couleurs d'écurie.***
+
+`frontend/src/lib/ecuries.js` porte les deux tables demandées, **verbatim** : `COULEURS_ECURIES` (pilote → couleur) et `COULEURS_NOMS_ECURIES` (écurie → couleur), plus une couche d'alias et `couleurEcurie(libelle)`, qui cherche dans les deux et rend `null` pour tout ce qu'elle ne connaît pas.
+
+**Périmètre, identique à celui de `lib/palette.js`, `lib/couleurs.js` et `DrapeauxGP.jsx`** : ces onze couleurs ne peignent que le fond d'un widget et son liseré. Jamais un fond d'écran, jamais un texte, jamais une bordure de bloc. Les sept couleurs de la section 5 gardent tous leurs rôles.
+
+**Deux tables et non une**, parce que les deux entrées ne se ressemblent pas : le marché « Vainqueur » nomme des pilotes, le marché « Ecurie Vainqueur » nomme des écuries. Une couche d'`ALIAS` vit à part des deux tables exportées, pour les orthographes qu'Unibet fait varier (« Red Bull » / « Red Bull Racing », « Haas » / « Haas F1 Team ») — même mécanisme que les alias de `backend/app/calcul/pilotes.py` et que ceux de `slugCircuit`.
+
+**Un libellé inconnu ne reçoit aucune teinte, jamais une couleur de repli** : le widget garde son blanc. C'est la règle déjà tenue par `aUnTrace` et par les drapeaux depuis la version `0.15.0` — inventer une couleur pour un pilote qu'on ne connaît pas ferait croire à une écurie qui n'existe pas. Les issues des marchés spéciaux (« Safety Car », « Drapeau rouge »), qui ne nomment personne, tombent naturellement dans ce cas.
+
+**La teinte suit le libellé AFFICHÉ, pas le libellé brut d'Unibet.** Le widget peint `formaterPilote(cote.pilote)`, donc « F.Colapinto » et non « Franco Colapinto » — c'est cette forme-là qui est dans la table, et c'est celle qu'on lit à l'écran. Les deux ne peuvent donc pas diverger.
+
+***La teinte est un dégradé, pas une couleur de fond, et ce n'est pas un détail.*** Un `background-color` semi-transparent posé en ligne **remplacerait** le blanc de `bg-surface` au lieu de s'y superposer, et laisserait passer le beige de la page : le widget cesserait d'être une carte blanche et tous les contrastes mesurés ci-dessous changeraient. Un `linear-gradient` plat de la même couleur se pose **par-dessus** le blanc, qui reste la base. C'est ce qui rend les mesures ci-dessous vraies.
+
+*Contrastes, mesurés sur les onze teintes* — fond à 9,4 % (`18`), liseré à 60 % (`99`) :
+
+| Élément | Pire cas | Écurie |
+|---|---|---|
+| Nom du pilote `#1A1A1A` | **14,47:1** | Haas |
+| Points `#800111` | **9,04:1** | Haas |
+| Étoile au repos `secondaire/60` | **3,16:1** | Haas |
+
+L'étoile est le point qu'il fallait vérifier : elle est le **seul** indicateur de l'état « pas en favori » (version `0.26.0`), donc soumise au plancher de 3:1 de WCAG 1.4.11. Elle le tient sur les onze teintes, et **aucun réglage n'a eu à bouger** — les teintes sont assez pâles pour ne rien changer au substrat.
+
+**Le liseré reste à 60 %, et c'est mesuré et non subi.** Sur les cinq livrées claires il est très discret (1,47:1 sur le turquoise Mercedes), et **aucune opacité n'y change rien** : à 100 % il ne monterait qu'à 1,78:1, la couleur étant intrinsèquement pâle, pendant que les livrées sombres passeraient de 3,24:1 à 8,78:1 (Red Bull) et de 4,06:1 à 13,38:1 (Haas), c'est-à-dire se mettraient à crier. 60 % est le compromis juste : le liseré est un **renfort**, jamais le seul porteur de l'information, le nom du pilote étant écrit juste dessous.
+
+---
+
+***Écart signalé plutôt que tranché seul, et c'est le point à arbitrer.*** La table fournie **diverge de la grille 2026 de `backend/app/calcul/pilotes.py`** sur huit pilotes :
+
+| Pilote | Table de cette version | `pilotes.py` |
+|---|---|---|
+| AK.Antonelli | Cadillac | **Mercedes** |
+| C.Sainz Jr | Ferrari | **Williams** |
+| L.Hamilton | Mercedes | **Ferrari** |
+| F.Colapinto | Williams | **Alpine** |
+| N.Hulkenberg | Haas | **Audi** |
+| E.Ocon | Alpine | **Haas F1 Team** |
+| S.Perez | Red Bull | **Cadillac** |
+| I.Hadjar | Racing Bulls | **Red Bull Racing** |
+
+La table de la demande est **appliquée telle quelle**, c'est la donnée explicitement fournie. Mais `pilotes.py` est ce qui **valide réellement le marché « Ecurie Vainqueur »** à l'étape 6 : en l'état, un widget peut afficher Hamilton en turquoise Mercedes sur le même écran qu'un marché qui le paie chez Ferrari. **À trancher** : soit `ecuries.js` s'aligne sur `pilotes.py`, soit `pilotes.py` est périmé et c'est lui qu'il faut reprendre — auquel cas le calcul des points est faux aussi, ce qui est autrement plus grave qu'une couleur.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Une teinte de fond ne change pas d'état sous les yeux du joueur : il n'y a rien à accompagner, et le skill Transitions.dev n'a pas de correspondance pour une surface statique. L'écran conserve celles qu'il portait — *icon swap* (09) pour l'étoile, *number pop-in* (02) pour le compteur de favoris par marché, *texts reveal* (18), *skeleton loader* (14) et *text states swap* (04).
+
+*Apport d'`/apple-design`* — l'ancre de défilement relève du §16 (« comment j'en sors, où suis-je ») appliqué à la navigation au clavier ; le liseré et la teinte sont `aria-hidden` et `pointer-events-none`, un lecteur d'écran n'ayant rien à annoncer d'un effet de profondeur ; les zones tactiles de 44px, le retour à l'appui et l'en-tête collant sont inchangés.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage pré-rempli) : **25 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Grille | `grid-cols-2 gap-3` conservée, **aucune largeur fixe en pixels sur un widget**, hauteur de 90px conservée, **tous les widgets en `min-w-0` et `overflow-hidden`** |
+| Ancre | les deux en-têtes de marché toujours collants, `ancre-collante` sur les sections **et sur chaque widget** |
+| Teintes | Verstappen en bleu Red Bull, **Colapinto normalisé en « F.Colapinto » puis teinté Williams**, Antonelli reconnu sous « AK. », les deux marchés servis (pilotes **et** écuries), Haas teinté ; **libellé inconnu → aucune teinte, aucun liseré** ; liseré rendu à 60 % et décoratif ; cote retirée affichée **sans montant inventé** |
+| Non-régression | **aucune cote brute « ×N »**, ni « ligue », ni « historique » ; section favoris, mode d'emploi, barre collée, étoiles et compteur par marché intacts |
+| CSS de production | `.ancre-collante`, `--marche-hauteur`, `.t-skel--flux` en `minmax(0,1fr)`, `min-w-0` et `grid-cols-2` bien générés |
+| `npm run build` | passe, 14 entrées au précache, version `0.27.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2826,6 +2914,8 @@ Ordre d'application, si l'une manque :
 
 Points non couverts, à traiter le moment venu :
 - **Décompte des Grands Prix restants figé à 12 — sur l'accueil uniquement, et la réponse existe désormais.** Depuis la version `0.14.1`, le bandeau de bas d'écran (`GP_RESTANTS` dans `frontend/src/ecrans/Accueil.jsx`) affiche une constante, parce que `public.grands_prix` ne contient que le Grand Prix suivant. **La version `0.20.0` a créé la liste qui manquait** : `frontend/src/lib/calendrier2026.js` porte les douze Grands Prix de la saison, et l'onglet Calendrier en tire déjà un décompte qui **exclut les courses terminées**. Le bandeau de l'accueil, lui, n'a pas été rebranché — c'est hors du périmètre de cette version, et c'est désormais quelques lignes : compter `GP_2026` filtré par `etatDuGpSaison`, exactement comme le fait `CalendrierGlobal`. **À faire, sans quoi les deux écrans se contrediront dès la première course courue** — l'accueil dira « 12 restants » quand le calendrier en montrera 11. `chargerGrandsPrixRestants` (`lib/pronostics.js`) reste en place mais n'est plus la bonne réponse : elle compte les lignes en base, c'est-à-dire une seule course.
+- **Couleurs d'écurie en désaccord avec la grille du backend, à trancher (version `0.27.0`).** `frontend/src/lib/ecuries.js` et `backend/app/calcul/pilotes.py` n'attribuent pas les mêmes écuries à **huit pilotes** (Antonelli, Sainz, Hamilton, Colapinto, Hulkenberg, Ocon, Perez, Hadjar — tableau détaillé dans la section `0.27.0`). La première ne peint qu'un fond de widget ; **la seconde valide le marché « Ecurie Vainqueur » et calcule les points**. Un widget peut donc afficher Hamilton en turquoise Mercedes sur le même écran qu'un marché qui le paie chez Ferrari. Si c'est `pilotes.py` qui est périmé, ce n'est pas une couleur qui est fausse mais **le calcul des points**, et c'est à reprendre en priorité. Les deux tables se relisent sur la grille officielle de la FIA et sur `/drivers` d'OpenF1.
+- **`frontend/src/lib/ecuries.js` est à mettre à jour chaque saison**, au même titre que `pilotes.py` et `calendrier2026.js`. Une table périmée ne fait aucun dégât silencieux : un pilote absent ressort sans teinte, ce qui se voit à l'écran.
 - **La liste statique des Grands Prix est à mettre à jour chaque saison** — `frontend/src/lib/calendrier2026.js`, au même titre que `backend/app/calcul/pilotes.py`. Elle se relit sur le calendrier officiel de la FIA. Les `slug` doivent rester ceux de `slugCircuit` : un slug inconnu fait retomber la carte sur le bordeaux de la marque, sans tracé. Ajouter les Grands Prix du début de saison demande aussi leur drapeau (`DrapeauxGP.jsx`) et leur tracé (`TracesCircuits.jsx`), les trois tables devant porter les mêmes clés.
 - **Scraper exercé contre le vrai Supabase** — la ligne réelle observée en version `0.5.1` (voir ci-dessus) montre que l'écriture a eu lieu au moins une fois. Reste à vérifier le contenu de `public.cotes` pour ce GP, et le comportement du scraper sur un GP déjà figé.
 - **Programmation automatique du scraping, et figeage des cotes** — **faite à l'étape 11** (`app/jobs/scraper.py`, second emploi APScheduler dans le `lifespan`). Le scraping se déclenche tout seul 2h après les qualifications, et le statut `cotes_figees` est enfin posé par du code. Trois points restent à surveiller : **(1)** Unibet n'exposait aucun événement de qualification au 16 août 2026, c'est donc le repli `date_course - 22h` qui s'applique — **relire les logs du samedi du premier vrai Grand Prix** pour voir si une vraie heure de qualifications est apparue (chercher « qualifications annoncées par Unibet » ou « aucune épreuve de qualification trouvée ») ; **(2)** le job de résultats continue de surveiller les GP restés `a_venir`, ce qui reste le bon filet si un figeage est manqué ; **(3)** `POST /scraper/declencher` fige désormais lui aussi — utiliser `?figer=false` pour un essai avant les qualifications, sans quoi les cotes sont arrêtées pour de bon et il faut un `update` à la main pour les débloquer.
