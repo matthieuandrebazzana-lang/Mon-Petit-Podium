@@ -3016,6 +3016,91 @@ Le compte à rebours tenait sur une ligne d'un aplat rouge — « 2j 14h 32min �
 
 **Une limite du banc d'essai, à connaître** — c'est la même qu'à la version `0.12.0` : le rendu statique n'exécute aucun effet, donc le préremplissage des bonus ne peut pas y apparaître et le compteur y part toujours de zéro. C'est précisément pourquoi les trois règles corrigées (`optionsDisponibles`, `enConflit`, `bonusEpingles`) ont été sorties de l'écran vers `lib/pronostics.js` : elles sont désormais vérifiables directement, sans monter React, et c'est là que le jeu de tests les éprouve.
 
+---
+
+**Couleurs et associations pilote → écurie de la grille 2026** (version `0.30.0`)
+
+`frontend/src/lib/ecuries.js` est repris intégralement : les onze écuries de la saison 2026, leurs vingt-deux pilotes et leurs teintes. **Aucune migration, aucun changement backend** — et cette fois le fait qu'il n'y en ait pas est un résultat, pas une convention : voir plus bas. `backend/app/config.py` reste en `0.14.0`.
+
+---
+
+***`pilotes.py` avait raison sur les huit pilotes, et le calcul des points n'a jamais été faux.*** C'est le résultat de la version, et il referme le point de vigilance ouvert à la version `0.27.0`.
+
+Le CLAUDE.md relevait alors que `frontend/src/lib/ecuries.js` et `backend/app/calcul/pilotes.py` n'attribuaient pas la même écurie à **huit pilotes**, sans pouvoir dire lequel des deux était périmé. Il posait l'enjeu franchement : « Si c'est `pilotes.py` qui est périmé, ce n'est pas une couleur qui est fausse mais **le calcul des points**, et c'est à reprendre en priorité. »
+
+La grille 2026 fournie tranche, et elle **coïncide exactement avec `pilotes.py` sur les vingt-deux pilotes**. C'est donc `ecuries.js` qui était faux, sur les huit :
+
+| Pilote | `ecuries.js` (faux) | Grille 2026 = `pilotes.py` |
+|---|---|---|
+| AK.Antonelli | Cadillac | **Mercedes** |
+| C.Sainz Jr | Ferrari | **Williams** |
+| L.Hamilton | Mercedes | **Ferrari** |
+| F.Colapinto | Williams | **Alpine** |
+| N.Hulkenberg | Haas | **Audi** |
+| E.Ocon | Alpine | **Haas** |
+| S.Perez | Red Bull | **Cadillac** |
+| I.Hadjar | Racing Bulls | **Red Bull** |
+
+**Conséquence : le marché « Ecurie Vainqueur » était noté juste depuis le début**, et aucun point n'est à recalculer. Le défaut était entièrement cosmétique — un widget de cote peint aux couleurs d'une écurie qui ne paie pas ce pilote. `backend/app/calcul/pilotes.py` **n'est pas touché**, et son absence de modification est le constat lui-même.
+
+Un contrôle du jeu de tests **lit désormais `pilotes.py`** et compare les vingt-deux pilotes ligne à ligne : les deux fichiers ne peuvent plus diverger sans que ce soit dit. C'est ce qui remplace la vigilance manuelle que la version `0.27.0` avait dû inscrire au « Reste à faire ».
+
+---
+
+*Une seule source de couleurs, trois tables dérivées.* Le fichier tenait à la main **trois** tables parallèles — pilotes, écuries, alias — chacune répétant les hexadécimaux. C'est ce qui avait laissé passer les huit erreurs, et aussi deux écuries portant deux teintes différentes selon le libellé qui les désignait. `ECURIES` porte désormais les onze couleurs, écrites **une seule fois** ; `COULEURS_ECURIES`, `COULEURS_NOMS_ECURIES` et les alias en dérivent. Les deux tables restent **exportées séparément** — le marché « Vainqueur » nomme des pilotes, le marché « Ecurie Vainqueur » nomme des écuries, et les fondre obligerait à deviner lequel on regarde — mais elles ne peuvent plus se contredire.
+
+Les alias gagnent les **formes d'OpenF1** (« Red Bull Racing », « Haas F1 Team », « Audi ») en plus de celles d'Unibet : ce sont elles que `pilotes.py` écrit, et le marché « Ecurie Vainqueur » doit les retrouver des deux côtés. Un libellé inconnu reste **sans teinte, jamais un repli** — règle inchangée depuis la version `0.27.0`.
+
+---
+
+*Les onze teintes*, dont trois seulement étaient déjà justes (Mercedes, McLaren, Williams) :
+
+| Écurie | Avant | Après |
+|---|---|---|
+| Mercedes | `#00D2BE` | `#00D2BE` |
+| Ferrari | `#FF2800` | **`#E8002D`** |
+| Red Bull | `#1E3A8A` | **`#3671C6`** |
+| McLaren | `#FF8000` | `#FF8000` |
+| Alpine | `#0090FF` | **`#FF87BC`** |
+| Audi | `#FF4D4D` | **`#6E6E6E`** |
+| Racing Bulls | `#6CBBEE` | **`#1B3A6B`** |
+| Aston Martin | `#006F44` | **`#358C75`** |
+| Haas | `#212121` | **`#B6BABD`** |
+| Williams | `#37BEDD` | `#37BEDD` |
+| Cadillac | `#9CA3AF` | **`#C41230`** |
+
+**Périmètre inchangé**, identique à celui de `lib/palette.js`, `lib/couleurs.js` et `DrapeauxGP.jsx` : ces couleurs ne peignent que le fond d'un widget de cote (9,4 %) et son liseré (60 %). Jamais un fond d'écran, jamais un texte, jamais une bordure de bloc. Les sept couleurs de la section 5 gardent tous leurs rôles.
+
+*Trois teintes appliquées telles que fournies, sans vérification indépendante* — la demande les donnait elle-même pour à confirmer (« prendre la teinte dominante de la livrée 2026 »). Ce qu'une recherche rend : **Alpine** porte bien le rose `#FF87BC` dans sa paire de marque 2026, aux côtés d'un bleu électrique ; **Haas** et **Cadillac** sont donnés comme blanc + rouge et blanc + noir. Le blanc ne peut pas teinter un widget déjà blanc, ce qui explique et justifie de retenir la teinte secondaire — mais si Haas doit se lire rouge plutôt que gris, c'est `#E6002B` et c'est une ligne. Le rose Alpine, lui, est **le bon choix quoi qu'il en soit** : la grille compte déjà trois bleus (Red Bull `#3671C6`, Racing Bulls `#1B3A6B`, Williams `#37BEDD`), un quatrième aurait annulé la fonction même de la teinte.
+
+*Contrastes recalculés sur les onze teintes*, aux deux opacités d'usage. Ils s'améliorent tous, l'ancienne palette comptant deux couleurs très sombres :
+
+| Élément | Pire cas | Écurie |
+|---|---|---|
+| Nom du pilote `#1A1A1A` | **14,75:1** | Ferrari |
+| Points `#800111` | **9,22:1** | Ferrari, Racing Bulls |
+| Étoile au repos `secondaire/60` | **3,18:1** | Ferrari |
+
+L'étoile est le point qu'il fallait vérifier : elle est le **seul** indicateur de l'état « pas en favori » depuis la version `0.26.0`, donc soumise au plancher de 3:1 de WCAG 1.4.11. Elle le tient sur les onze, et un peu mieux qu'avant (3,16:1).
+
+**Un effet de bord mesuré, à connaître** : à 9,4 %, **Ferrari `#E8002D` et Cadillac `#C41230` ne sont plus séparés que de 4 niveaux sur 255** — deux rouges qui donnent le même fond. Viennent ensuite Mercedes / Williams (5 niveaux, deux cyans) et Audi / Aston Martin (5). Le liseré à 60 % les écarte davantage (23 à 36 niveaux), et le nom du pilote est écrit juste dessous : c'est exactement ce que la version `0.27.0` posait en principe — **la teinte est un renfort, jamais le seul porteur de l'information**. Le cas était moins visible avant seulement parce qu'`ecuries.js` donnait à Cadillac un gris, c'est-à-dire une couleur fausse.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Une teinte de fond ne change pas d'état sous les yeux du joueur.
+
+*Vérifié* — modules chargés par le chargeur SSR de Vite, contrastes recalculés, rendu hors navigateur (`react-dom/server`, cache localStorage pré-rempli) : **101 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Écuries | **onze**, les onze noms attendus, **les onze hexadécimaux exacts un à un**, deux à deux distincts, tous au format `#RRGGBB` |
+| Pilotes | **vingt-deux**, chacun rattaché à la bonne écurie, **deux pilotes par écurie** |
+| **Les huit corrections** | pour chacun, la nouvelle écurie est servie **et** l'ancienne ne l'est plus |
+| **Accord avec le backend** | les 22 lignes de `pilotes.py` sont lues et comparées : **aucun désaccord** ; chaque écurie écrite dans la forme d'OpenF1 trouve bien une teinte |
+| Alias | les neuf formes longues résolues (« Red Bull Racing », « Haas F1 Team », « Audi Sauber », « Visa Cash App RB », « Cadillac F1 Team »…) ; « A.Antonelli » comme « AK.Antonelli » ; casse, accents et espaces normalisés (« S.Pérez ») |
+| Repli | issue de marché spécial, pilote inconnu, entrées vides et **clé héritée d'`Object`** → `null`, jamais une couleur inventée |
+| Écran des cotes | neuf widgets rendus ; **chacun apparié entre ce qu'il affiche et ce qu'il peint** ; Verstappen bleu Red Bull, **Hamilton rouge Ferrari et non turquoise**, **Antonelli turquoise et non gris**, Colapinto normalisé puis rose Alpine, **Ocon gris Haas et non bleu Alpine**, **Perez rouge Cadillac et non bleu Red Bull** ; marché Ecurie Vainqueur teinté, alias compris ; **chaque widget porte un liseré à 60 % de sa propre teinte** ; **aucune des huit anciennes teintes ne subsiste** |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue » |
+| `npm run build` | passe, version `0.30.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -3071,7 +3156,7 @@ Ordre d'application, si l'une manque :
 
 Points non couverts, à traiter le moment venu :
 - **Décompte des Grands Prix restants figé à 12 — sur l'accueil uniquement, et la réponse existe désormais.** Depuis la version `0.14.1`, le bandeau de bas d'écran (`GP_RESTANTS` dans `frontend/src/ecrans/Accueil.jsx`) affiche une constante, parce que `public.grands_prix` ne contient que le Grand Prix suivant. **La version `0.20.0` a créé la liste qui manquait** : `frontend/src/lib/calendrier2026.js` porte les douze Grands Prix de la saison, et l'onglet Calendrier en tire déjà un décompte qui **exclut les courses terminées**. Le bandeau de l'accueil, lui, n'a pas été rebranché — c'est hors du périmètre de cette version, et c'est désormais quelques lignes : compter `GP_2026` filtré par `etatDuGpSaison`, exactement comme le fait `CalendrierGlobal`. **À faire, sans quoi les deux écrans se contrediront dès la première course courue** — l'accueil dira « 12 restants » quand le calendrier en montrera 11. `chargerGrandsPrixRestants` (`lib/pronostics.js`) reste en place mais n'est plus la bonne réponse : elle compte les lignes en base, c'est-à-dire une seule course.
-- **Couleurs d'écurie en désaccord avec la grille du backend, à trancher (version `0.27.0`).** `frontend/src/lib/ecuries.js` et `backend/app/calcul/pilotes.py` n'attribuent pas les mêmes écuries à **huit pilotes** (Antonelli, Sainz, Hamilton, Colapinto, Hulkenberg, Ocon, Perez, Hadjar — tableau détaillé dans la section `0.27.0`). La première ne peint qu'un fond de widget ; **la seconde valide le marché « Ecurie Vainqueur » et calcule les points**. Un widget peut donc afficher Hamilton en turquoise Mercedes sur le même écran qu'un marché qui le paie chez Ferrari. Si c'est `pilotes.py` qui est périmé, ce n'est pas une couleur qui est fausse mais **le calcul des points**, et c'est à reprendre en priorité. Les deux tables se relisent sur la grille officielle de la FIA et sur `/drivers` d'OpenF1.
+- **Couleurs d'écurie en désaccord avec la grille du backend — tranché en version `0.30.0`, et dans le bon sens.** Le désaccord sur huit pilotes que relevait la version `0.27.0` venait entièrement de `frontend/src/lib/ecuries.js` : `backend/app/calcul/pilotes.py` **avait raison sur les vingt-deux**, donc **le calcul des points n'a jamais été faux** et rien n'est à recalculer. Le frontend est corrigé, le backend n'est pas touché. Un contrôle du jeu de tests lit désormais `pilotes.py` et compare les deux grilles ligne à ligne : elles ne peuvent plus diverger en silence.
 - **`frontend/src/lib/ecuries.js` est à mettre à jour chaque saison**, au même titre que `pilotes.py` et `calendrier2026.js`. Une table périmée ne fait aucun dégât silencieux : un pilote absent ressort sans teinte, ce qui se voit à l'écran.
 - **La liste statique des Grands Prix est à mettre à jour chaque saison** — `frontend/src/lib/calendrier2026.js`, au même titre que `backend/app/calcul/pilotes.py`. Elle se relit sur le calendrier officiel de la FIA. Les `slug` doivent rester ceux de `slugCircuit` : un slug inconnu fait retomber la carte sur le bordeaux de la marque, sans tracé. Ajouter les Grands Prix du début de saison demande aussi leur drapeau (`DrapeauxGP.jsx`) et leur tracé (`TracesCircuits.jsx`), les trois tables devant porter les mêmes clés.
 - **Scraper exercé contre le vrai Supabase** — la ligne réelle observée en version `0.5.1` (voir ci-dessus) montre que l'écriture a eu lieu au moins une fois. Reste à vérifier le contenu de `public.cotes` pour ce GP, et le comportement du scraper sur un GP déjà figé.

@@ -7,11 +7,14 @@
  * une bordure de bloc. Les sept couleurs de la section 5 gardent donc tous
  * leurs rôles — le widget reste une carte blanche, à peine teintée.
  *
- * **Deux tables et non une**, parce que les deux entrées ne se ressemblent pas :
- * le marché « Vainqueur » nomme des pilotes (« C.Leclerc »), le marché « Ecurie
- * Vainqueur » nomme des écuries (« Ferrari »). Les fondre obligerait à deviner
- * lequel des deux on regarde ; les garder séparées permet à `couleurEcurie` de
- * chercher dans les deux et de rendre `null` quand elle ne trouve rien.
+ * **Deux tables exportées, mais une seule source de couleurs.** Les deux entrées
+ * ne se ressemblent pas — le marché « Vainqueur » nomme des pilotes
+ * (« C.Leclerc »), le marché « Ecurie Vainqueur » nomme des écuries
+ * (« Ferrari ») — et les fondre obligerait à deviner lequel des deux on regarde.
+ * Elles dérivent en revanche toutes les deux de `ECURIES`, où chaque teinte est
+ * écrite **une seule fois** : une écurie ne peut donc plus recevoir deux
+ * couleurs différentes selon le libellé qui la désigne, ce qui était le cas
+ * quand les trois tables étaient tenues à la main.
  *
  * **Un libellé inconnu ne reçoit aucune teinte, jamais une couleur de repli.**
  * Le widget garde alors son blanc. Inventer une couleur pour un pilote qu'on ne
@@ -24,45 +27,61 @@
  * silencieux : un pilote absent ressort sans teinte, ce qui se voit.
  */
 
-export const COULEURS_ECURIES = {
-  // Ferrari
-  "C.Leclerc": "#FF2800", "C.Sainz Jr": "#FF2800",
-  // McLaren
-  "L.Norris": "#FF8000", "O.Piastri": "#FF8000",
-  // Mercedes
-  "G.Russell": "#00D2BE", "L.Hamilton": "#00D2BE",
-  // Aston Martin
-  "F.Alonso": "#006F44", "L.Stroll": "#006F44",
-  // Red Bull
-  "M.Verstappen": "#1E3A8A", "S.Perez": "#1E3A8A",
-  // Williams
-  "A.Albon": "#37BEDD", "F.Colapinto": "#37BEDD",
-  // Alpine
-  "P.Gasly": "#0090FF", "E.Ocon": "#0090FF",
-  // Haas
-  "O.Bearman": "#212121", "N.Hulkenberg": "#212121",
-  // Racing Bulls
-  "I.Hadjar": "#6CBBEE", "L.Lawson": "#6CBBEE", "A.Lindblad": "#6CBBEE",
-  // Audi
-  "G.Bortoleto": "#FF4D4D",
-  // Cadillac
-  "A.Antonelli": "#9CA3AF", "AK.Antonelli": "#9CA3AF",
+/**
+ * Les onze écuries de la grille 2026, dans l'ordre du championnat constructeurs
+ * de fin de saison précédente. Une couleur par écurie, écrite **une seule
+ * fois** : les deux tables exportées et les alias y puisent, si bien qu'aucune
+ * écurie ne peut recevoir deux teintes différentes selon le libellé qui la
+ * désigne. C'était le cas avant, et c'est ce qui avait laissé passer huit
+ * pilotes rangés dans la mauvaise écurie.
+ */
+const ECURIES = {
+  Mercedes: "#00D2BE",
+  Ferrari: "#E8002D",
+  "Red Bull": "#3671C6",
+  McLaren: "#FF8000",
+  Alpine: "#FF87BC",
+  Audi: "#6E6E6E",
+  "Racing Bulls": "#1B3A6B",
+  "Aston Martin": "#358C75",
+  Haas: "#B6BABD",
+  Williams: "#37BEDD",
+  Cadillac: "#C41230",
 };
 
-/** Pour les écuries (marché Ecurie Vainqueur). */
-export const COULEURS_NOMS_ECURIES = {
-  Ferrari: "#FF2800",
-  McLaren: "#FF8000",
-  Mercedes: "#00D2BE",
-  "Aston Martin": "#006F44",
-  "Red Bull": "#1E3A8A",
-  Williams: "#37BEDD",
-  Alpine: "#0090FF",
-  Haas: "#212121",
-  "Racing Bulls": "#6CBBEE",
-  "Audi F1 Team": "#FF4D4D",
-  Cadillac: "#9CA3AF",
+/**
+ * La grille 2026, écurie par écurie, dans les libellés qu'Unibet emploie.
+ *
+ * **Elle est identique à celle de `backend/app/calcul/pilotes.py`**, et ce n'est
+ * pas une coïncidence à entretenir à la main : c'est cette table-là qui valide
+ * le marché « Ecurie Vainqueur » et attribue les points. Les deux doivent dire
+ * la même chose, sans quoi un widget peindrait un pilote aux couleurs d'une
+ * écurie qui ne le paie pas. Toute correction ici se relit là-bas, et
+ * réciproquement.
+ */
+const GRILLE = {
+  Mercedes: ["AK.Antonelli", "A.Antonelli", "G.Russell"],
+  Ferrari: ["L.Hamilton", "C.Leclerc"],
+  "Red Bull": ["M.Verstappen", "I.Hadjar"],
+  McLaren: ["L.Norris", "O.Piastri"],
+  Alpine: ["F.Colapinto", "P.Gasly"],
+  Audi: ["G.Bortoleto", "N.Hulkenberg"],
+  "Racing Bulls": ["A.Lindblad", "L.Lawson"],
+  "Aston Martin": ["F.Alonso", "L.Stroll"],
+  Haas: ["E.Ocon", "O.Bearman"],
+  Williams: ["A.Albon", "C.Sainz Jr"],
+  Cadillac: ["S.Perez", "V.Bottas"],
 };
+
+/** Pilote → couleur (marchés « Vainqueur », « Podium », duels…). */
+export const COULEURS_ECURIES = Object.fromEntries(
+  Object.entries(GRILLE).flatMap(([ecurie, pilotes]) =>
+    pilotes.map((pilote) => [pilote, ECURIES[ecurie]]),
+  ),
+);
+
+/** Écurie → couleur (marché « Ecurie Vainqueur »). */
+export const COULEURS_NOMS_ECURIES = { ...ECURIES };
 
 /**
  * Orthographes qu'Unibet emploie pour les mêmes écuries.
@@ -72,17 +91,36 @@ export const COULEURS_NOMS_ECURIES = {
  * Racing » le suivant, exactement comme il écrit « GP Pays Bas » puis « GP
  * Pays-Bas » (étape 4). C'est le même mécanisme que les alias de
  * `backend/app/calcul/pilotes.py` et ceux de `slugCircuit`.
+ *
+ * **Les formes d'OpenF1 y figurent aussi** — « Red Bull Racing », « Haas F1
+ * Team », « Audi » — parce que ce sont elles que `pilotes.py` écrit et que le
+ * marché « Ecurie Vainqueur » doit retrouver de part et d'autre.
  */
-const ALIAS = {
-  "Red Bull Racing": "#1E3A8A",
-  "Haas F1 Team": "#212121",
-  Audi: "#FF4D4D",
-  "Audi Sauber": "#FF4D4D",
-  "Alpine F1 Team": "#0090FF",
-  "Aston Martin Aramco": "#006F44",
-  "Visa Cash App RB": "#6CBBEE",
-  "Cadillac F1 Team": "#9CA3AF",
+const ALIAS_ECURIES = {
+  "Red Bull Racing": "Red Bull",
+  "Oracle Red Bull Racing": "Red Bull",
+  "Haas F1 Team": "Haas",
+  "MoneyGram Haas": "Haas",
+  "Audi F1 Team": "Audi",
+  "Audi Sauber": "Audi",
+  Sauber: "Audi",
+  "Alpine F1 Team": "Alpine",
+  "BWT Alpine": "Alpine",
+  "Aston Martin Aramco": "Aston Martin",
+  "Visa Cash App RB": "Racing Bulls",
+  RB: "Racing Bulls",
+  "Cadillac F1 Team": "Cadillac",
+  "Scuderia Ferrari": "Ferrari",
+  "Mercedes AMG": "Mercedes",
+  "Williams Racing": "Williams",
 };
+
+const ALIAS = Object.fromEntries(
+  Object.entries(ALIAS_ECURIES).map(([libelle, ecurie]) => [
+    libelle,
+    ECURIES[ecurie],
+  ]),
+);
 
 /**
  * La clé de recherche : minuscules, accents ramenés à la lettre de base,
