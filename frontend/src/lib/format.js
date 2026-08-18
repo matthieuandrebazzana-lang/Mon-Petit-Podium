@@ -12,9 +12,69 @@
 /** Règle 4.3 : les pronostics ferment cinq minutes avant le départ. */
 export const MARGE_FERMETURE_MS = 5 * 60 * 1000;
 
+/**
+ * Le nombre de points, découpé en sa valeur et son unité.
+ *
+ * Les widgets de cote écrivent les deux à deux tailles différentes — le nombre
+ * en gras, « pts » en petit à côté — et ne peuvent donc pas se contenter de la
+ * chaîne toute faite. Le découpage vit ici plutôt que dans l'écran pour que la
+ * règle 4.1 continue de n'avoir qu'un seul point d'application : un écran qui
+ * fabriquerait `${points} pts` lui-même finirait un jour par écrire la cote.
+ *
+ * `retiree` est le troisième état, celui d'une issue qu'Unibet a retirée depuis
+ * la saisie : il n'y a alors ni valeur ni unité, et c'est à l'appelant de le
+ * dire à sa manière — jamais à cette fonction d'inventer un zéro.
+ */
+export function decouperPoints(points) {
+  if (points === null || points === undefined) {
+    return { retiree: true, valeur: null, unite: null };
+  }
+  return { retiree: false, valeur: String(points), unite: "pts" };
+}
+
 export function formaterPoints(points) {
-  if (points === null || points === undefined) return "Cote retirée";
-  return `${points} pts`;
+  const decoupe = decouperPoints(points);
+  if (decoupe.retiree) return "Cote retirée";
+  return `${decoupe.valeur} ${decoupe.unite}`;
+}
+
+/**
+ * Le libellé d'un pilote, tel qu'on veut le lire.
+ *
+ * **Unibet n'écrit pas tous ses pilotes de la même façon.** La quasi-totalité
+ * de la grille arrive en « initiale + nom » — « M.Verstappen », « C.Leclerc »,
+ * « AK.Antonelli ». Quelques-uns arrivent en nom complet, et se lisent alors
+ * comme des intrus dans une liste de vingt-deux lignes : « Franco Colapinto »
+ * fait deux fois la largeur de ses voisins, déborde du widget qui l'affiche, et
+ * casse l'alignement de la grille.
+ *
+ * C'est le même mécanisme que les `alias` de `backend/app/calcul/pilotes.py`,
+ * et il est ici pour la même raison : ces écarts sont **irréductibles par une
+ * règle**. On ne peut pas abréger automatiquement tout libellé à deux mots —
+ * « Red Bull » et « Aston Martin » sont des écuries, et le marché « Ecurie
+ * Vainqueur » les nomme exactement comme ça. Les cas sont donc listés un par
+ * un, et **tout ce qui n'est pas dans la table ressort intact**.
+ *
+ * La clé est normalisée (minuscules, accents ramenés à la lettre de base,
+ * espaces fondus) : Unibet écrit tantôt « Pays Bas » tantôt « Pays-Bas » sur ses
+ * Grands Prix, rien ne garantit qu'il soit plus régulier sur ses pilotes.
+ */
+const LIBELLES_PILOTES = {
+  "franco colapinto": "F.Colapinto",
+};
+
+function clePilote(nom) {
+  return String(nom)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+export function formaterPilote(nom) {
+  if (nom === null || nom === undefined || nom === "") return nom;
+  return LIBELLES_PILOTES[clePilote(nom)] ?? nom;
 }
 
 /** Date de départ en heure locale, découpée pour la sous-ligne des maquettes. */

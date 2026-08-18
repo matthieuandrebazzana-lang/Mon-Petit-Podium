@@ -5,18 +5,31 @@ import { IconeEtoile } from "./Icones.jsx";
  * transitions-dev 09 : le contour et l'étoile pleine partagent la même
  * cellule, l'une entre pendant que l'autre sort.
  *
- * **Refonte visuelle** : l'étoile n'est plus posée à nu sur la ligne, elle vit
- * dans une pastille qui passe à l'amber `#E8A020` quand la cote est épinglée et
- * reste sur le beige de l'app sinon. L'état est ainsi lisible d'un coup d'œil
- * sur une liste de vingt-deux pilotes, là où deux nuances d'étoile demandaient
- * de regarder de près. L'étoile pleine passe à l'encre foncée du design system
- * une fois sur l'amber : en blanc, elle disparaîtrait (2,2:1 de contraste).
+ * **L'étoile redevient un trait nu, sans sa pastille.** La version `0.12.0`
+ * l'avait posée dans un disque qui virait à l'ambre, parce qu'elle vivait alors
+ * au bout d'une ligne de liste où deux nuances d'étoile ne se distinguaient
+ * pas. Elle vit maintenant dans le coin d'un widget de 90px, sur une surface
+ * blanche qui n'appartient qu'à une seule cote : le contraste entre le contour
+ * gris et l'aplat ambre suffit, et un disque de plus dans un widget déjà petit
+ * mangerait la place du nom.
  *
- * La zone tactile fait 44px (contrainte iOS du CLAUDE.md) alors que la pastille
- * n'en occupe que 32 : les marges négatives absorbent exactement le surplus,
- * pour que la rangée ne gagne pas 12px de haut par cote.
+ * **Le gris du contour est mesuré, pas choisi.** Le `texte-doux` `#999999` du
+ * design system ne vaut que 2,85:1 sur du blanc, sous le plancher de 3:1 exigé
+ * d'un élément graphique porteur de sens (WCAG 1.4.11) — et l'étoile est ici le
+ * seul indicateur de l'état « pas en favori ». Le marron `secondaire` du design
+ * system à 60 % le porte à 3,4:1 sans introduire de couleur nouvelle, et sa
+ * chaleur va avec le beige de l'app.
+ *
+ * La zone tactile fait 44px (contrainte iOS du CLAUDE.md) pour une étoile de
+ * 22 : c'est à l'appelant de la caler, d'où `className`.
  */
-export default function EtoileFavori({ favori, onClick, disabled, nom }) {
+export default function EtoileFavori({
+  favori,
+  onClick,
+  disabled,
+  nom,
+  className = "",
+}) {
   return (
     <button
       type="button"
@@ -24,28 +37,22 @@ export default function EtoileFavori({ favori, onClick, disabled, nom }) {
       disabled={disabled}
       aria-pressed={favori}
       aria-label={favori ? `Retirer ${nom} des favoris` : `Mettre ${nom} en favori`}
-      className="pressable size-tactile -my-1.5 -mr-1.5 flex shrink-0 items-center justify-center"
+      className={`pressable size-tactile flex shrink-0 items-center justify-center ${className}`}
     >
       <span
         aria-hidden="true"
-        className={`flex size-8 items-center justify-center rounded-full ${
-          favori ? "bg-accent" : "bg-fond"
-        }`}
+        className="t-icon-swap size-[22px]"
+        data-state={favori ? "b" : "a"}
       >
-        <span
-          className="t-icon-swap size-[18px]"
-          data-state={favori ? "b" : "a"}
-        >
-          <IconeEtoile
-            className="t-icon text-texte-doux size-[18px]"
-            data-icon="a"
-          />
-          <IconeEtoile
-            pleine
-            className="t-icon text-texte size-[18px]"
-            data-icon="b"
-          />
-        </span>
+        <IconeEtoile
+          className="t-icon text-secondaire/60 size-[22px]"
+          data-icon="a"
+        />
+        <IconeEtoile
+          pleine
+          className="t-icon text-accent size-[22px]"
+          data-icon="b"
+        />
       </span>
     </button>
   );

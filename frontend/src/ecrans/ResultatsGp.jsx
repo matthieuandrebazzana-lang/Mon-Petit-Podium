@@ -19,7 +19,11 @@ import {
   podiumDeLaCourse,
 } from "../lib/calendrier.js";
 import { useDonnees } from "../lib/useDonnees.js";
-import { formaterDepart, formaterPoints } from "../lib/format.js";
+import {
+  formaterDepart,
+  formaterPilote,
+  formaterPoints,
+} from "../lib/format.js";
 
 /**
  * Maquette 11 — les résultats d'un Grand Prix couru.
@@ -211,10 +215,12 @@ function Verdict({ pointsGagnes }) {
 /** Le pilote (ou les deux pilotes) sur lesquels porte un pronostic. */
 function choixDuPronostic(pronostic) {
   if (pronostic.podium) {
-    const deux = [pronostic.podium.nom_1, pronostic.podium.nom_2].filter(Boolean);
+    const deux = [pronostic.podium.nom_1, pronostic.podium.nom_2]
+      .filter(Boolean)
+      .map(formaterPilote);
     if (deux.length > 0) return deux.join(" + ");
   }
-  return pronostic.pilote ?? "Cote retirée par le bookmaker";
+  return formaterPilote(pronostic.pilote) ?? "Cote retirée par le bookmaker";
 }
 
 /**

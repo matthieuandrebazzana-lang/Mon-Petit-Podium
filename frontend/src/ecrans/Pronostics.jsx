@@ -28,7 +28,11 @@ import {
   organiserPronostics,
 } from "../lib/pronostics.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
-import { formaterDepart, formaterPoints } from "../lib/format.js";
+import {
+  formaterDepart,
+  formaterPilote,
+  formaterPoints,
+} from "../lib/format.js";
 import { origineRetour } from "../lib/navigation.js";
 import { useFermeture } from "../lib/useFermeture.js";
 
@@ -137,7 +141,7 @@ function Emplacement({
           choisi ? `font-medium ${ton.texte}` : ton.texteDoux
         }`}
       >
-        {choisi ? choisi.pilote : "Non sélectionné"}
+        {choisi ? formaterPilote(choisi.pilote) : "Non sélectionné"}
       </span>
     </span>
   );
@@ -200,7 +204,7 @@ function Emplacement({
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate text-[14px] font-medium">
-                      {option.pilote}
+                      {formaterPilote(option.pilote)}
                     </span>
                     <span
                       className={`shrink-0 text-[12px] font-medium ${
@@ -582,7 +586,8 @@ export default function Pronostics() {
                                     actif ? tonBonus.texte : "text-texte"
                                   }`}
                                 >
-                                  {favori.pilote ?? favori.id_outcome_unibet}
+                                  {formaterPilote(favori.pilote) ??
+                                    favori.id_outcome_unibet}
                                 </span>
                               </span>
 

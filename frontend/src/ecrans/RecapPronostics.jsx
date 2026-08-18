@@ -29,7 +29,12 @@ import {
 } from "../lib/pronostics.js";
 import { couleurBloc, couleurMarche, tonalites } from "../lib/couleurs.js";
 import { useDonnees } from "../lib/useDonnees.js";
-import { blocsRestant, formaterDepart, formaterPoints } from "../lib/format.js";
+import {
+  blocsRestant,
+  formaterDepart,
+  formaterPilote,
+  formaterPoints,
+} from "../lib/format.js";
 import { useFermeture } from "../lib/useFermeture.js";
 
 /* --------------------------------------------------------------------------
@@ -366,7 +371,7 @@ function Ligne({ marche, choix, couleur }) {
           {marche}
         </span>
         <span className="text-texte mt-0.5 block truncate text-[14px] font-medium">
-          {choix.pilote ?? "Cote retirée par le bookmaker"}
+          {formaterPilote(choix.pilote) ?? "Cote retirée par le bookmaker"}
         </span>
       </span>
 

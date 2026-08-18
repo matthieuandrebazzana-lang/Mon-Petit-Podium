@@ -21,12 +21,12 @@ import { luminance } from "./palette.js";
  *  : Tailwind lit les fichiers source et ne verrait pas une classe assemblée à
  *  l'exécution (`bg-${cle}`). */
 export const COULEURS_BLOC = [
-  { cle: "rouge", hex: "#800111", fond: "bg-primaire" },
-  { cle: "amber", hex: "#E8A020", fond: "bg-accent" },
-  { cle: "vert-sauge", hex: "#4A7C59", fond: "bg-vert-sauge" },
-  { cle: "bleu-ardoise", hex: "#2C4A6E", fond: "bg-bleu-ardoise" },
-  { cle: "terracotta", hex: "#C4622D", fond: "bg-terracotta" },
-  { cle: "violet", hex: "#5C3D7A", fond: "bg-violet" },
+  { cle: "rouge", hex: "#800111", fond: "bg-primaire", texte: "text-primaire" },
+  { cle: "amber", hex: "#E8A020", fond: "bg-accent", texte: "text-accent" },
+  { cle: "vert-sauge", hex: "#4A7C59", fond: "bg-vert-sauge", texte: "text-vert-sauge" },
+  { cle: "bleu-ardoise", hex: "#2C4A6E", fond: "bg-bleu-ardoise", texte: "text-bleu-ardoise" },
+  { cle: "terracotta", hex: "#C4622D", fond: "bg-terracotta", texte: "text-terracotta" },
+  { cle: "violet", hex: "#5C3D7A", fond: "bg-violet", texte: "text-violet" },
 ];
 
 const PAR_CLE = new Map(COULEURS_BLOC.map((couleur) => [couleur.cle, couleur]));
@@ -67,6 +67,30 @@ export function contraste(a, b) {
  */
 export function encreSurAplat(hex) {
   return contraste(hex, "#FFFFFF") >= 3 ? "#FFFFFF" : "#1A1A1A";
+}
+
+/**
+ * L'inverse : l'encre d'une **pastille blanche** posée sur un aplat coloré.
+ *
+ * Le compteur de favoris d'un en-tête de marché est une pastille blanche, et
+ * son chiffre doit porter la couleur du marché — c'est ce qui fait que le
+ * compteur appartient visiblement à sa section. Sauf que **deux des six teintes
+ * ne tiennent pas sur du blanc** : l'amber `#E8A020` n'y vaut que 2,2:1 et le
+ * terracotta `#C4622D` 4,1:1, tous deux sous le plancher AA d'un texte
+ * ordinaire (4,5:1). Les quatre autres passent, du 4,9:1 du vert sauge au
+ * 10,9:1 du bordeaux.
+ *
+ * Le seuil est donc mesuré ici plutôt que décidé à l'œil, exactement comme
+ * `encreSurAplat` décide de l'encre d'un aplat depuis la version `0.12.0`.
+ * Les deux teintes trop claires retombent sur l'encre du design system, les
+ * quatre autres gardent la leur ; et un aplat ajouté demain reçoit la bonne
+ * réponse sans que personne n'ait à refaire le calcul.
+ *
+ * Le seuil retenu est **4,5:1 et non 3:1** : ce chiffre est du texte de petite
+ * taille, pas un grand titre.
+ */
+export function encreSurBlanc(couleur) {
+  return contraste(couleur.hex, "#FFFFFF") >= 4.5 ? couleur.texte : "text-texte";
 }
 
 /**

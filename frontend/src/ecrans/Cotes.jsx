@@ -5,157 +5,335 @@ import EnTeteEcran from "../composants/EnTeteEcran.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
+import Compteur from "../composants/Compteur.jsx";
 import EtoileFavori from "../composants/EtoileFavori.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { Barre, Pave } from "../composants/Squelette.jsx";
-import { IconeEtoile } from "../composants/Icones.jsx";
+import { IconeCroix, IconeEtoile } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
-import { couleurMarche, tonalites } from "../lib/couleurs.js";
+import { couleurMarche, encreSurBlanc, tonalites } from "../lib/couleurs.js";
 import { basculerFavori, chargerTableauCotes } from "../lib/pronostics.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
-import { formaterDepart, formaterPoints } from "../lib/format.js";
+import {
+  decouperPoints,
+  formaterDepart,
+  formaterPilote,
+} from "../lib/format.js";
 import { origineRetour } from "../lib/navigation.js";
 import { useFermeture } from "../lib/useFermeture.js";
 
-function SqueletteCotes() {
+/* Hauteur d'un widget de cote. Écrite une fois et partagée avec le squelette :
+   sans hauteur commune, la grille sauterait de 90px par rangée à l'arrivée des
+   données — le défaut déjà corrigé sur les cartes de championnat en version
+   `0.14.0`. */
+const HAUTEUR_WIDGET = 90;
+
+/**
+ * Un widget de cote — la brique de la grille à deux colonnes.
+ *
+ * **Hauteur fixe, et c'est ce qui fait la grille.** Deux widgets d'une même
+ * rangée doivent finir à la même ligne quel que soit le nom qu'ils portent :
+ * une hauteur libre donnerait des rangées en dents de scie dès qu'un pilote a
+ * un nom plus long que son voisin. Le nom est donc sur **une seule ligne**, et
+ * tronqué au-delà.
+ *
+ * L'étoile est posée en absolu dans le coin plutôt que dans le flux : sa zone
+ * tactile de 44px est plus haute que la ligne des points, et la mettre dans le
+ * flux ferait grandir le widget de 20px pour rien. Elle chevauche le
+ * rembourrage, jamais le texte — les points lui laissent la place à droite.
+ */
+function WidgetCote({ cote, epingle, ferme, onBasculer }) {
+  const points = decouperPoints(cote.points);
+  const nom = formaterPilote(cote.pilote);
+
   return (
-    <div className="flex flex-col gap-3">
-      {[0, 1].map((section) => (
-        <div key={section} className="rounded-carte bg-surface shadow-carte overflow-hidden">
-          {/* L'en-tête garde son aplat de couleur, seul son contenu est grisé :
-              le voir virer au gris puis revenir ferait clignoter l'écran au
-              lieu de le remplir. C'est la règle tenue depuis l'étape 9. */}
-          <div className="bg-primaire px-4 py-3">
-            <div className="h-3 w-28 rounded-full bg-white/25" />
-          </div>
-          <div className="flex flex-col gap-4 p-4">
-            {[0, 1, 2].map((rang) => (
-              <div key={rang} className="flex items-center justify-between gap-3">
-                <Barre largeur="w-1/3" />
-                <Pave className="h-7 w-24" arrondi="rounded-[10px]" />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
+    <li
+      className="rounded-widget bg-surface shadow-carte relative"
+      style={{ height: `${HAUTEUR_WIDGET}px` }}
+    >
+      <div className="flex h-full flex-col justify-between p-3">
+        <p className="text-texte truncate text-[14px] font-medium">{nom}</p>
+
+        {points.retiree ? (
+          <p className="text-texte-doux truncate pr-8 text-[12px]">
+            Cote retirée
+          </p>
+        ) : (
+          /* Le rouge de la marque sur le blanc du widget : 10,9:1. La graisse
+             700 est un écart assumé à la section 5, qui la réserve aux numéros
+             de voiture — il est borné à ce seul chiffre, comme les tuiles du
+             compte à rebours (version `0.18.0`) et le quantième des cartes de
+             Grand Prix (version `0.20.0`). C'est le nombre qu'on vient lire. */
+          <p className="text-primaire flex items-baseline gap-1 pr-8 font-bold">
+            <span className="text-[18px] tracking-[-0.01em]">
+              {points.valeur}
+            </span>
+            <span className="text-[11px] font-medium">{points.unite}</span>
+          </p>
+        )}
+      </div>
+
+      {!ferme && (
+        <EtoileFavori
+          nom={nom}
+          favori={epingle}
+          onClick={onBasculer}
+          className="absolute right-0.5 bottom-0.5"
+        />
+      )}
+    </li>
   );
 }
 
 /**
- * Une section de marché : en-tête coloré **collant**, puis ses cotes.
+ * Une pastille de la rangée « MES FAVORIS ».
+ *
+ * **Les points sont un aplat ambre à encre foncée, jamais du texte ambre.**
+ * `#E8A020` écrit sur le blanc de la pastille ne vaut que 2,2:1 ; le même ambre
+ * en aplat avec l'encre `#1A1A1A` du design system monte à 7,9:1. C'est le
+ * même arbitrage qu'aux versions `0.12.0`, `0.17.0` et `0.19.0`, et il donne
+ * bien le repère ambre que la demande cherche.
+ *
+ * Le bouton de retrait fait ses 44px alors que la croix n'en occupe que 14 :
+ * dans une rangée qui défile sous le pouce, une cible étroite se rate.
+ */
+function ChipFavori({ favori, ferme, onRetirer }) {
+  const points = decouperPoints(favori.points);
+  const nom = favori.pilote ? formaterPilote(favori.pilote) : "Cote retirée";
+
+  return (
+    <li className="rounded-full bg-surface shadow-carte min-h-tactile flex shrink-0 snap-start items-center gap-2 pl-3.5">
+      <span className="text-texte text-[13px] font-medium whitespace-nowrap">
+        {nom}
+      </span>
+
+      {!points.retiree && (
+        <span className="bg-accent text-texte rounded-full px-2 py-0.5 text-[12px] font-bold">
+          {points.valeur}
+          <span className="ml-0.5 text-[10px] font-medium">{points.unite}</span>
+        </span>
+      )}
+
+      {ferme ? (
+        <span aria-hidden="true" className="w-3.5" />
+      ) : (
+        <button
+          type="button"
+          onClick={onRetirer}
+          aria-label={`Retirer ${nom} des favoris`}
+          className="pressable size-tactile text-secondaire/70 flex shrink-0 items-center justify-center"
+        >
+          <IconeCroix className="size-3.5" />
+        </button>
+      )}
+    </li>
+  );
+}
+
+/**
+ * La section « MES FAVORIS », en tête d'écran.
+ *
+ * C'est le panier du joueur : ce qu'il a mis de côté, et ce dans quoi il
+ * choisira ses trois bonus à l'écran suivant. Il est donc en haut, avant le
+ * catalogue, et non relégué sous vingt-deux widgets.
+ *
+ * **Le libellé de section quitte le gris `texte-doux` du design system.** Sur
+ * le beige `#F5F0EB`, `#999999` ne vaut que 2,0:1 : c'était tenable pour une
+ * étiquette qu'on ne lit pas, pas pour celle que la demande veut « bien
+ * visible ». Le marron `secondaire` du design system le porte à 9,4:1, sans
+ * introduire de couleur nouvelle. Même correction qu'au bandeau de saison en
+ * version `0.14.1`.
+ *
+ * La rangée défile à l'horizontale, calée sur les pastilles (`snap-x`) : un
+ * doigt qui la pousse la laisse sur une pastille entière, jamais coupée en
+ * deux. C'est ce qui la distingue d'un débordement accidentel.
+ */
+function SectionFavoris({ favoris, ferme, onRetirer }) {
+  return (
+    <section className="flex flex-col gap-2.5">
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <h2 className="text-label text-secondaire uppercase">Mes favoris</h2>
+        {favoris.length > 0 && (
+          <span className="text-texte-doux text-[12px]">
+            {favoris.length} {favoris.length > 1 ? "cotes" : "cote"}
+          </span>
+        )}
+      </div>
+
+      {favoris.length === 0 ? (
+        <div className="rounded-carte bg-surface shadow-carte px-5 py-7 text-center">
+          <IconeEtoile
+            className="text-accent mx-auto size-6"
+            aria-hidden="true"
+          />
+          <p className="text-texte-doux text-corps-sm mx-auto mt-2.5 max-w-[30ch]">
+            Épingle tes cotes favorites ci-dessous pour construire tes bonus.
+          </p>
+        </div>
+      ) : (
+        <ul className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {favoris.map((favori) => (
+            <ChipFavori
+              key={favori.id_outcome_unibet}
+              favori={favori}
+              ferme={ferme}
+              onRetirer={() => onRetirer(favori)}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Le mode d'emploi, entre les favoris et les marchés.
+ *
+ * Trois gestes, dans l'ordre où on les fait, à l'endroit exact où on passe de
+ * « ce que j'ai retenu » à « ce que le bookmaker propose ». Sans lui, rien à
+ * l'écran ne dit qu'épingler une cote sert à quelque chose plus tard.
+ *
+ * **Deux écarts au design system, tous deux demandés explicitement.** La
+ * section 5 proscrit les bordures fines : celle-ci est réclamée par la demande,
+ * et elle fait un vrai travail — sur un fond ambre très pâle posé sur du beige,
+ * c'est le trait qui dit où commence l'encadré. Et `#FDF3E0` est une teinte
+ * nouvelle : elle est écrite en valeur littérale plutôt qu'ajoutée aux jetons
+ * du thème, parce qu'elle **ne peint que cet encadré** et rien d'autre — un
+ * jeton inviterait à la réutiliser ailleurs.
+ *
+ * Contraste mesuré : `#543925` sur `#FDF3E0` vaut 9,0:1.
+ */
+function ModeEmploi() {
+  const etapes = [
+    <>
+      Épingle tes cotes favorites avec{" "}
+      <IconeEtoile
+        pleine
+        aria-hidden="true"
+        className="inline-block size-3.5 translate-y-px"
+      />
+    </>,
+    <>
+      Choisis tes 2 pronostics obligatoires (Vainqueur + Podium) depuis l'écran
+      suivant
+    </>,
+    <>Sélectionne 3 bonus parmi tes favoris</>,
+  ];
+
+  return (
+    <ol className="rounded-carte border-accent text-secondaire flex flex-col gap-2.5 border bg-[#FDF3E0] px-4 py-3.5 text-[13px] leading-snug">
+      {etapes.map((etape, rang) => (
+        <li key={rang} className="flex items-start gap-2.5">
+          {/* Encre foncée sur l'ambre : 7,9:1. Le blanc y tomberait à 2,2:1. */}
+          <span
+            aria-hidden="true"
+            className="bg-accent text-texte mt-px flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium"
+          >
+            {rang + 1}
+          </span>
+          <span className="min-w-0">{etape}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * Un marché : en-tête coloré **collant**, puis ses cotes en grille de deux.
  *
  * Les trois marchés du noyau ont chacun leur couleur nommée (`lib/couleurs.js`),
  * les marchés que le scraper découvre en prennent une parmi les trois qui
  * restent. Le libellé affiché est celui d'Unibet, jamais un slug reconstitué :
  * le bookmaker est la seule source légitime du nom d'un marché (étape 4).
  *
- * **L'en-tête est `sticky`**, et c'est le vrai apport de cette passe sur cet
- * écran. Un marché aligne vingt-deux pilotes : à mi-liste, plus rien ne disait
- * ce qu'on était en train de lire, et il fallait remonter pour le savoir. C'est
- * la liste groupée d'iOS, et le §16 d'/apple-design sur le « où suis-je ».
- * Le décalage `top` est celui de la barre de navigation d'écran, sans quoi
- * l'en-tête de marché viendrait se coller par-dessus.
+ * **L'en-tête est `sticky`.** Un marché aligne vingt-deux pilotes, soit onze
+ * rangées de widgets : à mi-liste, plus rien ne dirait ce qu'on est en train de
+ * lire, et il faudrait remonter pour le savoir. C'est la liste groupée d'iOS, et
+ * le §16 d'/apple-design sur le « où suis-je ». Le décalage `top` est celui de
+ * la barre d'écran (`--entete-hauteur`), sans quoi les deux se recouvriraient.
  *
- * Le nombre de pilotes cède la place au **nombre de favoris épinglés dans ce
- * marché** dès qu'il y en a : « 22 » ne dit rien qu'on ne voie en défilant,
- * « 3 en favoris » dit où en est le joueur de sa sélection.
+ * La pastille de droite est **toujours rendue**, y compris à zéro : une pastille
+ * qui apparaîtrait au premier favori ferait sauter un en-tête collant sous le
+ * doigt qui vient d'épingler.
  */
 function SectionMarche({ marche, rang, epingles, ferme, onBasculer }) {
   const couleur = couleurMarche(marche.marche, rang);
   const ton = tonalites(couleur.hex);
+  const encreCompteur = encreSurBlanc(couleur);
   const epinglesIci = marche.cotes.filter((cote) => epingles.has(cote.id)).length;
 
   return (
-    <section className="rounded-carte bg-surface shadow-carte overflow-hidden">
+    <section className="flex flex-col gap-3">
       <header
-        className={`section-collante flex items-center justify-between gap-3 px-4 py-3 ${couleur.fond}`}
+        className={`section-collante rounded-carte shadow-carte relative flex items-center justify-between gap-3 overflow-hidden px-4 py-2.5 ${couleur.fond}`}
       >
+        <span
+          aria-hidden="true"
+          className="lueur-haute pointer-events-none absolute inset-0"
+        />
         <h2
-          className={`min-w-0 truncate text-[13px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
+          className={`relative min-w-0 truncate text-[13px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
         >
           {marche.libelle}
         </h2>
         <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-            epinglesIci > 0
-              ? `${ton.surfaceForte} ${ton.texte}`
-              : ton.texteDoux
-          }`}
+          className={`relative flex shrink-0 items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[12px] font-medium ${encreCompteur}`}
         >
-          {epinglesIci > 0
-            ? `${epinglesIci} en favoris`
-            : `${marche.cotes.length} pilotes`}
+          <IconeEtoile pleine aria-hidden="true" className="size-3" />
+          <span className="sr-only">Favoris épinglés dans ce marché :</span>
+          <Compteur valeur={epinglesIci} />
         </span>
       </header>
 
-      {/* Les rangées sont séparées par leur seul rythme vertical, jamais par un
-          filet : la section 5 proscrit les traits fins, et une liste de
-          vingt-deux lignes soulignées serait un tableau, pas un widget. */}
-      <ul className="px-4 py-1">
-        {marche.cotes.map((cote) => {
-          const epingle = epingles.has(cote.id);
-          return (
-            <li
-              key={cote.id}
-              className="flex items-center justify-between gap-3 py-2"
-            >
-              <span className="text-texte min-w-0 flex-1 truncate text-[15px] font-medium">
-                {cote.pilote}
-              </span>
-              <span className="flex items-center gap-2.5">
-                {/* La case de points passe à l'ambre du bloc dès que la cote est
-                    épinglée : la ligne entière dit alors « retenue », et pas
-                    seulement l'étoile de 18px posée au bout. */}
-                <span
-                  className={`rounded-[10px] px-2.5 py-1.5 text-[14px] font-medium ${
-                    epingle ? "bg-accent/15 text-texte" : "bg-fond text-texte"
-                  }`}
-                >
-                  {formaterPoints(cote.points)}
-                </span>
-                {!ferme && (
-                  <EtoileFavori
-                    nom={cote.pilote}
-                    favori={epingle}
-                    onClick={() => onBasculer(cote, marche)}
-                  />
-                )}
-              </span>
-            </li>
-          );
-        })}
+      {/* Deux colonnes, 12px de gouttière. Les 16px de marge latérale viennent
+          d'`ecran`, qui les applique déjà à tout l'écran : les redéclarer ici
+          les doublerait. */}
+      <ul className="grid grid-cols-2 gap-3">
+        {marche.cotes.map((cote) => (
+          <WidgetCote
+            key={cote.id}
+            cote={cote}
+            epingle={epingles.has(cote.id)}
+            ferme={ferme}
+            onBasculer={() => onBasculer(cote, marche)}
+          />
+        ))}
       </ul>
     </section>
   );
 }
 
-/**
- * Rangée de pastilles « MES FAVORIS », défilant à l'horizontale.
- *
- * Le défilement est calé sur les pastilles (`snap-x`) : un doigt qui pousse la
- * rangée la laisse en place sur une pastille entière, jamais coupée en deux.
- * C'est la seule surface de l'app qui défile à l'horizontale, et c'est ce qui la
- * distingue d'un débordement accidentel.
- */
-function RangeeFavoris({ favoris }) {
+/** La silhouette de l'écran : la rangée de favoris, puis deux marchés. */
+function SqueletteCotes() {
   return (
-    <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {favoris.map((favori) => (
-        <span
-          key={favori.id_outcome_unibet}
-          className="rounded-champ bg-surface shadow-carte flex shrink-0 snap-start items-center gap-1.5 py-2 pr-2.5 pl-2.5"
-        >
-          <IconeEtoile pleine className="text-accent size-3.5 shrink-0" />
-          <span className="text-texte text-[13px] font-medium">
-            {favori.pilote ?? "Cote retirée"}
-          </span>
-          {favori.points !== null && favori.points !== undefined && (
-            <span className="bg-accent/15 text-texte rounded-md px-1.5 py-0.5 text-[11px] font-medium">
-              {formaterPoints(favori.points)}
-            </span>
-          )}
-        </span>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2.5">
+        <Barre largeur="w-24" hauteur="h-2.5" className="ml-1" />
+        <div className="flex gap-2">
+          {[0, 1, 2].map((rang) => (
+            <Pave key={rang} className="h-11 w-32 shrink-0" arrondi="rounded-full" />
+          ))}
+        </div>
+      </div>
+
+      {[0, 1].map((section) => (
+        <div key={section} className="flex flex-col gap-3">
+          {/* L'en-tête garde son aplat de couleur, seul son contenu est grisé :
+              le voir virer au gris puis revenir ferait clignoter l'écran au
+              lieu de le remplir. C'est la règle tenue depuis l'étape 9. */}
+          <div className="rounded-carte bg-primaire shadow-carte px-4 py-2.5">
+            <div className="h-3.5 w-28 rounded-full bg-white/25" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[0, 1, 2, 3].map((cellule) => (
+              <Pave
+                key={cellule}
+                arrondi="rounded-widget"
+                style={{ height: `${HAUTEUR_WIDGET}px` }}
+              />
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -239,6 +417,20 @@ export default function Cotes() {
     if (utilisateur) oublierCache(`saisie:${utilisateur.id}:${gpId}`);
   }
 
+  // La croix d'une pastille passe par le même chemin que l'étoile du widget :
+  // c'est la même bascule, vue de l'autre bout. Deux chemins d'écriture
+  // séparés auraient fini par diverger sur la mise à jour optimiste.
+  function retirerFavori(favori) {
+    return basculer(
+      {
+        id: favori.id_outcome_unibet,
+        pilote: favori.pilote,
+        points: favori.points,
+      },
+      { marche: favori.marche, libelle: favori.libelle },
+    );
+  }
+
   if (echec && !donnees) {
     return (
       <Ecran direction="avant">
@@ -266,6 +458,7 @@ export default function Cotes() {
         titre="Fais tes paris"
         retourVers={retour.vers}
         libelleRetour={gp?.nom ?? retour.libelle}
+        retourEtat={state?.origine ? { retour: state.origine } : null}
         sousTitre={
           gp
             ? depart.heure
@@ -282,7 +475,12 @@ export default function Cotes() {
             squelette={<SqueletteCotes />}
           >
             {gp && (
-              <div className="flex flex-col gap-3">
+              /* 20px entre les grands ensembles — favoris, mode d'emploi,
+                 marchés — contre 12px à l'intérieur de chacun. C'est le « vrai
+                 espacement » que la demande réclame autour des favoris : ce qui
+                 sépare deux ensembles doit être visiblement plus large que ce
+                 qui sépare deux éléments d'un même ensemble. */
+              <div className="flex flex-col gap-5">
                 {ferme && (
                   <p className="rounded-carte bg-surface shadow-carte text-texte-doux text-corps-sm px-4 py-3">
                     Les pronostics sont fermés. Les cotes restent consultables.
@@ -301,20 +499,19 @@ export default function Cotes() {
                   </div>
                 ) : (
                   <>
-                    {favoris.length > 0 && (
-                      <div className="flex flex-col gap-2">
-                        <p className="text-label text-texte-doux px-1 uppercase">
-                          Mes favoris
-                        </p>
-                        <RangeeFavoris favoris={favoris} />
-                      </div>
-                    )}
+                    <SectionFavoris
+                      favoris={favoris}
+                      ferme={ferme}
+                      onRetirer={retirerFavori}
+                    />
 
                     {erreurFavori && (
                       <Alerte ton="erreur" tentative={tentative}>
                         {erreurFavori}
                       </Alerte>
                     )}
+
+                    {!ferme && <ModeEmploi />}
 
                     {/* Tous les marchés sont empilés, chacun sous son en-tête
                         coloré, au lieu d'un seul marché derrière des onglets.
@@ -346,7 +543,7 @@ export default function Cotes() {
 
             La barre est collée en bas : sur un écran qui empile trois marchés de
             vingt-deux pilotes, un bouton en fin de page obligerait à redescendre
-            tout le tableau après chaque étoile épinglée. Elle rend elle-même la
+            toute la grille après chaque étoile épinglée. Elle rend elle-même la
             zone sûre du home indicator (voir `barre-collee` dans index.css) et
             n'est pas enveloppée dans un `Bloc` : `t-stagger-line` porte un
             `transform`, et un ancêtre transformé casse le collage. */}

@@ -88,6 +88,11 @@
   --radius-bloc: 24px; /* blocs principaux */
   --radius-carte: 20px; /* blocs secondaires et cartes */
   --radius-carte-sm: 18px;
+  --radius-widget: 16px; /* widgets de cote — la plus petite carte autonome.
+                            Entre `carte-sm` et `champ`, et c'est délibéré : une
+                            grille de vingt-deux tuiles de 90px ne supporte pas
+                            les 18px d'une carte pleine largeur, qui y font des
+                            coins mous. Écart borné à ces widgets. */
   --radius-champ: 14px; /* champs de saisie et petits éléments */
 
   /* Rythme — 12px entre blocs, 16–20px de padding intérieur.

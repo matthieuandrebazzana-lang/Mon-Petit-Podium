@@ -121,6 +121,28 @@ export function IconeAlerte(props) {
   );
 }
 
+/* Croix de retrait — le bouton qui décroche une cote de la rangée des favoris.
+   Deux segments et rien d'autre : à 14px, un tracé plus travaillé ne se lit
+   plus. `strokeLinecap="round"` adoucit les quatre extrémités pour qu'elle
+   n'ait pas l'air d'un « supprimer » définitif : on retire un favori, on ne
+   détruit rien. */
+export function IconeCroix(props) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <line x1="6" y1="6" x2="18" y2="18" />
+      <line x1="18" y1="6" x2="6" y2="18" />
+    </svg>
+  );
+}
+
 export function IconeSortie(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" {...props}>

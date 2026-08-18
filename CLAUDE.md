@@ -2678,6 +2678,99 @@ Le test visuel de la version `0.23.0` **n'est pas conservé**. La barre de navig
 
 ---
 
+---
+
+**Refonte de l'écran des cotes — grille à deux colonnes, section favoris, mode d'emploi** (version `0.26.0`)
+
+Le tableau des cotes passe d'une liste de vingt-deux lignes par marché à une **grille de widgets à deux colonnes**, précédée d'une section « MES FAVORIS » et d'un mode d'emploi en trois gestes. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+*Lecture du brief, telle que la pose le skill Taste* — écran-outil d'une PWA iOS, parcouru plusieurs fois par week-end, langage widget de la section 5. Dials : `DESIGN_VARIANCE 5`, `MOTION_INTENSITY 5`, `VISUAL_DENSITY 6`. La variance est basse et c'est délibéré : une composition asymétrique change de sens quand on revient sur le même écran vingt fois, et une grille régulière est ici la réponse juste. La densité, elle, monte — c'est tout l'objet de la grille.
+
+---
+
+***Le nom des pilotes est normalisé avant d'être affiché.***
+
+Unibet n'écrit pas tous ses pilotes de la même façon. La quasi-totalité de la grille arrive en « initiale + nom » (« M.Verstappen », « AK.Antonelli ») ; **Franco Colapinto arrive en nom complet**. Dans une liste il passait ; dans un widget de 173px de large, il fait deux fois la largeur de ses voisins et se fait tronquer.
+
+`formaterPilote` entre dans `frontend/src/lib/format.js`, où vit déjà toute la mise en forme, avec une table de correspondance. **C'est le même mécanisme que les `alias` de `backend/app/calcul/pilotes.py`**, et il est là pour la même raison : ces écarts sont **irréductibles par une règle**. Abréger automatiquement tout libellé à deux mots casserait le marché « Ecurie Vainqueur », où « Red Bull » et « Aston Martin » sont les bonnes réponses. Les cas sont donc listés un par un, et **tout ce qui n'est pas dans la table ressort intact**. La clé est normalisée (minuscules, accents ramenés à la lettre de base, espaces fondus) : Unibet écrit tantôt « Pays Bas » tantôt « Pays-Bas » sur ses Grands Prix, rien ne garantit qu'il soit plus régulier sur ses pilotes.
+
+**Elle est appliquée aux libellés venus des COTES, et à eux seuls** : le tableau des cotes, l'écran de saisie, le récapitulatif, et les pronostics de l'écran de résultats. Les lignes du **classement de course** de ce dernier viennent d'OpenF1 et gardent leur nom complet — les normaliser y donnerait « F.Colapinto » au milieu de « Max VERSTAPPEN », c'est-à-dire l'incohérence qu'on cherche à corriger, remise à l'envers.
+
+---
+
+*La section « MES FAVORIS », en tête d'écran.* C'est le panier du joueur : ce qu'il a mis de côté, et ce dans quoi il choisira ses trois bonus à l'écran suivant. Elle est donc **avant** le catalogue, et non reléguée sous soixante-six widgets.
+
+Sans favori, un message centré dit à quoi sert la section. Avec, une **rangée de pastilles qui défile à l'horizontale**, calée sur les pastilles (`snap-x`) : un doigt qui la pousse la laisse sur une pastille entière, jamais coupée en deux — c'est ce qui la distingue d'un débordement accidentel. Chaque pastille porte le nom, les points et une croix de retrait.
+
+**Trois décisions de contraste, toutes mesurées, toutes documentées dans le code :**
+
+1. **Les points d'une pastille sont un aplat ambre à encre foncée, jamais du texte ambre.** `#E8A020` écrit sur le blanc de la pastille ne vaut que **2,2:1** ; le même ambre en aplat avec l'encre `#1A1A1A` monte à **7,9:1**. C'est le même arbitrage qu'aux versions `0.12.0`, `0.17.0`, `0.19.0` et `0.21.0`, et il donne bien le repère ambre que la demande cherche.
+2. **Le libellé de section quitte le gris `texte-doux` du design system.** Sur le beige `#F5F0EB`, `#999999` ne vaut que **2,5:1** : tenable pour une étiquette qu'on ne lit pas, pas pour celle que la demande veut « bien visible ». Le marron `secondaire` le porte à **9,3:1**, sans introduire de couleur nouvelle. Même correction qu'au bandeau de saison en version `0.14.1`.
+3. **La croix de retrait fait ses 44px** alors qu'elle n'en occupe que 14 : dans une rangée qui défile sous le pouce, une cible étroite se rate. `IconeCroix` est ajoutée à `composants/Icones.jsx`, deux segments et rien d'autre — à 14px, un tracé plus travaillé ne se lit plus.
+
+La croix passe par **le même chemin que l'étoile du widget** (`basculer`), vue de l'autre bout : deux chemins d'écriture séparés auraient fini par diverger sur la mise à jour optimiste.
+
+---
+
+*Le mode d'emploi.* Trois gestes, dans l'ordre où on les fait, posés à l'endroit exact où l'on passe de « ce que j'ai retenu » à « ce que le bookmaker propose ». Sans lui, rien à l'écran ne dit qu'épingler une cote sert à quelque chose plus tard. Il disparaît une fois les pronostics fermés : il n'y a plus de geste à faire.
+
+**Deux écarts au design system, tous deux demandés explicitement.** La section 5 proscrit les bordures fines : celle-ci est réclamée par la demande, et elle fait un vrai travail — sur un fond ambre très pâle posé sur du beige, c'est le trait qui dit où commence l'encadré. Et `#FDF3E0` est une teinte nouvelle : elle est écrite en **valeur littérale plutôt qu'ajoutée aux jetons du thème**, parce qu'elle ne peint que cet encadré et rien d'autre — un jeton inviterait à la réutiliser ailleurs. Contraste mesuré : `#543925` sur `#FDF3E0` vaut **9,6:1**, et les pastilles numérotées reprennent l'encre foncée sur ambre (**7,9:1**).
+
+---
+
+***La grille de widgets.*** Deux colonnes, 12px de gouttière, 16px de marge latérale — ces derniers viennent d'`ecran`, qui les applique déjà à tout l'écran ; les redéclarer les doublerait.
+
+Chaque widget : surface blanche, **90px de haut**, rayon de 16px, nom du pilote en haut sur une seule ligne, points en bas à gauche, étoile en bas à droite.
+
+**Quatre points de mise en œuvre à ne pas défaire :**
+
+1. **La hauteur est fixe, et c'est ce qui fait la grille.** Deux widgets d'une même rangée doivent finir à la même ligne quel que soit le nom qu'ils portent : une hauteur libre donnerait des rangées en dents de scie dès qu'un pilote a un nom plus long que son voisin. Le nom est donc sur une seule ligne et tronqué au-delà — ce qui est aussi la raison d'être de la normalisation ci-dessus.
+2. **`HAUTEUR_WIDGET` est écrite une fois et partagée avec le squelette.** Sans hauteur commune, la grille sauterait de 90px par rangée à l'arrivée des données — le défaut déjà corrigé sur les cartes de championnat en version `0.14.0`.
+3. **L'étoile est posée en absolu dans le coin, pas dans le flux.** Sa zone tactile de 44px est plus haute que la ligne des points : dans le flux, elle ferait grandir le widget de 20px pour rien. Elle chevauche le rembourrage, jamais le texte, à qui les points laissent la place.
+4. **`--radius-widget: 16px`** entre dans le bloc `@theme`, entre `carte-sm` (18px) et `champ` (14px). C'est la valeur demandée, et elle se tient : une grille de vingt-deux tuiles de 90px ne supporte pas les 18px d'une carte pleine largeur, qui y font des coins mous. L'écart est **borné à ces widgets**, et la règle de forme de l'écran est donc explicite : sections et encadré en `rounded-carte`, widgets en `rounded-widget`, pastilles en pilule.
+
+*Écart assumé sur la typographie, le même qu'aux versions `0.18.0` et `0.20.0`* — les points sont demandés en **graisse 700**, que la section 5 réserve aux numéros de voiture. L'écart est borné à ce seul chiffre, et c'est le nombre qu'on vient lire. Le rouge `#800111` sur le blanc du widget vaut **10,9:1**.
+
+*L'étoile redevient un trait nu.* La version `0.12.0` l'avait posée dans un disque qui virait à l'ambre, parce qu'elle vivait alors au bout d'une ligne de liste où deux nuances d'étoile ne se distinguaient pas. Elle vit maintenant dans le coin d'un widget qui n'appartient qu'à une seule cote : le contraste entre le contour et l'aplat ambre suffit, et un disque de plus dans un widget de 90px mangerait la place du nom.
+
+**Le gris du contour est mesuré, pas choisi.** Le `texte-doux` `#999999` du design system ne vaut que **2,85:1** sur du blanc, sous le plancher de 3:1 exigé d'un élément graphique porteur de sens (WCAG 1.4.11) — et l'étoile est ici le **seul** indicateur de l'état « pas en favori ». Le marron `secondaire` à 60 % le porte à **3,4:1** sans introduire de couleur nouvelle.
+
+---
+
+*Les en-têtes de marché.* Ils restent **collants** (`section-collante`, version `0.13.0`) et gardent leur couleur : rouge pour Vainqueur, bleu ardoise pour Podium, vert sauge pour Écurie Vainqueur, et les trois teintes restantes à tour de rôle pour les marchés que le scraper découvre — **jamais celle d'un marché du noyau**, ce qui garde le repère quoi qu'Unibet ouvre. Le libellé affiché est celui du bookmaker, jamais un slug reconstitué.
+
+Ils gagnent une **pastille blanche** portant le nombre de favoris épinglés dans ce marché, et deux points la gouvernent :
+
+1. **Elle est toujours rendue, y compris à zéro.** Une pastille qui apparaîtrait au premier favori ferait sauter un en-tête collant sous le doigt qui vient d'épingler.
+2. **Son encre est calculée**, par `encreSurBlanc` (ajoutée à `lib/couleurs.js`, à côté d'`encreSurAplat`). Le chiffre doit porter la couleur du marché — c'est ce qui fait qu'il appartient visiblement à sa section — mais **deux des six teintes ne tiennent pas sur du blanc** : l'ambre à 2,2:1 et le terracotta à 4,1:1, tous deux sous le plancher AA d'un texte ordinaire. Elles retombent sur l'encre du design system ; les quatre autres gardent la leur, du 4,9:1 du vert sauge au 10,9:1 du bordeaux. Le seuil retenu est **4,5:1 et non 3:1** : ce chiffre est du petit texte, pas un grand titre. Un aplat ajouté demain reçoit la bonne réponse sans que personne n'ait à refaire le calcul.
+
+---
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** L'écran réutilise celles déjà installées : *icon swap* (09) pour l'étoile, *texts reveal* (18) pour l'entrée des blocs, *skeleton loader and reveal* (14) pour l'attente, *text states swap* (04) pour le libellé du bouton, et **_number pop-in_ (02)** pour le compteur de la pastille — un chiffre qui change sous le doigt qui vient d'épingler est exactement le cas que ce snippet couvre, et c'est du mouvement motivé au sens du skill Taste (retour d'action). Un jeton de plus aurait été un jeton à maintenir sans rien gagner.
+
+*Apport d'`/apple-design`* — zone tactile de 44px sur l'étoile et sur chaque croix de retrait, retour tactile à l'appui partout ; l'en-tête collant répond au « où suis-je » du §16 sur un écran qui empile désormais soixante-six widgets ; la pastille de compteur est nommée pour le lecteur d'écran (`sr-only`) là où l'icône seule ne dirait rien ; la lumière spéculaire du §12 est conservée sur les aplats de couleur ; et le squelette suit la silhouette réelle, hauteur de widget comprise (§7, cohérence spatiale).
+
+*Signalé plutôt que tranché seul, comme le demande la section 5* : le skill Taste recommande une bibliothèque d'icônes tierce et proscrit les SVG écrits à la main. C'est le point où le CLAUDE.md gagne, `composants/Icones.jsx` étant tiré des maquettes depuis l'étape 2 — même arbitrage qu'aux versions `0.12.0` et `0.17.0`.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage pré-rempli) : **89 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Normalisation des noms | « Franco Colapinto » → « F.Colapinto », **insensible à la casse et aux espaces** ; les autres pilotes ressortent intacts ; **« Red Bull » n'est pas abrégé** ; `null` et chaîne vide traversent sans lever |
+| Points | 280 découpé en valeur + unité, `null` → retirée **sans valeur inventée**, `formaterPoints` inchangé |
+| **Encre du compteur, mesurée sur les six aplats** | **≥ 4,5:1 partout** ; l'ambre et le terracotta retombent sur l'encre du design system, le vert sauge garde la sienne ; **l'ambre en encre échouerait à 2,2:1** |
+| Contrastes | étoile au repos **3,42:1** (et `#999999` prouvé à 2,85:1, sous le seuil) ; points rouges 10,88:1 ; encadré 9,59:1 ; pastille ambre 7,86:1 ; libellé de section 9,32:1 (et `texte-doux` prouvé à 2,52:1 sur le beige) |
+| Grille | deux colonnes, gouttière de 12px, **sept widgets à 90px exactement**, rayon propre, surface blanche et ombre ; nom sur une ligne tronquée ; points en rouge graisse 700 à 18px avec leur suffixe ; **cote retirée sans montant inventé** ; une étoile par cote, 44px chacune, contour et aplat aux bonnes couleurs |
+| Colapinto | « F.Colapinto » affiché, **« Franco Colapinto » absent du rendu** |
+| Favoris, vide | titre rendu, **libellé en marron et non en gris**, message explicatif exact, centré, **aucun compteur à zéro** |
+| Favoris, rempli | rangée calée sur les pastilles, deux pastilles, nom normalisé, **points en aplat ambre à encre foncée**, bouton de retrait nommé, 44px, compteur « 2 cotes » accordé, message d'invitation retiré |
+| Encadré | liste ordonnée, fond `#FDF3E0`, bordure ambre, texte marron, **les trois étapes au mot près**, trois pastilles numérotées à encre foncée |
+| En-têtes | **quatre en-têtes collants**, les trois couleurs du noyau, **teinte de repli sur le marché découvert**, libellé du bookmaker servi tel quel, pastille blanche, compteur animé et nommé, **compteur à 2 dans le marché Vainqueur**, lumière spéculaire |
+| GP fermé | message de fermeture, **plus aucune étoile, plus de mode d'emploi**, widgets toujours lisibles, bouton « Voir mes pronos » |
+| États | aucun marché → message et **ni grille ni favoris** ; squelette à la silhouette de la grille, **huit widgets à la hauteur réelle**, en-têtes gardant leur aplat, silhouettes de pastilles, **aucun état inventé** |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », ni tiret cadratin, sur les cinq rendus ; barre collée et entrée échelonnée conservées |
+| `npm run build` | passe, 136 modules ; `--radius-widget`, `#FDF3E0`, `.border-accent`, `text-secondaire/60` et les quatre encres de marché bien générés ; version `0.26.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2736,7 +2829,7 @@ Points non couverts, à traiter le moment venu :
 - **La liste statique des Grands Prix est à mettre à jour chaque saison** — `frontend/src/lib/calendrier2026.js`, au même titre que `backend/app/calcul/pilotes.py`. Elle se relit sur le calendrier officiel de la FIA. Les `slug` doivent rester ceux de `slugCircuit` : un slug inconnu fait retomber la carte sur le bordeaux de la marque, sans tracé. Ajouter les Grands Prix du début de saison demande aussi leur drapeau (`DrapeauxGP.jsx`) et leur tracé (`TracesCircuits.jsx`), les trois tables devant porter les mêmes clés.
 - **Scraper exercé contre le vrai Supabase** — la ligne réelle observée en version `0.5.1` (voir ci-dessus) montre que l'écriture a eu lieu au moins une fois. Reste à vérifier le contenu de `public.cotes` pour ce GP, et le comportement du scraper sur un GP déjà figé.
 - **Programmation automatique du scraping, et figeage des cotes** — **faite à l'étape 11** (`app/jobs/scraper.py`, second emploi APScheduler dans le `lifespan`). Le scraping se déclenche tout seul 2h après les qualifications, et le statut `cotes_figees` est enfin posé par du code. Trois points restent à surveiller : **(1)** Unibet n'exposait aucun événement de qualification au 16 août 2026, c'est donc le repli `date_course - 22h` qui s'applique — **relire les logs du samedi du premier vrai Grand Prix** pour voir si une vraie heure de qualifications est apparue (chercher « qualifications annoncées par Unibet » ou « aucune épreuve de qualification trouvée ») ; **(2)** le job de résultats continue de surveiller les GP restés `a_venir`, ce qui reste le bon filet si un figeage est manqué ; **(3)** `POST /scraper/declencher` fige désormais lui aussi — utiliser `?figer=false` pour un essai avant les qualifications, sans quoi les cotes sont arrêtées pour de bon et il faut un `update` à la main pour les débloquer.
-- **Tableau des cotes quand les marchés se multiplient** — depuis la refonte visuelle (`0.12.0`), les marchés sont **empilés** en sections colorées au lieu d'être derrière des onglets. À trois marchés, l'écran se lit d'un défilement. Après les qualifications, le noyau complet de la section 3.1 (top 6, top 10, duels…) donnera un écran très long, à vingt-deux pilotes par section. `frontend/src/composants/Onglets.jsx` et sa transition *tabs sliding* sont **restés en place, simplement non montés** : c'est la réponse déjà écrite et vérifiée le jour où l'empilement devient impraticable.
+- **Tableau des cotes quand les marchés se multiplient** — depuis la refonte visuelle (`0.12.0`), les marchés sont **empilés** en sections colorées au lieu d'être derrière des onglets. La grille à deux colonnes de la version `0.26.0` **divise par deux** la longueur de chaque section, et les en-têtes collants disent en permanence où l'on est. Après les qualifications, le noyau complet de la section 3.1 (top 6, top 10, duels…) donnera malgré tout un écran très long, à onze rangées par marché. `frontend/src/composants/Onglets.jsx` et sa transition *tabs sliding* sont **restés en place, simplement non montés** : c'est la réponse déjà écrite et vérifiée le jour où l'empilement devient impraticable.
 - **Marchés disponibles à J-10** — au moment du développement, Unibet n'exposait que 3 marchés pour le GP Pays-Bas (vainqueur, podium, écurie gagnante). Le noyau annoncé en section 3.1 (top 6, top 10, duels…) n'apparaîtra qu'à l'approche de la course. Le scraper les découvre dynamiquement, donc rien à changer — mais **le jeu de marchés réellement obtenu après les qualifications reste à observer**. C'est le point de vigilance principal de l'étape 6 : `app/calcul/points.py` reconnaît neuf familles de marchés, mais **seules trois ont été confrontées à de vrais libellés Unibet**. Les autres (top N, abandon, safety car, drapeau rouge, meilleur tour) sont écrites d'après la section 4.4. Un marché non reconnu ne fait aucun dégât — le pronostic reste à `NULL` et les logs le disent — mais il faut **relire les avertissements `[points] … laissé(s) sans points` après le premier vrai GP** et compléter `validateur()` en conséquence, puis rejouer `POST /jobs/resultats/{gp_id}`. **Depuis la version `0.6.1`, l'attente n'est plus obligatoire** : `POST /jobs/resultats/{gp_id}/test` confronte le calcul aux vrais pronostics en base sur un classement fictif, sans rien écrire. Dès que les marchés complets apparaissent chez Unibet (après les qualifications), un essai dit immédiatement lesquels restent non reconnus.
 - **Duels entre pilotes, premier abandon, marge de victoire, classement exact** — annoncés en section 4.4, **non implémentés**. Ils demandent chacun une règle explicite (égalités, pilote classé contre pilote abandonné) que le CLAUDE.md pose mais que rien ne code encore. Les cas d'égalité du « premier abandon » sont le point à trancher en premier. En l'état ils tombent dans le filet « marché non reconnu ».
 - **Écran de résultats (maquette 11) et calendrier (maquette 15)** — **faits à l'étape 9.** Les seize maquettes du projet sont désormais codées.
