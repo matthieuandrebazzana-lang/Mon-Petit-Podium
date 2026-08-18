@@ -17,15 +17,12 @@ import {
   FondDrapeau,
   VoileDrapeau,
 } from "../composants/DrapeauxGP.jsx";
-import {
-  IconeChevronDroit,
-  IconeLien,
-  IconeMembres,
-  IconePlus,
-} from "../composants/Icones.jsx";
+import { IconeChevronDroit, IconeMembres } from "../composants/Icones.jsx";
+import IconeCreer from "../composants/icones/IconeCreer.jsx";
+import IconeRejoindre from "../composants/icones/IconeRejoindre.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { listerMesChampionnats } from "../lib/championnats.js";
-import { couleurBloc, couleurChampionnat, tonalites } from "../lib/couleurs.js";
+import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
 import { chargerAccueilGp, cleAccueilGp } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import { formaterDepart } from "../lib/format.js";
@@ -513,26 +510,26 @@ function AucunChampionnat() {
  * mouvement du pouce, du dernier championnat aux deux façons d'en avoir un de
  * plus, au lieu de sauter par-dessus un blanc de plusieurs centimètres.
  *
- * *Écart assumé sur la pastille d'icône.* La demande décrit « une icône en rouge
- * dans un cercle rouge » et « une icône de lien en amber ». Une icône ambre sur
- * une pastille ambre pâle tombe à 2,2:1 de contraste sur une carte blanche, très
- * en dessous du plancher de 3:1 exigé d'un élément graphique porteur de sens.
- * La pastille prend donc l'aplat plein et l'icône l'encre que `encreSurAplat`
- * calcule pour lui — blanche sur le bordeaux, foncée sur l'ambre. C'est le même
- * arbitrage, et le même seuil, que celui déjà tranché pour les blocs de bonus.
+ * **La pastille de couleur a cédé la place au logo de la marque** (version
+ * `0.28.0`) : les deux dessins de `assets/logo.svg`, à 40px, dans leur couleur
+ * propre. Un logo enfermé dans un disque de la même teinte se serait dessiné
+ * en négatif, c'est-à-dire pas du tout.
+ *
+ * *Conséquence à connaître.* L'ambre `#E8A020` sur le blanc de la carte ne vaut
+ * que 2,2:1, sous le plancher de 3:1 d'un élément graphique porteur de sens.
+ * C'était rédhibitoire tant que l'icône était le seul marqueur au centre d'une
+ * pastille ; ça ne l'est plus ici, où le logo est **décoratif** (`aria-hidden`)
+ * et où c'est le titre de la carte, à 17px et 12,6:1, qui porte le sens. Si le
+ * logo doit redevenir lisible à distance, c'est la teinte qu'il faut reprendre,
+ * pas la composition.
  */
-export function CarteAction({ vers, couleur, icone, titre, sousTitre }) {
-  const ton = tonalites(couleur.hex);
-
+export function CarteAction({ vers, icone, titre, sousTitre }) {
   return (
     <Link
       to={vers}
       className="rounded-carte bg-surface shadow-carte pressable-large flex min-h-[120px] items-center gap-3.5 p-4"
     >
-      <span
-        aria-hidden="true"
-        className={`flex size-12 shrink-0 items-center justify-center rounded-full ${couleur.fond} ${ton.texte}`}
-      >
+      <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center">
         {icone}
       </span>
 
@@ -556,15 +553,13 @@ export function ActionsChampionnat() {
     <div className="flex flex-col gap-2.5">
       <CarteAction
         vers="/championnats/creer"
-        couleur={couleurBloc("rouge")}
-        icone={<IconePlus className="size-5" />}
+        icone={<IconeCreer couleur="#800111" className="size-10" />}
         titre="Créer un championnat"
         sousTitre="Lance ton championnat 2026"
       />
       <CarteAction
         vers="/championnats/rejoindre"
-        couleur={couleurBloc("amber")}
-        icone={<IconeLien className="size-5" />}
+        icone={<IconeRejoindre couleur="#E8A020" className="size-10" />}
         titre="Rejoindre un championnat"
         sousTitre="Entre un code à 6 caractères"
       />

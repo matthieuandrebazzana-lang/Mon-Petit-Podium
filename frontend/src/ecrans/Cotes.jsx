@@ -74,7 +74,7 @@ function WidgetCote({ cote, epingle, ferme, onBasculer }) {
 
   return (
     <li
-      className="rounded-widget bg-surface shadow-carte ancre-collante relative min-w-0 overflow-hidden"
+      className="rounded-widget bg-surface shadow-carte ancre-collante relative z-10 min-w-0 overflow-hidden"
       style={{
         height: `${HAUTEUR_WIDGET}px`,
         ...(ecurie && {
@@ -309,7 +309,10 @@ function SectionMarche({ marche, rang, epingles, ferme, onBasculer }) {
   return (
     <section className="ancre-collante flex flex-col gap-3">
       <header
-        className={`section-collante rounded-carte shadow-carte relative flex items-center justify-between gap-3 overflow-hidden px-4 py-2.5 ${couleur.fond}`}
+        /* Pas de `relative` ici : `position: sticky` établit déjà le bloc
+           conteneur des deux enfants absolus, et la classe entrait en conflit
+           avec le collage (voir `.section-collante` dans index.css). */
+        className={`section-collante rounded-carte shadow-carte flex items-center justify-between gap-3 overflow-hidden px-4 py-2.5 ${couleur.fond}`}
       >
         <span
           aria-hidden="true"

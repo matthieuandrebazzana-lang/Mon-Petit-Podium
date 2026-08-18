@@ -2859,6 +2859,79 @@ La table de la demande est **appliquée telle quelle**, c'est la donnée explici
 | CSS de production | `.ancre-collante`, `--marche-hauteur`, `.t-skel--flux` en `minmax(0,1fr)`, `min-w-0` et `grid-cols-2` bien générés |
 | `npm run build` | passe, 14 entrées au précache, version `0.27.0` dans le bundle |
 
+---
+
+**En-tête de marché collant réparé, logos SVG sur les cartes d'action** (version `0.28.0`)
+
+Deux corrections relevées à l'œil sur **iPhone réel**. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+---
+
+***Correction 1 — l'en-tête de marché n'était pas collant du tout, il était descendu de 107 pixels.*** C'est le point de la version, et il ne se voyait ni dans le JSX ni dans `index.css`.
+
+Le symptôme était un chevauchement : sur le tableau des cotes, Ferrari et Mercedes disparaissaient sous l'en-tête « ECURIE VAINQUEUR » **dès le chargement**, sans qu'on ait défilé. Or un `position: sticky` non défilé ne recouvre rien — il reste dans le flux. La demande proposait de remplacer le collage par un `top` calculé : c'est **exactement ce que faisait déjà** `.section-collante` depuis la version `0.27.0` (`top: var(--entete-hauteur); z-index: 20`). Le défaut était ailleurs.
+
+L'en-tête portait `section-collante rounded-carte shadow-carte relative …`. Les deux classes de position ont **la même spécificité** (0,1,0) et vivent dans la **même couche** `utilities` : c'est donc l'ordre d'émission dans la feuille compilée qui tranche, jamais l'ordre écrit dans l'attribut `class`. Vérifié sur le CSS de production : `.section-collante` était émis à l'octet 10216, `.relative` à l'octet 10482. **`position: relative` gagnait.**
+
+Et un élément *relatif* n'ignore pas son `top` — il s'en décale. L'en-tête était donc **poussé vers le bas de `--entete-hauteur`**, soit la zone sûre plus 60px, c'est-à-dire environ 107px sur un iPhone à encoche : pile la hauteur de la première rangée de widgets, qu'il venait recouvrir en permanence. Le `z-index: 20`, lui, s'appliquait normalement — d'où un recouvrement franc plutôt qu'un simple désordre.
+
+*La correction, en deux temps :*
+
+1. **`relative` est retiré du JSX.** La classe était de toute façon redondante : `position: sticky` établit à lui seul le bloc conteneur des deux enfants absolus (la lueur spéculaire et les deux `relative` du contenu).
+2. **`.section-collante` sort de `@utility` pour devenir une règle CSS ordinaire, hors de toute couche.** Une règle non affectée à une couche l'emporte sur **toutes** les règles empilées, quelle que soit leur spécificité — le collage ne peut donc plus être désactivé en silence par un utilitaire de position ajouté plus tard. **C'est le mécanisme que la version `0.21.1` documentait comme un piège** (`.t-stagger-line`, `.t-skel-bar`) ; il est ici employé à dessein, et non subi. Vérifié sur le CSS de production : la règle est bien à une profondeur d'imbrication de zéro, et désormais émise après `.relative`.
+
+Le second point seul aurait suffi à réparer l'écran ; le premier seul l'aurait réparé jusqu'à ce que quelqu'un remette `relative`. Les deux ensemble font que ni l'un ni l'autre n'a à être redécouvert.
+
+**Les widgets prennent `z-10`**, comme demandé. Ce n'est pas ce qui répare le chevauchement — sans lui ils valent `z-index: auto` et passent déjà sous le `z-20` de l'en-tête — mais il rend l'empilement explicite plutôt que dépendant de l'ordre du DOM. **Aucun risque de recouvrir la barre d'action collée** (`barre-collee`, `z-10` elle aussi) : celle-ci vit hors du `Bloc`, dont le `will-change: transform` fait un contexte d'empilement à `z-index: auto` — les deux ne sont donc jamais comparés directement. C'est le corollaire du piège déjà documenté à l'étape 10 et à la version `0.13.0`.
+
+**Le piège à connaître, et il vaut au-delà de cet écran** : monter le `z-index` d'un en-tête de marché ne servirait à rien face à la barre de navigation ou à la barre d'écran. `.t-stagger-line` porte `will-change: transform` en permanence, ce qui fait de chaque `Bloc` un contexte d'empilement ; tous les `z-index` posés à l'intérieur sont comparés entre eux seulement.
+
+---
+
+***Correction 2 — les logos de la marque sur les deux cartes d'action.***
+
+`assets/logo.svg` porte deux dessins dans un même système de coordonnées : un trophée accompagné d'une étincelle en haut, deux silhouettes de personnes en bas. Ils remplacent la pastille de couleur et son icône générique (`+` et maillon) sur les cartes « Créer un championnat » et « Rejoindre un championnat ».
+
+*Extraction, jamais reproduction* — `frontend/src/composants/icones/IconeCreer.jsx` (2 chemins) et `IconeRejoindre.jsx` (4 chemins). Les données de chemin sont identiques au fichier d'origine, **octet pour octet**, et un contrôle du jeu de tests le vérifie contre la planche. Le découpage a été fait **par script**, comme les tracés de circuits de la version `0.15.0`, les icônes de la barre de navigation de la `0.22.0` et les drapeaux de la `0.24.0`, et pour la même raison : transcrire à la main des chemins de plusieurs milliers de caractères introduit des fautes invisibles à la lecture.
+
+***Écart assumé sur les `viewBox`, et c'est le point à ne pas défaire.*** La demande donnait deux tranches arithmétiques de la planche — `0 0 133.55 120` pour la moitié haute, `0 121 133.55 120` pour la moitié basse. **Les deux logos n'y sont ni jointifs, ni centrés, ni de la largeur de la planche** :
+
+| Logo | Boîte englobante mesurée | Largeur × hauteur |
+|---|---|---|
+| Créer | x 12,23 → 115,80 · y 18,42 → 91,28 | 103,57 × 72,86 |
+| Rejoindre | x 19,47 → 114,57 · y 154,50 → 227,35 | 95,10 × 72,85 |
+
+Le second commence à y=154,50 quand sa tranche commence à 121 : les cadrages prescrits auraient laissé 33 unités de vide au-dessus et 14 en dessous, et 38 unités de vide horizontal — le dessin serait sorti décentré et nettement rétréci dans sa boîte de 40px. Ce sont donc les **vraies boîtes englobantes** qui font foi, mesurées en échantillonnant les courbes de Bézier : **aucune coordonnée n'est réécrite, c'est le cadrage qui bouge**.
+
+**Le côté du carré est le même pour les deux — 106 unités, centrées sur chaque boîte.** C'est la règle posée à la version `0.22.0` pour les icônes de la barre de navigation, et elle vaut ici pour la même raison : les deux logos vivent dans le même système de coordonnées dans la planche, donc leurs tailles relatives sont celles que le dessin a voulues. Leurs hauteurs coïncident à 0,01 unité près — manifestement délibéré — pour des largeurs de 103,6 et 95,1. Un cadrage serré sur chaque boîte les ramènerait tous deux à la même largeur apparente et écraserait cette intention.
+
+*La couleur passe par une prop, jamais par `currentColor`* : `couleur` (défauts `#800111` et `#E8A020`) est posée sur le `fill` de **toutes** les formes, et un contrôle vérifie que le compte de `fill` colorés égale le compte de formes. Le `#1d1d1b` de la planche ne survit nulle part.
+
+*La pastille de couleur disparaît.* Le logo est servi nu, à 40px, dans sa couleur propre : un logo enfermé dans un disque de la même teinte se serait dessiné en négatif, c'est-à-dire pas du tout.
+
+***Conséquence à connaître sur le contraste.*** L'ambre `#E8A020` sur le blanc de la carte ne vaut que **2,2:1**, sous le plancher de 3:1 exigé d'un élément graphique porteur de sens — c'est précisément la mesure qui, à la version `0.14.0`, avait imposé la pastille pleine et l'encre calculée par `encreSurAplat`. **Elle ne s'applique plus ici, et la différence est structurelle** : l'icône était alors le seul marqueur au centre d'un disque, elle est aujourd'hui **décorative** (`aria-hidden`), et c'est le titre de la carte — 17px, `#1A1A1A` sur blanc, 12,6:1 — qui porte le sens. Le logo bordeaux, lui, tient 10,9:1. Si l'ambre doit redevenir lisible à distance, c'est **la teinte** qu'il faut reprendre, pas la composition.
+
+`ActionsChampionnat` sert les deux cartes d'un bloc aux écrans qui les portent — l'accueil et la liste des championnats : **une seule modification les couvre tous les deux**, et aucun n'a à se souvenir des libellés ni des couleurs. `IconePlus` et `IconeLien` restent dans `composants/Icones.jsx`, simplement plus importées ici, comme `Onglets.jsx` depuis la version `0.12.0` et le code OAuth depuis la `0.2.2`.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Un en-tête collant et un logo ne changent pas d'état sous les yeux du joueur. Le retour tactile des grandes surfaces (`pressable-large`, version `0.12.1`) et l'entrée échelonnée des blocs sont conservés tels quels.
+
+*Apport d'`/apple-design`* — la réparation du collage relève directement du §16 (« où suis-je ») : sur un écran qui empile trois marchés, un en-tête qui recouvre ses propres lignes au lieu de les surplomber au défilement est pire que pas d'en-tête du tout. Les deux logos sont `aria-hidden` et `focusable="false"`, le titre de la carte disant déjà ce qu'elle fait — un SVG focusable ajouterait deux arrêts de tabulation muets. Zones tactiles, retour à l'appui et ancre de défilement (`ancre-collante`) sont inchangés.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage pré-rempli) : **37 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Fidélité à la planche | 2 chemins pour Créer, 4 pour Rejoindre, **strictement identiques à `assets/logo.svg`, octet pour octet** |
+| Cadrage | les deux `viewBox` mesurées, **le même côté de 106 unités pour les deux** |
+| Couleur | défauts bordeaux et ambre posés sur **toutes** les formes ; couleur forcée transmise à chacune ; **aucun `#1d1d1b`, aucune classe `cls-1`** ; décoratives ; `className` transmis |
+| Cartes d'action | les deux titres, sous-titres et destinations ; **les deux logos aux bonnes couleurs**, les deux `viewBox` présentes, 40px ; **plus aucune pastille de couleur pleine** ; retour tactile grande surface conservé ; le mot « ligue » absent |
+| **En-tête de marché** | deux en-têtes rendus, **les deux collants**, **plus aucun `relative`** — ni aucune autre classe de position — sur l'en-tête |
+| Widgets | quatre rendus, **tous en `z-10`**, bornés en largeur (`min-w-0`), ancre de défilement conservée ; **Ferrari et Mercedes bien rendus** ; libellés du bookmaker servis tels quels ; grille à deux colonnes |
+| Règle 4.1 | **aucune cote brute « ×N »**, points bien habillés |
+| CSS de production | `.section-collante` **à une profondeur d'imbrication de zéro** (hors de toute couche) et émise après `.relative` ; `.z-10` et `.size-10` bien générés |
+| Aperçu rendu | les deux logos dessinés à 400px : trophée et étincelle pour Créer, deux silhouettes pour Rejoindre, **centrés et non rognés** |
+| `npm run build` | passe, 14 entrées au précache, version `0.28.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -2944,7 +3017,7 @@ Points non couverts, à traiter le moment venu :
 
 Point secondaire : `frontend/public/flags.svg` **n'est utilisé par aucun écran** (les drapeaux partent en SVG inline avec le bundle) et coûte 30 Ko au précache du service worker. Le retirer est sans effet sur l'application.
 
-**Un point depuis la `0.21.1` — le piège des règles hors couche.** `.t-stagger-line` et `.t-skel-bar` sont déclarées hors de toute couche Tailwind : **elles battent n'importe quelle classe utilitaire**, quelle que soit sa spécificité. Un `flex`, un `gap` ou un `bg-*` posé sur un élément qui porte l'une de ces classes ne s'applique pas, et rien dans le JSX ne le laisse voir. Le motif à suivre est celui de l'accueil : **le conteneur flex vit à l'intérieur du `Bloc`, jamais sur le `Bloc` lui-même**. Un cas subsiste, sans conséquence visible : `Championnat.jsx` porte un `gap-2.5` mort sur le `Bloc` des deux boutons de confirmation de départ — à reprendre avec le même motif si l'empilement paraît serré sur un appareil réel.
+**Un point depuis la `0.21.1` — le piège des règles hors couche, et son revers.** `.t-stagger-line`, `.t-skel-bar` et, depuis la version `0.28.0`, `.section-collante` sont déclarées hors de toute couche Tailwind : **elles battent n'importe quelle classe utilitaire**, quelle que soit sa spécificité. Pour la troisième c'est délibéré — voir la version `0.28.0`, où un `relative` posé à côté de `section-collante` avait silencieusement désactivé le collage d'un en-tête et l'avait décalé de 107px sur les cotes. **Le corollaire vaut pour tout ce qui reste dans `@utility` : deux utilitaires de même spécificité se départagent par leur ordre d'émission, jamais par l'ordre du `class`.** Devant un comportement de mise en page inexplicable, la première chose à regarder est le CSS compilé (`grep -o '\.ma-classe{[^}]*}' dist/assets/*.css`), pas le JSX. Un `flex`, un `gap` ou un `bg-*` posé sur un élément qui porte l'une de ces classes ne s'applique pas, et rien dans le JSX ne le laisse voir. Le motif à suivre est celui de l'accueil : **le conteneur flex vit à l'intérieur du `Bloc`, jamais sur le `Bloc` lui-même**. Un cas subsiste, sans conséquence visible : `Championnat.jsx` porte un `gap-2.5` mort sur le `Bloc` des deux boutons de confirmation de départ — à reprendre avec le même motif si l'empilement paraît serré sur un appareil réel.
 
 **Deux points propres à la `0.21.0`**, tous deux sur la lisibilité du tracé maintenant qu'il traverse le texte. **Sur les neuf drapeaux à bande claire** (la Malaisie et Abu Dhabi les ont rejoints en version `0.21.2`), le trait blanc à 60 % passe sur une bande ramenée au gris moyen par le voile : mesuré à 2,70:1 pour eux et 2,44:1 au pire (Brésil) — les valeurs n'ont pas bougé depuis la `0.21.0`, seul Las Vegas descend de 5,81 à 3,11:1 en passant du noir au rouge, ce qui reste au-dessus des neuf autres. Lisible, donc, mais discret — s'il paraît fantomatique sur un vrai écran, deux leviers d'une ligne, dans cet ordre : monter le trait de 60 à 70 % de blanc, ou approfondir la surcouche de 15 à 25 % (elle assombrit alors aussi le fond du texte, ce qui ne fait que renforcer sa lisibilité). **Ne pas toucher au voile**, calculé pour le texte. Et **le croisement texte / tracé** : l'ombre portée le rend lisible en rendu statique, mais c'est exactement le genre de détail qui se juge à la lumière du jour, sur les cartes où le tracé passe pile derrière le quantième (Espagne, Azerbaïdjan, Brésil).
 

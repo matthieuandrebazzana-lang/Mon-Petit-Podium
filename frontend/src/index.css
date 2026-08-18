@@ -394,7 +394,23 @@
   );
 }
 
-@utility section-collante {
+/* **Volontairement hors de toute couche Tailwind, et c'est le correctif.**
+   Écrite en `@utility`, cette règle atterrissait dans la couche `utilities`,
+   à égalité de spécificité avec `relative` — et Tailwind émet `.relative`
+   APRÈS `.section-collante` dans la feuille compilée. Le `position: relative`
+   l'emportait donc sur le `position: sticky`, et l'en-tête, devenu simplement
+   relatif, se retrouvait **décalé vers le bas de `--entete-hauteur`** par son
+   propre `top` : il venait recouvrir la première rangée de widgets du marché,
+   en permanence et dès le chargement. Une règle non affectée à une couche bat
+   toutes les règles empilées, quelle que soit leur spécificité : le collage
+   ne peut plus être désactivé en silence par un utilitaire de position.
+   C'est le même mécanisme que celui déjà documenté pour `.t-stagger-line` et
+   `.t-skel-bar` — ici employé à dessein, et non subi.
+
+   `position: sticky` établit à lui seul le bloc conteneur des descendants
+   absolus : la classe `relative` était donc redondante sur cet en-tête, et
+   elle a été retirée du JSX en plus de cette protection. */
+.section-collante {
   position: sticky;
   top: var(--entete-hauteur, 0px);
   z-index: 20;
