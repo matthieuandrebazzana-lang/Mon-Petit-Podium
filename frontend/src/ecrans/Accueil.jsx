@@ -152,6 +152,28 @@ export function BlocProchainGp({ profilId }) {
   const couru = donnees?.couru === true;
   const versRecap = !couru && (etat.ferme || donnees?.aPronostique === true);
 
+  // **Le bouton des pronostics n'existe que sur un Grand Prix dont les cotes
+  // sont figées**, et c'est la seule condition de son affichage.
+  //
+  // Tant qu'un Grand Prix est en `a_venir`, le scraper n'a rien relevé : le
+  // tableau des cotes est vide et le récapitulatif n'a rien à récapituler. Un
+  // bouton menant à l'un ou l'autre serait une promesse fausse, celle-là même
+  // que le libellé variable de ce bloc cherche à éviter depuis la version
+  // `0.5.1`. Il est donc **retiré, pas grisé et pas remplacé** : le widget garde
+  // sa place, son drapeau, son tracé, sa date et son compte à rebours — tout ce
+  // qu'il dit reste vrai avant les qualifications, et c'est bien à ce moment-là
+  // qu'on vient voir quand part la course.
+  //
+  // Le statut vient de `donnees.gp`, déjà chargé pour ce bloc : aucune lecture
+  // supplémentaire, et surtout aucune seconde source qui pourrait diverger.
+  //
+  // **Le bouton des résultats, lui, n'est pas concerné.** Un Grand Prix couru
+  // porte le statut `termine`, jamais `cotes_figees` : lui appliquer la règle
+  // fermerait l'accès aux résultats le dimanche soir, c'est-à-dire au moment où
+  // tout le monde ouvre l'application.
+  const cotesFigees = gp.statut === "cotes_figees";
+  const avecBouton = couru || cotesFigees;
+
   const destination = couru
     ? `/grands-prix/${gp.id}/resultats`
     : `/grands-prix/${gp.id}/${versRecap ? "recap" : "cotes"}`;
@@ -353,17 +375,22 @@ export function BlocProchainGp({ profilId }) {
           ))}
         </div>
 
-        {/* Zone 5 — le bouton, inchangé. */}
-        <Link
-          to={destination}
-          className="rounded-champ bg-surface text-primaire pressable min-h-tactile mt-2.5 flex items-center justify-center px-4 text-center text-[15px] font-medium"
-        >
-          {/* Le cache peut avoir servi l'état d'avant la dernière validation : le
-              libellé change alors sous les yeux du joueur, une fois la lecture
-              fraîche revenue. TexteEchange (transitions-dev 04) le remplace en
-              place plutôt que de le laisser clignoter. */}
-          <TexteEchange valeur={libelle} />
-        </Link>
+        {/* Zone 5 — le bouton, conditionné aux cotes figées (voir plus haut).
+            Absent, il ne laisse rien derrière lui : la marge est portée par le
+            bouton et non par la zone au-dessus, donc le bloc se referme de
+            lui-même sur les cases de statut. */}
+        {avecBouton && (
+          <Link
+            to={destination}
+            className="rounded-champ bg-surface text-primaire pressable min-h-tactile mt-2.5 flex items-center justify-center px-4 text-center text-[15px] font-medium"
+          >
+            {/* Le cache peut avoir servi l'état d'avant la dernière validation :
+                le libellé change alors sous les yeux du joueur, une fois la
+                lecture fraîche revenue. TexteEchange (transitions-dev 04) le
+                remplace en place plutôt que de le laisser clignoter. */}
+            <TexteEchange valeur={libelle} />
+          </Link>
+        )}
       </div>
     </div>
   );

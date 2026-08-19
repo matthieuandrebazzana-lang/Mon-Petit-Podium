@@ -80,8 +80,21 @@ export function chargerFavoris(gpId, signal) {
 }
 
 /**
- * Le prochain Grand Prix : celui en statut `a_venir` dont la date est la plus
+ * Le prochain Grand Prix : celui qui n'a pas encore couru, à la date la plus
  * proche.
+ *
+ * **Les deux statuts non courus sont retenus, `a_venir` et `cotes_figees`.**
+ * Le second manquait, et son absence rendait le bloc de l'accueil aveugle
+ * précisément au moment où il sert le plus : dès que le job du samedi fige les
+ * cotes, le Grand Prix quittait la liste des `a_venir`, la lecture ne trouvait
+ * plus rien, et l'accueil retombait sur le dernier Grand Prix couru — celui de
+ * la semaine d'avant — pendant tout le week-end de course. C'est aussi le
+ * filtre qu'appliquent déjà `GET /championnats/moi` (étape 10) et le décompte
+ * des Grands Prix restants : les trois lectures disent maintenant la même
+ * chose.
+ *
+ * Le statut est servi au bloc, qui n'affiche son bouton de pronostics que sur
+ * un Grand Prix figé — avant, il n'y a pas une cote en base.
  *
  * Lu directement sous RLS — la politique « Grands prix lisibles par tous » de
  * l'étape 4 couvre exactement ce cas, et l'accueil est l'écran qui souffrirait
@@ -98,7 +111,7 @@ export async function chargerProchainGp(signal) {
     const requete = supabase
       .from("grands_prix")
       .select("id, nom, date_course, statut")
-      .eq("statut", "a_venir")
+      .in("statut", ["a_venir", "cotes_figees"])
       .order("date_course", { ascending: true, nullsFirst: false })
       .limit(1)
       .maybeSingle();

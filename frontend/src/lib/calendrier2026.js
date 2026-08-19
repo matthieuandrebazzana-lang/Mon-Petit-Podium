@@ -178,7 +178,13 @@ export function actionDuGp(gp, etat) {
       style: "bg-white text-vert-sauge",
     };
   }
-  if (etat.cle === "ouvert") {
+  // **Pronostiquer exige des cotes figées, pas seulement des cotes visibles.**
+  // Tant que le Grand Prix est en `a_venir`, le scraper n'a rien arrêté : le
+  // bouton mènerait à un tableau de cotes vide. Il est donc retiré — ni grisé,
+  // ni remplacé par un message. La pastille, elle, continue de dire l'état que
+  // les données décrivent : les deux calendriers la calculent sans jamais la
+  // déduire du statut, et ce n'est pas un bouton qui doit renverser cette règle.
+  if (etat.cle === "ouvert" && gp.statut === "cotes_figees") {
     return {
       vers: `/grands-prix/${gp.gp_id}/cotes`,
       libelle: "Pronostiquer",

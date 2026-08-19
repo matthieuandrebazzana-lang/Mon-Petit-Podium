@@ -3531,6 +3531,54 @@ Trois retouches sur la maquette 01, un commit après la refonte qui l'avait reco
 | Bundle de production | version `0.36.0` présente, `.justify-center` généré, **« La vue piste » absent du JavaScript livré** — les deux composants non montés sont bien secoués de l'arbre |
 | `npm run build` | passe, **145 modules** (un de moins), 14 entrées au précache |
 
+---
+
+**Boutons de pronostics conditionnés au statut `cotes_figees`** (version `0.37.0`)
+
+Le bouton qui mène aux pronostics n'apparaît plus que sur un Grand Prix dont les cotes sont figées, sur les trois surfaces qui le portent : le bloc de l'accueil et les deux calendriers. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+*La règle, et pourquoi elle tombe juste.* Tant qu'un Grand Prix est en `a_venir`, le scraper n'a rien arrêté : `public.cotes` est vide pour lui, le tableau des cotes s'ouvre sur « aucun marché » et le récapitulatif n'a rien à récapituler. Un bouton menant à l'un ou l'autre est une promesse fausse — exactement celle que le libellé variable du bloc de l'accueil cherche à éviter depuis la version `0.5.1`. Il est donc **retiré, jamais grisé et jamais remplacé par un message** : un bouton grisé ne dit pas ce qui manque, et un texte d'excuse à la place d'un bouton occupe la même place pour dire moins.
+
+**Le statut est lu dans les données déjà chargées**, sur les trois surfaces : `donnees.gp.statut` pour l'accueil, `gp.statut` porté par `enrichir` pour le calendrier de la saison, et le champ `statut` que `GET /championnats/{id}/calendrier` sert depuis l'étape 9 pour celui d'un championnat. **Aucune requête supplémentaire**, et surtout aucune seconde source qui pourrait diverger de ce que la carte affiche par ailleurs.
+
+---
+
+***Sans une correction de la lecture, le bouton de l'accueil n'aurait jamais pu apparaître.*** C'est le point de la version, et il découvre un défaut plus ancien que la demande.
+
+`chargerProchainGp` (`lib/pronostics.js`) filtrait sur **`.eq("statut", "a_venir")`**. Conditionner le bouton à `cotes_figees` dans un bloc qui ne peut, par construction, afficher que des Grands Prix `a_venir` aurait donné du code mort : le bouton n'aurait plus jamais été rendu.
+
+Le filtre était déjà faux en lui-même, et son symptôme était le pire possible. **Dès que le job du samedi fige les cotes** (étape 11), le Grand Prix quitte la liste des `a_venir` : la lecture ne trouvait plus rien, `chargerAccueilGp` retombait sur `chargerDernierGpCouru`, et l'accueil annonçait le Grand Prix de la semaine **précédente** — « Dernier GP », bouton « Voir les résultats » — pendant tout le week-end de course, c'est-à-dire précisément quand il faut pronostiquer.
+
+La lecture retient donc les **deux statuts non courus**, `a_venir` et `cotes_figees`. C'est le filtre qu'appliquent déjà `GET /championnats/moi` pour son `prochain_gp` (étape 10) et `chargerGrandsPrixRestants` : les trois lectures disent enfin la même chose. Le tri par date et le `nullsFirst: false` sont inchangés — un Grand Prix sans horaire annoncé ne doit pas passer devant la course de dimanche.
+
+---
+
+*Ce qui n'est pas touché, et c'est délibéré.*
+
+**Le bouton « Voir les résultats » ne passe pas sous la règle.** Un Grand Prix couru porte le statut `termine`, jamais `cotes_figees` : la lui appliquer fermerait l'accès aux résultats le dimanche soir, au moment exact où tout le monde ouvre l'application. La condition de l'accueil est donc `couru || cotesFigees`, et les deux calendriers ne gardent le garde-fou que sur leur branche « ouvert ».
+
+**Les pastilles d'état ne bougent pas.** Une carte de calendrier peut désormais afficher « Pronos ouverts » sans bouton, si des cotes traînent en base sur un Grand Prix encore en `a_venir`. C'est assumé : les deux calendriers calculent leur état en lisant `cotes` et `resultats_gp`, **jamais le statut** — c'est la décision de l'étape 9, motivée par le fait que le statut ment dans les deux sens — et ce n'est pas un bouton qui doit renverser cette règle. Le geste proposé est plus exigeant que le mot affiché, ce qui est le bon sens du doute.
+
+**Les deux calendriers sont corrigés, pas seulement l'onglet.** La demande nommait « l'écran calendrier » ; ils sont deux — celui de la saison (`lib/calendrier2026.js`, `actionDuGp`) et celui d'un championnat (maquette 15, `ecrans/Calendrier.jsx`). Ils n'ont pas les mêmes données pour décider de l'état, mais ils doivent proposer le même geste : c'est la raison même pour laquelle `ETATS_GP` leur est commun depuis l'étape 9. N'en corriger qu'un aurait laissé un Grand Prix pronostiquable d'un onglet et pas de l'autre.
+
+**Le bloc garde tout le reste.** Drapeau du pays hôte, tracé du circuit, pastille « Prochain GP », date, heure de départ et compte à rebours : tout ce qu'il dit reste vrai avant les qualifications, et c'est bien à ce moment-là qu'on vient voir quand part la course. La marge du bouton étant portée par le bouton lui-même (`mt-2.5`) et non par la zone au-dessus, le bloc se referme de lui-même sur les deux cases de statut — aucun blanc résiduel, aucune marge à retoucher.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Un bouton absent n'a pas d'entrée à animer, et le libellé conserve son échange en place (transitions-dev 04) pour les cas où il change.
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage pré-rempli) : **16 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Accueil | GP figé → bouton « Pronostiquer » ; **GP `a_venir` → aucun bouton du tout** (ni « Pronostiquer », ni « Voir mes pronos », **ni aucune balise de lien**) ; GP figé avec pronostics → « Voir mes pronos » ; **GP couru → « Voir les résultats » conservé** |
+| Widget conservé | GP `a_venir` : nom, pastille « Prochain GP », case « Fermeture dans », **drapeau et tracé toujours rendus** ; **aucun texte de remplacement** |
+| Calendrier de la saison | figé → « Pronostiquer » ; **`a_venir` → aucune action** ; terminé → « Voir les résultats » ; hors base → aucune action ; **la pastille « Pronos ouverts » est conservée sur le GP `a_venir`** |
+| Calendrier d'un championnat | figé → « Pronostiquer » ; **`a_venir` → aucun bouton et aucun lien**, carte complète et pastille conservées ; terminé → « Voir les résultats » |
+| `npm run build` | passe, 145 modules, 14 entrées au précache, version `0.37.0` dans le bundle |
+
+**Ce qui n'a pas pu être vérifié ici** : la correction de `chargerProchainGp` porte sur une requête Supabase, donc elle ne se juge que contre la vraie base — les contrôles ci-dessus servent le bloc depuis un cache pré-rempli et ne passent jamais par la lecture. **À confronter au premier samedi de qualifications** : une fois le job de figeage passé, l'accueil doit annoncer le Grand Prix du week-end et non celui de la semaine d'avant.
+
+---
+
 ### Bugs connus
 
 *(Aucun.)*
