@@ -46,7 +46,9 @@ DOMAINE = "profils"
 # Colonnes servies par les deux routes de lecture. Écrites une fois : deux
 # listes séparées finiraient par diverger, et le profil d'un autre membre
 # afficherait une voiture différente de la sienne au classement.
-COLONNES_PROFIL = "id,pseudo,couleur1,couleur2,numero,cree_le"
+COLONNES_PROFIL = (
+    "id,pseudo,couleur1,couleur2,numero,livree_mode,livree_ecurie,cree_le"
+)
 
 # Bornes du numéro (1 à 99), doublées par la contrainte `profils_numero_valide`.
 NUMERO_MINIMUM = 1
@@ -56,6 +58,22 @@ NUMERO_MAXIMUM = 99
 # format est vérifié ici ET en base (`profils_couleurs_hex`). Le frontend n'en
 # propose que vingt, mais rien n'oblige un client à passer par le frontend.
 MOTIF_COULEUR = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+# Les deux modes d'affichage d'une voiture, doublés par la contrainte
+# `profils_livree_mode_valide`.
+MODE_PERSO = "perso"
+MODE_ECURIE = "ecurie"
+MODES_LIVREE = (MODE_PERSO, MODE_ECURIE)
+
+# Le slug d'une livrée est vérifié sur son FORMAT, jamais contre la liste des
+# onze écuries. Cette liste est un actif du frontend
+# (`frontend/src/lib/livrees.js`), relu à chaque saison au même titre que la
+# grille des pilotes ; la coder ici en dur obligerait à déployer le backend pour
+# ajouter une voiture. Un slug que le frontend ne connaît pas n'est pas une
+# panne : `livreeDuMembre` retombe sur les couleurs personnalisées, ce qui se
+# voit à l'écran au lieu de planter. Même motif que la contrainte
+# `profils_livree_ecurie_format`.
+MOTIF_LIVREE = re.compile(r"^[a-z0-9-]{2,32}$")
 
 
 def echec_lisible(contexte: str, erreur: BaseException) -> HTTPException:
@@ -88,13 +106,19 @@ class ProfilServi(BaseModel):
     # par `0` : c'est le frontend qui décide quoi afficher à la place (le rang
     # au classement), et « numéro 0 » n'existe pas en Formule 1.
     numero: int | None = None
+    # Les deux champs ont une VALEUR PAR DÉFAUT, et ce n'est pas du confort : un
+    # backend déployé avant la migration recevrait des lignes sans ces colonnes
+    # et rendrait `500` sur toute la réponse. C'est le piège déjà rencontré avec
+    # `cree_par` à la version `0.4.1`. `perso` est aussi le repli du frontend.
+    livree_mode: str = MODE_PERSO
+    livree_ecurie: str | None = None
     cree_le: datetime
 
 
 class ModificationProfil(BaseModel):
     """Modification partielle : ce qui n'est pas transmis n'est pas touché.
 
-    Les trois champs sont facultatifs et valent `None` quand ils sont absents.
+    Tous les champs sont facultatifs et valent `None` quand ils sont absents.
     `numero` a donc besoin d'un autre moyen de dire « je retire mon numéro » :
     c'est `retirer_numero`, un drapeau explicite. Sans lui, `numero: null`
     serait indiscernable de « champ non transmis », et un membre ne pourrait
@@ -105,6 +129,11 @@ class ModificationProfil(BaseModel):
     couleur2: str | None = Field(default=None, max_length=16)
     numero: int | None = None
     retirer_numero: bool = False
+    # `livree_mode` n'a pas besoin de drapeau de retrait : revenir aux couleurs
+    # personnalisées, c'est passer le mode à `perso`, et le slug reste alors en
+    # base — c'est le dernier choix du membre, qu'il retrouve s'il rebascule.
+    livree_mode: str | None = Field(default=None, max_length=16)
+    livree_ecurie: str | None = Field(default=None, max_length=32)
 
 
 class StatsProfil(BaseModel):
@@ -205,6 +234,16 @@ def couleur_valide(valeur: str, role: str) -> str:
     return propre.upper()
 
 
+def livree_valide(valeur: str) -> str:
+    """Normalise et vérifie le slug d'une livrée — son format, pas son existence."""
+    propre = valeur.strip().lower()
+    if not MOTIF_LIVREE.match(propre):
+        raise refuser(
+            f"Cette livrée n'a pas un identifiant valide (reçu : « {propre} »)."
+        )
+    return propre
+
+
 # --------------------------------------------------------------------------- #
 #  Routes
 # --------------------------------------------------------------------------- #
@@ -250,10 +289,35 @@ async def modifier_mon_profil(
             )
         valeurs["numero"] = corps.numero
 
+    if corps.livree_ecurie is not None:
+        valeurs["livree_ecurie"] = livree_valide(corps.livree_ecurie)
+
+    if corps.livree_mode is not None:
+        mode = corps.livree_mode.strip().lower()
+        if mode not in MODES_LIVREE:
+            raise refuser(
+                "Le mode de livrée doit être « perso » ou « ecurie » "
+                f"(reçu : « {mode} »)."
+            )
+        valeurs["livree_mode"] = mode
+
+    # Le mode `ecurie` exige une livrée. La vérification porte sur le couple
+    # RÉSULTANT, exactement comme celle des couleurs ci-dessous : passer le mode
+    # à `ecurie` sans jamais avoir choisi de livrée produirait sinon une ligne
+    # que la contrainte `profils_livree_ecurie_requise` refuserait en base, avec
+    # un message technique au lieu d'un refus en français.
+    mode_final = valeurs.get("livree_mode", actuel.get("livree_mode") or MODE_PERSO)
+    livree_finale = valeurs.get("livree_ecurie", actuel.get("livree_ecurie"))
+    if mode_final == MODE_ECURIE and not livree_finale:
+        raise refuser("Choisis une livrée d'écurie avant de l'appliquer.")
+
     # Les deux couleurs doivent différer. La comparaison porte sur le couple
     # RÉSULTANT, pas sur ce qui a été transmis : n'envoyer que `couleur1` en la
     # posant sur la valeur actuelle de `couleur2` produirait sinon une voiture
     # monochrome sans que rien ne soit refusé.
+    #
+    # Le contrôle vaut AUSSI en mode écurie : les deux couleurs restent en base
+    # et redeviennent visibles dès que le membre rebascule sur « Ma livrée ».
     finale1 = valeurs.get("couleur1", str(actuel["couleur1"])).upper()
     finale2 = valeurs.get("couleur2", str(actuel["couleur2"])).upper()
     if finale1 == finale2:

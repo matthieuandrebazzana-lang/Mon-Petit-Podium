@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
+import BasculeVue from "../composants/BasculeVue.jsx";
 import Voiture from "../composants/Voiture.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import GrilleStats from "../composants/GrilleStats.jsx";
@@ -11,7 +12,8 @@ import SelecteurCouleur from "../composants/SelecteurCouleur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
-import { IconeChevronDroit, IconeDrapeau } from "../composants/Icones.jsx";
+import { IconeCoche } from "../composants/Icones.jsx";
+import { LIVREES_DESSINEES } from "../composants/VoituresEcuries.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import {
   chargerNumerosPris,
@@ -20,38 +22,74 @@ import {
   enregistrerVoiture,
   porteurDuNumero,
 } from "../lib/profils.js";
-import { couleursDuMembre } from "../lib/palette.js";
+import { livreeDuMembre } from "../lib/palette.js";
 import { oublierCachePrefixe, useDonnees } from "../lib/useDonnees.js";
 import { APP_VERSION } from "../config.js";
 
 /**
  * Maquette 14 — mon profil : ma voiture, mes statistiques, ma personnalisation.
  *
+ * **La voiture se choisit désormais de deux façons**, et c'est l'objet de la
+ * refonte : soit « Ma livrée » — les deux couleurs de la palette, comme depuis
+ * l'étape 8 — soit « Livrée écurie », l'une des onze voitures de
+ * `assets/voitures_ecuries.svg`, dont les couleurs sont fixes. Le choix vit sur
+ * le profil (`livree_mode`, `livree_ecurie`), donc il est le même dans tous les
+ * championnats du membre, ce que demande la section 5.
+ *
  * **Écarts assumés par rapport à la maquette**, tous documentés dans le
  * CLAUDE.md :
  *
- * 1. La maquette affiche une grille « MES GRANDS PRIX » de cartes illustrées
- *    par les tracés de `assets/gp-cards.svg`. L'extraction de ces tracés n'est
- *    pas au programme de l'étape 8 ; une rangée mène à l'écran qui liste
- *    vraiment ces Grands Prix (maquette 13), avec les pronostics dedans.
- * 2. La barre de navigation basse n'est toujours pas codée : l'onglet
- *    Calendrier n'a pas d'écran. La déconnexion, elle, **quitte l'accueil pour
- *    venir ici**, comme l'annonçait l'étape 3 — c'est sa place définitive.
+ * 1. La rangée « Mes Grands Prix » est retirée. La maquette dessinait une
+ *    grille de cartes illustrées par `assets/gp-cards.svg` ; l'écran qu'elle
+ *    ouvrait (maquette 13) reste en place et atteignable par son URL, seule
+ *    l'entrée depuis le profil disparaît.
+ * 2. La bascule entre les deux modes est un **contrôle segmenté** et non deux
+ *    onglets : c'est le geste que reconnaît immédiatement quelqu'un qui vient
+ *    d'iOS, et `composants/BasculeVue.jsx` le rendait déjà pour la maquette 07.
+ * 3. Les onze livrées défilent **à l'horizontale**, calées sur les cartes
+ *    (`snap-x`), comme la rangée « Mes favoris » du tableau des cotes. Une
+ *    grille de onze voitures hautes et étroites ferait trois rangées et
+ *    repousserait le bouton d'enregistrement hors de l'écran.
  */
 
 const NUMERO_MAXIMUM = 99;
+
+const MODES = [
+  { cle: "perso", libelle: "Ma livrée" },
+  { cle: "ecurie", libelle: "Livrée écurie" },
+];
 
 /** Ne garde que des chiffres, et jamais plus de deux (numéro de 1 à 99). */
 function nettoyerNumero(saisi) {
   return String(saisi ?? "").replace(/\D/g, "").slice(0, 2);
 }
 
+/**
+ * L'état de saisie tel qu'il découle d'un profil servi.
+ *
+ * Écrit une seule fois : la remise à zéro après enregistrement et le suivi du
+ * profil frais doivent produire exactement le même état, sinon les deux
+ * chemins divergent au premier champ ajouté.
+ */
+function saisieDepuis(profil) {
+  const livree = livreeDuMembre(profil);
+  return {
+    couleur1: livree.couleur1,
+    couleur2: livree.couleur2,
+    mode: livree.mode,
+    // Le dernier slug choisi est conservé même en mode perso : c'est ce que la
+    // colonne garde en base, et c'est ce que le membre retrouve s'il rebascule.
+    ecurie: profil?.livree_ecurie ?? null,
+    numero: profil?.numero == null ? "" : String(profil.numero),
+  };
+}
+
 function SqueletteProfil() {
   return (
     <div className="flex flex-col gap-3">
-      {/* L'en-tête garde son aplat rouge, les quatre cases et le bloc de
-          personnalisation gardent leur surface blanche : ce sont les formes de
-          l'écran, seul leur contenu est encore inconnu. */}
+      {/* L'en-tête garde son aplat rouge et le bloc de personnalisation sa
+          surface blanche : ce sont les formes de l'écran, seul leur contenu est
+          encore inconnu. */}
       <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-4 p-5">
         <div className="flex flex-1 items-center gap-3.5">
           <div className="size-[42px] shrink-0 rounded-full bg-white/25" />
@@ -70,9 +108,13 @@ function SqueletteProfil() {
           </Carte>
         ))}
       </div>
+      {/* La silhouette suit la vraie hauteur du bloc : l'aperçu fait 140px et le
+          contrôle segmenté 44px. Sans eux, l'écran sauterait de deux cents
+          pixels à l'arrivée des données. */}
       <Carte className="flex flex-col gap-3">
-        <Barre largeur="w-32" hauteur="h-2.5" />
-        <Pave className="h-[46px]" />
+        <Barre largeur="w-24" hauteur="h-2.5" />
+        <Pave className="mx-auto h-[140px] w-[70px]" />
+        <Pave className="h-[44px]" />
         <Pave className="h-[46px]" />
         <Pave className="h-[46px]" />
       </Carte>
@@ -80,9 +122,15 @@ function SqueletteProfil() {
   );
 }
 
-/** Bloc rouge d'en-tête : pseudo, voiture et numéro (maquettes 12 et 14). */
+/**
+ * Bloc rouge d'en-tête : pseudo, voiture et numéro (maquettes 12 et 14).
+ *
+ * `voiture` reçoit la ligne complète — profil ou ligne de classement — et
+ * `livreeDuMembre` en tire ce qu'il faut peindre. Passer les deux couleurs
+ * séparément ferait perdre la livrée d'écurie en chemin.
+ */
 export function HeroProfil({ pseudo, voiture, numero, action }) {
-  const couleurs = couleursDuMembre(voiture);
+  const livree = livreeDuMembre(voiture);
 
   return (
     <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-4 p-5">
@@ -100,8 +148,7 @@ export function HeroProfil({ pseudo, voiture, numero, action }) {
 
       <div className="flex shrink-0 items-center gap-2.5">
         <Voiture
-          couleur1={couleurs.couleur1}
-          couleur2={couleurs.couleur2}
+          {...livree}
           numero={numero ?? ""}
           nom={pseudo}
           titre={`Voiture de ${pseudo || "ce membre"}`}
@@ -120,6 +167,54 @@ export function HeroProfil({ pseudo, voiture, numero, action }) {
   );
 }
 
+/**
+ * Une livrée d'écurie dans la rangée de choix.
+ *
+ * La carte retenue prend l'aplat bordeaux du design system, pas un filet ni une
+ * bordure — la section 5 proscrit les traits fins, et c'est déjà la couleur de
+ * la sélection partout ailleurs dans l'application (pastille du contrôle
+ * segmenté, boutons principaux). La coche en haut à droite dit la même chose
+ * une seconde fois, pour qui ne distingue pas les deux fonds.
+ */
+function CarteLivree({ livree, choisie, onChoisir }) {
+  return (
+    <li className="snap-start">
+      <button
+        type="button"
+        aria-pressed={choisie}
+        onClick={onChoisir}
+        className={`pressable rounded-widget relative flex w-[78px] flex-col items-center gap-1.5 px-2 pt-2.5 pb-2 ${
+          choisie ? "bg-primaire" : "bg-fond"
+        }`}
+      >
+        {choisie && (
+          <span
+            aria-hidden="true"
+            className="t-coche absolute top-1.5 right-1.5 flex size-4 items-center justify-center rounded-full bg-white"
+          >
+            <IconeCoche className="text-primaire size-2.5 [stroke-width:3]" />
+          </span>
+        )}
+
+        <Voiture
+          mode="ecurie"
+          ecurie={livree.slug}
+          titre={`Livrée ${livree.nom}`}
+          className="h-[88px] w-auto"
+        />
+
+        <span
+          className={`w-full truncate text-center text-[11px] font-medium ${
+            choisie ? "text-white" : "text-texte-doux"
+          }`}
+        >
+          {livree.nom}
+        </span>
+      </button>
+    </li>
+  );
+}
+
 export default function MonProfil() {
   const { utilisateur, deconnecter } = useAuth();
   const naviguer = useNavigate();
@@ -131,7 +226,7 @@ export default function MonProfil() {
     (signal) => chargerProfilComplet(profilId, signal),
     [profilId],
   );
-  const { donnees, chargement, echec, recharger, setDonnees } = useDonnees(
+  const { donnees, chargement, echec, recharger, remplacer } = useDonnees(
     cle,
     chargeur,
   );
@@ -145,30 +240,36 @@ export default function MonProfil() {
   const profil = donnees?.profil ?? null;
 
   // ---- Saisie ------------------------------------------------------------
-  // L'état de saisie part du profil chargé, puis vit sa vie. Il n'est réinitialisé
-  // que lorsque le profil change d'identité (nouvelle réponse serveur), pas à
-  // chaque rendu : sinon le rafraîchissement en arrière-plan du cache
-  // *stale-while-revalidate* effacerait une couleur en cours de choix.
-  const [couleur1, setCouleur1] = useState(null);
-  const [couleur2, setCouleur2] = useState(null);
-  const [numero, setNumero] = useState(null);
+  // L'état de saisie **suit le profil servi tant que le membre n'a rien
+  // touché**, et se fige dès qu'il touche à quelque chose.
+  //
+  // Les deux moitiés comptent, et c'est le défaut corrigé ici. Le cache
+  // *stale-while-revalidate* affiche d'abord ce qu'il savait : sans le suivi,
+  // la réponse fraîche arrivait bien mais la saisie gardait la valeur périmée,
+  // et l'ancienne couleur restait à l'écran indéfiniment. Sans le figeage, la
+  // revalidation en arrière-plan effacerait une couleur en cours de choix.
+  const [saisie, setSaisie] = useState(null);
+  const [edite, setEdite] = useState(false);
   const [ouvert, setOuvert] = useState(null);
+  const [enregistre, setEnregistre] = useState(false);
 
   useEffect(() => {
-    if (!profil) return;
-    setCouleur1((actuelle) => actuelle ?? profil.couleur1);
-    setCouleur2((actuelle) => actuelle ?? profil.couleur2);
-    setNumero((actuel) =>
-      actuel ?? (profil.numero == null ? "" : String(profil.numero)),
-    );
-  }, [profil]);
+    if (!profil || edite) return;
+    setSaisie(saisieDepuis(profil));
+  }, [profil, edite]);
+
+  /** Modifie un champ de la saisie et fige le suivi du serveur. */
+  const modifier = useCallback((champs) => {
+    setEdite(true);
+    setEnregistre(false);
+    setSaisie((precedente) => ({ ...precedente, ...champs }));
+  }, []);
 
   const [envoi, setEnvoi] = useState(false);
   // Échec de l'ENREGISTREMENT, à ne pas confondre avec celui du chargement
   // rendu par `useDonnees` : l'un est un message de refus métier posé sous le
   // bouton, l'autre remplace l'écran.
   const [echecEnvoi, setEchecEnvoi] = useState(null);
-  const [enregistre, setEnregistre] = useState(false);
   const [tentative, setTentative] = useState(0);
 
   // Les numéros déjà pris sont chargés **une seule fois** : la vérification à
@@ -196,18 +297,24 @@ export default function MonProfil() {
     };
   }, [profilId]);
 
-  const porteur = useMemo(() => porteurDuNumero(pris, numero), [pris, numero]);
-
-  const voiture = {
-    couleur1: couleur1 ?? profil?.couleur1,
-    couleur2: couleur2 ?? profil?.couleur2,
-  };
+  // `voiture` est la saisie si elle existe, le profil servi sinon. Ce repli
+  // n'est pas théorique : l'effet de synchronisation ne tourne qu'APRÈS le
+  // premier rendu, et sans lui la première image afficherait une voiture aux
+  // couleurs par défaut et un numéro vide alors que le cache les connaît déjà.
+  // Tout ce que l'écran lit passe donc par `voiture`, jamais par `saisie`.
+  const voiture = saisie ?? saisieDepuis(profil);
+  const numero = voiture.numero;
   const numeroSaisi = numero ? Number(numero) : null;
+  const enEcurie = voiture.mode === "ecurie";
+
+  const porteur = useMemo(() => porteurDuNumero(pris, numero), [pris, numero]);
 
   const modifie =
     Boolean(profil) &&
     (voiture.couleur1 !== profil.couleur1 ||
       voiture.couleur2 !== profil.couleur2 ||
+      voiture.mode !== livreeDuMembre(profil).mode ||
+      voiture.ecurie !== (profil.livree_ecurie ?? null) ||
       (numeroSaisi ?? null) !== (profil.numero ?? null));
 
   async function enregistrer() {
@@ -219,6 +326,11 @@ export default function MonProfil() {
     const resultat = await enregistrerVoiture({
       couleur1: voiture.couleur1,
       couleur2: voiture.couleur2,
+      livree_mode: voiture.mode,
+      // Le slug n'est transmis que s'il existe : `null` serait refusé par le
+      // format en base, et il n'y a rien à écrire tant qu'aucune livrée n'a
+      // jamais été choisie.
+      ...(voiture.ecurie ? { livree_ecurie: voiture.ecurie } : {}),
       // `retirer_numero` est un drapeau explicite : un `numero: null` serait
       // indiscernable d'un champ non transmis côté backend, et personne ne
       // pourrait plus revenir à l'état sans numéro.
@@ -233,12 +345,19 @@ export default function MonProfil() {
     }
 
     setEnregistre(true);
+
+    // **`remplacer` et non `setDonnees` : le cache doit suivre.** `setDonnees`
+    // ne touche que l'état React ; le cache `localStorage` gardait alors la
+    // version d'avant, et c'est lui qui est relu au montage suivant. C'est
+    // précisément ce qui faisait réapparaître l'ancienne couleur en revenant
+    // sur le profil.
+    remplacer({ ...donnees, profil: resultat.donnees });
+
     // Le profil rendu par la route fait foi : il porte les valeurs normalisées
-    // par le backend (couleurs en majuscules), pas celles de la saisie.
-    setDonnees((precedent) => ({ ...precedent, profil: resultat.donnees }));
-    setCouleur1(resultat.donnees.couleur1);
-    setCouleur2(resultat.donnees.couleur2);
-    setNumero(resultat.donnees.numero == null ? "" : String(resultat.donnees.numero));
+    // par le backend (couleurs en majuscules), pas celles de la saisie. La
+    // saisie repart de lui, et redevient suiveuse du serveur.
+    setSaisie(saisieDepuis(resultat.donnees));
+    setEdite(false);
 
     // Les classements affichent cette voiture : leur cache doit repartir de
     // zéro, sinon la vue liste et la vue piste garderaient l'ancienne livrée
@@ -286,7 +405,12 @@ export default function MonProfil() {
               <div className="flex flex-col gap-3">
                 <HeroProfil
                   pseudo={profil.pseudo}
-                  voiture={voiture}
+                  voiture={{
+                    couleur1: voiture.couleur1,
+                    couleur2: voiture.couleur2,
+                    livree_mode: voiture.mode,
+                    livree_ecurie: voiture.ecurie,
+                  }}
                   numero={numeroSaisi}
                   action="Saison 2026"
                 />
@@ -298,20 +422,58 @@ export default function MonProfil() {
                     Ma voiture
                   </p>
 
-                  <div className="flex items-center gap-4">
-                    {/* L'aperçu est à gauche, les réglages à droite : le
-                        résultat du choix reste sous les yeux pendant qu'on
-                        choisit. C'est aussi ce que fait la maquette. */}
-                    <Voiture
-                      couleur1={voiture.couleur1}
-                      couleur2={voiture.couleur2}
-                      numero={numeroSaisi ?? ""}
-                      nom={profil.pseudo}
-                      titre="Aperçu de ta voiture"
-                      className="h-[112px] w-auto shrink-0"
-                    />
+                  {/* L'aperçu est au-dessus des réglages et centré : c'est le
+                      sujet de l'écran, et il reste sous les yeux quel que soit
+                      le mode. Les deux modes ne peuvent pas se le partager
+                      côte à côte — la rangée des livrées prend toute la
+                      largeur. */}
+                  <Voiture
+                    mode={voiture.mode}
+                    ecurie={voiture.ecurie}
+                    couleur1={voiture.couleur1}
+                    couleur2={voiture.couleur2}
+                    numero={numeroSaisi ?? ""}
+                    nom={profil.pseudo}
+                    titre="Aperçu de ta voiture"
+                    className="mx-auto h-[140px] w-auto"
+                  />
 
-                    <div className="min-w-0 flex-1">
+                  <div className="mt-3.5">
+                    <BasculeVue
+                      options={MODES}
+                      valeur={voiture.mode}
+                      onChange={(mode) => {
+                        modifier({ mode });
+                        setOuvert(null);
+                      }}
+                      etiquette="Type de livrée"
+                    />
+                  </div>
+
+                  {enEcurie ? (
+                    <div className="mt-3.5">
+                      {/* La rangée déborde des deux côtés du bloc (`-mx-4`)
+                          puis retrouve son rembourrage : les cartes touchent
+                          alors le bord de l'écran, ce qui dit qu'il y en a
+                          d'autres au-delà. */}
+                      <ul className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        {LIVREES_DESSINEES.map((livree) => (
+                          <CarteLivree
+                            key={livree.slug}
+                            livree={livree}
+                            choisie={voiture.ecurie === livree.slug}
+                            onChoisir={() => modifier({ ecurie: livree.slug })}
+                          />
+                        ))}
+                      </ul>
+                      {!voiture.ecurie && (
+                        <p className="text-corps-sm text-secondaire mt-2">
+                          Choisis une livrée pour l'appliquer à ta voiture.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-1.5">
                       <SelecteurCouleur
                         libelle="Coque"
                         valeur={voiture.couleur1}
@@ -319,7 +481,7 @@ export default function MonProfil() {
                         ouvert={ouvert === 1}
                         onOuvrir={() => setOuvert(ouvert === 1 ? null : 1)}
                         onChange={(hex) => {
-                          setCouleur1(hex);
+                          modifier({ couleur1: hex });
                           setOuvert(null);
                         }}
                       />
@@ -330,44 +492,47 @@ export default function MonProfil() {
                         ouvert={ouvert === 2}
                         onOuvrir={() => setOuvert(ouvert === 2 ? null : 2)}
                         onChange={(hex) => {
-                          setCouleur2(hex);
+                          modifier({ couleur2: hex });
                           setOuvert(null);
                         }}
                       />
+                    </div>
+                  )}
 
-                      <div className="flex min-h-tactile items-center justify-between gap-3 py-1.5">
-                        <label
-                          htmlFor="numero-voiture"
-                          className="text-corps-sm text-texte-doux"
-                        >
-                          Numéro
-                        </label>
-                        <div className="rounded-champ bg-fond flex items-center">
-                          <span
-                            aria-hidden="true"
-                            className="text-texte-doux pl-3 text-[15px]"
-                          >
-                            #
-                          </span>
-                          <input
-                            id="numero-voiture"
-                            // `inputMode` plutôt que `type="number"` : sur iOS
-                            // le second ouvre un clavier à flèches, accepte les
-                            // signes et le « e », et affiche des incrémenteurs
-                            // dont personne n'a besoin pour deux chiffres.
-                            inputMode="numeric"
-                            autoComplete="off"
-                            maxLength={2}
-                            placeholder="—"
-                            value={numero ?? ""}
-                            onChange={(evenement) => {
-                              setNumero(nettoyerNumero(evenement.target.value));
-                              setEnregistre(false);
-                            }}
-                            className="text-texte w-[46px] bg-transparent py-2 pr-3 pl-0.5 text-[15px] font-medium outline-none"
-                          />
-                        </div>
-                      </div>
+                  {/* Le numéro est hors des deux modes : il s'écrit sur le
+                      museau quelle que soit la livrée. */}
+                  <div className="flex min-h-tactile items-center justify-between gap-3 py-1.5">
+                    <label
+                      htmlFor="numero-voiture"
+                      className="text-corps-sm text-texte-doux"
+                    >
+                      Numéro
+                    </label>
+                    <div className="rounded-champ bg-fond flex items-center">
+                      <span
+                        aria-hidden="true"
+                        className="text-texte-doux pl-3 text-[15px]"
+                      >
+                        #
+                      </span>
+                      <input
+                        id="numero-voiture"
+                        // `inputMode` plutôt que `type="number"` : sur iOS le
+                        // second ouvre un clavier à flèches, accepte les signes
+                        // et le « e », et affiche des incrémenteurs dont
+                        // personne n'a besoin pour deux chiffres.
+                        inputMode="numeric"
+                        autoComplete="off"
+                        maxLength={2}
+                        placeholder="—"
+                        value={numero}
+                        onChange={(evenement) =>
+                          modifier({
+                            numero: nettoyerNumero(evenement.target.value),
+                          })
+                        }
+                        className="text-texte w-[46px] bg-transparent py-2 pr-3 pl-0.5 text-[15px] font-medium outline-none"
+                      />
                     </div>
                   </div>
 
@@ -410,31 +575,6 @@ export default function MonProfil() {
                     </Bouton>
                   </div>
                 </div>
-
-                <Link
-                  to={`/profils/${profilId}/grands-prix`}
-                  className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3.5 p-4"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="bg-primaire rounded-champ flex size-[46px] shrink-0 items-center justify-center text-white"
-                  >
-                    <IconeDrapeau className="size-[22px]" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="text-corps text-texte block font-medium">
-                      Mes Grands Prix
-                    </span>
-                    <span className="text-texte-doux mt-0.5 block text-[12px]">
-                      {donnees?.stats?.gp_joues
-                        ? `${donnees.stats.gp_joues} GP joué${
-                            donnees.stats.gp_joues > 1 ? "s" : ""
-                          } cette saison`
-                        : "Tes pronostics, Grand Prix par Grand Prix"}
-                    </span>
-                  </span>
-                  <IconeChevronDroit className="text-texte-doux size-4 shrink-0" />
-                </Link>
               </div>
             )}
           </ZoneChargement>

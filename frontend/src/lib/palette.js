@@ -1,3 +1,5 @@
+import { teinteLivree } from "./livrees.js";
+
 /**
  * Palette des voitures — étape 8.
  *
@@ -104,7 +106,38 @@ export function encreSur(fond) {
 }
 
 /**
+ * La livrée d'un membre, quelle que soit la forme de la ligne reçue.
+ *
+ * **C'est le seul endroit qui décide de ce que porte une voiture**, et tous les
+ * écrans qui en affichent une y passent : le profil, le classement, la vue
+ * piste, le tableau des résultats. Sans lui, chaque écran relirait `livree_mode`
+ * à sa façon, et un membre pourrait apparaître en livrée Ferrari au classement
+ * et aux couleurs de son choix sur la piste.
+ *
+ * Une ligne sans mode — cache d'une version antérieure, backend déployé avant la
+ * migration, profil manquant — retombe sur `perso`, donc sur les couleurs, qui
+ * ont elles-mêmes leurs défauts de colonne. Le repli n'est jamais une voiture
+ * transparente.
+ */
+export function livreeDuMembre(ligne) {
+  const { couleur1, couleur2 } = couleursDuMembre(ligne);
+  const ecurie = ligne?.livree_ecurie ?? null;
+  return {
+    mode: ligne?.livree_mode === "ecurie" && ecurie ? "ecurie" : "perso",
+    ecurie,
+    couleur1,
+    couleur2,
+  };
+}
+
+/**
  * Celle des deux couleurs qui se voit sur une carte blanche.
+ *
+ * Elle porte la pastille du classement et le filet des lignes : c'est ce qui
+ * permet de reconnaître la même personne du même coup d'œil au classement, sur
+ * la piste et sur son profil. **Une livrée d'écurie rend donc la teinte de son
+ * écurie**, pas les couleurs personnelles du membre, qui ne peignent alors plus
+ * rien à l'écran.
  *
  * Cinq couleurs de la palette sont trop claires pour une pastille posée sur le
  * fond `surface` — blanc, argent, beige, jaune, vert clair. On prend alors la
@@ -113,7 +146,13 @@ export function encreSur(fond) {
  * mieux vaut une pastille pâle que pas de pastille du tout.
  */
 export function couleurLisible(voiture) {
-  const { couleur1, couleur2 } = couleursDuMembre(voiture);
+  const livree = livreeDuMembre(voiture);
+  if (livree.mode === "ecurie") {
+    const teinte = teinteLivree(livree.ecurie);
+    if (teinte) return teinte;
+  }
+
+  const { couleur1, couleur2 } = livree;
   return luminance(couleur1) > 0.75 && luminance(couleur2) <= 0.75
     ? couleur2
     : couleur1;

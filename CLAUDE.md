@@ -3262,6 +3262,114 @@ Le résultat le plus utile du balayage est le verdict lui-même : **cette interf
 
 **Ce qui reste à juger à l'œil, et que le code ne peut pas trancher** : le croisement des deux chiffres de la bascule. Pendant 260ms deux nombres coexistent dans la tuile, l'un descendant et l'autre tombant, et l'équilibre entre le flou, l'opacité et la vitesse ne se règle qu'en regardant. À vérifier sur un iPhone réel, en ralentissant l'animation d'un facteur 3 ou 4, et à revoir le lendemain — c'est le genre de détail dont on voit les défauts avec des yeux frais, jamais pendant qu'on l'écrit. Deux points précis à surveiller : que le rognage de la tuile ne coupe pas le haut des chiffres à 48px, et que la minute qui change ne tire pas l'œil pendant qu'on lit autre chose.
 
+---
+
+**Livrée d'écurie, nouveau dessin de voiture, cohérence profil ↔ piste** (version `0.33.0`)
+
+Quatre corrections sur l'écran profil, dont deux défauts de fond. Une migration, deux composants nouveaux, un module partagé, une route enrichie.
+
+---
+
+***Le bug des couleurs qui réapparaissent tenait à DEUX causes, et les corriger toutes les deux était nécessaire.*** C'est le point de la version.
+
+Le symptôme : enregistrer une couleur la posait bien sur la vue piste, mais revenir sur le profil ressortait l'ancienne.
+
+1. **`setDonnees` n'écrit pas le cache.** `useDonnees` mémorise en `localStorage` (*stale-while-revalidate*, section 9) et relit ce cache **au montage**, dans l'initialiseur de `useState`. L'enregistrement appelait `setDonnees`, qui ne touche que l'état React : le cache gardait la version d'avant, et c'est lui qui était servi au retour sur l'écran. `remplacer(valeur)` est ajouté à `useDonnees` — il pose l'état **et** le cache. `setDonnees` reste exporté pour les mises à jour optimistes que la réponse serveur confirmera de toute façon (la bascule d'un favori).
+
+2. **L'état de saisie ne suivait jamais le serveur.** L'effet de synchronisation s'écrivait `setCouleur1((actuelle) => actuelle ?? profil.couleur1)` : il n'initialisait qu'une fois. Le garde-fou était voulu — sans lui, la revalidation en arrière-plan effacerait une couleur en cours de choix — mais il figeait aussi la valeur périmée du cache **définitivement**. La réponse fraîche arrivait, `profil` se mettait à jour, et la saisie gardait l'ancienne couleur. Un drapeau `edite` remplace le `??` : tant que le membre n'a rien touché, la saisie suit le profil servi ; dès qu'il touche à quelque chose, elle se fige. La revalidation ne peut plus ni écraser une saisie en cours, ni imposer une valeur périmée.
+
+**Les deux écrans lisent bien la même source.** Le profil passe par `GET /profils/{id}`, la piste par `classement_du_championnat` : deux chemins, une seule base, et les deux servent désormais les mêmes colonnes. C'est le cache qui mentait, pas la source.
+
+*Un troisième défaut, trouvé en rendant l'écran avec la feuille compilée* : le numéro était lu dans `saisie` et non dans le repli `saisie ?? saisieDepuis(profil)`. La première image affichait donc un numéro vide alors que le cache le connaissait — corrigé sur place, et c'est la raison pour laquelle **tout ce que l'écran lit passe par `voiture`, jamais par `saisie`**.
+
+---
+
+*Nouveau dessin de voiture* — `assets/voitures_perso.svg`, première des quatre voitures de la planche.
+
+**Écart assumé sur les deux classes colorisables.** La demande nommait `cls-6` pour la couleur 1 et `cls-2` pour la couleur 2. La planche empile **quatre** voitures, chacune peinte par son propre couple de classes (`cls-6`/`cls-14`, `cls-13`/`cls-10`, `cls-8`/`cls-3`, `cls-12`/`cls-2`) : `cls-2` appartient à la quatrième et **n'existe pas** dans la première. Suivre la lettre aurait laissé la couleur 2 sans porteur. Ce sont donc `cls-6` — la carrosserie principale, celle que la demande nomme — et `cls-14`, la surface secondaire de la même voiture, qui sont branchées.
+
+Les couleurs sont posées en **attribut `fill` sur chaque forme**, comme la demande le prescrit, jamais par une classe : un `class="cls-6"` obligerait à injecter une feuille de style par voiture, et deux voitures de couleurs différentes ne pourraient pas coexister sur la vue piste.
+
+**La `viewBox` est la boîte englobante réelle**, mesurée en échantillonnant les courbes de Bézier — même méthode que les tracés de circuits (`0.15.0`), les icônes de la barre (`0.22.0`) et les drapeaux (`0.24.0`). Celle de l'ancien `assets/voiture.svg` portait près de deux fois la largeur du dessin en marge vide : à hauteur CSS égale, la voiture paraît donc plus grande. **Les deux appelants qui tenaient à leur gabarit ont été ajustés** : la vue piste passe de 56 × 68 à 29 × 59 (la voiture occupe exactement la même place qu'avant, la boîte ne portant plus de vide), et le tableau des résultats de `w-[28px]` à `w-[17px]`.
+
+*Les onze livrées d'écurie* — `assets/voitures_ecuries.svg` découpé en `composants/VoituresEcuries.jsx`. La planche empile ses onze voitures **en zigzag sur deux colonnes**, ni jointives ni régulièrement espacées : chacune porte donc sa propre `viewBox` mesurée. Les onze font exactement 141,11 × 288,09 — c'est le même dessin, onze fois repeint.
+
+**L'identification des écuries a été faite en rendant les onze voitures côte à côte**, pas devinée d'après les couleurs du fichier. Elles tombent une à une sur les onze écuries que `lib/ecuries.js` tient déjà : Red Bull, Ferrari, Mercedes, Alpine, Aston Martin, Audi, McLaren, Racing Bulls, Williams, Haas, Cadillac.
+
+**Deux modules et non un**, et la séparation compte : `lib/livrees.js` porte les slugs, les noms et les teintes, **sans une ligne de SVG** ; `composants/VoituresEcuries.jsx` porte les formes, cinquante kilo-octets de chemins. `lib/palette.js` a besoin de la teinte d'une livrée pour la pastille du classement, et il est importé par `lib/couleurs.js`, donc par presque tous les écrans — y compris ceux qui n'affichent aucune voiture. Faire remonter les formes jusque-là embarquerait le dessin des onze voitures dans le lot de chaque écran. Le nom `lib/livrees.js` est repris à l'étape 7, libéré depuis que l'étape 8 avait supprimé les livrées par ordre d'inscription.
+
+**La teinte d'une écurie n'est pas écrite deux fois** : elle est lue dans `lib/ecuries.js`, la table que le projet tient déjà pour les widgets de cotes. C'est la même question — « de quelle couleur est cette écurie ? ». La couleur dominante du dessin ne ferait pas l'affaire : trois livrées sont à dominante blanche (Racing Bulls, Haas, Cadillac) et deux à dominante grise (Mercedes, Audi), soit cinq pastilles indistinguables sur onze.
+
+**Chaque texte prend l'encre qui contraste avec l'aplat qui est sous lui**, et cela corrige un défaut du fichier source : la planche écrit les deux textes en blanc, ce qui rend le pseudo **illisible** sur les ailerons clairs de Haas et de Cadillac. Sur la voiture personnalisée, le numéro et le nom reposent tous deux sur `couleur1` — c'est elle qui peint le museau **et** l'aileron arrière, contrairement à l'ancien dessin où l'aileron portait `couleur2`.
+
+---
+
+*`livreeDuMembre` est le seul endroit qui décide de ce que porte une voiture*, et les quatre surfaces qui en affichent une y passent : mon profil, le profil d'un membre, la vue piste, le tableau des résultats. Sans lui, chaque écran relirait `livree_mode` à sa façon, et un membre pourrait apparaître en livrée Ferrari au classement et aux couleurs de son choix sur la piste.
+
+**Un slug inconnu n'est pas une panne** : la voiture retombe sur le mode personnalisé, ce qui se voit à l'écran au lieu de planter. C'est la règle déjà tenue par `aUnTrace` pour les circuits et par les drapeaux depuis la version `0.15.0`. Une ligne sans `livree_mode` — cache d'une version antérieure, backend déployé avant la migration — retombe de même.
+
+`couleurLisible` suit : **une livrée d'écurie rend la teinte de son écurie**, pas les couleurs personnelles du membre, qui ne peignent alors plus rien à l'écran. C'est elle qui porte la pastille du classement et le filet des lignes — la même personne doit se reconnaître du même coup d'œil au classement, sur la piste et sur son profil.
+
+---
+
+*Schéma* — `supabase/migrations/20260819124500_livree_ecurie.sql`, **à exécuter à la main dans le SQL Editor de Supabase**, après les onze précédentes. Idempotente. Elle ne crée **aucune table** : deux colonnes, trois contraintes, deux fonctions remplacées.
+
+`public.profils` gagne `livree_mode` (défaut `perso`) et `livree_ecurie` (nullable). Ces deux colonnes vivent sur le **profil** et non sur l'adhésion à un championnat : la section 5 dit « une seule voiture, identique dans tous ses championnats ».
+
+**Deux colonnes plutôt qu'une seule nullable**, et ce n'est pas de la redondance : un membre qui essaie une livrée puis revient à ses couleurs garde son dernier choix d'écurie et le retrouve s'il rebascule. Une colonne unique (« le slug, ou NULL pour le mode perso ») le lui ferait ressaisir à chaque aller-retour.
+
+**Le slug est contraint par son FORMAT, jamais par une liste des onze écuries.** Une énumération en base figerait la grille : ajouter une livrée demanderait une migration, alors que les onze voitures sont un actif du frontend qui se relit à chaque saison, comme `lib/ecuries.js` et `lib/calendrier2026.js`. La contrainte `profils_livree_ecurie_requise` exige en revanche un slug dès que le mode vaut `ecurie` — sans elle, un profil pourrait se déclarer en livrée d'écurie sans dire laquelle.
+
+Les deux fonctions de lecture sont **remplacées** pour porter les deux champs : `classement_du_championnat` (vue liste et vue piste) et `pronostics_du_championnat` (tableau des résultats). Leur corps est inchangé par ailleurs, `coalesce` de repli compris.
+
+*Backend* — `ProfilServi` et `ModificationProfil` gagnent les deux champs. Les deux ont une **valeur par défaut** dans le modèle servi : un backend déployé avant la migration rendrait sinon `500` sur toute la réponse, le piège déjà rencontré avec `cree_par` à la version `0.4.1`.
+
+**Le mode `ecurie` est refusé sans livrée, et la vérification porte sur le couple RÉSULTANT**, exactement comme celle des deux couleurs : passer le mode à `ecurie` sans jamais avoir choisi de livrée produirait une ligne que la contrainte refuserait en base, avec un message technique au lieu d'un refus en français. **Le contrôle « deux couleurs différentes » vaut aussi en mode écurie** : les couleurs restent en base et redeviennent visibles dès que le membre rebascule.
+
+Le backend valide le **format** du slug et non son appartenance aux onze : la liste est un actif du frontend, la coder ici obligerait à déployer le backend pour ajouter une voiture.
+
+---
+
+*Écran* — l'aperçu de la voiture passe au-dessus des réglages et centré : c'est le sujet de l'écran, et il reste sous les yeux quel que soit le mode. La bascule est le **contrôle segmenté** de `composants/BasculeVue.jsx`, resté en place et non monté depuis la version `0.12.0` — c'est exactement le cas pour lequel le CLAUDE.md disait de le garder. Les onze livrées défilent **à l'horizontale**, calées sur les cartes (`snap-x`), comme la rangée « Mes favoris » du tableau des cotes : une grille de onze voitures hautes et étroites ferait trois rangées et repousserait le bouton d'enregistrement hors de l'écran.
+
+**La carte retenue prend l'aplat bordeaux du design system**, pas un filet ni une bordure — la section 5 proscrit les traits fins, et c'est déjà la couleur de la sélection partout ailleurs. La coche en haut à droite le redit une seconde fois.
+
+**Le numéro reste hors des deux modes** : il s'écrit sur le museau quelle que soit la livrée.
+
+*Le widget « Mes Grands Prix » est retiré*, comme demandé. **L'écran qu'il ouvrait (maquette 13) reste en place** et atteignable par son URL ; seule l'entrée depuis mon profil disparaît. À signaler : le profil d'un **autre** membre (maquette 12) porte la même rangée et la conserve — la demande ne nommait que l'écran profil, et retirer les deux aurait rendu `GrandsPrixDuMembre.jsx` inatteignable.
+
+*Mouvement* — **une seule règle nouvelle, aucun jeton nouveau**, et les deux animations viennent du balayage `/find-animation-opportunities` de la version `0.32.0` (section 11, opportunités n° 4 et 5) :
+
+- **La teinte de la voiture personnalisable se remplace en 200ms** au lieu de sauter d'une couleur à l'autre pendant qu'on parcourt la palette. La courbe est `ease` — c'est ce que demande la grille d'`/animate` pour un changement de couleur, ni `ease-out` (les entrées et les sorties) ni `ease-in-out` (les déplacements). Elle n'est posée que sur la voiture personnalisable : une livrée d'écurie ne change jamais de couleur, elle se remplace en entier.
+- **La coche d'un choix entre en `scale(0.8)`**, 160ms, jamais `scale(0)` — la case doit avoir une silhouette avant d'être remplie. 160ms est la fourchette d'un retour d'appui : le geste vient d'avoir lieu, la marque ne doit pas se faire attendre.
+
+**Ce qui n'a PAS été animé, et pourquoi** : le passage d'un mode à l'autre remplace la voiture d'un coup. Un fondu croisé (transitions-dev 09, installé) était tentant, mais les deux voitures sont **la même silhouette** à la peinture près : un fondu entre deux formes identiques se lit comme un scintillement, pas comme une transition. La pastille du contrôle segmenté porte déjà le changement d'état. C'est le portier d'`/animate` qui tranche — une animation sans motif nommé ne s'écrit pas.
+
+*Apport d'`/apple-design`* — zones tactiles de 44px sur chaque carte de livrée et sur le champ numéro, retour tactile à l'appui partout ; `aria-pressed` sur les onze cartes, un seul à `true` ; la rangée qui déborde des deux côtés du bloc dit qu'il y a d'autres cartes au-delà (§16, wayfinding) ; et le squelette suit la silhouette réelle, hauteur de l'aperçu et du contrôle segmenté comprises (§7), sans quoi l'écran sauterait de deux cents pixels à l'arrivée des données.
+
+*Vérifié* — modules chargés par le chargeur SSR de Vite, rendu hors navigateur (`react-dom/server`, cache localStorage pré-rempli) : **104 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Les deux tables de livrées | 11 livrées, **les onze slugs attendus dans l'ordre**, les onze dessinées ; slug inconnu et **clé héritée d'`Object` (`toString`) refusés** ; `viewBox` à quatre nombres pour les onze |
+| Teintes | les onze servies et **deux à deux distinctes**, toutes en `#RRGGBB`, **lues dans `lib/ecuries.js`** ; slug inconnu → `null`, jamais une couleur inventée |
+| `livreeDuMembre` | sans mode → perso ; mode `ecurie` reconnu ; **mode `ecurie` sans slug → repli perso** ; ligne nulle et ligne sans couleurs → défauts |
+| `couleurLisible` | livrée → **teinte de l'écurie** ; perso inchangé, voiture blanche toujours servie par sa seconde couleur ; **livrée inconnue → retombe sur les couleurs** |
+| Voiture personnalisable | `viewBox` = boîte englobante ; **8 formes en `couleur1`, 7 en `couleur2`** ; **aucune couleur d'origine de la planche ne subsiste** ; pneus, suspensions et fond plat conservés ; numéro centré et nom écrits ; **encre foncée sur une coque blanche** ; sans nom ni numéro, aucun `<text>` |
+| Les onze livrées | chacune rendue avec sa propre `viewBox` ; **aucune transition de teinte** sur une livrée fixe ; **aileron blanc (Haas) → nom en encre foncée**, aileron sombre (Red Bull) → nom en blanc ; **livrée inconnue → repli sur la voiture personnalisable** |
+| Écran, mode perso | se rend ; **le widget « Mes Grands Prix » a disparu**, aucun lien vers `/grands-prix` ; bascule segmentée rendue ; les deux sélecteurs de couleur affichés ; **aucune carte de livrée** ; aperçu aux couleurs saisies ; bouton désactivé tant que rien n'a changé |
+| Écran, mode écurie | **les onze livrées proposées avec leurs onze noms** ; **sélecteurs de couleur masqués** ; une seule livrée marquée (`aria-pressed`), coche animée ; rangée calée sur les cartes ; **aperçu en livrée McLaren**, aucune couleur personnelle ; le numéro reste proposé |
+| Cas limites | mode `ecurie` sans slug → **normalisé en perso**, aperçu en repli, aucune carte affichée ; **aucun numéro inventé sur le hero** ; sans cache → squelette, **à la hauteur réelle de l'aperçu** |
+| Vue piste | **livrée Ferrari peinte sur la piste**, numéro choisi conservé ; voiture personnalisée servie ; **ligne sans livrée (ancien cache) → perso, sans plantage** |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », sur les trois surfaces |
+| CSS de production | `t-voiture-teinte` en `fill .2s`, `@keyframes coche-pop` et `.t-coche` générés, **les deux coupés sous `prefers-reduced-motion`** |
+| Aperçu rendu avec la feuille compilée | les deux modes dessinés à 390px de large : voiture colorisée, livrées reconnaissables, numéro porté du hero au museau |
+| `npm run build` | passe, **144 modules**, version `0.33.0` dans le bundle |
+
+**Un défaut trouvé par cet aperçu**, et il n'apparaissait dans aucun contrôle textuel : le numéro lu dans `saisie` au lieu du repli (voir plus haut). C'est la troisième fois qu'un rendu avec la vraie feuille de style attrape ce qu'un rendu HTML seul laisse passer.
+
+**Ce qui n'a PAS pu être vérifié, et c'est à faire** : la migration n'a **pas** été jouée contre un PostgreSQL jetable — le démon Docker n'était pas démarré sur cette machine. Toutes les migrations précédentes l'avaient été. Ses trois contraintes, ses deux fonctions remplacées et son idempotence sont donc **écrites mais non éprouvées** ; à jouer sur une base jetable avant de l'appliquer en production, ou à surveiller de près au premier passage dans le SQL Editor.
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -3286,6 +3394,8 @@ Ordre d'application, si l'une manque :
 10. `supabase/migrations/20260814213000_calendrier_championnat.sql` — sans elle, `GET /championnats/{id}/calendrier` répond `422` en portant `42883` (fonction absente) et l'écran de calendrier (maquette 15) reste vide ; le tableau des résultats (maquette 11), lui, s'affiche mais sans les voitures des membres, qui retombent sur les défauts. **Elle suppose les 3, 5, 6 et 8 déjà appliquées** : elle lit `grands_prix`, `cotes`, `resultats_gp`, `pronostics.points_gagnes` et `profils.couleur1` / `couleur2` / `numero`, et **remplace** `public.pronostics_du_championnat` (migration 5). Elle ne crée aucune table. **Attention à l'ordre, vérifié en test** : **rejouer la 5 après la 10 retire les voitures du tableau des résultats**. Si la 5 est rejouée pour une raison quelconque, rejouer la 10 derrière.
 
 11. `supabase/migrations/20260816120000_date_qualifications.sql` — sans elle, `POST /scraper/declencher` et le job automatique répondent `42703` (colonne absente) à l'écriture d'un Grand Prix : **le scraper ne peut plus rien enregistrer du tout**, ni GP ni cotes. Le job horaire, lui, échoue à sa lecture et le journalise à chaque tour. **Elle suppose la 3 déjà appliquée** : elle altère `public.grands_prix`. Elle ne crée aucune table et **ne remplace aucune fonction** — c'est la seule migration depuis la 7 qui ne puisse pas entrer en conflit d'ordre avec une migration antérieure rejouée par-dessus.
+
+12. `supabase/migrations/20260819124500_livree_ecurie.sql` — sans elle, **`GET /profils/{id}` et `PATCH /profils/moi` répondent `422` en portant `42703`** (colonne absente), donc l'écran profil ne charge plus du tout ; les classements, eux, continuent de servir les couleurs et les voitures retombent simplement toutes en mode personnalisé. **Elle suppose les 1, 8 et 10 déjà appliquées** : elle altère `public.profils` et **remplace** `classement_du_championnat` (migration 8) et `pronostics_du_championnat` (migration 10). Elle ne crée aucune table. **Attention à l'ordre** : rejouer la 8 ou la 10 après celle-ci retirerait la livrée du classement et du tableau des résultats — sans rien casser, le frontend repliant sur les couleurs. Si l'une des deux est rejouée, rejouer la 12 derrière. **Non éprouvée sur un PostgreSQL jetable**, contrairement aux onze précédentes : le démon Docker n'était pas disponible au moment de l'écrire.
 
 **Variables d'environnement du backend** — à définir sur Railway :
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Sans elles, `/championnats` et `POST /scraper/declencher` répondent `503` avec un message explicite, et **le scheduler de l'étape 6 ne démarre pas du tout** (il le journalise au démarrage). La clé de service ne doit jamais être exposée au frontend ni committée.
@@ -3335,6 +3445,7 @@ Points non couverts, à traiter le moment venu :
 - **Pronostics d'un GP annulé ou reporté** — la règle 4.7 veut que les pronostics enregistrés soient **effacés**. Rien ne le fait aujourd'hui : le statut `annule` n'existe pas dans la contrainte `check` de `grands_prix`, et aucun code ne l'applique. L'étape 6 apporte un demi-pas : **OpenF1 expose `is_cancelled` sur ses sessions**, et `session_de_course()` le **journalise** quand il vaut vrai — le cas se verra dans les logs au lieu de passer pour une course sans résultat. Il reste à ajouter le statut, l'effacement, et la reprise après report.
 - **Marchés obligatoires liés au nom Unibet** — le vainqueur et le podium sont reconnus par les slugs `vainqueur` et `podium`, en dur à **trois** endroits depuis l'étape 6 : `backend/app/api/routes/pronostics.py`, `backend/app/calcul/points.py` et `frontend/src/lib/pronostics.js`. Si Unibet renomme un de ces marchés, la saisie s'arrête proprement en le disant, mais **les trois constantes doivent être corrigées ensemble**.
 - **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
+- **Rangée « Mes Grands Prix » sur le profil d'un autre membre** — retirée de mon profil en version `0.33.0`, elle reste sur la maquette 12 (`ProfilMembre.jsx`), la demande n'ayant nommé que l'écran profil. C'est aussi le **seul chemin restant** vers `GrandsPrixDuMembre.jsx` (maquette 13) : la retirer là aussi rendrait cet écran inatteignable autrement que par son URL. À trancher — soit les deux rangées disparaissent et l'écran est atteint autrement, soit la maquette 12 la garde et l'écart est assumé.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
 
 **Trois points depuis les versions `0.20.0` et `0.21.0`**, tous sur l'onglet Calendrier. **La longueur de l'écran** : la refonte de la `0.21.0` ramène la carte de ~300px à **200px**, ce qui divise le défilement par une fois et demie, mais douze cartes font toujours près de trois écrans sans en-tête collant pour dire où l'on est — c'est le premier point à juger au pouce, et le levier est `HAUTEUR_CARTE` (`frontend/src/composants/CarteGpSaison.jsx`), que le tracé, la bande d'action et le squelette suivent tout seuls. **L'entrée dans la saison** : l'écran s'ouvre sur le premier Grand Prix de la liste, y compris quand il est terminé ; faire défiler jusqu'au prochain à jouer serait plus juste, mais demande un `scrollIntoView` à l'arrivée, donc un choix explicite sur le comportement du retour. Et **le décompte de l'en-tête**, qui contredira le bandeau de l'accueil dès la première course courue tant que celui-ci n'est pas rebranché (voir plus haut).

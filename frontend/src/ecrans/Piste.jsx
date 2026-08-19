@@ -6,7 +6,7 @@ import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerChampionnat } from "../lib/championnats.js";
 import { chargerClassement, cleClassement } from "../lib/classement.js";
 import { messageDeChargement } from "../lib/erreurs.js";
-import { couleursDuMembre } from "../lib/palette.js";
+import { livreeDuMembre } from "../lib/palette.js";
 import { useDonnees } from "../lib/useDonnees.js";
 
 /**
@@ -31,18 +31,26 @@ import { useDonnees } from "../lib/useDonnees.js";
  */
 
 // Largeur de la voiture, et hauteur qui s'en déduit du rapport du viewBox
-// (275.12 × 332.75). Les deux sont fixes : c'est la piste qui s'adapte à
+// (141.12 × 288.09). Les deux sont fixes : c'est la piste qui s'adapte à
 // l'écran, pas la voiture, dont le numéro deviendrait illisible en dessous.
-const LARGEUR_VOITURE = 56;
-const HAUTEUR_VOITURE = Math.round(LARGEUR_VOITURE * (332.75 / 275.12));
+//
+// **Les deux valeurs ont changé avec le nouveau dessin, sans que la piste
+// bouge.** L'ancien `assets/voiture.svg` portait près de deux fois la largeur
+// du dessin en marge vide : sa boîte de 56 × 68 ne montrait qu'une voiture de
+// 29 × 59. La boîte est désormais celle du dessin, d'où 29 × 59 — la voiture
+// occupe exactement la même place à l'écran qu'avant.
+const LARGEUR_VOITURE = 29;
+const HAUTEUR_VOITURE = Math.round(LARGEUR_VOITURE * (288.09 / 141.12));
 
 // Marge au-dessus de la première voiture et au-dessous de la dernière.
 const MARGE_HAUTE = 16;
 const MARGE_BASSE = 12;
 
 // Écart vertical souhaité entre deux voitures. En dessous, elles se
-// chevauchent ; au-delà, la piste se vide inutilement.
-const ECART_SOUHAITE = Math.round(HAUTEUR_VOITURE * 0.78);
+// chevauchent ; au-delà, la piste se vide inutilement. Le facteur monte de 0,78
+// à 0,90 parce que la boîte ne porte plus de marge : 0,78 d'une boîte qui
+// contenait 13 % de vide donnait le même écart absolu qu'ici.
+const ECART_SOUHAITE = Math.round(HAUTEUR_VOITURE * 0.9);
 
 // Décalage d'entrée entre deux voitures — doit rester égal à --voiture-stagger.
 const RETARD_ENTREE = 100;
@@ -106,9 +114,14 @@ export function positionsDesVoitures(lignes, hauteur) {
  * **numéro qu'il a choisi** — l'une et l'autre servies par le classement. Le
  * rang ne s'affiche que faute de numéro choisi : c'était le comportement
  * provisoire de l'étape 7, il devient le repli.
+ *
+ * `livreeDuMembre` décide de ce qui est peint : un membre qui a choisi une
+ * livrée d'écurie roule ici dans cette livrée, exactement comme sur son
+ * profil. C'est la même fonction des deux côtés — deux lectures séparées de
+ * `livree_mode` finiraient par se contredire.
  */
 export function LigneDePiste({ ligne, centre, hauteur, retard, estMoi }) {
-  const voiture = couleursDuMembre(ligne);
+  const voiture = livreeDuMembre(ligne);
   const numero = ligne.numero ?? ligne.rang;
 
   return (
@@ -125,8 +138,7 @@ export function LigneDePiste({ ligne, centre, hauteur, retard, estMoi }) {
       }}
     >
       <Voiture
-        couleur1={voiture.couleur1}
-        couleur2={voiture.couleur2}
+        {...voiture}
         numero={numero}
         nom={ligne.pseudo}
         titre={`${ligne.rang}. ${ligne.pseudo}, ${ligne.total_points} points`}

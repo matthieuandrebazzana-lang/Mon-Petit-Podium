@@ -83,6 +83,27 @@ export function useDonnees(cle, chargeur) {
   const chargeurRef = useRef(chargeur);
   chargeurRef.current = chargeur;
 
+  /**
+   * Remplace les données ET le cache, en une fois.
+   *
+   * `setDonnees` seul ne touche que l'état React : le cache `localStorage`
+   * garde alors la version d'avant, et c'est lui qui est relu au montage
+   * suivant. C'est exactement le défaut qui faisait réapparaître l'ancienne
+   * couleur de voiture en revenant sur le profil — l'enregistrement mettait
+   * l'écran à jour, puis la navigation ressortait la valeur périmée.
+   *
+   * À utiliser après toute écriture dont la réponse fait foi. `setDonnees`
+   * reste exporté pour les mises à jour optimistes que la réponse serveur
+   * confirmera de toute façon (la bascule d'un favori, par exemple).
+   */
+  const remplacer = useCallback(
+    (valeur) => {
+      setDonnees(valeur);
+      ecrireCache(cle, valeur);
+    },
+    [cle],
+  );
+
   const [tour, setTour] = useState(0);
   const recharger = useCallback(() => {
     // L'attente doit repartir avec la tentative, sinon le squelette ne
@@ -132,5 +153,6 @@ export function useDonnees(cle, chargeur) {
     erreur: echec ? messageDeChargement(echec) : null,
     recharger,
     setDonnees,
+    remplacer,
   };
 }

@@ -5,6 +5,7 @@ import EnTete from "../composants/EnTete.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import Voiture from "../composants/Voiture.jsx";
+import { livreeDuMembre } from "../lib/palette.js";
 import { Barre, Carte, Pave, Rangee } from "../composants/Squelette.jsx";
 import {
   IconeChevronAccordeon,
@@ -251,14 +252,14 @@ function LigneMembre({ ligne, estMoi }) {
         </span>
 
         {/* La vraie voiture du membre (étape 8), servie par la route depuis
-            l'étape 9. À 34px, seuls la coque et les ailerons se lisent — c'est
-            précisément ce que les deux couleurs peignent. */}
+            l'étape 9, livrée d'écurie comprise. La largeur suit la boîte
+            englobante du dessin : l'ancienne `viewBox` portait sa moitié en
+            marge vide, et 28px n'en montraient que 14. */}
         <Voiture
-          couleur1={ligne.couleur1}
-          couleur2={ligne.couleur2}
+          {...livreeDuMembre(ligne)}
           numero={ligne.numero ?? ""}
           titre={`Voiture de ${ligne.pseudo}`}
-          className="h-[34px] w-[28px] shrink-0"
+          className="h-[34px] w-[17px] shrink-0"
         />
 
         <span className="min-w-0 flex-1">

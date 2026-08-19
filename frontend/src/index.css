@@ -1422,6 +1422,43 @@
   transition: fill var(--icon-swap-dur) var(--icon-swap-ease);
 }
 
+/* — Teinte d'une voiture personnalisable (version 0.33.0) —
+   Aucun jeton nouveau : `--duration-fast` (250ms) est ramenée à 200ms, la borne
+   haute d'un changement de couleur, et la courbe est `ease` — c'est ce que
+   demande la grille d'/animate pour un changement de couleur, ni `ease-out`
+   (qui sert aux entrées et aux sorties) ni `ease-in-out` (qui sert aux
+   déplacements).
+
+   **La transition porte sur `fill`, sur les formes, et sur elles seules.**
+   Pendant qu'on parcourt la palette, les aplats se remplacent au lieu de sauter
+   d'une teinte à l'autre — c'est l'opportunité n° 5 relevée par le balayage
+   `/find-animation-opportunities` de la version 0.32.0. Elle n'est posée que
+   sur la voiture personnalisable : une livrée d'écurie ne change jamais de
+   couleur, elle se remplace en entier. */
+.t-voiture-teinte :is(path, polygon, rect, circle) {
+  transition: fill 200ms ease;
+}
+
+/* — Coche d'un choix (version 0.33.0) —
+   La marque qui dit « c'est celle-ci » sur une case de couleur ou une livrée.
+   C'est l'opportunité n° 4 du même balayage.
+
+   **Jamais `scale(0)`** : la case doit avoir une silhouette avant d'être
+   remplie, rien dans le monde réel n'apparaît à partir de rien. 160ms, dans la
+   fourchette d'un retour d'appui — le geste vient d'avoir lieu, la marque ne
+   doit pas se faire attendre. Une animation et non une transition : la coche
+   est montée au moment du choix, il n'y a pas d'état de départ à quitter. */
+@keyframes coche-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+.t-coche {
+  animation: coche-pop 160ms var(--ease-smooth-out) both;
+}
+
 /* — Retour tactile (/apple-design §1 et §4) —
    Le retour visuel se déclenche à l'appui, pas au relâchement : attendre le
    clic donne une interface morte.
@@ -1469,10 +1506,17 @@
   .t-icon-swap .t-icon,
   .t-nav .t-nav-onglet,
   .t-nav .t-nav-onglet :is(path, rect),
+  .t-voiture-teinte :is(path, polygon, rect, circle),
   .entete-collante::before,
   .entete-collante::after,
   .entete-titre-compact {
     transition: none !important;
+  }
+  /* La coche reste MONTRÉE, sans grandir : elle dit quel choix est courant,
+     c'est une information et non une décoration. Mouvement réduit veut dire
+     moins de mouvement, pas moins de sens. */
+  .t-coche {
+    animation: none !important;
   }
   /* Le titre compact reste montré : sous mouvement réduit, il doit apparaître
      sans glisser, pas disparaître. La navigation n'est pas de la décoration. */
