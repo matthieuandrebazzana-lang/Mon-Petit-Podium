@@ -1,12 +1,13 @@
 {
   "name": "mon-petit-podium",
   "private": true,
-  "version": "0.34.0",
+  "version": "0.35.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "icones": "node scripts/generer-icones.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.2",
@@ -17,6 +18,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.0.5",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4.3.3",
     "vite": "^8.2.1",
     "vite-plugin-pwa": "^1.3.0"

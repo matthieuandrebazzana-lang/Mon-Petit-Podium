@@ -21,7 +21,10 @@
     <!-- "default" garde un texte de statut sombre, lisible sur le fond beige.
          "black-translucent" imposerait un texte blanc illisible ici. -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- iOS applique son propre masque arrondi à cette icône : elle est donc
+         rendue à fond perdu et sans transparence (une apple-touch-icon
+         transparente est rendue noire). Régénérée par `npm run icones`. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
 
     <!-- Empêche iOS de transformer les nombres en liens d'appel
          (les scores et numéros de voiture en sont truffés). -->

@@ -3453,6 +3453,47 @@ Trois points de mise en œuvre :
 
 **Un défaut trouvé par cet aperçu, et il n'apparaissait dans aucun contrôle textuel** : l'icône était calée **à gauche** au lieu d'être centrée. Le `flex flex-col items-center` était pourtant bien écrit — mais posé **sur un `Bloc`**, où il est inerte : `.t-stagger-line` déclare `display: block` hors de toute couche Tailwind, et une règle non affectée à une couche l'emporte sur toutes les règles empilées. C'est exactement le piège documenté en version `0.21.1` pour le `gap` du calendrier, ici sur `display`. Le conteneur flex vit désormais **à l'intérieur** du bloc, qui est le motif à suivre. **C'est la quatrième fois qu'un rendu avec la vraie feuille de style attrape ce qu'un rendu HTML seul laisse passer.**
 
+---
+
+**Icônes PWA et nom sur l'écran d'accueil** (version `0.35.0`)
+
+Les icônes installées sur l'écran d'accueil iOS et Android portaient encore l'ancienne marque, un commit après le renommage. Elles sont regénérées depuis `assets/logo-05.svg`. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`.
+
+*Le script est le livrable, pas les PNG.* `frontend/scripts/generer-icones.mjs` (`npm run icones`, avec `sharp` en devDependency) relit la planche — arrêts du dégradé, neuf tracés de la tuile, le « G » — et les recompose dans un SVG autonome que `sharp` rastérise. **Aucune coordonnée n'est réécrite**, et une retouche de la planche se répercute en une commande. Le script **échoue franchement** si la planche change de structure, plutôt que d'écrire une icône vide.
+
+`density` est passée à `sharp` proportionnellement à la taille demandée : sans elle, le SVG est rastérisé à 72 ppp puis agrandi, et les 512 sortent floues.
+
+---
+
+***Deux écarts par rapport au dessin, et ce sont eux qui font une icône plutôt qu'une image.***
+
+1. **Les coins arrondis sautent : l'icône est rendue à fond perdu.** Le dessin porte un `rx` de 29,47, soit 23 % du côté — mais **iOS applique déjà son propre masque arrondi** à `apple-touch-icon`, et Android le sien. Garder l'arrondi donnerait un arrondi dans un arrondi, avec un liseré transparent tout autour ; et surtout, **iOS rend en noir la transparence d'une `apple-touch-icon`**, donc les quatre coins seraient noirs. Le dégradé, la texture et le « G » sont intacts : seul l'arrondi est délégué au système, ce que fait toute icône d'application. Les quatre PNG sont écrits **sans canal alpha**.
+
+2. **Une quatrième icône est générée, `maskable`, et ce n'est pas un ajout gratuit.** Android découpe une icône `maskable` dans un cercle ou un squircle et peut manger les 10 % de chaque bord ; une icône `purpose: "any"`, elle, est posée **dans une pastille blanche** au lieu d'être servie bord à bord. Le manifeste en déclarait déjà une — mais elle pointait sur l'**ancienne marque**, et s'en tenir aux trois fichiers demandés aurait laissé l'ancien logo sur les écrans d'accueil Android. Le fond continue donc de couvrir tout le carré, et le « G » est ramené à 80 % **autour du centre du carré** : un tracé qui tenait dans le carré tient alors forcément dans les 80 % centraux, sans qu'on ait à mesurer sa boîte englobante.
+
+---
+
+***Il n'y a pas de `public/manifest.json`, et il ne faut pas en créer un.*** C'est le point à ne pas défaire.
+
+Le projet sert son manifeste par **`vite-plugin-pwa`**, qui le génère à la construction sous le nom `manifest.webmanifest` et **injecte lui-même** le `<link rel="manifest">` dans `index.html`. Un `public/manifest.json` posé à côté serait copié tel quel dans `dist` et ne serait lié par rien — un fichier mort ; et le lier ferait cohabiter deux manifestes, là où la spécification n'en admet qu'un et où les navigateurs retiennent le premier. Les icônes, le nom et le nom court se déclarent donc dans le bloc `manifest` de **`frontend/vite.config.js`**, qui est le fichier de configuration PWA du projet. Un contrôle du jeu de tests vérifie qu'il n'existe **qu'un seul** manifeste et qu'aucun `manifest.json` concurrent n'est publié.
+
+*Les quatre anciennes icônes sont supprimées* (`apple-touch-icon.png`, `pwa-192x192.png`, `pwa-512x512.png`, `pwa-maskable-512x512.png`) : plus rien ne les référençait, et les garder aurait laissé l'ancienne marque récupérable à son ancienne URL. `includeAssets` suit vers `icons/icon-180.png`.
+
+*Le nom* — le renommage de la version `0.34.0` est vérifié complet côté frontend : plus aucune occurrence de « Mon Petit Podium » dans `src/`, `index.html`, `vite.config.js`, `public/`, ni dans le bundle construit. Deux occurrences subsistent hors du périmètre demandé et sont documentées au « Reste à faire » : le titre OpenAPI du backend et les quinze maquettes.
+
+*Vérifié* — **57 contrôles passent**, plus les 43 de la page publique rejoués sans régression.
+
+| Contrôle | Résultat |
+|---|---|
+| Les quatre fichiers | présents dans `public/icons/` **et publiés dans `dist/`** ; 180, 192, 512 et 512 maskable, **carrés**, PNG, **opaques et sans canal alpha**, les quatre précachées par le service worker |
+| Provenance | le script lit la planche et **ne contient aucune donnée de chemin en dur** ; il échoue franchement si la structure change ; cadrage identique à celui de `LogoGreedF1.jsx` |
+| `index.html` | `apple-touch-icon` pointe sur `/icons/icon-180.png` avec sa taille déclarée, **une seule occurrence**, plus aucune référence aux anciennes icônes ; titre et titre d'installation iOS en « Greed F1 » |
+| Manifeste | **un seul manifeste lié**, celui du plugin ; **aucun `public/manifest.json` concurrent** ; `name` et `short_name` à « Greed F1 », qui tient dans les 12 caractères d'un `short_name` ; trois icônes, deux en `any` et **une seule en `maskable`** ; toutes les sources existent dans `dist` ; **plus aucune icône de l'ancienne marque** ; couleurs, `display`, `orientation` et `lang` inchangés |
+| Anciens fichiers | les quatre retirés de `public/` **et absents de `dist/`** |
+| Zone sûre de la maskable | boîte englobante du « G » mesurée pixel par pixel : **elle tient dans les 80 % centraux**, elle est nettement plus petite que sur la variante pleine, et le fond couvre toujours tout le carré |
+| Planche de contrôle rendue | les quatre icônes dessinées côte à côte : dégradé, texture et « G » lisibles, la maskable visiblement en retrait |
+| `npm run build` | passe, 146 modules, **14 entrées au précache**, version `0.35.0` dans le bundle |
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -3531,6 +3572,7 @@ Points non couverts, à traiter le moment venu :
 - **Rangée « Mes Grands Prix » sur le profil d'un autre membre** — retirée de mon profil en version `0.33.0`, elle reste sur la maquette 12 (`ProfilMembre.jsx`), la demande n'ayant nommé que l'écran profil. C'est aussi le **seul chemin restant** vers `GrandsPrixDuMembre.jsx` (maquette 13) : la retirer là aussi rendrait cet écran inatteignable autrement que par son URL. À trancher — soit les deux rangées disparaissent et l'écran est atteint autrement, soit la maquette 12 la garde et l'écart est assumé.
 - **Vraies captures d'écran sur la page publique** — les cinq cartes d'aperçu de la maquette 01 sont des **emplacements réservés** depuis la version `0.34.0`. Il en faut cinq, au ratio d'un iPhone (390 × 844) : l'accueil et son prochain Grand Prix, le tableau des cotes, l'écran de saisie des pronostics, le classement d'un championnat, la vue piste. Les intégrer est une prop et non une réécriture : poser `image` sur l'entrée correspondante d'`APERCUS` (`frontend/src/composants/ApercusApp.jsx`) remplace la silhouette par la capture, à la même place et à la même taille.
 - **Le mot « reed » du bandeau est du texte, pas un tracé** (version `0.34.0`). Il se rend avec la police du système et son `transform` l'étire de 1,84 à l'horizontale : Helvetica Neue est garantie sur iOS et macOS, mais **à confronter à un navigateur non-Apple**, où une police de repli aux métriques différentes décalerait le mot par rapport au « G » et au « F1 », qui sont des tracés. Si l'écart se voit, la réponse est de vectoriser le mot dans la planche, jamais de le recaler à la main dans le composant.
+- **Trois surfaces portent encore « Mon Petit Podium »**, toutes hors du périmètre des versions `0.34.0` et `0.35.0`, qui visaient le frontend : le **titre OpenAPI du backend** (`backend/app/main.py`, visible sur `/docs`) — une ligne, mais qui fait bouger le backend donc sa version et un déploiement Railway ; et les **quinze maquettes** de `/maquettes/`, laissées telles quelles comme le reste de leurs écarts (elles écrivent aussi « ligue » et « historique », que la section 1 interdit). À reprendre si la cohérence du nom compte plus que la stabilité de ces deux surfaces.
 - **Le nom npm et l'URL Vercel portent encore l'ancien nom** — `frontend/package.json` (`"name": "mon-petit-podium"`) et la constante `ORIGINE_PRODUCTION` de `backend/app/config.py`. Ni l'un ni l'autre n'est du texte visible, et la seconde est l'**origine CORS garantie** depuis la version `0.1.2` : la changer avant que le domaine Vercel n'ait suivi fermerait la production à elle-même. À renommer ensemble, avec le domaine, le jour où il bouge.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
 

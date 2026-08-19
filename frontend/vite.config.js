@@ -12,7 +12,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["apple-touch-icon.png"],
+      includeAssets: ["icons/icon-180.png"],
       manifest: {
         name: "Greed F1",
         short_name: "Greed F1",
@@ -24,11 +24,24 @@ export default defineConfig({
         orientation: "portrait",
         background_color: "#F5F0EB",
         theme_color: "#800111",
+        // Générées depuis `assets/logo-05.svg` par `npm run icones`.
+        // La variante `maskable` n'est pas un doublon : sans elle, Android pose
+        // l'icône dans une pastille blanche au lieu de la servir bord à bord.
         icons: [
-          { src: "pwa-192x192.png", sizes: "192x192", type: "image/png" },
-          { src: "pwa-512x512.png", sizes: "512x512", type: "image/png" },
           {
-            src: "pwa-maskable-512x512.png",
+            src: "/icons/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon-512-maskable.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
