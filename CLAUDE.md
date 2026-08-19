@@ -1,13 +1,14 @@
-# CLAUDE.md — Mon Petit Podium
+# CLAUDE.md — Greed F1
 
 > Contexte permanent du projet. À lire **en premier** à chaque session.
-> Le nom de l'app est temporaire et susceptible de changer.
+> L'application s'appelait « Mon Petit Podium » jusqu'à la version `0.34.0`, qui
+> l'a renommée **Greed F1** et lui a donné son logo (`assets/logo-05.svg`).
 
 ---
 
 ## 1. Vue d'ensemble
 
-**Mon Petit Podium** est une PWA de pronostics Formule 1 entre amis, sur le modèle de "Mon Petit Prono" appliqué à la F1.
+**Greed F1** est une PWA de pronostics Formule 1 entre amis, sur le modèle de "Mon Petit Prono" appliqué à la F1.
 
 Un utilisateur crée un **championnat**, partage un code d'invitation à 6 caractères, et ses amis le rejoignent. Avant chaque Grand Prix, chaque membre fait ses pronostics. Les points rapportés dépendent des **cotes réelles des bookmakers** : plus un pronostic est improbable, plus il rapporte. Après la course, les résultats sont récupérés automatiquement et les points attribués. Un classement se construit tout au long de la saison.
 
@@ -278,6 +279,8 @@ Les maquettes définissent la **structure et la hiérarchie de l'information**. 
 ### `/assets/`
 
 **`voiture.svg`** — la voiture vue du dessus. À transformer en composant React acceptant les props `couleur1`, `couleur2`, `numero`, `nom`. Les couleurs sont actuellement codées en dur dans le fichier : les remplacer par des valeurs dynamiques. Utilisé dans la vue piste, les profils et les cartes de membres.
+
+**`logo-05.svg`** — le logo, ajouté en version `0.34.0`. La planche porte **deux dessins dans un même système de coordonnées** : l'icône carrée de l'application et le bandeau horizontal du nom. Chacun est servi par son propre `viewBox` rogné sur sa boîte réelle, dans `frontend/src/composants/LogoGreedF1.jsx`. Les autres planches de logo (`logo.svg`, `logo-02.svg`, `logoV2.svg`) restent en place : `logo.svg` fournit les deux marques des cartes d'action et `logo-02.svg` les quatre icônes de la barre de navigation.
 
 **`gp-cards.svg`** — planche contenant les tracés de circuits. En extraire chaque tracé pour illustrer les cartes de Grand Prix dans les profils et le calendrier.
 
@@ -3370,6 +3373,86 @@ Le backend valide le **format** du slug et non son appartenance aux onze : la li
 
 **Ce qui n'a PAS pu être vérifié, et c'est à faire** : la migration n'a **pas** été jouée contre un PostgreSQL jetable — le démon Docker n'était pas démarré sur cette machine. Toutes les migrations précédentes l'avaient été. Ses trois contraintes, ses deux fonctions remplacées et son idempotence sont donc **écrites mais non éprouvées** ; à jouer sur une base jetable avant de l'appliquer en production, ou à surveiller de près au premier passage dans le SQL Editor.
 
+---
+
+**Renommage en Greed F1, logo, et refonte de la page d'accueil publique** (version `0.34.0`)
+
+L'application change de nom et reçoit son logo. La maquette 01 est recomposée autour de lui, et son widget d'atouts cède la place à une rangée d'aperçus de l'application. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+*Renommage* — « Mon Petit Podium » devient **« Greed F1 »** partout où le nom est visible : le titre de l'écran d'attente d'`App.jsx`, le repli du grand titre de l'accueil, le pied de la page publique, la balise `<title>`, le nom du manifeste PWA et le titre d'installation iOS. Le `short_name` du manifeste et l'`apple-mobile-web-app-title` passent eux aussi de « Podium » à « Greed F1 » : ce sont les libellés sous l'icône de l'écran d'accueil, donc le nom que l'utilisateur lit tous les jours, et les laisser aurait fait cohabiter deux noms sur le même téléphone. « Greed F1 » tient dans les douze caractères qu'un `short_name` supporte.
+
+**Deux occurrences de « Podium » sont volontairement conservées** — `lib/profils.js` et `RecapPronostics.jsx` — parce qu'elles ne nomment pas l'application : c'est le libellé du **marché de pari** « Podium » (règle 4.2). Les renommer aurait cassé l'affichage des pronostics.
+
+**Le champ `name` de `package.json` n'est pas touché**, ni l'URL Vercel de `backend/app/config.py`. Ce ne sont pas du texte visible : le premier est l'identifiant npm du paquet, la seconde est l'**origine CORS garantie** depuis la version `0.1.2`. La changer fermerait la production à elle-même tant que le domaine Vercel n'aurait pas suivi. À renommer plus tard, ensemble, avec le domaine.
+
+---
+
+***Le logo — deux dessins, deux cadrages, une seule planche.***
+
+`assets/logo-05.svg` porte l'icône carrée de l'application (126,29 × 126,29 à x=379,88 / y=51,62) et le bandeau horizontal du nom (826,76 × 242,9 à x=29,64 / y=215,24), **dans un même système de coordonnées**. `frontend/src/composants/LogoGreedF1.jsx` les sert séparément, chacun par son propre `viewBox` **rogné sur sa boîte réelle** : les données de chemin sont celles du fichier, octet pour octet, et **aucune coordonnée n'est réécrite**. Le découpage a été fait **par script**, comme les tracés de circuits (version `0.15.0`), les icônes de la barre (`0.22.0`), les logos des cartes d'action (`0.28.0`) et les drapeaux (`0.24.0`), et pour la même raison : transcrire à la main des chemins de plusieurs milliers de caractères introduit des fautes invisibles à la lecture.
+
+**Trois points de mise en œuvre à ne pas défaire :**
+
+1. **Les classes `.cls-N` de la planche sont converties en attributs.** Une balise `<style>` embarquée déclarerait ces classes au niveau du **document entier** : les deux dessins vivant sur le même écran se marcheraient dessus, et n'importe quel `.cls-1` ailleurs dans l'application hériterait de leur remplissage. C'est la règle tenue depuis la version `0.22.0`.
+2. **Les identifiants de `<defs>` sont préfixés par composant** (`gf1-icone-*`, `gf1-bandeau-*`). La planche nomme son dégradé `Rouge_été` et son motif `Nouveau_motif` ; montés ensemble, des identifiants nus entreraient en collision et le second dessin reprendrait le `url(#…)` du premier. Ils sont aussi ramenés en ASCII — un accent dans un `url(#…)` n'est pas également traité partout.
+3. **Le dégradé de l'icône garde ses bornes d'origine** (x1=379,88 → x2=506,17) et non celles du bandeau (29,64 → 856,4). C'est ce qui fait que l'icône montre la **tranche centrale** du dégradé, exactement comme dans la planche, au lieu de le rejouer en entier sur 126 unités.
+
+La tuile de texture (neuf tracés, à 11 % d'opacité) est déclarée **une seule fois** dans le module et référencée par les deux `<defs>` : c'est le même dessin, et l'écrire deux fois serait deux textes à tenir d'accord.
+
+*Rôles d'accessibilité, et ils diffèrent.* Le **bandeau porte le nom de l'application** : c'est du contenu, donc `role="img"` et `aria-label="Greed F1"`, sans quoi la page n'annoncerait jamais comment elle s'appelle. L'**icône est décorative** (`aria-hidden`, `focusable="false"`) — le bandeau posé juste dessous dit déjà le nom, et un lecteur d'écran n'a pas à l'entendre deux fois.
+
+**Un point à confronter à un navigateur non-Apple.** Le mot « reed » est du `<text>` dans la planche, pas un tracé : il se rend avec la police du système, et son `transform` l'étire horizontalement de 1,84. Helvetica Neue est garantie sur iOS et macOS, la cible du projet ; ailleurs, une police de repli aux métriques différentes décalerait le mot par rapport au « G » et au « F1 », qui sont des tracés. La pile de repli du design system est déclarée sur l'élément.
+
+---
+
+*Page d'accueil publique (maquette 01) — l'en-tête rouge cède la place au logo.* Il portait une pastille de drapeau, le nom en petites capitales, un titre et un sous-titre : quatre éléments pour dire ce que le bandeau dit d'un coup d'œil. L'ordre des blocs suit désormais celui de la lecture — qui c'est (icône et bandeau), ce que ça fait (le titre), à quoi ça ressemble (les aperçus), comment entrer (les deux boutons).
+
+**Le bandeau occupe la largeur de la colonne de contenu, jamais celle de l'écran.** Les coins arrondis sont dessinés **dans** le SVG : le porter en `pleine-largeur` les ferait mourir sur les deux bords, c'est-à-dire les effacer, alors que la demande veut précisément qu'ils restent visibles.
+
+*Le widget « Championnats privés / Ta voiture » est supprimé*, comme demandé, et avec lui ses deux rangées d'icônes.
+
+---
+
+***Les aperçus — des silhouettes, jamais une fausse interface.***
+
+`composants/ApercusApp.jsx` sert cinq cartes qui défilent à l'horizontale, calées sur les cartes (`snap-x`), comme la rangée « Mes favoris » du tableau des cotes (version `0.26.0`) et les livrées d'écurie du profil (`0.33.0`). Le débordement volontaire de la dernière dit qu'il y en a d'autres au-delà — c'est le « wayfinding » d'`/apple-design` §16, et c'est ce qu'une grille de cinq cartes ne dirait pas.
+
+**Chaque carte est une silhouette de téléphone qui nomme l'écran qu'elle montrera, jamais une interface reconstituée en `<div>`.** C'est la règle que le projet tient depuis l'étape 9 — une attente est une silhouette, pas un faux contenu — et c'est aussi ce que le skill Taste proscrit le plus fermement : un écran produit inventé est le premier signe d'une landing fabriquée, et le visiteur ne le retrouverait jamais dans l'application. La demande n'en réclamait pas davantage : elle décrit un cadre de téléphone, un dégradé, une ombre et des coins arrondis, ce qui est exactement ce qui est rendu.
+
+**Le passage aux vraies captures est une prop, pas une réécriture.** Poser `image` sur une entrée d'`APERCUS` remplace la silhouette par la capture, à la même place et à la même taille. Rien d'autre ne bouge.
+
+Trois points de mise en œuvre :
+
+1. **La forme vient du ratio, pas d'un arrondi de pixels.** La carte porte `aspect-ratio: 390 / 844` et une hauteur ; la largeur s'en déduit. Une largeur écrite à la main donnerait une carte qui n'a plus la forme d'un téléphone.
+2. **`HAUTEUR_APERCU` est exportée** et partagée avec toute silhouette de chargement à venir : sans hauteur commune, l'écran sauterait à l'arrivée des captures, le défaut déjà corrigé sur les cartes de championnat en version `0.14.0`.
+3. **Le dégradé va du charbon `texte` au bordeaux `primaire`**, les deux couleurs du design system. La demande disait « gris/rouge » ; un gris clair au départ y aurait posé du blanc à **2,5:1**, sous le plancher AA. Le libellé blanc tient ici **10,9:1 au pire** (sur l'extrémité bordeaux) et 17,4:1 sur l'autre. Aucune couleur nouvelle n'entre par cette porte.
+
+---
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau**, et c'est le portier d'`/animate` qui l'a tranché. La page est vue **une fois**, avant d'avoir un compte : c'est le palier où le budget délice existe, et il est déjà dépensé par *texts reveal* (transitions-dev 18), qui fait entrer les quatre blocs. Deux candidats ont été refusés : un défilement automatique de la rangée d'aperçus, qui serait un marquee sans motif — le geste appartient au doigt, et le défilement à inertie est celui de la plateforme ; et une animation d'entrée propre au logo, qui n'a pas d'autre raison que « ça fait joli » sur l'élément qui doit lire comme une identité.
+
+*Apport d'`/apple-design`* — la rangée s'appuie sur le défilement natif et son inertie plutôt que sur un carrousel en JavaScript (§1 et §6 : la momentum de la plateforme, gratuitement, et aucun écouteur de défilement) ; le dégradé et la lueur des cartes sont `aria-hidden` et `pointer-events-none` ; les deux boutons gardent leur zone tactile de 44px et leur retour à l'appui ; et l'écran répond aux quatre questions du wayfinding sans jamais montrer un état qu'il ne connaît pas.
+
+*Signalé plutôt que tranché seul, comme le demande la section 5* — trois recommandations des skills sont écartées au profit du CLAUDE.md, et pour des raisons déjà tranchées : une **bibliothèque d'icônes tierce** (le projet dessine les siennes depuis l'étape 2, même arbitrage qu'aux versions `0.12.0`, `0.17.0` et `0.26.0`), le **mode sombre** (la section 5 fixe un fond beige unique, l'application n'en a pas), et le **numéro de version en pied de page**, que le skill Taste proscrit sur une page publique alors que la section 8 l'exige — il sert à vérifier qu'un déploiement Vercel a bien pris.
+
+*Vérifié* — modules chargés par le chargeur SSR de Vite, rendu hors navigateur (`react-dom/server`) : **43 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Fidélité à la planche | **les 13 chemins de `logo-05.svg` rendus tels quels, octet pour octet** ; les 5 arrêts du dégradé et les 9 tracés de la tuile présents des deux côtés |
+| Cadrage | les deux `viewBox` rognées sur leur boîte réelle ; **dégradé de l'icône gardant ses bornes** (379,88 → 506,17) et celui du bandeau les siennes (29,64 → 856,4) ; motif de l'icône à l'échelle .5 ; coins arrondis conservés |
+| Hygiène | **aucune classe `cls-N` rendue, aucune balise `<style>`** ; identifiants préfixés, sans accent, et **sans collision entre les deux dessins** |
+| Accessibilité | icône décorative (`aria-hidden`, `focusable="false"`), **bandeau nommé** (`role="img"`, `aria-label="Greed F1"`) ; mot « reed » rendu en texte sur la pile du design system |
+| Écran | se rend sans lever ; icône et bandeau montés ; **plus aucun en-tête rouge en aplat**, `bg-primaire` ne subsistant que sur le bouton principal ; plus de pastille de drapeau ; titre `<h1>`, accroche en une ligne, les deux boutons conservés |
+| Aperçus | rangée calée sur les cartes, **cinq aperçus**, ratio iPhone, hauteur partagée appliquée, **dégradé en jetons du design system**, ombre et coins arrondis, lueur décorative, les cinq écrans nommés ; **aucune fausse interface produit** |
+| Widget retiré | « Championnats privés », « Ta voiture » et leurs deux sous-titres absents |
+| Renommage | « Greed F1 » servi, **« Mon Petit Podium » absent** |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », ni tiret cadratin |
+| Aperçu rendu avec la feuille compilée | les deux tailles d'iPhone dessinées : icône centrée, bandeau lisible avec sa texture, cartes reconnaissables comme des téléphones, libellés lisibles, les deux boutons à portée de pouce sur un 390 × 844 |
+| `npm run build` | passe, **146 modules**, version `0.34.0` dans le bundle |
+
+**Un défaut trouvé par cet aperçu, et il n'apparaissait dans aucun contrôle textuel** : l'icône était calée **à gauche** au lieu d'être centrée. Le `flex flex-col items-center` était pourtant bien écrit — mais posé **sur un `Bloc`**, où il est inerte : `.t-stagger-line` déclare `display: block` hors de toute couche Tailwind, et une règle non affectée à une couche l'emporte sur toutes les règles empilées. C'est exactement le piège documenté en version `0.21.1` pour le `gap` du calendrier, ici sur `display`. Le conteneur flex vit désormais **à l'intérieur** du bloc, qui est le motif à suivre. **C'est la quatrième fois qu'un rendu avec la vraie feuille de style attrape ce qu'un rendu HTML seul laisse passer.**
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -3446,6 +3529,9 @@ Points non couverts, à traiter le moment venu :
 - **Marchés obligatoires liés au nom Unibet** — le vainqueur et le podium sont reconnus par les slugs `vainqueur` et `podium`, en dur à **trois** endroits depuis l'étape 6 : `backend/app/api/routes/pronostics.py`, `backend/app/calcul/points.py` et `frontend/src/lib/pronostics.js`. Si Unibet renomme un de ces marchés, la saisie s'arrête proprement en le disant, mais **les trois constantes doivent être corrigées ensemble**.
 - **Schedulers et instances multiples** — les **deux** jobs (résultats, étape 6 ; scraper, étape 11) supposent **un seul processus**. C'est le cas sur le plan gratuit de Railway. Passer à plusieurs instances ferait tourner deux schedulers de chaque : la base empêche la double attribution des points, mais **ni les appels OpenF1 ni les appels Unibet en double**. Ajouter alors un `pg_try_advisory_lock` dans les deux `surveiller()`, ou sortir les jobs dans un worker dédié.
 - **Rangée « Mes Grands Prix » sur le profil d'un autre membre** — retirée de mon profil en version `0.33.0`, elle reste sur la maquette 12 (`ProfilMembre.jsx`), la demande n'ayant nommé que l'écran profil. C'est aussi le **seul chemin restant** vers `GrandsPrixDuMembre.jsx` (maquette 13) : la retirer là aussi rendrait cet écran inatteignable autrement que par son URL. À trancher — soit les deux rangées disparaissent et l'écran est atteint autrement, soit la maquette 12 la garde et l'écart est assumé.
+- **Vraies captures d'écran sur la page publique** — les cinq cartes d'aperçu de la maquette 01 sont des **emplacements réservés** depuis la version `0.34.0`. Il en faut cinq, au ratio d'un iPhone (390 × 844) : l'accueil et son prochain Grand Prix, le tableau des cotes, l'écran de saisie des pronostics, le classement d'un championnat, la vue piste. Les intégrer est une prop et non une réécriture : poser `image` sur l'entrée correspondante d'`APERCUS` (`frontend/src/composants/ApercusApp.jsx`) remplace la silhouette par la capture, à la même place et à la même taille.
+- **Le mot « reed » du bandeau est du texte, pas un tracé** (version `0.34.0`). Il se rend avec la police du système et son `transform` l'étire de 1,84 à l'horizontale : Helvetica Neue est garantie sur iOS et macOS, mais **à confronter à un navigateur non-Apple**, où une police de repli aux métriques différentes décalerait le mot par rapport au « G » et au « F1 », qui sont des tracés. Si l'écart se voit, la réponse est de vectoriser le mot dans la planche, jamais de le recaler à la main dans le composant.
+- **Le nom npm et l'URL Vercel portent encore l'ancien nom** — `frontend/package.json` (`"name": "mon-petit-podium"`) et la constante `ORIGINE_PRODUCTION` de `backend/app/config.py`. Ni l'un ni l'autre n'est du texte visible, et la seconde est l'**origine CORS garantie** depuis la version `0.1.2` : la changer avant que le domaine Vercel n'ait suivi fermerait la production à elle-même. À renommer ensemble, avec le domaine, le jour où il bouge.
 - **Test sur iPhone réel** — toujours pas fait, et c'est ce qui reste de plus important. Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors navigateur. **Un point nouveau depuis la passe de finition (`0.12.1`)** : les deux **matériaux translucides** (`backdrop-filter`) — barre de navigation et barre d'action collée. Safari iOS les compose sur le GPU, mais c'est le genre d'effet qui coûte à chaque image de défilement : regarder que la page ne saccade pas sous la barre, et que le flou ne laisse pas de traînée quand la barre d'adresse se rétracte. Vérifier aussi le repli `prefers-reduced-transparency` en activant « Réduire la transparence » dans les réglages d'accessibilité d'iOS.
 
 **Trois points depuis les versions `0.20.0` et `0.21.0`**, tous sur l'onglet Calendrier. **La longueur de l'écran** : la refonte de la `0.21.0` ramène la carte de ~300px à **200px**, ce qui divise le défilement par une fois et demie, mais douze cartes font toujours près de trois écrans sans en-tête collant pour dire où l'on est — c'est le premier point à juger au pouce, et le levier est `HAUTEUR_CARTE` (`frontend/src/composants/CarteGpSaison.jsx`), que le tracé, la bande d'action et le squelette suivent tout seuls. **L'entrée dans la saison** : l'écran s'ouvre sur le premier Grand Prix de la liste, y compris quand il est terminé ; faire défiler jusqu'au prochain à jouer serait plus juste, mais demande un `scrollIntoView` à l'arrivée, donc un choix explicite sur le comportement du retour. Et **le décompte de l'en-tête**, qui contredira le bandeau de l'accueil dès la première course courue tant que celui-ci n'est pas rebranché (voir plus haut).

@@ -28,7 +28,7 @@ import ResultatsGp from "./ecrans/ResultatsGp.jsx";
 function EcranConfiguration({ message }) {
   return (
     <main className="ecran flex min-h-dvh flex-col justify-center gap-3">
-      <h1 className="text-titre text-texte">Mon Petit Podium</h1>
+      <h1 className="text-titre text-texte">Greed F1</h1>
       <Alerte ton="erreur">{message}</Alerte>
     </main>
   );

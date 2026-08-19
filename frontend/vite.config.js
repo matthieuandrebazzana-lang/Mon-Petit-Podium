@@ -14,8 +14,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["apple-touch-icon.png"],
       manifest: {
-        name: "Mon Petit Podium",
-        short_name: "Podium",
+        name: "Greed F1",
+        short_name: "Greed F1",
         description: "Pronostics Formule 1 entre amis.",
         lang: "fr",
         start_url: "/",

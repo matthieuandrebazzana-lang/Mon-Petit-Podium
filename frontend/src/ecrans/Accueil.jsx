@@ -652,7 +652,7 @@ export default function Accueil() {
   return (
     <Ecran direction="avant">
       <EnTeteEcran
-        titre={pseudo ? `Salut ${pseudo}` : "Mon Petit Podium"}
+        titre={pseudo ? `Salut ${pseudo}` : "Greed F1"}
         sousTitre="Saison 2026 · Formule 1"
         action={avatar}
       />

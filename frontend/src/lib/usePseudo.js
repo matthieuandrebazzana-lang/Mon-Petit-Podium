@@ -30,7 +30,7 @@ import { chargerPseudo } from "./profils.js";
  * 3. **Repli sur le jeton, jamais sur le vide.** Pendant la lecture et si elle
  *    échoue, c'est `replier` qui est rendu. Un pseudo légèrement périmé vaut
  *    mieux qu'un « Salut  » vide ou qu'un titre qui clignote de
- *    « Mon Petit Podium » vers « Salut X » à chaque arrivée. C'est le bon sens
+ *    « Greed F1 » vers « Salut X » à chaque arrivée. C'est le bon sens
  *    du doute, celui déjà appliqué au bloc du prochain Grand Prix depuis la
  *    version `0.5.1` : l'échec d'une lecture de confort ne casse pas l'écran.
  *

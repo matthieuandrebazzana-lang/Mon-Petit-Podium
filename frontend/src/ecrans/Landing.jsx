@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import Bouton from "../composants/Bouton.jsx";
-import { IconeDrapeau, IconeMembres, IconeVoiture } from "../composants/Icones.jsx";
+import { BandeauGreedF1, IconeGreedF1 } from "../composants/LogoGreedF1.jsx";
+import ApercusApp from "../composants/ApercusApp.jsx";
 import { APP_VERSION } from "../config.js";
 
 /**
@@ -9,68 +10,55 @@ import { APP_VERSION } from "../config.js";
  *
  * Le vocabulaire de la maquette est corrigé : elle écrit « ligue », que la
  * section 1 du CLAUDE.md interdit dans toute l'interface. On dit championnat.
+ *
+ * **L'en-tête rouge de la maquette a disparu au profit du logo.** Il portait
+ * une pastille de drapeau, le nom de l'application en petites capitales, un
+ * titre et un sous-titre — soit quatre éléments pour dire ce que le bandeau du
+ * logo dit d'un coup d'œil. Le nom vit maintenant dans le dessin, pas dans une
+ * ligne de texte au-dessus d'un titre.
+ *
+ * L'ordre des blocs suit celui de la lecture : qui c'est (l'icône et le
+ * bandeau), ce que ça fait (le titre), à quoi ça ressemble (les aperçus), et
+ * comment entrer (les deux boutons).
  */
-
-const ATOUTS = [
-  {
-    Icone: IconeMembres,
-    titre: "Championnats privés",
-    detail: "Rejoins avec un code à 6 caractères",
-  },
-  {
-    Icone: IconeVoiture,
-    titre: "Ta voiture, ton style",
-    detail: "Personnalise couleurs et numéro",
-  },
-];
-
 export default function Landing() {
   const naviguer = useNavigate();
 
   return (
     <Ecran direction="arriere">
       <div className="flex flex-1 flex-col gap-3">
-        <Bloc
-          rang={1}
-          className="rounded-bloc bg-primaire shadow-bloc px-6 pt-9 pb-8 text-center"
-        >
-          <div className="mx-auto mb-4.5 flex size-[68px] items-center justify-center rounded-[20px] bg-white/15">
-            <IconeDrapeau className="size-8 text-white" />
+        <Bloc rang={1}>
+          {/* Le conteneur flex vit **à l'intérieur** du bloc, jamais sur le bloc
+              lui-même : `.t-stagger-line` pose `display: block` hors de toute
+              couche Tailwind, donc `flex` et `gap` posés sur un `Bloc` sont
+              inertes. C'est le piège documenté en version `0.21.1`, et il ne se
+              voit pas à la lecture du JSX — ici il laissait l'icône calée à
+              gauche au lieu d'être centrée. */}
+          <div className="flex flex-col items-center gap-2.5 pt-2">
+            <IconeGreedF1 className="size-14" />
+            {/* Le bandeau garde les coins arrondis du dessin : il occupe toute
+                la largeur de la colonne de contenu, jamais celle de l'écran,
+                sinon l'arrondi viendrait mourir sur les deux bords. */}
+            <BandeauGreedF1 className="w-full" />
           </div>
-          <p className="text-label mb-3 text-white/70 uppercase [letter-spacing:2.5px]">
-            Mon Petit Podium
-          </p>
-          <h1 className="text-titre-lg mb-3 text-white">
+        </Bloc>
+
+        <Bloc rang={2} className="px-1 text-center">
+          <h1 className="text-titre-lg text-texte">
             Pronostique chaque Grand Prix
           </h1>
-          <p className="text-corps leading-relaxed text-white/65">
-            Crée ton championnat, invite tes amis, et grimpe au classement à
-            chaque course.
-          </p>
         </Bloc>
-
-        <Bloc rang={2} className="rounded-bloc bg-surface shadow-bloc p-5">
-          <div className="flex flex-col gap-4">
-            {ATOUTS.map(({ Icone, titre, detail }) => (
-              <div key={titre} className="flex items-center gap-3.5">
-                <div className="bg-fond flex size-tactile shrink-0 items-center justify-center rounded-[13px]">
-                  <Icone className="text-primaire size-5" />
-                </div>
-                <div>
-                  <p className="text-corps text-texte font-medium">{titre}</p>
-                  <p className="text-texte-doux mt-0.5 text-[12px]">{detail}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Bloc>
-
-        {/* L'espace disponible est absorbé ici pour que les deux boutons
-            restent à portée de pouce sur les grands écrans, sans changer
-            l'ordre des blocs de la maquette. */}
-        <div className="min-h-3 flex-1" />
 
         <Bloc rang={3}>
+          <p className="text-corps text-secondaire mb-2.5 px-1 text-center font-medium">
+            Les cotes réelles, le classement de tes amis.
+          </p>
+          <ApercusApp />
+        </Bloc>
+
+        <div className="min-h-2 flex-1" />
+
+        <Bloc rang={4}>
           <div className="flex flex-col gap-2.5">
             <Bouton
               variante="principal"
@@ -92,7 +80,7 @@ export default function Landing() {
 
       <footer className="pt-4 text-center">
         <span className="text-texte-doux text-[11px]">
-          Mon Petit Podium · v{APP_VERSION}
+          Greed F1 · v{APP_VERSION}
         </span>
       </footer>
     </Ecran>
