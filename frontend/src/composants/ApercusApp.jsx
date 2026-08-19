@@ -1,6 +1,13 @@
 /**
  * Aperçus de l'application — la rangée de mockups de la page d'accueil publique.
  *
+ * **Plus montée nulle part depuis la version `0.36.0`.** Cinq silhouettes de
+ * téléphone qui ne montrent aucune interface occupaient le tiers de la page
+ * d'accueil publique sans rien apprendre au visiteur : la rangée est retirée
+ * tant que les vraies captures n'existent pas. Le composant reste en place,
+ * comme `Onglets.jsx` depuis la version `0.12.0` — il n'y aura qu'à le
+ * remonter dans `ecrans/Landing.jsx`, avec les `image` posées ci-dessous.
+ *
  * **Ce sont des emplacements réservés, et ils ne prétendent pas être autre
  * chose.** Les vraies captures d'écran arriveront plus tard : d'ici là, chaque
  * carte est une silhouette de téléphone qui **nomme l'écran qu'elle montrera**,

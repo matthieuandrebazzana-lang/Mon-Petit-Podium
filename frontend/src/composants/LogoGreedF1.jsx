@@ -71,8 +71,15 @@ function Texture({ id, patternTransform }) {
 }
 
 /**
- * Icône carrée de l'application. Décorative : le bandeau posé juste dessous
- * nomme l'application, un lecteur d'écran n'a pas à l'entendre deux fois.
+ * Icône carrée de l'application.
+ *
+ * **Plus montée nulle part depuis la version `0.36.0`** : la page d'accueil
+ * publique la posait au-dessus du bandeau, qui dit déjà le nom. Elle reste ici
+ * pour le jour où une surface aura besoin de la marque sans son nom écrit.
+ *
+ * Elle est `aria-hidden` parce qu'elle était **accompagnée du bandeau**, qui
+ * nommait l'application juste dessous. Servie seule comme unique identité, il
+ * faudra lui donner `role="img"` et `aria-label="Greed F1"`, comme le bandeau.
  */
 export function IconeGreedF1({ className = "" }) {
   return (
