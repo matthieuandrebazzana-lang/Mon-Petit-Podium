@@ -493,7 +493,9 @@
 }
 @media (prefers-contrast: more) {
   .voile-drapeau {
-    background-color: rgb(0 0 0 / clamp(0.2, calc(var(--voile, 0) + 0.15), 0.7));
+    background-color: rgb(
+      0 0 0 / clamp(0.2, calc(var(--voile, 0) + 0.15), 0.7)
+    );
   }
 }
 
@@ -784,8 +786,8 @@
    (80, 60, 80, 60 = 280ms) : 28.57%, 57.14%, 78.57%, 100%.
    Les recalculer si une durée de segment change. */
 .t-input.is-shaking {
-  animation: t-input-shake
-    calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2) linear;
+  animation: t-input-shake calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2)
+    linear;
 }
 @keyframes t-input-shake {
   0% {
@@ -1218,6 +1220,41 @@
   transform: scale(var(--icon-swap-start-scale));
 }
 
+/* — Interrupteur à deux états (« Mode admin actif ») —
+   Aucun jeton nouveau, et c'est le résultat du portier d'`/animate` plutôt
+   qu'une économie : les deux valeurs justes existaient déjà.
+
+   - **Durée.** Un interrupteur est un retour d'état, palier 100–250ms.
+     `--icon-swap-dur` (180ms) est déjà la durée des deux bascules de l'app —
+     l'étoile de favori et les icônes de la barre — donc la même chose au même
+     rythme.
+   - **Courbe.** Le pouce ne rentre ni ne sort : il **se déplace** d'un bout à
+     l'autre de sa piste, le seul cas où l'accélération puis la décélération
+     sont justes. `--ease-in-out-fort` est exactement la courbe que les skills
+     prescrivent pour ce cas.
+   - **Pas de ressort.** Aucun élan ne précède le mouvement — c'est un appui,
+     pas un lancer. Un dépassement se lirait comme une erreur (/apple-design §4).
+
+   **La piste et le pouce partagent durée ET courbe**, et c'est la règle posée
+   en version `0.22.0` pour les icônes de la barre : la teinte et le mouvement
+   doivent changer ensemble, sinon l'œil voit deux événements là où il n'y en a
+   qu'un. C'est aussi pour cela que la piste est peinte en `background-color` et
+   le pouce déplacé en `transform` — jamais en `left`, qui repasserait par la
+   mise en page à chaque image. */
+.t-bascule {
+  transition: background-color var(--icon-swap-dur) var(--ease-in-out-fort);
+}
+.t-bascule-pouce {
+  /* `translate` et non `transform` : en Tailwind 4, `translate-x-*` écrit la
+     propriété **indépendante** `translate`, pas `transform`. Transitionner
+     `transform` ici ne ferait donc rigoureusement rien — le pouce sauterait
+     d'un bout à l'autre de sa piste, et rien dans le JSX ne le laisserait voir.
+     Relevé sur le CSS de production, jamais à la lecture. Les deux propriétés
+     se composent aussi bien l'une que l'autre sur le GPU ; c'est le nom qui
+     devait suivre l'utilitaire. */
+  transition: translate var(--icon-swap-dur) var(--ease-in-out-fort);
+}
+
 /* — Number pop-in (transitions-dev 02) —
    Le compteur de bonus « 1 sélectionné sur 3 max » : le chiffre remonte,
    flouté, à chaque changement. Un seul caractère ici, donc pas de
@@ -1577,5 +1614,12 @@
   }
   .t-flip-sortant {
     display: none !important;
+  }
+  /* Le pouce de l'interrupteur se pose sans traverser sa piste — mais la piste
+     garde SA transition de couleur : c'est elle qui dit l'état, et mouvement
+     réduit veut dire moins de mouvement, pas moins de sens. Même arbitrage que
+     pour la coche et le titre compact ci-dessus. */
+  .t-bascule-pouce {
+    transition: none !important;
   }
 }

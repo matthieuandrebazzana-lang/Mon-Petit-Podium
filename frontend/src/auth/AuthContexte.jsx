@@ -37,6 +37,27 @@ export function AuthProvider({ children }) {
   const [recuperation, setRecuperation] = useState(false);
   // Drapeau d'administration, relu **en base** à chaque changement de compte.
   const [estAdmin, setEstAdmin] = useState(false);
+  /**
+   * Mode admin — l'interrupteur de la section « Administration » du profil.
+   *
+   * **État de session, jamais persisté**, et les trois conséquences se
+   * tiennent :
+   *
+   * 1. **Il repart éteint à chaque rechargement.** Un administrateur voit donc
+   *    l'application telle que la voient les autres tant qu'il n'a rien
+   *    allumé — c'est exactement ce qu'on veut d'un mode de vérification, qui
+   *    doit demander un geste explicite plutôt que d'être l'état par défaut de
+   *    quelqu'un.
+   * 2. **Ni base, ni `localStorage`, ni jeton.** Persister ce drapeau lui
+   *    donnerait les défauts déjà documentés sur `pseudo` et sur `is_admin` :
+   *    une valeur qui survit à ce qu'elle décrit. Ici il n'y a rien à faire
+   *    survivre — c'est une préférence d'affichage valable le temps qu'on
+   *    regarde.
+   * 3. **Il est remis à zéro au changement de compte**, avec `estAdmin` et dans
+   *    le même effet : deux personnes qui se relaient sur le même téléphone ne
+   *    doivent hériter ni du droit de l'autre, ni de son mode.
+   */
+  const [modeAdminActif, setModeAdminActif] = useState(false);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -105,6 +126,10 @@ export function AuthProvider({ children }) {
    */
   useEffect(() => {
     setEstAdmin(false);
+    // Le mode retombe avec le droit : sans cela, un administrateur qui se
+    // déconnecte laisserait son mode allumé au compte suivant, qui le
+    // retrouverait actif à la seconde où son propre `is_admin` reviendrait vrai.
+    setModeAdminActif(false);
     if (!compte) return undefined;
 
     const controleur = new AbortController();
@@ -218,7 +243,9 @@ export function AuthProvider({ children }) {
   const definirMotDePasse = useCallback(async (motDePasse) => {
     if (!supabase) return echec(CONFIG_MANQUANTE);
     try {
-      const { error } = await supabase.auth.updateUser({ password: motDePasse });
+      const { error } = await supabase.auth.updateUser({
+        password: motDePasse,
+      });
       if (error) return echec(messageErreur(error));
       setRecuperation(false);
       return succes();
@@ -262,7 +289,30 @@ export function AuthProvider({ children }) {
       // Gouverne **l'affichage** de la section d'administration du profil, et
       // rien d'autre : ce n'est pas un droit, le seul garde des routes
       // d'administration est le secret `X-Admin-Secret` vérifié côté backend.
+      //
+      // **`estAdmin` ne se lit plus qu'à un seul endroit** — la section du
+      // profil, qui reste visible quel que soit l'interrupteur, puisque c'est
+      // de là qu'on le rallume. Partout ailleurs, c'est `modeAdmin` qu'il faut
+      // lire, jamais `estAdmin`.
       estAdmin,
+      // L'interrupteur nu, pour la section qui le porte et lui seule.
+      modeAdminActif,
+      setModeAdminActif,
+      /**
+       * **Le drapeau que toute autre surface doit lire.**
+       *
+       * C'est la conjonction `estAdmin && modeAdminActif`, nommée une fois
+       * plutôt que réécrite à chaque point d'usage. La raison est mécanique :
+       * une conjonction qu'on recopie finit par être écrite à moitié, et la
+       * moitié qui saute est toujours la même — le mode, parce qu'il est le
+       * terme récent. On obtiendrait alors une surface qui reste visible
+       * interrupteur éteint, c'est-à-dire le défaut même que ce mode existe
+       * pour supprimer. Ici il n'y a rien à recopier.
+       *
+       * Il vaut `false` pour tout le monde sauf un administrateur qui a allumé
+       * son interrupteur dans la session courante.
+       */
+      modeAdmin: estAdmin && modeAdminActif,
       chargement,
       recuperation,
       configure: supabaseConfigure,
@@ -278,6 +328,7 @@ export function AuthProvider({ children }) {
   }, [
     session,
     estAdmin,
+    modeAdminActif,
     chargement,
     recuperation,
     pseudoDisponible,
@@ -295,7 +346,9 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   const contexte = useContext(AuthContexte);
   if (!contexte) {
-    throw new Error("useAuth doit être utilisé à l'intérieur d'un AuthProvider.");
+    throw new Error(
+      "useAuth doit être utilisé à l'intérieur d'un AuthProvider.",
+    );
   }
   return contexte;
 }

@@ -526,7 +526,15 @@ export default function MonProfil() {
                     posée en dernier, sous la personnalisation : c'est un outil
                     d'exploitation, pas une partie du profil, et il n'a aucune
                     raison de passer devant la voiture ni devant les
-                    statistiques. */}
+                    statistiques.
+
+                    **C'est le seul endroit de l'app qui lise `estAdmin` et non
+                    `modeAdmin`, et ce n'est pas un oubli** : la section porte
+                    l'interrupteur, elle doit donc rester visible interrupteur
+                    éteint — sinon il n'y aurait plus rien pour le rallumer, et
+                    il faudrait se déconnecter pour sortir du mode membre.
+                    Toute AUTRE surface d'administration se conditionne à
+                    `modeAdmin`. */}
                 {estAdmin && <SectionAdmin />}
               </div>
             )}

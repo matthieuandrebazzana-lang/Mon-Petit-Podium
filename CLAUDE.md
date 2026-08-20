@@ -3972,6 +3972,80 @@ La confirmation est posée **sur place et non en boîte de dialogue**, comme « 
 **Ce qui n'a pas pu être vérifié, et c'est à faire** : la migration n'a **pas** été jouée contre un PostgreSQL jetable — le démon Docker n'était pas démarré, comme aux versions `0.33.0` et `0.39.0`. Elle est plus simple que les deux précédentes (une colonne, aucune fonction, aucune politique), mais à surveiller au premier passage dans le SQL Editor.
 
 
+---
+
+**Interrupteur « Mode admin actif »** (version `0.42.0`)
+
+Un administrateur peut désormais éteindre son propre mode et voir l'application exactement comme la voient les autres. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.41.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`). Un état de session, une règle CSS, un composant.
+
+***Le mode est un état de session, et les trois conséquences se tiennent.*** `modeAdminActif` vit dans `AuthContexte`, en `useState` — c'est le « store global » du projet, qui n'a pas de Zustand et dont ce contexte est déjà le seul endroit à savoir qui est connecté.
+
+1. **Il repart éteint à chaque rechargement.** C'est demandé, et c'est aussi ce qu'on veut d'un mode de vérification : il demande un geste explicite plutôt que d'être l'état par défaut de quelqu'un.
+2. **Ni base, ni `localStorage`, ni jeton.** Le persister lui donnerait les défauts déjà documentés sur `pseudo` (version `0.32.0`) et sur `is_admin` (`0.41.0`) : une valeur qui survit à ce qu'elle décrit. Ici il n'y a rien à faire survivre — c'est une préférence d'affichage valable le temps qu'on regarde.
+3. **Il est remis à zéro au changement de compte**, dans le même effet que `estAdmin` : deux personnes qui se relaient sur le même téléphone ne doivent hériter ni du droit de l'autre, ni de son mode. Sans cela, un administrateur qui se déconnecte laisserait son mode allumé au compte suivant, qui le retrouverait actif à la seconde où son propre `is_admin` reviendrait vrai.
+
+***Le contexte expose `modeAdmin`, et c'est lui que toute autre surface doit lire.*** C'est la conjonction `estAdmin && modeAdminActif`, **nommée une fois plutôt que recopiée à chaque point d'usage**, et la raison est mécanique : une conjonction qu'on recopie finit par être écrite à moitié, et la moitié qui saute est toujours la même — le mode, parce qu'il est le terme récent. On obtiendrait alors une surface qui reste visible interrupteur éteint, c'est-à-dire le défaut même que ce mode existe pour supprimer. `modeAdminActif` et son setter restent exposés à côté, pour la section qui porte l'interrupteur et pour elle seule.
+
+**Constat, et il vaut d'être dit : aucun autre point d'usage n'a eu à changer aujourd'hui.** La demande prescrivait de remplacer `estAdmin` par la conjonction « partout où il conditionne un affichage » ; relevé sur toute la codebase, `estAdmin` n'est déstructuré **qu'à un seul endroit**, `MonProfil.jsx`, et c'est la section d'administration elle-même — qui doit précisément rester visible quel que soit l'interrupteur. Le remplacement demandé porte donc sur un ensemble vide, et `modeAdmin` est posé pour les surfaces à venir. De même, la condition `cotesArretees` que la demande cite ne connaissait **aucune dérogation administrateur** : elle s'appliquait déjà à tout le monde, et elle continue.
+
+**`MonProfil.jsx` porte désormais un commentaire à son point de montage**, parce que c'est le seul endroit de l'application qui lise `estAdmin` et non `modeAdmin` : sans cette note, la prochaine session l'« alignerait » sur les autres et l'interrupteur deviendrait impossible à rallumer autrement qu'en se déconnectant.
+
+---
+
+*L'interrupteur* — `BasculeModeAdmin`, en tête de la section et **avant ce qu'il gouverne** : c'est la règle de mapping d'`/apple-design` §16, un contrôle vit près de ce qu'il commande. Il est le seul élément de la section à ne jamais disparaître.
+
+**Tout le reste s'éteint avec lui — rien n'est grisé ni laissé en place.** « Voir l'app comme un membre » ne veut rien dire s'il reste deux boutons désactivés que personne d'autre n'a. Une ligne discrète prend leur place et rappelle que le mode repart éteint au rechargement, information sans quoi le retour à zéro passerait pour une panne.
+
+**L'interrupteur est neutralisé pendant un envoi**, comme les deux boutons le sont déjà. Sans cela, s'éteindre à mi-course laisserait une requête en vol dont le résultat s'afficherait au retour, des minutes plus tard, comme s'il venait d'arriver. Et **éteindre remet la section à son point de départ** : une confirmation restée ouverte ou un message de succès vieux de dix minutes n'ont plus rien à dire — ce qui est effacé est toujours une issue déjà lue, jamais un envoi en cours.
+
+*Le contrôle est une rangée entière*, pas une pastille de 46px posée au bout : la cible fait toute la largeur, elle porte `role="switch"` et `aria-checked`, et **le libellé dit l'état** (« Les outils d'administration sont visibles » / « Tu vois l'app comme un membre ordinaire ») au lieu de le laisser deviner à la couleur seule.
+
+**Les deux couleurs de la piste sont mesurées, pas choisies.** Le pouce blanc doit se détacher de sa piste — WCAG 1.4.11, 3:1 pour un élément graphique porteur de sens, et ici la piste est le seul indicateur peint. `secondaire/60` le pose à **3,41:1**, la valeur même qu'a déjà l'étoile de favori au repos depuis la version `0.26.0` ; `primaire` à **10,88:1**. Le gris `texte-doux` du design system n'aurait donné que **2,85:1**, sous le plancher, et `squelette` ne peint jamais autre chose qu'une silhouette (règle de l'étape 9). Aucune couleur nouvelle n'entre par cette porte.
+
+---
+
+*Mouvement* — **aucun jeton nouveau**, et c'est le résultat du portier d'`/animate` plutôt qu'une économie : les deux valeurs justes existaient déjà.
+
+| Décision | Valeur | Pourquoi |
+|---|---|---|
+| Animer ? | oui | Quelques fois par week-end de course, par une seule personne : palier « occasionnel ». Motif nommé — **indication d'état**, et un interrupteur qui se démet lui-même doit rendre son état incontestable. |
+| Outil | transition CSS | Le moins cher qui fasse le travail, et le seul interruptible : un interrupteur se déclenche deux fois par seconde sans difficulté, où des `@keyframes` repartiraient de zéro. |
+| Propriétés | `background-color`, `translate` | Composées sur le GPU. Jamais `left`, qui repasserait par la mise en page à chaque image. |
+| Durée | `--icon-swap-dur` (180ms) | Déjà la durée des deux bascules de l'app — l'étoile de favori et les icônes de la barre. La même chose au même rythme. |
+| Courbe | `--ease-in-out-fort` | Le pouce ne rentre ni ne sort : il **se déplace**, le seul cas où l'accélération puis la décélération sont justes. C'est exactement la courbe que les skills prescrivent pour ce cas. |
+| Ressort | aucun | Aucun élan ne précède le mouvement — c'est un appui, pas un lancer. Un dépassement se lirait comme une erreur (`/apple-design` §4). |
+
+**La piste et le pouce partagent durée ET courbe**, et c'est la règle posée en version `0.22.0` pour les icônes de la barre : la teinte et le mouvement doivent changer ensemble, sinon l'œil voit deux événements là où il n'y en a qu'un.
+
+**Sous `prefers-reduced-motion`, le pouce se pose sans traverser sa piste — mais la piste garde SA transition de couleur.** Mouvement réduit veut dire moins de mouvement, pas moins de sens : c'est la couleur qui dit l'état. Même arbitrage que pour la coche du sélecteur de couleur et le titre compact de l'en-tête.
+
+*Le retour d'appui n'est PAS repris de `pressable`*, et c'est délibéré : le pouce se déplace déjà à l'appui, et un `scale(0.97)` de la rangée entière par-dessus ferait deux mouvements concurrents sur le même geste.
+
+---
+
+***Un défaut trouvé sur le CSS de production, et invisible à la lecture du JSX.*** C'est le point de la version à retenir.
+
+La règle transitionnait `transform`. Or **Tailwind 4 compile `translate-x-*` vers la propriété indépendante `translate`, pas vers `transform`** — vérifié dans le bundle : `.translate-x-\[18px\]{--tw-translate-x:18px;translate:var(--tw-translate-x) var(--tw-translate-y)}`. La transition ne portait donc sur rien du tout : le pouce aurait sauté d'un bout à l'autre de sa piste, et **le JSX aurait eu exactement la même tête**. Les deux propriétés se composent aussi bien l'une que l'autre sur le GPU ; c'est le nom qui devait suivre l'utilitaire.
+
+**Un contrôle garde désormais cette classe de défaut** plutôt que la seule valeur : il lit la règle de l'utilitaire dans le CSS compilé, en extrait la propriété réellement écrite, et vérifie que c'est bien celle que `.t-bascule-pouce` transitionne. Éprouvé dans les deux sens — réintroduire `transform` le fait échouer, le remettre à `translate` le fait passer. **C'est la sixième fois qu'un examen du rendu compilé attrape ce qu'une relecture du JSX laisse passer**, et la deuxième qui tienne à une règle CSS que le JSX ne montre pas (après le `gap` inerte de la version `0.21.1`).
+
+*Vérifié* — rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite) : **62 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Interrupteur | `role="switch"`, `aria-checked` dans les deux sens, libellé demandé, zone tactile de 44px ; **l'état est dit et non seulement peint**, dans les deux sens ; piste et pouce décoratifs ; piste grise éteinte, bordeaux allumée ; pouce à gauche puis à droite ; **le pouce se déplace en `translate`, jamais en `left`** ; neutralisable |
+| Mode éteint | interrupteur présent ; **aucun bouton scraper, aucun texte d'explication** ; rien de grisé et laissé en place ; le retour à zéro au rechargement est dit ; l'en-tête de section reste |
+| Mode allumé | les deux boutons et l'explication reviennent ; interrupteur toujours là |
+| Non-régression des quatre phases | confirmation : conséquence écrite **avant** l'appui, sortie « Annuler », les deux actions remplacées ; en cours : `role="status"`, boutons **et interrupteur** neutralisés, aucune issue affichée ; succès : `role="alert"`, **« lancé » et jamais « terminé »**, renvoi aux logs Railway ; échec : message du serveur tel quel, boutons réutilisables |
+| Contexte | `modeAdminActif` et son setter exposés ; **`modeAdmin` dérivé de `estAdmin && modeAdminActif`** ; remis à zéro au changement de compte ; **jamais persisté**, défaut éteint ; présent dans les dépendances du memo ; la section reste montée sur `estAdmin` |
+| CSS | piste et pouce transitionnés sur des propriétés **nommées**, jamais `all` ; **aucun jeton de mouvement ajouté** ; mouvement réduit : le pouce ne voyage plus, **la piste garde sa couleur** |
+| **Garde-fou de propriété** | la propriété transitionnée par le pouce est bien celle que l'utilitaire de déplacement écrit dans le CSS compilé — **et le contrôle échoue si on réintroduit `transform`** |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », sur les trois rendus |
+| `npm run build` | passe, 14 entrées au précache, version `0.42.0` dans le bundle ; `.t-bascule`, `.t-bascule-pouce` et les utilitaires employés bien générés |
+
+**Ce qui reste à juger à l'œil, sur un iPhone réel** : le pouce ne parcourt que 18px, à 180ms — c'est court, et la question est de savoir si le mouvement se perçoit ou s'il passe pour un saut. Le levier est `--icon-swap-dur`, mais il est **partagé avec l'étoile de favori et les icônes de la barre** : le toucher les changerait toutes les trois. Si l'interrupteur seul doit ralentir, c'est là qu'un jeton propre se justifierait — et pas avant d'avoir regardé.
+
+
 ### Bugs connus
 
 *(Aucun.)*
