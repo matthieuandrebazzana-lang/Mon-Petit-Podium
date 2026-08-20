@@ -100,6 +100,43 @@ export const ETATS_GP = {
 };
 
 /**
+ * Les cotes de ce Grand Prix sont-elles arrêtées, c'est-à-dire peut-on
+ * pronostiquer dessus ?
+ *
+ * **Deux conditions, et les deux doivent tenir** : le statut vaut
+ * `cotes_figees`, ET l'heure des qualifications est passée. C'est la règle 4.3
+ * lue jusqu'au bout — les cotes ne valent quelque chose que sur une grille de
+ * départ définitive, donc après les qualifications.
+ *
+ * **Le statut seul ne suffit pas, et ce n'est pas une précaution en l'air.**
+ * `POST /scraper/declencher` fige les cotes des Grands Prix qu'il a scrapés
+ * avec succès (étape 11), et il peut être appelé n'importe quand : un essai
+ * passé un mardi, sans `?figer=false`, arrête les cotes sur une grille qui
+ * n'existe pas encore. C'est exactement ce qui s'est produit sur le GP des
+ * Pays-Bas, constaté en base à la version `0.38.0` — statut `cotes_figees`
+ * deux jours avant des qualifications annoncées au 22 août. La date des
+ * qualifications, elle, ne peut pas être avancée par un `curl` : elle vient du
+ * programme d'Unibet, ou du repli `date_course - 22h` du scraper.
+ *
+ * **On se ferme sur une donnée qu'on n'a pas, jamais l'inverse.** Un
+ * `date_qualifications` absent — colonne nulle, cache écrit par une version
+ * antérieure, backend déployé avant la migration — rend `false`. C'est la règle
+ * tenue depuis la version `0.38.0`, et le *stale-while-revalidate* corrige à la
+ * première réponse fraîche.
+ *
+ * Elle sert les **trois** surfaces qui portent un bouton de pronostics : le
+ * bloc de l'accueil et les deux calendriers. Écrite trois fois, elle aurait
+ * divergé au premier ajustement, et le symptôme aurait été discret — un Grand
+ * Prix pronostiquable d'un onglet et pas de l'autre.
+ */
+export function cotesArretees(gp, maintenant = Date.now()) {
+  if (!gp || gp.statut !== "cotes_figees") return false;
+
+  const qualifications = Date.parse(gp.date_qualifications ?? "");
+  return Number.isFinite(qualifications) && qualifications <= maintenant;
+}
+
+/**
  * Résultats d'un Grand Prix.
  *
  * `championnatId` est facultatif, et c'est la route qui porte la distinction

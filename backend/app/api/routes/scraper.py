@@ -66,6 +66,14 @@ class GrandPrixServi(BaseModel):
     id: UUID
     nom: str
     date_course: datetime | None
+    # Heure des qualifications (migration `20260816120000`). Servie au frontend
+    # parce que le calendrier de la saison en a besoin pour décider si des cotes
+    # figées le sont vraiment : le statut seul se laisse avancer par un
+    # déclenchement manuel du scraper, l'heure des qualifications non (règle 4.3).
+    # Nulle quand Unibet n'a pas annoncé le programme — le champ a donc une
+    # valeur par défaut, pour qu'une base non migrée ne fasse pas échouer la
+    # validation de TOUTE la réponse (le piège de `cree_par`, version `0.4.1`).
+    date_qualifications: datetime | None = None
     statut: str
     marches: list[MarcheServi]
 
@@ -145,7 +153,11 @@ async def _grands_prix_servis(filtre: dict[str, str]) -> list[GrandPrixServi]:
     """
     lignes = await selectionner(
         "grands_prix",
-        {"select": "id,nom,date_course,statut", "order": "date_course.asc", **filtre},
+        {
+            "select": "id,nom,date_course,date_qualifications,statut",
+            "order": "date_course.asc",
+            **filtre,
+        },
     )
 
     servis: list[GrandPrixServi] = []
@@ -156,6 +168,7 @@ async def _grands_prix_servis(filtre: dict[str, str]) -> list[GrandPrixServi]:
                 id=ligne["id"],
                 nom=ligne["nom"],
                 date_course=ligne.get("date_course"),
+                date_qualifications=ligne.get("date_qualifications"),
                 statut=ligne["statut"],
                 marches=[
                     MarcheServi(

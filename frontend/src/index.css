@@ -1347,17 +1347,6 @@
   );
 }
 
-/* Ligne d'arrivée en damier. */
-.piste-arrivee {
-  background-image: repeating-linear-gradient(
-    90deg,
-    var(--piste-kerb-blanc) 0,
-    var(--piste-kerb-blanc) 8px,
-    var(--piste-asphalte) 8px,
-    var(--piste-asphalte) 16px
-  );
-}
-
 /* — Entrée des voitures, d'après texts reveal (transitions-dev 18) —
    Le snippet monte des lignes de texte de 12px avec 40ms de décalage ; ici
    chaque voiture part du bas de l'écran, d'une distance qui lui est propre

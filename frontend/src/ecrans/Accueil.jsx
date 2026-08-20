@@ -26,6 +26,7 @@ import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
 import { chargerAccueilGp, cleAccueilGp } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import { usePseudoCourant } from "../lib/usePseudo.js";
+import { cotesArretees } from "../lib/calendrier.js";
 import { formaterDepart } from "../lib/format.js";
 import { useFermeture } from "../lib/useFermeture.js";
 import { APP_VERSION } from "../config.js";
@@ -152,27 +153,32 @@ export function BlocProchainGp({ profilId }) {
   const couru = donnees?.couru === true;
   const versRecap = !couru && (etat.ferme || donnees?.aPronostique === true);
 
-  // **Le bouton des pronostics n'existe que sur un Grand Prix dont les cotes
-  // sont figées**, et c'est la seule condition de son affichage.
+  // **Le bouton des pronostics exige DEUX conditions réunies** : des cotes
+  // figées, et des qualifications déjà courues. `cotesArretees` porte la règle
+  // pour les trois surfaces qui l'appliquent — voir `lib/calendrier.js`.
   //
   // Tant qu'un Grand Prix est en `a_venir`, le scraper n'a rien relevé : le
-  // tableau des cotes est vide et le récapitulatif n'a rien à récapituler. Un
-  // bouton menant à l'un ou l'autre serait une promesse fausse, celle-là même
-  // que le libellé variable de ce bloc cherche à éviter depuis la version
-  // `0.5.1`. Il est donc **retiré, pas grisé et pas remplacé** : le widget garde
-  // sa place, son drapeau, son tracé, sa date et son compte à rebours — tout ce
+  // tableau des cotes est vide et le récapitulatif n'a rien à récapituler. Et
+  // tant que les qualifications ne sont pas courues, la grille de départ n'est
+  // pas définitive : des cotes figées trop tôt par un déclenchement manuel du
+  // scraper ne valent rien (règle 4.3). Dans les deux cas le bouton serait une
+  // promesse fausse, celle-là même que le libellé variable de ce bloc cherche à
+  // éviter depuis la version `0.5.1`.
+  //
+  // Il est donc **retiré, pas grisé et pas remplacé** : le widget garde sa
+  // place, son drapeau, son tracé, sa date et son compte à rebours — tout ce
   // qu'il dit reste vrai avant les qualifications, et c'est bien à ce moment-là
   // qu'on vient voir quand part la course.
   //
-  // Le statut vient de `donnees.gp`, déjà chargé pour ce bloc : aucune lecture
-  // supplémentaire, et surtout aucune seconde source qui pourrait diverger.
+  // Les deux champs viennent de `donnees.gp`, déjà chargé pour ce bloc : aucune
+  // lecture supplémentaire, et surtout aucune seconde source qui pourrait
+  // diverger.
   //
   // **Le bouton des résultats, lui, n'est pas concerné.** Un Grand Prix couru
   // porte le statut `termine`, jamais `cotes_figees` : lui appliquer la règle
   // fermerait l'accès aux résultats le dimanche soir, c'est-à-dire au moment où
   // tout le monde ouvre l'application.
-  const cotesFigees = gp.statut === "cotes_figees";
-  const avecBouton = couru || cotesFigees;
+  const avecBouton = couru || cotesArretees(gp);
 
   const destination = couru
     ? `/grands-prix/${gp.id}/resultats`

@@ -137,6 +137,15 @@ class GrandPrixCalendrier(BaseModel):
     # Nulle tant qu'Unibet n'a pas annoncé l'horaire. Le GP est servi quand
     # même, en fin de liste : l'écarter le rendrait invisible jusqu'au samedi.
     date_course: datetime | None = None
+    # Heure des qualifications (migration `20260816120000`, servie au calendrier
+    # par la migration `20260820120000`). L'écran ne propose « Pronostiquer » que sur
+    # un GP dont les cotes sont figées ET dont les qualifications sont passées :
+    # le statut seul se laisse avancer par un déclenchement manuel du scraper,
+    # l'heure des qualifications non (règle 4.3). Valeur par défaut pour qu'une
+    # base non migrée ne fasse pas échouer la validation de TOUTE la réponse —
+    # le piège de `cree_par` à la version `0.4.1`. Le frontend se ferme alors,
+    # il ne s'ouvre jamais, sur un champ qu'il n'a pas.
+    date_qualifications: datetime | None = None
     statut: str
     # Lus dans `cotes` et `resultats_gp`, jamais déduits du statut : rien ne fait
     # passer un GP en `cotes_figees` aujourd'hui, et le statut peut donc mentir

@@ -286,7 +286,9 @@ Les maquettes définissent la **structure et la hiérarchie de l'information**. 
 
 ### La vue piste
 
-Écran signature de l'app, à soigner particulièrement. Une route occupe **toute la largeur de l'écran** : asphalte sombre, bordures rouge et blanc sur les deux côtés, ligne pointillée centrale. Aucun fond beige visible. Les voitures des membres sont réparties verticalement selon leur nombre de points — le leader près de la ligne d'arrivée en damier tout en haut, le dernier en bas. Les scores s'affichent en légende sur la droite, alignés avec chaque voiture.
+Écran signature de l'app, à soigner particulièrement. Une route occupe **toute la largeur de l'écran** : asphalte sombre, bordures rouge et blanc sur les deux côtés, ligne pointillée centrale. Aucun fond beige visible. Les voitures des membres sont réparties verticalement selon leur nombre de points — le leader tout en haut, le dernier en bas. Les scores s'affichent en légende sur la droite, alignés avec chaque voiture, **sans aucun libellé** : ni pseudo, ni mention d'égalité. Le nom du membre est déjà peint sur l'aileron arrière de sa voiture.
+
+> La **ligne d'arrivée en damier** que cette section décrivait a été retirée en version `0.39.0`, à la demande. Ce paragraphe étant le cahier des charges, il ne doit plus l'annoncer.
 
 ---
 
@@ -3663,6 +3665,93 @@ Quand la piste n'a pas la hauteur de porter toutes les rangées à ce pas-là, *
 
 ---
 
+---
+
+**Double condition sur les pronostics, et nettoyage de la vue piste** (version `0.39.0`)
+
+Le bouton « Pronostiquer » ne suffit plus d'un statut, et la vue piste perd trois éléments. Une migration, deux modèles de réponse enrichis, un module partagé. **Le backend change** — `backend/app/config.py` passe donc en `0.39.0` : deux modèles servent un champ de plus, et `/health` doit dire la vérité sur ce qui est déployé.
+
+---
+
+***La règle passe de « figées » à « arrêtées », et c'est la version `0.38.0` qui l'appelait.***
+
+La version `0.37.0` avait conditionné le bouton au seul statut `cotes_figees`. La `0.38.0` a montré ce que cette condition laisse passer : interrogé contre le vrai projet Supabase, le GP des Pays-Bas ressortait **déjà figé, avec 146 cotes sur dix marchés**, alors que ses qualifications sont annoncées au 22 août 2026 à 12h00 UTC. Le job automatique ne pouvait pas l'avoir posé — il ne se déclenche qu'à partir de qualifs + 2h. Le statut venait d'un `POST /scraper/declencher` passé à la main sans `?figer=false`, exactement le piège que la version `0.11.0` décrivait en créant ce paramètre.
+
+Le bouton s'affichait donc, et il menait à des cotes arrêtées **sur une grille de départ qui n'existait pas encore** — l'inverse de la règle 4.3, qui veut que tout le monde pronostique avec les mêmes cotes sur une grille définitive.
+
+`cotesArretees(gp, maintenant)` entre dans `frontend/src/lib/calendrier.js` et exige les **deux** conditions : statut `cotes_figees`, **et** `date_qualifications` dans le passé. Le second test est ce qui manquait, et il tient précisément parce qu'il ne se laisse pas contourner de la même façon : un `curl` avance le statut, il n'avance pas l'heure des qualifications — celle-ci vient du programme d'Unibet, ou du repli `date_course - 22h` du scraper (étape 11).
+
+**Elle vit dans `lib/calendrier.js` et nulle part ailleurs**, aux côtés d'`ETATS_GP` et pour la même raison : **trois** surfaces portent un bouton de pronostics — le bloc de l'accueil et les deux calendriers. Écrite trois fois, la règle aurait divergé au premier ajustement, et le symptôme aurait été discret : un Grand Prix pronostiquable d'un onglet et pas de l'autre.
+
+**On se ferme sur une donnée qu'on n'a pas, jamais l'inverse.** `date_qualifications` absente — colonne nulle, cache écrit par une version antérieure, backend déployé avant la migration — rend `false`, donc retire le bouton. C'est la règle posée à la version `0.38.0`, et le *stale-while-revalidate* la corrige à la première réponse fraîche. Un contrôle couvre les trois formes d'absence : `null`, champ non transmis, date illisible.
+
+*Deux points qui ne changent pas, et il faut qu'ils ne changent pas :*
+
+1. **Le bouton des résultats n'est pas concerné.** Un Grand Prix couru porte le statut `termine`, jamais `cotes_figees` : lui appliquer la règle fermerait l'accès aux résultats le dimanche soir, au moment exact où tout le monde ouvre l'application. La condition de l'accueil reste `couru || cotesArretees(gp)`, et les deux calendriers ne gardent la garde que sur leur branche « ouvert ».
+2. **Les pastilles d'état ne bougent pas.** Une carte peut afficher « Pronos ouverts » sans bouton. C'est assumé, et c'est la décision de l'étape 9 : les deux calendriers calculent leur état en lisant `cotes` et `resultats_gp`, **jamais le statut**, parce que le statut ment dans les deux sens. Ce n'est pas un bouton qui doit renverser cette règle — le geste proposé est simplement plus exigeant que le mot affiché, ce qui est le bon sens du doute.
+
+---
+
+***Le champ devait être servi par trois chemins, et aucun ne le servait.***
+
+C'est le vrai travail de la correction : `date_qualifications` existe en base depuis l'étape 11, mais **aucune des trois lectures du frontend ne la demandait**.
+
+| Surface | Chemin | Ce qui a changé |
+|---|---|---|
+| Bloc de l'accueil | lecture directe Supabase (`chargerProchainGp`) | le `select` la demande |
+| Calendrier de la saison | `GET /scraper/cotes` | `_grands_prix_servis` la sélectionne et la porte, `GrandPrixServi` la déclare, `enrichir` la transporte |
+| Calendrier d'un championnat | `calendrier_du_championnat` | **migration 13**, `GrandPrixCalendrier` la déclare |
+
+**Les deux modèles Pydantic la déclarent avec une valeur par défaut**, et c'est le piège de `cree_par` à la version `0.4.1` : sans elle, un backend déployé avant la migration recevrait des lignes sans le champ et rendrait `500` sur **toute** la réponse, pas seulement sur le Grand Prix concerné. Avec elle, le champ vaut `None`, le frontend se ferme, et le bouton disparaît au lieu d'apparaître à tort — l'échec va dans le bon sens.
+
+*Migration* — `supabase/migrations/20260820120000_calendrier_date_qualifications.sql`, **à exécuter à la main dans le SQL Editor de Supabase**, après les douze précédentes. Idempotente. Elle ne crée **aucune table**, n'ajoute **aucune colonne** et ne touche à **aucune donnée** : elle remplace `calendrier_du_championnat` pour lui faire servir un champ de plus.
+
+**Un seul champ s'ajoute au JSON, aucun ne part, et le corps est inchangé par ailleurs.** Ce n'est pas une affirmation de confiance : le jeu de contrôles compare le SQL exécutable des deux fonctions ligne à ligne et n'y trouve que **trois lignes différentes** — `date_qualifications` ajoutée au `select` de la CTE `gps`, et la paire JSON correspondante. Les trois décisions de la migration 10 tiennent donc toutes : `rank` et non `row_number`, un Grand Prix sans date servi quand même en fin de liste, `mes_points` à `NULL` et jamais `0`. La signature ne bouge pas non plus — les droits sont conservés par le `create or replace`, et réaffirmés en fin de fichier pour que la migration décrive complètement l'état qu'elle laisse.
+
+**Attention à l'ordre**, comme pour toutes les migrations depuis la 7 : rejouer la 10 après celle-ci lui retirerait `date_qualifications`. Sans rien casser — le frontend se ferme sur un champ absent — mais le bouton « Pronostiquer » disparaîtrait jusqu'à ce qu'on rejoue la 13 derrière.
+
+---
+
+***Vue piste — trois retraits et une typographie.***
+
+**1. La légende ne dit plus que le score.** Elle portait une troisième ligne : le pseudo sur un groupe d'un seul, « N ex æquo » sur un groupe à égalité. Les deux partent. Le premier faisait doublon — le pseudo est déjà peint sur l'aileron arrière de la voiture, à quelques pixels de là (section 5). Le second nommait un fait que la piste **montre** déjà, deux voitures posées à la même hauteur, et il occupait la place au moment précis où elle manque le plus.
+
+Conséquence mesurable : **le palier de légende le plus haut disparaît**. `dispositionDesVoitures` en choisissait trois selon l'espace disponible autour de chaque légende (50px, 33px, 15px) ; il n'en reste que deux. La légende est deux fois plus courte, donc deux groupes proches se recouvrent d'autant moins — le défaut que la version `0.38.0` avait dû corriger en ajoutant ces paliers se referme de lui-même.
+
+`estMoi` survit au retrait et garde son rôle : ma propre ligne passe au blanc plein, les autres restent à 90 %. C'est **le seul repère qui me situe** maintenant qu'aucun nom n'est écrit dans la légende. Le nom complet, lui, reste porté par chaque voiture (`titre`), pour le lecteur d'écran comme au survol.
+
+**2. La ligne d'arrivée en damier et son libellé sont retirés.** La règle CSS `.piste-arrivee` part avec eux : c'était du CSS de projet écrit pour cet élément-là, pas un snippet vendu qu'on garde par convention. La piste va désormais du bouton de retour au nom du championnat sans interruption, et `MARGE_HAUTE` suffit à empêcher la voiture de tête de venir toucher l'en-tête.
+
+***C'est le point à signaler plutôt qu'à trancher seul.*** La section 6 du CLAUDE.md décrivait cette ligne d'arrivée, et le commentaire du code disait ce qu'elle faisait : « c'est elle qui donne son sens à la hauteur des voitures ; sans elle, "en haut" ne voudrait rien dire. » **La section 6 a été mise à jour dans le même commit** — un cahier des charges qui annonce un élément supprimé induirait en erreur toutes les sessions suivantes. Ce que la piste garde pour dire son sens : la position du leader, les bordures qui filent, et le nom du championnat en bas, désormais nettement plus présent. Si le haut de la piste paraît flotter sur un appareil réel, c'est ce point-là qu'il faut rouvrir.
+
+**3. Le nom du championnat devient lisible.** Il passe de 11px en `#999999` à **15px, blanc plein, graisse 500**. Le gain n'est pas cosmétique et il est mesuré : `text-white/50` sur l'asphalte `#1A1A1A` ne vaut que **5,3:1** de contraste, le blanc plein **17,4:1**.
+
+Les capitales et le crénage positif de `0,7px` sont **conservés** : c'est ce que la section 5 prescrit pour un label, et c'est aussi la règle d'`/apple-design` §15 — on resserre les grands textes, on espace les petits. La hiérarchie passe par la taille et la graisse, jamais par l'opacité (règle de vibrance du §12, déjà appliquée aux drapeaux depuis la version `0.15.0`). L'ombre portée est celle des légendes, et pour la raison exacte : le texte est centré, donc il croise la ligne médiane pointillée de la piste, elle-même en blanc à 50 %.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Le portier d'`/animate` ne demandait rien : une suppression n'a pas d'entrée à animer, et un changement de taille de texte statique n'accompagne aucun changement d'état. L'entrée des voitures depuis le bas (d'après *texts reveal*, transitions-dev 18) est conservée telle quelle, `--voiture-depart` et `--voiture-retard` compris, et la légende d'un groupe monte toujours avec la première voiture qu'elle chiffre.
+
+*Apport d'`/apple-design`* — le retrait de la ligne d'arrivée relève du §16 (wayfinding) et c'est pour cela qu'il est signalé plus haut plutôt qu'appliqué en silence ; le nom du championnat suit le §15 sur le crénage propre à la taille et le §12 sur la vibrance ; la légende reste `pointer-events-none`, elle ne peut pas voler l'appui d'une voiture qui passerait dessous ; et chaque voiture garde son `titre` complet, seul porteur de l'identité pour un lecteur d'écran une fois les pseudos retirés de la légende.
+
+*Vérifié* :
+
+| Contrôle | Résultat |
+|---|---|
+| Rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite, cache localStorage doublé) | **64 contrôles passent** |
+| `cotesArretees` | figé + qualifs passées → `true` ; **figé + qualifs à venir → `false`** ; `a_venir` et `termine` → `false` même qualifs passées ; **les trois formes d'absence** (`null`, champ non transmis, date illisible) → `false` ; `gp` nul sans lever ; qualifs à l'instant pile → `true` ; **le cas réel du GP Pays-Bas reproduit** (figé le 20, qualifs le 22) → `false` |
+| Calendrier de la saison | `enrichir` transporte le champ, statut et identifiant intacts, **les douze cartes toujours servies**, GP hors base → champ nul ; bouton présent sur figé + qualifs passées, **absent sur figé + qualifs à venir et sur figé sans qualifs**, absent sur `a_venir` ; **bouton résultats conservé** ; **la pastille « Pronos ouverts » est conservée malgré l'absence de bouton** |
+| Bloc de l'accueil | figé + qualifs passées → « Pronostiquer » et lien vers les cotes ; **qualifs à venir → aucun bouton, aucune balise de lien, aucun texte de remplacement**, et le widget garde son nom et sa case de fermeture ; sans qualifs → aucun bouton ; `a_venir` → aucun bouton ; pronos saisis → « Voir mes pronos » ; **GP couru → « Voir les résultats » conservé malgré l'absence de qualifs** |
+| Calendrier d'un championnat | mêmes six cas, mêmes verdicts ; la carte reste complète et sa pastille aussi |
+| **Migration** | le SQL exécutable des deux fonctions comparé ligne à ligne : **trois lignes de différence**, toutes attendues ; le reste du corps est identique au caractère près |
+| Backend | `/health` en `0.39.0` ; les deux modèles déclarent le champ **avec une valeur par défaut** ; **une réponse sans le champ se sérialise** au lieu d'un `500` ; routes toujours protégées |
+| Vue piste | deux légendes pour trois membres dont deux à égalité ; **plus aucune variante « complete »** ; **aucun « ex æquo », aucun pseudo dans la légende**, score et unité conservés ; ma ligne au blanc plein, les autres à 90 % ; **le pseudo reste porté par la voiture** ; l'écran se monte sans lever ; **plus aucune `piste-arrivee`, plus aucun libellé « Arrivée »** ; bordures et ligne médiane conservées ; nom du championnat **en blanc plein, 15px, graisse 500, capitales, crénage `0,7px`, ombre portée** |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », sur les trois surfaces |
+| CSS de production | `.piste-arrivee` **absente du bundle** ; `.text-[15px]`, `.tracking-[0.7px]` et l'ombre portée bien générés |
+| `npm run build` | passe, 145 modules, 14 entrées au précache, version `0.39.0` dans le bundle |
+
+**Ce qui n'a pas pu être vérifié, et c'est à faire** : la migration n'a **pas** été jouée contre un PostgreSQL jetable — le démon Docker n'était pas démarré sur cette machine, comme à la version `0.33.0`. La comparaison ligne à ligne avec la migration 10 est une garantie forte sur le corps de la fonction, mais elle ne remplace pas une exécution : à jouer sur une base jetable avant de l'appliquer en production, ou à surveiller au premier passage dans le SQL Editor.
+
+**Ce qui reste à juger à l'œil** : le haut de la piste sans sa ligne d'arrivée (voir le point 2 ci-dessus), et le poids du nom du championnat en bas — 15px en blanc plein est un net changement d'équilibre sur un écran qui n'avait aucun texte appuyé.
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -3689,6 +3778,8 @@ Ordre d'application, si l'une manque :
 11. `supabase/migrations/20260816120000_date_qualifications.sql` — sans elle, `POST /scraper/declencher` et le job automatique répondent `42703` (colonne absente) à l'écriture d'un Grand Prix : **le scraper ne peut plus rien enregistrer du tout**, ni GP ni cotes. Le job horaire, lui, échoue à sa lecture et le journalise à chaque tour. **Elle suppose la 3 déjà appliquée** : elle altère `public.grands_prix`. Elle ne crée aucune table et **ne remplace aucune fonction** — c'est la seule migration depuis la 7 qui ne puisse pas entrer en conflit d'ordre avec une migration antérieure rejouée par-dessus.
 
 12. `supabase/migrations/20260819124500_livree_ecurie.sql` — sans elle, **`GET /profils/{id}` et `PATCH /profils/moi` répondent `422` en portant `42703`** (colonne absente), donc l'écran profil ne charge plus du tout ; les classements, eux, continuent de servir les couleurs et les voitures retombent simplement toutes en mode personnalisé. **Elle suppose les 1, 8 et 10 déjà appliquées** : elle altère `public.profils` et **remplace** `classement_du_championnat` (migration 8) et `pronostics_du_championnat` (migration 10). Elle ne crée aucune table. **Attention à l'ordre** : rejouer la 8 ou la 10 après celle-ci retirerait la livrée du classement et du tableau des résultats — sans rien casser, le frontend repliant sur les couleurs. Si l'une des deux est rejouée, rejouer la 12 derrière. **Non éprouvée sur un PostgreSQL jetable**, contrairement aux onze précédentes : le démon Docker n'était pas disponible au moment de l'écrire.
+
+13. `supabase/migrations/20260820120000_calendrier_date_qualifications.sql` — sans elle, `calendrier_du_championnat` ne sert pas `date_qualifications`, et **le bouton « Pronostiquer » n'apparaît jamais sur le calendrier d'un championnat** (maquette 15) : le frontend se ferme sur un champ absent plutôt que de s'ouvrir. Rien ne plante, et les deux autres surfaces — le bloc de l'accueil et le calendrier de la saison — ne sont pas concernées, elles lisent le champ par d'autres chemins. **Elle suppose les 10 et 11 déjà appliquées** : elle remplace `calendrier_du_championnat` (migration 10) et lit `grands_prix.date_qualifications` (migration 11). Elle ne crée aucune table et n'ajoute aucune colonne. **Attention à l'ordre** : rejouer la 10 après celle-ci lui retirerait le champ — rejouer la 13 derrière. **Non éprouvée sur un PostgreSQL jetable** (Docker indisponible), mais son corps a été comparé ligne à ligne à celui de la migration 10 : trois lignes de différence, toutes attendues.
 
 **Variables d'environnement du backend** — à définir sur Railway :
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Sans elles, `/championnats` et `POST /scraper/declencher` répondent `503` avec un message explicite, et **le scheduler de l'étape 6 ne démarre pas du tout** (il le journalise au démarrage). La clé de service ne doit jamais être exposée au frontend ni committée.
@@ -3719,7 +3810,7 @@ Ordre d'application, si l'une manque :
   ```
 
 Points non couverts, à traiter le moment venu :
-- **Le GP Pays-Bas est figé prématurément en base, et c'est à défaire** (constaté en version `0.38.0`). `public.grands_prix` porte `statut = 'cotes_figees'` pour `33b835cc-5c17-40f7-a41f-3e95fc14885a` alors que les qualifications sont annoncées au **22 août 2026 à 12h00 UTC** : le job automatique ne pouvait pas l'avoir posé, il ne se déclenche qu'à partir de qualifs + 2h. Le statut vient donc d'un `POST /scraper/declencher` passé à la main **sans `?figer=false`** — le piège décrit à la version `0.11.0`. Conséquence visible : le bouton « Pronostiquer » s'affiche sur l'accueil et les deux calendriers, et les cotes proposées sont celles d'une grille non définitive. À défaire dans le SQL Editor — `update public.grands_prix set statut = 'a_venir' where id = '33b835cc-5c17-40f7-a41f-3e95fc14885a' and statut = 'cotes_figees';` — le job du samedi refigera de lui-même après les qualifications. **Tout essai de scraper d'ici là doit porter `?figer=false`.**
+- **Le GP Pays-Bas est figé prématurément en base, et c'est à défaire** (constaté en version `0.38.0`). `public.grands_prix` porte `statut = 'cotes_figees'` pour `33b835cc-5c17-40f7-a41f-3e95fc14885a` alors que les qualifications sont annoncées au **22 août 2026 à 12h00 UTC** : le job automatique ne pouvait pas l'avoir posé, il ne se déclenche qu'à partir de qualifs + 2h. Le statut vient donc d'un `POST /scraper/declencher` passé à la main **sans `?figer=false`** — le piège décrit à la version `0.11.0`. **Depuis la version `0.39.0`, le symptôme visible est corrigé** : les trois surfaces exigent en plus que les qualifications soient passées (`cotesArretees`), donc plus aucun bouton « Pronostiquer » ne s'affiche avant l'heure. **La donnée, elle, reste fausse** — le GP est toujours marqué figé, et le job du samedi ne le refigera pas puisqu'il ne traite que les GP en `a_venir`. À défaire dans le SQL Editor : `update public.grands_prix set statut = 'a_venir' where id = '33b835cc-5c17-40f7-a41f-3e95fc14885a' and statut = 'cotes_figees';` Le job du samedi le refigera alors de lui-même après les qualifications. **Tout essai de scraper d'ici là doit porter `?figer=false`.**
 - **Décompte des Grands Prix restants figé à 12 — sur l'accueil uniquement, et la réponse existe désormais.** Depuis la version `0.14.1`, le bandeau de bas d'écran (`GP_RESTANTS` dans `frontend/src/ecrans/Accueil.jsx`) affiche une constante, parce que `public.grands_prix` ne contient que le Grand Prix suivant. **La version `0.20.0` a créé la liste qui manquait** : `frontend/src/lib/calendrier2026.js` porte les douze Grands Prix de la saison, et l'onglet Calendrier en tire déjà un décompte qui **exclut les courses terminées**. Le bandeau de l'accueil, lui, n'a pas été rebranché — c'est hors du périmètre de cette version, et c'est désormais quelques lignes : compter `GP_2026` filtré par `etatDuGpSaison`, exactement comme le fait `CalendrierGlobal`. **À faire, sans quoi les deux écrans se contrediront dès la première course courue** — l'accueil dira « 12 restants » quand le calendrier en montrera 11. `chargerGrandsPrixRestants` (`lib/pronostics.js`) reste en place mais n'est plus la bonne réponse : elle compte les lignes en base, c'est-à-dire une seule course.
 - **Couleurs d'écurie en désaccord avec la grille du backend — tranché en version `0.30.0`, et dans le bon sens.** Le désaccord sur huit pilotes que relevait la version `0.27.0` venait entièrement de `frontend/src/lib/ecuries.js` : `backend/app/calcul/pilotes.py` **avait raison sur les vingt-deux**, donc **le calcul des points n'a jamais été faux** et rien n'est à recalculer. Le frontend est corrigé, le backend n'est pas touché. Un contrôle du jeu de tests lit désormais `pilotes.py` et compare les deux grilles ligne à ligne : elles ne peuvent plus diverger en silence.
 - **`frontend/src/lib/ecuries.js` est à mettre à jour chaque saison**, au même titre que `pilotes.py` et `calendrier2026.js`. Une table périmée ne fait aucun dégât silencieux : un pilote absent ressort sans teinte, ce qui se voit à l'écran.

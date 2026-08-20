@@ -93,8 +93,12 @@ export function chargerFavoris(gpId, signal) {
  * des Grands Prix restants : les trois lectures disent maintenant la même
  * chose.
  *
- * Le statut est servi au bloc, qui n'affiche son bouton de pronostics que sur
- * un Grand Prix figé — avant, il n'y a pas une cote en base.
+ * **`date_qualifications` est servie à côté du statut**, et les deux vont
+ * ensemble : le bloc n'affiche son bouton de pronostics que sur un Grand Prix
+ * dont les cotes sont figées ET dont les qualifications sont passées (voir
+ * `cotesArretees` dans `lib/calendrier.js`). Le statut seul se laisse avancer
+ * par un `POST /scraper/declencher` passé trop tôt ; l'heure des qualifications,
+ * non.
  *
  * Lu directement sous RLS — la politique « Grands prix lisibles par tous » de
  * l'étape 4 couvre exactement ce cas, et l'accueil est l'écran qui souffrirait
@@ -110,7 +114,7 @@ export async function chargerProchainGp(signal) {
   try {
     const requete = supabase
       .from("grands_prix")
-      .select("id, nom, date_course, statut")
+      .select("id, nom, date_course, date_qualifications, statut")
       .in("statut", ["a_venir", "cotes_figees"])
       .order("date_course", { ascending: true, nullsFirst: false })
       .limit(1)

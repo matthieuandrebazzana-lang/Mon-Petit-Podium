@@ -13,10 +13,17 @@ import { useDonnees } from "../lib/useDonnees.js";
  * Maquette 07b — la vue piste, écran signature de l'app.
  *
  * Une route occupe tout l'écran : asphalte sombre, bordures rouge et blanc sur
- * les deux côtés, ligne pointillée centrale, ligne d'arrivée en damier tout en
- * haut. Aucun fond beige n'est visible. Les voitures sont réparties
- * verticalement selon les points — le leader près de l'arrivée, le dernier en
- * bas — et le pseudo et le score s'affichent à droite de chacune.
+ * les deux côtés, ligne pointillée centrale. Aucun fond beige n'est visible.
+ * Les voitures sont réparties verticalement selon les points — le leader tout
+ * en haut, le dernier en bas — et **le score seul** s'affiche à droite de
+ * chaque groupe.
+ *
+ * **La ligne d'arrivée en damier a été retirée**, ainsi que son libellé. Elle
+ * ancrait le haut de la piste, et sa disparition laisse ce rôle aux seuls
+ * éléments qui restent : la position du leader et le nom du championnat qui
+ * ferme l'écran en bas. La section 6 du CLAUDE.md a été mise à jour en
+ * conséquence — la décrire encore aurait laissé le cahier des charges annoncer
+ * un élément qui n'existe plus.
  *
  * **Écart assumé par rapport à la maquette 07b**, et il vient de la demande
  * elle-même : la maquette garde l'en-tête du championnat et la bascule
@@ -65,15 +72,19 @@ const PAS_HORIZONTAL = LARGEUR_VOITURE + GOUTTIERE_HORIZONTALE;
 // toute la grille vers la gauche, ce qui se lirait comme un défaut de calage.
 const ZONE_LEGENDE = 104;
 
-// Hauteur des trois formes de légende, mesurée sur le rendu : le score seul
-// (15px), le score et son unité, puis le nom ou le nombre d'ex æquo.
+// Hauteur des deux formes de légende, mesurée sur le rendu : le score seul
+// (15px), puis le score et son unité.
 //
 // **La légende ne rapetisse pas avec la voiture**, et c'est voulu : un score de
 // neuf pixels de haut ne se lit plus. C'est son contenu qui se réduit quand la
-// place manque — l'unité d'abord, le nom ensuite. Sans ces deux paliers, deux
-// légendes voisines se recouvraient dès que les voitures se resserraient, ce
-// que l'aperçu rendu avec la feuille compilée montrait sans équivoque.
-const LEGENDE_COMPLETE = 50;
+// place manque — l'unité tombe en dernier. Sans ce palier, deux légendes
+// voisines se recouvraient dès que les voitures se resserraient, ce que
+// l'aperçu rendu avec la feuille compilée montrait sans équivoque.
+//
+// Il y avait un troisième palier, le plus haut, qui portait le pseudo ou le
+// nombre d'ex æquo. **La légende ne dit plus que le score**, et ce palier n'a
+// donc plus d'objet : la légende est deux fois plus courte, et deux groupes
+// proches se recouvrent d'autant moins.
 const LEGENDE_REDUITE = 33;
 
 // En deçà, la voiture n'est plus qu'une tache. On ne descend jamais jusqu'à
@@ -251,12 +262,7 @@ export function dispositionDesVoitures(lignes, hauteur, largeur) {
       index < legendes.length - 1 ? legendes[index + 1].centre - legende.centre : Infinity;
     const espace = Math.min(avant, apres);
 
-    legende.variante =
-      espace >= LEGENDE_COMPLETE
-        ? "complete"
-        : espace >= LEGENDE_REDUITE
-          ? "reduite"
-          : "minimale";
+    legende.variante = espace >= LEGENDE_REDUITE ? "reduite" : "minimale";
   });
 
   return { echelle, largeurVoiture, hauteurVoiture, voitures, legendes };
@@ -328,19 +334,25 @@ export function VoitureSurPiste({
 }
 
 /**
- * La légende d'un score, à droite de la rangée qu'elle nomme.
+ * La légende d'un score, à droite de la rangée qu'elle chiffre.
  *
- * Un groupe d'une seule voiture affiche le pseudo, comme avant cette version.
- * Un groupe à égalité affiche « N ex æquo » : aligner N pseudos les uns sous
- * les autres déborderait sur le groupe voisin, et la piste identifie déjà
- * chacun par sa livrée et son numéro — c'est sa raison d'être. Le nom complet
- * reste porté par chaque voiture, pour le lecteur d'écran comme au survol.
+ * **Elle ne porte que le score, et aucun libellé.** Elle affichait auparavant
+ * le pseudo sur un groupe d'un seul, et « N ex æquo » sur un groupe à égalité :
+ * les deux sont retirés. Le premier faisait doublon — le pseudo est déjà peint
+ * sur l'aileron arrière de la voiture (section 5), à quelques pixels de là. Le
+ * second nommait un fait que la piste montre déjà, deux voitures posées à la
+ * même hauteur, et il occupait la place au moment précis où elle manque le
+ * plus. Le nom complet reste porté par chaque voiture, pour le lecteur d'écran
+ * comme au survol.
+ *
+ * `estMoi` survit à ce retrait et garde son rôle : ma propre ligne passe au
+ * blanc plein, les autres restent à 90 %. C'est le seul repère qui me situe
+ * d'un coup d'œil maintenant que plus aucun nom n'est écrit ici.
  *
  * L'ombre portée n'est pas décorative : ce texte passe tantôt sur l'asphalte,
  * tantôt sur une bordure blanche, et doit rester lisible sur les deux.
  */
 export function LegendeDeGroupe({ legende, hauteur, retard, moi }) {
-  const seul = legende.membres.length === 1;
   const estMoi = legende.membres.some((membre) => membre.profil_id === moi);
 
   return (
@@ -362,15 +374,6 @@ export function LegendeDeGroupe({ legende, hauteur, retard, moi }) {
         </p>
         {legende.variante !== "minimale" && (
           <p className="text-label-sm mt-1 text-white/70">pts</p>
-        )}
-        {legende.variante === "complete" && (
-          <p
-            className={`mt-1.5 max-w-[76px] truncate text-[11px] ${
-              estMoi ? "font-medium text-white" : "text-white/70"
-            }`}
-          >
-            {seul ? legende.membres[0].pseudo : `${legende.membres.length} ex æquo`}
-          </p>
         )}
       </div>
     </div>
@@ -475,18 +478,17 @@ export default function Piste() {
         </button>
       </header>
 
-      {/* Ligne d'arrivée, immédiatement sous le bouton : c'est elle qui donne
-          son sens à la hauteur des voitures. Sans elle, « en haut » ne
-          voudrait rien dire. */}
-      <div className="relative z-[5] shrink-0 px-5">
-        <div aria-hidden="true" className="piste-arrivee h-[5px] w-full" />
-        <p className="text-label-sm mt-1.5 uppercase text-white/70">Arrivée</p>
-      </div>
-
+      {/* La ligne d'arrivée en damier et son libellé vivaient ici. Ils sont
+          retirés : la piste va désormais du bouton de retour au nom du
+          championnat sans interruption, et `MARGE_HAUTE` suffit à empêcher la
+          voiture de tête de venir toucher l'en-tête. La règle CSS
+          `.piste-arrivee` est partie avec eux — c'était du CSS de projet écrit
+          pour cet élément-là, pas un snippet vendu, et le garder n'aurait servi
+          qu'à peser dans chaque feuille. */}
       <div ref={zone} className="relative flex-1">
         {/* Les voitures d'abord, les légendes ensuite : à égalité de points
-            plusieurs voitures partagent une hauteur, et une seule légende les
-            nomme. Le retard d'entrée reste celui du **classement** et non celui
+            plusieurs voitures partagent une hauteur, et une seule légende en
+            chiffre le score. Le retard d'entrée reste celui du **classement** et non celui
             de la rangée, pour que la cascade suive l'ordre des rangs. */}
         {disposition.voitures.map((placement) => (
           <VoitureSurPiste
@@ -561,7 +563,23 @@ export default function Piste() {
 
       {/* Le nom du championnat ferme l'écran en bas, au-dessus du home
           indicator : il dit de quel championnat on regarde la piste, sans
-          rajouter d'en-tête. */}
+          rajouter d'en-tête.
+
+          **Il porte davantage depuis que la ligne d'arrivée est partie** : il
+          est le seul texte de chrome qui reste, et le seul repère qui situe la
+          piste. Il passe donc de 11px en `#999` à 15px en blanc plein et
+          graisse 500. Le gain n'est pas cosmétique — `text-white/50` sur
+          l'asphalte `#1A1A1A` ne vaut que 5,3:1 de contraste, le blanc plein
+          17,4:1.
+
+          Les capitales et leur crénage positif sont conservés : c'est ce que la
+          section 5 prescrit pour un label, et c'est aussi la règle d'/apple-design
+          §15 — on resserre les grands textes, on espace les petits. La
+          hiérarchie passe par la graisse et la taille, jamais par l'opacité.
+
+          L'ombre portée est celle des légendes, et pour la raison exacte : le
+          texte est centré, donc il croise la ligne médiane pointillée de la
+          piste, elle-même en blanc à 50 %. */}
       <footer
         className="relative z-10 shrink-0 px-7 pt-2"
         style={{
@@ -570,7 +588,7 @@ export default function Piste() {
           paddingBottom: "calc(var(--spacing-safe-bottom) + 12px)",
         }}
       >
-        <p className="text-label truncate text-center uppercase text-white/50">
+        <p className="truncate text-center text-[15px] leading-none font-medium tracking-[0.7px] text-white uppercase [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
           {championnat?.nom ?? ""}
         </p>
       </footer>

@@ -18,7 +18,12 @@ import {
 } from "../composants/DrapeauxGP.jsx";
 import { Barre, Pave } from "../composants/Squelette.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
-import { ETATS_GP, chargerCalendrier, cleCalendrier } from "../lib/calendrier.js";
+import {
+  ETATS_GP,
+  chargerCalendrier,
+  cleCalendrier,
+  cotesArretees,
+} from "../lib/calendrier.js";
 import { chargerChampionnat } from "../lib/championnats.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import {
@@ -101,12 +106,12 @@ export function CarteGrandPrix({ gp }) {
   // Le bouton n'existe que là où il y a quelque chose à faire. Un Grand Prix à
   // venir n'a pas encore de cotes ; un Grand Prix fermé n'accepte plus rien.
   //
-  // **« Pronostiquer » exige en plus des cotes figées.** C'est la même règle que
-  // sur le calendrier de la saison et sur le bloc de l'accueil, et elle est
-  // écrite ici aussi parce que les deux calendriers n'ont pas les mêmes données
-  // pour décider de l'état — mais doivent proposer le même geste. Sans elle, un
-  // Grand Prix en `a_venir` dont quelques cotes traînent en base ouvrirait un
-  // tableau que le scraper n'a pas encore arrêté.
+  // **« Pronostiquer » exige en plus des cotes arrêtées** — statut `cotes_figees`
+  // ET qualifications passées, la règle que `cotesArretees` porte pour les trois
+  // surfaces. Sans le premier test, un Grand Prix en `a_venir` dont quelques
+  // cotes traînent en base ouvrirait un tableau que le scraper n'a pas encore
+  // arrêté ; sans le second, un figeage manuel passé un mardi ferait pronostiquer
+  // sur une grille de départ qui n'existe pas encore (règle 4.3).
   const action =
     etat.cle === "termine"
       ? {
@@ -117,7 +122,7 @@ export function CarteGrandPrix({ gp }) {
           // et l'urgence ne se distinguerait plus de l'archive.
           style: "bg-fond text-primaire",
         }
-      : etat.cle === "ouvert" && gp.statut === "cotes_figees"
+      : etat.cle === "ouvert" && cotesArretees(gp)
         ? {
             vers: `/grands-prix/${gp.gp_id}/cotes`,
             libelle: "Pronostiquer",

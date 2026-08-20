@@ -1,5 +1,5 @@
 import { appelApi } from "./api.js";
-import { ETATS_GP } from "./calendrier.js";
+import { cotesArretees, ETATS_GP } from "./calendrier.js";
 import { slugCircuit } from "../composants/TracesCircuits.jsx";
 import { etatFermeture } from "./format.js";
 
@@ -116,6 +116,10 @@ export function enrichir(grandsPrix = GP_2026, enBase = null) {
       // L'heure exacte du départ n'existe qu'en base : elle seule permet de
       // savoir si les pronostics sont fermés (règle 4.3).
       date_course: trouve?.date_course ?? null,
+      // Celle des qualifications non plus, et elle est ce qui distingue des
+      // cotes vraiment arrêtées d'un figeage manuel passé trop tôt : voir
+      // `cotesArretees`, qui la lit avec le statut.
+      date_qualifications: trouve?.date_qualifications ?? null,
       cotes_disponibles: (trouve?.marches?.length ?? 0) > 0,
       en_base: Boolean(trouve),
     };
@@ -178,13 +182,18 @@ export function actionDuGp(gp, etat) {
       style: "bg-white text-vert-sauge",
     };
   }
-  // **Pronostiquer exige des cotes figées, pas seulement des cotes visibles.**
-  // Tant que le Grand Prix est en `a_venir`, le scraper n'a rien arrêté : le
-  // bouton mènerait à un tableau de cotes vide. Il est donc retiré — ni grisé,
-  // ni remplacé par un message. La pastille, elle, continue de dire l'état que
-  // les données décrivent : les deux calendriers la calculent sans jamais la
-  // déduire du statut, et ce n'est pas un bouton qui doit renverser cette règle.
-  if (etat.cle === "ouvert" && gp.statut === "cotes_figees") {
+  // **Pronostiquer exige des cotes arrêtées, pas seulement des cotes visibles.**
+  // Deux conditions réunies (`cotesArretees`) : le statut `cotes_figees`, et des
+  // qualifications déjà courues. Tant que le Grand Prix est en `a_venir`, le
+  // scraper n'a rien arrêté ; et des cotes figées avant les qualifications le
+  // sont sur une grille de départ qui n'existe pas encore (règle 4.3). Dans les
+  // deux cas le bouton est retiré — ni grisé, ni remplacé par un message.
+  //
+  // La pastille, elle, continue de dire l'état que les données décrivent : les
+  // deux calendriers la calculent sans jamais la déduire du statut, et ce n'est
+  // pas un bouton qui doit renverser cette règle. Le geste proposé est donc plus
+  // exigeant que le mot affiché, ce qui est le bon sens du doute.
+  if (etat.cle === "ouvert" && cotesArretees(gp)) {
     return {
       vers: `/grands-prix/${gp.gp_id}/cotes`,
       libelle: "Pronostiquer",
