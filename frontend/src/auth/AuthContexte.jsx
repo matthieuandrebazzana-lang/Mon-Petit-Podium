@@ -8,6 +8,7 @@ import {
 } from "react";
 import { supabase, supabaseConfigure, urlDeRetour } from "../lib/supabase.js";
 import { emailDejaInscrit, messageErreur } from "../lib/erreurs.js";
+import { chargerEstAdmin } from "../lib/profils.js";
 
 /**
  * Exporté nommément depuis l'étape 9, pour la même raison que `BlocProchainGp`
@@ -34,6 +35,8 @@ export function AuthProvider({ children }) {
   const [chargement, setChargement] = useState(supabaseConfigure);
   // Passe à vrai quand l'utilisateur arrive par un lien de réinitialisation.
   const [recuperation, setRecuperation] = useState(false);
+  // Drapeau d'administration, relu **en base** à chaque changement de compte.
+  const [estAdmin, setEstAdmin] = useState(false);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -68,6 +71,59 @@ export function AuthProvider({ children }) {
       abonnement.subscription.unsubscribe();
     };
   }, []);
+
+  const compte = session?.user?.id ?? null;
+
+  /**
+   * Lecture du drapeau d'administration, **jamais depuis un cache**.
+   *
+   * Trois décisions, et aucune n'est arbitraire :
+   *
+   * 1. **Ici et non dans un écran.** C'est le « store global » de la demande :
+   *    le projet n'a pas de Zustand, et ce contexte est déjà le seul endroit
+   *    qui sait qui est connecté. Un droit lu dans chaque écran qui l'affiche
+   *    finirait par être lu de deux façons différentes.
+   *
+   * 2. **En base, jamais dans le jeton ni dans `localStorage`.** Le jeton porte
+   *    une copie figée à l'inscription — c'est tout le piège documenté sur
+   *    `pseudo` juste plus bas, et il serait bien pire sur un drapeau
+   *    d'administration : une révocation ne prendrait effet qu'au prochain
+   *    renouvellement de session. Le cache *stale-while-revalidate* a le même
+   *    défaut, en plus modifiable depuis les outils de développement.
+   *
+   * 3. **Le doute referme, il n'ouvre jamais.** Base non migrée, ligne absente,
+   *    réseau coupé, session en cours de résolution : tous ces cas laissent
+   *    `false`. C'est l'inverse du sens du doute appliqué au pseudo, où une
+   *    valeur périmée vaut mieux que rien — une section d'administration
+   *    affichée à tort ne vaut rien.
+   *
+   * La lecture est relancée à chaque changement de compte et remise à `false`
+   * **avant** de repartir : deux personnes qui se relaient sur le même
+   * téléphone ne doivent jamais hériter du drapeau de l'autre, fût-ce une
+   * image (règle posée à l'étape 3 pour les clés de cache, et qui vaut aussi
+   * sans cache).
+   */
+  useEffect(() => {
+    setEstAdmin(false);
+    if (!compte) return undefined;
+
+    const controleur = new AbortController();
+    let actif = true;
+
+    (async () => {
+      try {
+        const resultat = await chargerEstAdmin(compte, controleur.signal);
+        if (actif && resultat.ok) setEstAdmin(resultat.donnees === true);
+      } catch {
+        /* Abandon au démontage, ou panne réseau : on reste non administrateur. */
+      }
+    })();
+
+    return () => {
+      actif = false;
+      controleur.abort();
+    };
+  }, [compte]);
 
   /**
    * Teste la disponibilité d'un pseudo avant l'inscription, via la fonction
@@ -203,6 +259,10 @@ export function AuthProvider({ children }) {
         utilisateur?.email?.split("@")[0] ||
         "",
       connecte: Boolean(session),
+      // Gouverne **l'affichage** de la section d'administration du profil, et
+      // rien d'autre : ce n'est pas un droit, le seul garde des routes
+      // d'administration est le secret `X-Admin-Secret` vérifié côté backend.
+      estAdmin,
       chargement,
       recuperation,
       configure: supabaseConfigure,
@@ -217,6 +277,7 @@ export function AuthProvider({ children }) {
     };
   }, [
     session,
+    estAdmin,
     chargement,
     recuperation,
     pseudoDisponible,

@@ -47,7 +47,7 @@ DOMAINE = "profils"
 # listes séparées finiraient par diverger, et le profil d'un autre membre
 # afficherait une voiture différente de la sienne au classement.
 COLONNES_PROFIL = (
-    "id,pseudo,couleur1,couleur2,numero,livree_mode,livree_ecurie,cree_le"
+    "id,pseudo,couleur1,couleur2,numero,livree_mode,livree_ecurie,is_admin,cree_le"
 )
 
 # Bornes du numéro (1 à 99), doublées par la contrainte `profils_numero_valide`.
@@ -112,6 +112,17 @@ class ProfilServi(BaseModel):
     # `cree_par` à la version `0.4.1`. `perso` est aussi le repli du frontend.
     livree_mode: str = MODE_PERSO
     livree_ecurie: str | None = None
+    # Drapeau d'administration (migration `20260820150000`). Même valeur par
+    # défaut et même raison que les deux champs ci-dessus — mais ici le défaut
+    # est aussi le moins privilégié des deux : une base non migrée, une colonne
+    # renommée ou une réponse tronquée referment la section d'administration,
+    # jamais l'inverse.
+    #
+    # **Il est servi, jamais reçu.** `ModificationProfil` ne le déclare pas et
+    # `modifier_mon_profil` construit son dictionnaire champ par champ : un
+    # `is_admin` glissé dans le corps d'un PATCH est ignoré, comme le sont déjà
+    # `id` et `pseudo`. Se promouvoir soi-même par cette route est impossible.
+    is_admin: bool = False
     cree_le: datetime
 
 

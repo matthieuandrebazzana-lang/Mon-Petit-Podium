@@ -350,3 +350,52 @@ export async function chargerPseudo(profilId, signal) {
     return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
   }
 }
+
+/**
+ * Le drapeau d'administration de ce profil, tel qu'il est **en base**.
+ *
+ * **Jamais depuis un cache, et c'est la seule règle qui compte ici.** Le cache
+ * *stale-while-revalidate* de `useDonnees` est le bon outil pour la liste des
+ * championnats — il fait tenir l'accueil pendant le réveil de Railway — et le
+ * mauvais pour un droit : une valeur écrite dans `localStorage` survit à la
+ * révocation du droit, et se modifie depuis les outils de développement. Ce
+ * chargeur ne passe donc pas par lui, exactement comme `chargerPseudo`.
+ *
+ * **Directement dans Supabase, et non par l'API**, pour la raison qui gouverne
+ * ce partage depuis l'étape 3 : la politique « Profils lisibles par les membres
+ * connectés » décrit exactement ce cas, et la lecture porte sur une clé
+ * primaire. Passer par Railway n'ajouterait qu'un cold start à une lecture qui
+ * conditionne l'affichage d'une section.
+ *
+ * **Le doute referme la section, il ne l'ouvre jamais.** Base non migrée, ligne
+ * absente, réseau coupé, colonne renommée : tous ces cas rendent `false`. C'est
+ * l'inverse du sens du doute appliqué au pseudo — un pseudo périmé vaut mieux
+ * que pas de pseudo, une section d'administration affichée à tort ne vaut rien.
+ *
+ * Ce drapeau ne garde d'ailleurs rien : il décide d'un affichage. Le seul garde
+ * réel de `POST /scraper/declencher` est le secret `X-Admin-Secret`, vérifié
+ * côté backend à temps constant.
+ */
+export async function chargerEstAdmin(profilId, signal) {
+  if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
+  if (!profilId) return { ok: true, message: null, donnees: false };
+
+  try {
+    const requete = supabase
+      .from("profils")
+      .select("is_admin")
+      .eq("id", profilId)
+      .maybeSingle();
+
+    const { data, error } = await (signal ? requete.abortSignal(signal) : requete);
+    if (error) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
+
+    // `=== true` et non une conversion en booléen : une colonne absente rend
+    // `undefined`, une ligne absente rend `null`, et les deux doivent valoir
+    // « non administrateur » sans que personne ait à s'en souvenir.
+    return { ok: true, message: null, donnees: data?.is_admin === true };
+  } catch (erreur) {
+    if (erreur.name === "AbortError") throw erreur;
+    return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
+  }
+}

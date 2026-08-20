@@ -3877,6 +3877,101 @@ C'est le piège déjà documenté à la version `0.21.1` pour le calendrier et �
 
 **Un point relevé et laissé tel quel** : le numéro peint sur le museau est rendu **tête-bêche** (`rotate(180)`), sur les onze livrées comme sur la voiture personnalisable. C'est le calage de la planche d'origine, antérieur à cette version et uniforme — donc hors du périmètre demandé. À trancher si le numéro doit se lire dans le sens de l'écran.
 
+**Compte administrateur — drapeau `is_admin` et section d'administration** (version `0.41.0`)
+
+Le déclenchement du scraper cesse d'exiger un terminal : un compte marqué administrateur voit deux boutons dans son profil. Une migration, un champ de plus sur un modèle Pydantic, un drapeau dans le contexte d'authentification, une section d'écran. **Le backend change** — `backend/app/config.py` passe donc en `0.41.0` : `ProfilServi` sert un champ de plus, et `/health` doit dire la vérité sur ce qui est déployé.
+
+---
+
+***`is_admin` décide d'un affichage, jamais d'un droit. C'est le point à ne pas oublier.***
+
+Le drapeau ne garde rien, et trois choses le rendent structurellement incapable d'en garder :
+
+1. **`POST /scraper/declencher` ne le connaît pas.** Elle est fermée par `exiger_secret` depuis l'étape 4, qui compare `X-Admin-Secret` à `ADMIN_SECRET` **à temps constant** et refuse tout le monde (`503`) quand la variable n'est pas définie sur Railway. Aucune ligne de backend n'a été ajoutée à cette route, et c'est voulu : le garde existait déjà et il est meilleur qu'un drapeau lu côté client.
+2. **Le secret voyage en clair dans le bundle.** Vite remplace `import.meta.env.VITE_*` par sa valeur littérale **à la construction** : `VITE_ADMIN_SECRET` part donc dans le JavaScript public, lisible par quiconque ouvre les outils de développement — que la section lui soit affichée ou non. Vérifié sur le bundle de production, la chaîne y est. C'est la conséquence assumée de la conception demandée, et elle est documentée à son point d'usage (`frontend/src/config.js`).
+3. **La politique RLS « Chacun modifie son profil » porte sur la LIGNE, pas sur la colonne.** Un membre peut donc techniquement écrire son propre `is_admin` en passant directement par un client Supabase. Sans conséquence : il verrait deux boutons, et rien de plus, tant qu'il n'a pas le secret.
+
+**Ce que la conception protège encore** : un passant qui ne lit pas le bundle, et les autres origines — le CORS du backend n'autorise que les nôtres. **Ce qu'elle ne protège plus** : un déclenchement de scraper par quelqu'un de déterminé. Le remède, le jour où c'est inacceptable, est une route backend qui exige le **jeton** du membre et vérifie `is_admin` en base ; le secret ne quitterait alors jamais Railway. C'est une réécriture de la route, pas un ajustement de l'écran.
+
+---
+
+*Schéma* — `supabase/migrations/20260820150000_profil_is_admin.sql`, **à exécuter à la main dans le SQL Editor de Supabase**, après les treize précédentes. Idempotente. Elle ne crée **aucune table**, ne remplace **aucune fonction** et ne touche à **aucune politique** : une colonne, et rien d'autre. Ne remplaçant aucune fonction, c'est — avec la 11 — la seule migration depuis la 7 qui ne puisse pas entrer en conflit d'ordre avec une migration antérieure rejouée par-dessus.
+
+`public.profils` gagne `is_admin` (boolean, **`not null default false`**). Le `not null` n'est pas de la rigueur décorative : une colonne nullable ferait de `NULL` un troisième état, que chaque lecteur devrait interpréter, et un `NULL` pris pour vrai par mégarde ouvrirait la section à tout le monde. Il n'y a que deux valeurs, et **le défaut est le moins privilégié des deux**.
+
+**Aucune politique RLS n'est ajoutée**, et c'est un constat plutôt qu'une omission : les deux politiques de la migration 1 couvrent exactement ce cas. « Profils lisibles par les membres connectés » sert la nouvelle colonne comme les autres, donc chacun lit son propre drapeau ; « Chacun modifie son profil » est la limite décrite au point 3 ci-dessus. Le jour où `is_admin` devra vraiment garder quelque chose, c'est une politique `with check` par colonne — ou le retrait du droit d'`update` sur cette colonne à `authenticated` — qu'il faudra écrire, **pas un contrôle applicatif de plus**.
+
+**La promotion du premier administrateur se fait à la main**, et il n'y a pas de reprise de l'existant. Un `update` qui promouvrait « le plus ancien compte » se tromperait de personne le jour où la base est restaurée depuis une sauvegarde, et personne ne s'en apercevrait.
+
+```sql
+update public.profils set is_admin = true where pseudo = '<ton pseudo>';
+```
+
+*Backend* — `ProfilServi` gagne `is_admin: bool = False`, et `COLONNES_PROFIL` le demande à PostgREST. Sans cette déclaration, `response_model` **filtrerait le champ avant qu'il n'atteigne le client** : c'est exactement le défaut qui avait rendu les livrées d'écurie invisibles jusqu'à la version `0.40.0`, où la base servait bien `livree_mode` et où le modèle le jetait en silence.
+
+**La valeur par défaut porte deux rôles à la fois.** Elle évite le piège de `cree_par` (version `0.4.1`) — une base non migrée rendrait sinon `500` sur **toute** la réponse au lieu de perdre un champ — et elle referme la section plutôt que de l'ouvrir : base non migrée, colonne renommée, réponse tronquée, tous ces cas donnent `false`.
+
+***Le drapeau est servi, jamais reçu.*** `ModificationProfil` ne le déclare pas, et `modifier_mon_profil` construit son dictionnaire champ par champ : un `is_admin` glissé dans le corps d'un `PATCH` est ignoré, comme le sont déjà `id` et `pseudo` depuis l'étape 8. **Se promouvoir soi-même par cette route est impossible**, et trois contrôles le vérifient — dont un qui relit le corps du handler pour s'assurer qu'aucun chemin n'écrit cette colonne.
+
+---
+
+*Frontend — la lecture du drapeau.* `chargerEstAdmin` (`lib/profils.js`) lit `is_admin` **directement dans Supabase**, à côté de `chargerPseudo` et pour les mêmes raisons : la politique « Profils lisibles par les membres connectés » décrit exactement ce cas, et la lecture porte sur une clé primaire — passer par Railway n'ajouterait qu'un cold start à une lecture qui conditionne un affichage. Le drapeau est ensuite exposé par `AuthContexte`, qui est le « store global » de la demande : le projet n'a pas de Zustand, et ce contexte est déjà le seul endroit qui sait qui est connecté.
+
+**Trois décisions, et aucune n'est arbitraire :**
+
+1. **Jamais depuis un cache, et c'est la seule règle qui compte.** Le hook ne passe pas par `useDonnees` : une valeur écrite dans `localStorage` survit à la révocation du droit, et se modifie depuis les outils de développement. C'est le raisonnement déjà tenu pour le pseudo à la version `0.32.0`, avec un enjeu de plus.
+2. **Jamais depuis le jeton non plus.** `user_metadata` porte une copie figée à l'inscription — le piège documenté sur `pseudo`, et il serait bien pire ici : une révocation ne prendrait effet qu'au prochain renouvellement de session.
+3. **Le doute referme, il n'ouvre jamais.** Base non migrée, ligne absente, réseau coupé, session en cours de résolution, valeur non booléenne : tous ces cas laissent `false`. C'est l'**inverse** du sens du doute appliqué au pseudo, où une valeur périmée vaut mieux que rien — une section d'administration affichée à tort ne vaut rien. La comparaison s'écrit `=== true` et non une conversion en booléen, pour que `undefined` et `null` n'aient à être interprétés par personne.
+
+L'état est remis à `false` **avant** chaque nouvelle lecture, au changement de compte : deux personnes qui se relaient sur le même téléphone ne doivent jamais hériter du drapeau de l'autre, fût-ce une image. C'est la règle posée à l'étape 3 pour les clés de cache, et elle vaut aussi sans cache.
+
+*`appelApi` accepte des en-têtes supplémentaires* — un paramètre `entetes`, fusionné **après** les en-têtes par défaut pour qu'un appelant explicite l'emporte. Le préflight passe sans rien changer côté backend : le `CORSMiddleware` est monté au niveau de l'application avec `allow_headers=["*"]`, donc sur toutes les routes à la fois (étape 1). Vérifié sous un vrai `uvicorn`, `x-admin-secret` est bien rendu dans `access-control-allow-headers`.
+
+---
+
+*La section « Administration »* — `composants/SectionAdmin.jsx`, montée dans « Mon profil » sous la seule condition `estAdmin`. **Pas de route dédiée, pas de garde de navigation**, comme la demande le prescrit — et c'est aussi le choix juste : une route `/admin` protégée par un drapeau lu côté client donnerait l'illusion d'une frontière là où il n'y en a pas. Elle est posée **en dernier**, sous la personnalisation : c'est un outil d'exploitation, pas une partie du profil, et il n'a aucune raison de passer devant la voiture ni devant les statistiques.
+
+***Le figeage demande une confirmation, et ce n'est pas de la prudence décorative.*** C'est l'action difficile à défaire de cet écran, et le CLAUDE.md en porte déjà le cas réel : un scraping passé **avant** les qualifications arrête les cotes sur une grille qui n'existe pas encore (règle 4.3), et rien dans l'application ne sait revenir en arrière — il faut un `update` à la main dans le SQL Editor. C'est très exactement ce qui est arrivé au GP des Pays-Bas (version `0.38.0`), avec un `curl` au lieu d'un bouton. **Un bouton rend le geste plus facile, donc l'accident plus probable.**
+
+La confirmation est posée **sur place et non en boîte de dialogue**, comme « Quitter le championnat » depuis l'étape 3 : le geste de retour d'iOS l'annule, et aucune couche ne s'interpose. La conséquence est écrite **avant** l'appui, seul moment où elle peut encore changer la décision. « Scraper sans figer » n'en demande aucune — il n'écrit que des cotes, sur des Grands Prix qui ne sont pas encore arrêtés.
+
+*L'indicateur de statut* couvre les trois états demandés, et un quatrième qui est le repos. La phase et le mode voyagent dans **un seul objet** : deux drapeaux séparés finiraient par afficher « en cours » et « réussi » en même temps, et un message de succès ne saurait pas dire s'il annonce un figeage.
+
+| Phase | Rendu | Annonce |
+|---|---|---|
+| Repos | les deux boutons | aucune |
+| En cours | boutons neutralisés, `aria-busy` sur celui qui a été lancé | `role="status"` — sans voler le focus |
+| Succès | `Alerte ton="succes"` (ambre, encre foncée) | `role="alert"` |
+| Échec | `Alerte ton="erreur"`, secousse rejouée à chaque tentative | `role="alert"` |
+
+***« Lancé », jamais « terminé ».*** La route rend `202` sans attendre — son contrat depuis l'étape 4 — le scraping dure plusieurs secondes derrière, et son compte rendu part dans les logs Railway. Annoncer « cotes mises à jour » serait une promesse que cette réponse ne porte pas ; le message renvoie donc explicitement aux logs. Un contrôle vérifie que le mot « terminé » n'apparaît nulle part.
+
+**Le secret absent est traité côté client**, sans aller-retour. La route répondrait `401`, que `lib/api.js` traduit en « Session expirée, reconnecte-toi » — un message faux, qui enverrait l'administrateur se reconnecter pour rien. `declencherScraper` refuse donc avant d'appeler, en nommant la vraie cause. Vérifié : aucune requête ne part.
+
+*L'affichage est séparé de l'état* — `VueAdmin` est une fonction pure de ses props, `SectionAdmin` porte les trois `useState`. C'est la convention posée à la version `0.29.0` pour `optionsDisponibles` et `bonusEpingles`, et pour la raison exacte : **le rendu statique n'exécute aucun effet et ne rejoue aucun appui**, donc les quatre phases ne seraient vérifiables qu'en montant un DOM que le projet n'outille pas. Elles le sont désormais directement.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** La secousse d'`Alerte` (transitions-dev 12) est rejouée à chaque tentative, et `TexteEchange` porte déjà le libellé d'attente du bouton (04) : les deux sont installées depuis l'étape 2. Le portier d'`/animate` ne demandait rien de plus — cette section est vue quelques fois par week-end de course, par une seule personne, et un mouvement de plus n'y accuserait aucun changement que ces deux-là n'accusent déjà.
+
+*Apport d'`/apple-design`* — zone tactile de 44px et retour tactile à l'appui sur les trois boutons ; les deux issues sont annoncées par `role="alert"` et l'attente par `role="status"`, qui ne déplace pas le focus ; le bouton lancé porte `aria-busy` et son libellé d'attente plutôt que de disparaître ; et la conséquence du figeage est écrite avant l'appui, ce que le §16 demande d'une action dont on ne revient pas.
+
+*Vérifié* — **90 contrôles passent**.
+
+| Contrôle | Résultat |
+|---|---|
+| Backend, modèles Pydantic (**11 contrôles**) | `is_admin` demandé à PostgREST, colonnes de la `0.40.0` conservées ; sérialisé à `true` comme à `false` ; **colonne absente → `false` et non une exception** ; **`is_admin` n'est pas un champ de `ModificationProfil`**, un `is_admin` glissé dans un corps de PATCH est ignoré, **aucun chemin du handler n'écrit cette colonne** ; `/health` en `0.41.0` |
+| Sous un vrai `uvicorn` | `/health` en `0.41.0` ; **`x-admin-secret` rendu dans `access-control-allow-headers`** au préflight ; `ADMIN_SECRET` absent → route fermée (`503`) ; défini → **`401` sans secret et sur mauvais secret**, et le bon secret passe le garde |
+| `chargerEstAdmin` (**7 contrôles**) | `true` → `true` ; `false`, **colonne absente**, ligne absente, erreur de lecture, identifiant absent et **valeur non booléenne** → `false` ; une erreur ne rend jamais `true` |
+| `declencherScraper` (**10 contrôles**) | `POST`, **en-tête `X-Admin-Secret` transmis**, jeton Supabase conservé à côté, `202` traité comme un succès ; `figer:false` → `?figer=false` ; `401` porté à l'écran |
+| **Secret absent** (build sans la variable, **7 contrôles**) | `ADMIN_SECRET` vaut la chaîne vide ; l'appel est refusé côté client, **aucune requête ne part**, le message dit la vraie cause et **jamais « Session expirée »** |
+| Section, les quatre phases (**39 contrôles**) | repos : les deux actions, aucun statut, carte blanche élevée, 44px, **le secret n'apparaît jamais dans le rendu** ; confirmation : le figeage remplace les deux actions, **la conséquence est écrite avant l'appui**, sortie « Annuler » ; en cours : `role="status"`, boutons neutralisés, `aria-busy`, aucune issue affichée ; succès : `role="alert"`, **« lancé » et jamais « terminé »**, renvoi aux logs Railway, aucune promesse de figeage quand il n'y en a pas ; échec : message du serveur tel quel, aplat d'erreur, **boutons réutilisables** |
+| Montage (**7 contrôles**) | monté sous la seule condition `estAdmin`, **aucune route `/admin` ajoutée** ; le contexte l'expose, le remet à `false` au changement de compte, **le lit en base et non dans le jeton**, et **aucune lecture ne passe par `useDonnees`** |
+| Règles permanentes | **aucune cote brute « ×N »**, ni « ligue », ni « historique », sur les quatre phases |
+| CSS de production | les douze utilitaires employés bien générés |
+| `npm run build` | passe, 14 entrées au précache, version `0.41.0` dans le bundle |
+
+**Ce qui n'a pas pu être vérifié, et c'est à faire** : la migration n'a **pas** été jouée contre un PostgreSQL jetable — le démon Docker n'était pas démarré, comme aux versions `0.33.0` et `0.39.0`. Elle est plus simple que les deux précédentes (une colonne, aucune fonction, aucune politique), mais à surveiller au premier passage dans le SQL Editor.
+
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -3906,6 +4001,8 @@ Ordre d'application, si l'une manque :
 
 13. `supabase/migrations/20260820120000_calendrier_date_qualifications.sql` — sans elle, `calendrier_du_championnat` ne sert pas `date_qualifications`, et **le bouton « Pronostiquer » n'apparaît jamais sur le calendrier d'un championnat** (maquette 15) : le frontend se ferme sur un champ absent plutôt que de s'ouvrir. Rien ne plante, et les deux autres surfaces — le bloc de l'accueil et le calendrier de la saison — ne sont pas concernées, elles lisent le champ par d'autres chemins. **Elle suppose les 10 et 11 déjà appliquées** : elle remplace `calendrier_du_championnat` (migration 10) et lit `grands_prix.date_qualifications` (migration 11). Elle ne crée aucune table et n'ajoute aucune colonne. **Attention à l'ordre** : rejouer la 10 après celle-ci lui retirerait le champ — rejouer la 13 derrière. **Non éprouvée sur un PostgreSQL jetable** (Docker indisponible), mais son corps a été comparé ligne à ligne à celui de la migration 10 : trois lignes de différence, toutes attendues.
 
+14. `supabase/migrations/20260820150000_profil_is_admin.sql` — sans elle, `GET /profils/{id}` et `PATCH /profils/moi` répondent `422` en portant `42703` (colonne absente), donc **l'écran profil ne charge plus du tout**, et `chargerEstAdmin` rend `false` — la section d'administration reste invisible pour tout le monde, ce qui est le bon sens du doute. **Elle suppose la 1 déjà appliquée** : elle altère `public.profils`. Elle ne crée aucune table, ne remplace aucune fonction et ne touche à aucune politique — elle ne peut donc pas entrer en conflit d'ordre avec une migration antérieure rejouée par-dessus. **Elle ne promeut personne** : le premier administrateur se désigne à la main, `update public.profils set is_admin = true where pseudo = '<ton pseudo>';`. **Non éprouvée sur un PostgreSQL jetable** (Docker indisponible), comme les 12 et 13.
+
 **Variables d'environnement du backend** — à définir sur Railway :
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Sans elles, `/championnats` et `POST /scraper/declencher` répondent `503` avec un message explicite, et **le scheduler de l'étape 6 ne démarre pas du tout** (il le journalise au démarrage). La clé de service ne doit jamais être exposée au frontend ni committée.
 - **`ADMIN_SECRET`** — chaîne libre, choisie par toi, à garder secrète. C'est la valeur attendue dans l'en-tête `X-Admin-Secret` de `POST /scraper/declencher` **et de `POST /jobs/resultats/{gp_id}`**. **Tant qu'elle n'est pas définie, les deux routes refusent tout le monde** (`503`) : une variable absente ne doit jamais valoir accès libre. Déclenchement type :
@@ -3933,6 +4030,13 @@ Ordre d'application, si l'une manque :
     -d '[{"driver_number":12,"position":1,"dnf":false,"dns":false,
           "dsq":false,"points":25,"number_of_laps":72,"gap_to_leader":0}]'
   ```
+
+**Variables d'environnement du frontend** — à définir sur Vercel (Settings puis Environment Variables), et en local dans `frontend/.env.local`, qui n'est jamais versionné :
+
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL` — voir plus bas.
+- **`VITE_ADMIN_SECRET`** (version `0.41.0`) — doit valoir **exactement** l'`ADMIN_SECRET` défini sur Railway. C'est le secret que la section « Administration » du profil transmet dans l'en-tête `X-Admin-Secret`. **À ajouter à la main sur Vercel** : sans elle, les deux boutons refusent de partir et le disent (« le secret d'administration n'est pas configuré pour cette version de l'app ») au lieu d'aller chercher un `401` que `lib/api.js` traduirait en « Session expirée ». Valeur locale actuelle : `monpetitpodium2026`.
+
+  **Elle n'est pas secrète vis-à-vis du navigateur, et c'est structurel** : Vite inline les `VITE_*` dans le bundle public à la construction. Quiconque ouvre les outils de développement la lit, administrateur ou non — voir l'entrée `0.41.0` pour ce que cela protège encore et ce que cela ne protège plus. **Toute rotation de ce secret demande donc un redéploiement Vercel en plus du changement sur Railway**, les deux devant rester d'accord.
 
 Points non couverts, à traiter le moment venu :
 - **Le GP Pays-Bas est figé prématurément en base, et c'est à défaire** (constaté en version `0.38.0`). `public.grands_prix` porte `statut = 'cotes_figees'` pour `33b835cc-5c17-40f7-a41f-3e95fc14885a` alors que les qualifications sont annoncées au **22 août 2026 à 12h00 UTC** : le job automatique ne pouvait pas l'avoir posé, il ne se déclenche qu'à partir de qualifs + 2h. Le statut vient donc d'un `POST /scraper/declencher` passé à la main **sans `?figer=false`** — le piège décrit à la version `0.11.0`. **Depuis la version `0.39.0`, le symptôme visible est corrigé** : les trois surfaces exigent en plus que les qualifications soient passées (`cotesArretees`), donc plus aucun bouton « Pronostiquer » ne s'affiche avant l'heure. **La donnée, elle, reste fausse** — le GP est toujours marqué figé, et le job du samedi ne le refigera pas puisqu'il ne traite que les GP en `a_venir`. À défaire dans le SQL Editor : `update public.grands_prix set statut = 'a_venir' where id = '33b835cc-5c17-40f7-a41f-3e95fc14885a' and statut = 'cotes_figees';` Le job du samedi le refigera alors de lui-même après les qualifications. **Tout essai de scraper d'ici là doit porter `?figer=false`.**
@@ -3995,7 +4099,7 @@ Point secondaire : `frontend/public/flags.svg` **n'est utilisé par aucun écran
 **Trois points depuis la refonte visuelle (`0.12.0`)** : l'**en-tête coloré du championnat**, qui remonte sous la zone sûre haute (`coiffe-ecran`) et dont la couleur doit courir jusque derrière la Dynamic Island sans y pousser de texte ; le **bouton de validation collé en bas** de l'écran de pronostics (`barre-collee`), qui rend lui-même `env(safe-area-inset-bottom)` et annule celui d'`ecran` — c'est exactement le genre de calage qui ne se vérifie qu'avec un vrai home indicator, et il faut aussi regarder qu'il ne saute pas quand la barre d'adresse de Safari se rétracte ; et les **aplats pleine largeur** (`pleine-largeur`), à vérifier en paysage sur un iPhone à encoche, où la zone sûre latérale n'est plus nulle. Point à regarder ensuite, hérité de l'étape 10 : la **barre de navigation basse**, dont la zone sûre (`env(safe-area-inset-bottom)`) et la hauteur réservée (`h-nav`, 58px) n'ont jamais été confrontées à un vrai home indicator — c'est exactement le genre de calage qui ne se vérifie pas au simulateur. Regarder aussi qu'elle **ne bouge pas quand la barre d'adresse de Safari se rétracte**, et que les 44px de chaque onglet tombent bien sous le pouce. Points hérités de l'étape 9 : le **balayage des squelettes** (une animation permanente sur plusieurs blocs à la fois, à surveiller côté fluidité), la **vue piste** dont la hauteur est mesurée et change quand la barre d'adresse de Safari se rétracte, et les **accordéons** de l'écran de résultats, dont le chevron bascule en `scaleY(-1)` précisément parce que l'interpolation de `d:` n'existe pas sous Safari.
 - **Parcours d'authentification testé de bout en bout** — le code est en place et compile, mais inscription, confirmation par email, connexion et réinitialisation n'ont pas encore été exercées contre le vrai projet Supabase.
 - **Clés OAuth Google et Apple** — à renseigner dans le tableau de bord Supabase. Ajouter aussi les URL de redirection autorisées : `https://mon-petit-podium.vercel.app/accueil`, `.../nouveau-mot-de-passe` et leurs équivalents `http://localhost:5173`. **Les boutons sont masqués depuis la version `0.2.2`** : une fois les clés en place, repasser `OAUTH_ACTIF` à `true` dans `frontend/src/composants/BoutonsOAuth.jsx`.
-- **Variables d'environnement de production** — `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` et `VITE_API_URL` **restent à définir côté Vercel** : sans les deux premières, la production affiche l'écran de configuration manquante. Côté Railway, **`ENVIRONMENT=production` reste à ajouter** : le service répond aujourd'hui `environment: development`, ce qui laisse `/docs` accessible publiquement. `FRONTEND_URL` n'est plus bloquante depuis la version `0.1.2` (l'URL Vercel est la valeur par défaut), mais la définir explicitement reste préférable pour garder la configuration lisible sur Railway.
+- **Variables d'environnement de production** — `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL` et, depuis la version `0.41.0`, **`VITE_ADMIN_SECRET`** (voir ci-dessus) **restent à définir côté Vercel** : sans les deux premières, la production affiche l'écran de configuration manquante ; sans la dernière, la section « Administration » du profil s'affiche mais ses deux boutons refusent de partir. Côté Railway, **`ENVIRONMENT=production` reste à ajouter** : le service répond aujourd'hui `environment: development`, ce qui laisse `/docs` accessible publiquement. `FRONTEND_URL` n'est plus bloquante depuis la version `0.1.2` (l'URL Vercel est la valeur par défaut), mais la définir explicitement reste préférable pour garder la configuration lisible sur Railway.
 
 ### Décisions validées mais non encore implémentées
 

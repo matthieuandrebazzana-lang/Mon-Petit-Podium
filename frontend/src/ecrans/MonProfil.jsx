@@ -13,6 +13,7 @@ import BlocErreur from "../composants/BlocErreur.jsx";
 import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
 import { IconeCoche } from "../composants/Icones.jsx";
 import SelecteurSkin from "../composants/SelecteurSkin.jsx";
+import SectionAdmin from "../composants/SectionAdmin.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import {
   chargerNumerosPris,
@@ -166,7 +167,7 @@ export function HeroProfil({ pseudo, voiture, numero, action }) {
 }
 
 export default function MonProfil() {
-  const { utilisateur, deconnecter } = useAuth();
+  const { utilisateur, estAdmin, deconnecter } = useAuth();
   const naviguer = useNavigate();
 
   const profilId = utilisateur?.id ?? null;
@@ -520,6 +521,13 @@ export default function MonProfil() {
                     </Bouton>
                   </div>
                 </div>
+
+                {/* La section n'existe que pour un administrateur. Elle est
+                    posée en dernier, sous la personnalisation : c'est un outil
+                    d'exploitation, pas une partie du profil, et il n'a aucune
+                    raison de passer devant la voiture ni devant les
+                    statistiques. */}
+                {estAdmin && <SectionAdmin />}
               </div>
             )}
           </ZoneChargement>

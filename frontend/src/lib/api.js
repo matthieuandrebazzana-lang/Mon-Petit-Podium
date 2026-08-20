@@ -84,7 +84,10 @@ function genreDuStatut(statut) {
   return GENRE_SERVEUR;
 }
 
-export async function appelApi(chemin, { methode = "GET", corps, signal } = {}) {
+export async function appelApi(
+  chemin,
+  { methode = "GET", corps, signal, entetes } = {},
+) {
   if (!supabase) return echec(NON_CONNECTE, 0, GENRE_SESSION);
 
   let jeton;
@@ -104,6 +107,12 @@ export async function appelApi(chemin, { methode = "GET", corps, signal } = {}) 
       headers: {
         Authorization: `Bearer ${jeton}`,
         ...(corps ? { "Content-Type": "application/json" } : {}),
+        // `entetes` en dernier : ce qu'un appelant transmet explicitement
+        // l'emporte. Sert aux routes d'administration, qui attendent en plus du
+        // jeton un secret partagé dans `X-Admin-Secret` (`lib/admin.js`). Le
+        // préflight passe : le backend monte son CORS avec `allow_headers=["*"]`
+        // au niveau de l'application, donc sur toutes les routes à la fois.
+        ...entetes,
       },
       body: corps ? JSON.stringify(corps) : undefined,
     });
