@@ -70,7 +70,12 @@ export default function ListeChampionnats() {
           </Bloc>
         )}
 
-        <Bloc rang={2} className="flex flex-col gap-2.5">
+        {/* Conteneur flex a l'interieur du `Bloc` : pose sur lui, le `gap`
+            serait inerte (`.t-stagger-line` est en `display: block` hors de
+            toute couche Tailwind). Meme correction qu'a l'accueil, dont cet
+            ecran reprend la composition — cartes puis actions. */}
+        <Bloc rang={2}>
+          <div className="flex flex-col gap-2.5">
           <ZoneChargement chargement={chargement} squelette={<SqueletteChampionnats />}>
             {championnats.length === 0 ? (
               /* Pas une erreur : un compte neuf n'appartient à rien. Le message
@@ -97,6 +102,7 @@ export default function ListeChampionnats() {
           </ZoneChargement>
 
           <ActionsChampionnat />
+          </div>
         </Bloc>
 
         <Bloc rang={3}>

@@ -448,6 +448,13 @@ export function CarteChampionnat({ championnat }) {
       to={`/championnats/${championnat.id}`}
       className={`rounded-carte shadow-aplat pressable-large relative flex min-h-[120px] flex-col justify-between gap-3 overflow-hidden p-4 ${couleur.fond}`}
     >
+      {/* Le damier d'abord, la lueur par-dessus : la lueur est un galbe de
+          lumiere qui doit porter sur la surface FINIE, texture comprise. Les
+          deux sont decoratifs et hors du chemin du doigt. */}
+      <span
+        aria-hidden="true"
+        className="motif-damier pointer-events-none absolute inset-0"
+      />
       <span
         aria-hidden="true"
         className="lueur-haute pointer-events-none absolute inset-0"
@@ -561,20 +568,32 @@ export function CarteAction({ vers, icone, titre, sousTitre }) {
   return (
     <Link
       to={vers}
-      className="rounded-carte bg-surface shadow-carte pressable-large flex min-h-[120px] items-center gap-3.5 p-4"
+      className="rounded-carte bg-surface shadow-carte pressable-large relative flex min-h-[120px] items-center gap-3.5 overflow-hidden p-4"
     >
-      <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center">
+      {/* `relative` + `overflow-hidden` sont ajoutes pour le damier : sans le
+          second, le motif deborderait des coins arrondis de la carte. */}
+      <span
+        aria-hidden="true"
+        className="motif-damier pointer-events-none absolute inset-0"
+      />
+
+      <span className="relative flex size-10 shrink-0 items-center justify-center" aria-hidden="true">
         {icone}
       </span>
 
-      <span className="min-w-0 flex-1">
+      <span className="relative min-w-0 flex-1">
         <span className="text-texte block truncate text-[17px] font-medium">
           {titre}
         </span>
-        <span className="text-texte-doux mt-1 block text-[13px]">{sousTitre}</span>
+        {/* Le sous-titre quitte le gris `texte-doux` pour le marron
+            `secondaire`. Ce n'est pas un choix de style : sur le fond ramene a
+            #E7E7E7 par le damier, `#999999` tombe a 2,30:1 — il etait deja sous
+            le seuil AA a 2,85:1 sur blanc — quand le marron tient 8,54:1. Meme
+            correction qu'au bandeau de saison a la version `0.14.1`. */}
+        <span className="text-secondaire mt-1 block text-[13px]">{sousTitre}</span>
       </span>
 
-      <IconeChevronDroit className="text-texte-doux size-5 shrink-0" />
+      <IconeChevronDroit className="text-secondaire relative size-5 shrink-0" />
     </Link>
   );
 }
@@ -695,7 +714,17 @@ export default function Accueil() {
           <BlocProchainGp profilId={utilisateur?.id ?? null} />
         </Bloc>
 
-        <Bloc rang={2} className="flex flex-col gap-2.5">
+        {/* **Le conteneur flex vit A L'INTERIEUR du `Bloc`, jamais sur lui.**
+            `.t-stagger-line` declare `display: block` hors de toute couche
+            Tailwind, et une regle non affectee a une couche l'emporte sur
+            toutes les regles empilees, quelle que soit leur specificite : un
+            `flex flex-col gap-2.5` pose sur le `Bloc` etait donc INERTE, et
+            rien dans le JSX ne le laissait voir. Les cartes de championnat se
+            retrouvaient collees a la carte « Creer un championnat », a 0 px.
+            C'est le piege deja documente a la version `0.21.1` pour le
+            calendrier et a la `0.34.0` pour le logo de la page publique. */}
+        <Bloc rang={2}>
+          <div className="flex flex-col gap-2.5">
           <p className="text-label text-texte-doux px-1 pt-1 uppercase">
             Mes championnats
           </p>
@@ -731,6 +760,7 @@ export default function Accueil() {
               et non dans une grille collée au bas de l'écran : elles sont la
               suite naturelle de la liste, pas un pied de page. */}
           <ActionsChampionnat />
+          </div>
         </Bloc>
 
         <Bloc rang={3}>

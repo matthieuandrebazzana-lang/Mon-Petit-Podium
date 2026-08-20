@@ -466,7 +466,13 @@ export default function Championnat() {
             chemins vers le même écran, à trois centimètres l'un de l'autre.
             L'écran de piste, lui, ramène ici par son propre bouton de retour :
             l'aller-retour reste symétrique. */}
-        <Bloc rang={2} className="flex flex-col gap-2.5">
+        {/* Le conteneur flex vit A L'INTERIEUR du `Bloc` : pose sur lui, le
+            `gap` serait inerte (`.t-stagger-line` est en `display: block` hors
+            de toute couche Tailwind). C'est le cas que le CLAUDE.md signalait
+            au « Reste a faire » depuis la version `0.21.1`, ici referme en meme
+            temps que celui de l'accueil. */}
+        <Bloc rang={2}>
+          <div className="flex flex-col gap-2.5">
           {confirmation ? (
             <>
               <Bouton
@@ -491,6 +497,7 @@ export default function Championnat() {
             <>
               <Bouton
                 variante="principal"
+                damier
                 onClick={() => naviguer(`/championnats/${id}/piste`)}
                 icone={<IconeVoiture className="size-5" />}
               >
@@ -506,6 +513,7 @@ export default function Championnat() {
               </button>
             </>
           )}
+          </div>
         </Bloc>
       </div>
     </Ecran>

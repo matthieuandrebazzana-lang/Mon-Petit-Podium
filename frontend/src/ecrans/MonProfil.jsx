@@ -4,7 +4,6 @@ import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
-import BasculeVue from "../composants/BasculeVue.jsx";
 import Voiture from "../composants/Voiture.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import GrilleStats from "../composants/GrilleStats.jsx";
@@ -13,7 +12,7 @@ import ZoneChargement from "../composants/ZoneChargement.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
 import { IconeCoche } from "../composants/Icones.jsx";
-import { LIVREES_DESSINEES } from "../composants/VoituresEcuries.jsx";
+import SelecteurSkin from "../composants/SelecteurSkin.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import {
   chargerNumerosPris,
@@ -29,11 +28,15 @@ import { APP_VERSION } from "../config.js";
 /**
  * Maquette 14 — mon profil : ma voiture, mes statistiques, ma personnalisation.
  *
- * **La voiture se choisit désormais de deux façons**, et c'est l'objet de la
- * refonte : soit « Ma livrée » — les deux couleurs de la palette, comme depuis
- * l'étape 8 — soit « Livrée écurie », l'une des onze voitures de
- * `assets/voitures_ecuries.svg`, dont les couleurs sont fixes. Le choix vit sur
- * le profil (`livree_mode`, `livree_ecurie`), donc il est le même dans tous les
+ * **Une seule section « Ma livrée », et un skin par-dessus.** L'écran opposait
+ * jusqu'ici deux modes dans un contrôle segmenté : choisir une écurie faisait
+ * disparaître les sélecteurs de couleur, et le membre perdait de vue ce vers
+ * quoi il pouvait revenir. Les couleurs et le numéro forment désormais une
+ * section unique, et le skin est **une ligne de plus** au même rang que
+ * « Coque » et « Ailerons » — un accordéon qui déplie les onze pastilles de
+ * `assets/matti.svg`. Le mode n'est plus choisi à la main : il se déduit du
+ * skin retenu, `null` valant « ma livrée ». Le choix vit sur le profil
+ * (`livree_mode`, `livree_ecurie`), donc il est le même dans tous les
  * championnats du membre, ce que demande la section 5.
  *
  * **Écarts assumés par rapport à la maquette**, tous documentés dans le
@@ -43,21 +46,16 @@ import { APP_VERSION } from "../config.js";
  *    grille de cartes illustrées par `assets/gp-cards.svg` ; l'écran qu'elle
  *    ouvrait (maquette 13) reste en place et atteignable par son URL, seule
  *    l'entrée depuis le profil disparaît.
- * 2. La bascule entre les deux modes est un **contrôle segmenté** et non deux
- *    onglets : c'est le geste que reconnaît immédiatement quelqu'un qui vient
- *    d'iOS, et `composants/BasculeVue.jsx` le rendait déjà pour la maquette 07.
- * 3. Les onze livrées défilent **à l'horizontale**, calées sur les cartes
- *    (`snap-x`), comme la rangée « Mes favoris » du tableau des cotes. Une
- *    grille de onze voitures hautes et étroites ferait trois rangées et
- *    repousserait le bouton d'enregistrement hors de l'écran.
+ * 2. Les vignettes du sélecteur de skin sont les **pastilles carrées** de
+ *    `assets/matti.svg`, pas des voitures : elles n'ont ni roues ni ailerons,
+ *    donc aucun endroit où écrire un numéro. La voiture réellement dessinée —
+ *    ici l'aperçu, ailleurs la vue piste — reste celle de
+ *    `composants/VoituresEcuries.jsx`, seule à porter le pseudo sur son aileron
+ *    arrière, qui est le seul identifiant d'un membre sur la piste depuis la
+ *    version `0.39.0`.
  */
 
 const NUMERO_MAXIMUM = 99;
-
-const MODES = [
-  { cle: "perso", libelle: "Ma livrée" },
-  { cle: "ecurie", libelle: "Livrée écurie" },
-];
 
 /** Ne garde que des chiffres, et jamais plus de deux (numéro de 1 à 99). */
 function nettoyerNumero(saisi) {
@@ -164,54 +162,6 @@ export function HeroProfil({ pseudo, voiture, numero, action }) {
         )}
       </div>
     </div>
-  );
-}
-
-/**
- * Une livrée d'écurie dans la rangée de choix.
- *
- * La carte retenue prend l'aplat bordeaux du design system, pas un filet ni une
- * bordure — la section 5 proscrit les traits fins, et c'est déjà la couleur de
- * la sélection partout ailleurs dans l'application (pastille du contrôle
- * segmenté, boutons principaux). La coche en haut à droite dit la même chose
- * une seconde fois, pour qui ne distingue pas les deux fonds.
- */
-function CarteLivree({ livree, choisie, onChoisir }) {
-  return (
-    <li className="snap-start">
-      <button
-        type="button"
-        aria-pressed={choisie}
-        onClick={onChoisir}
-        className={`pressable rounded-widget relative flex w-[78px] flex-col items-center gap-1.5 px-2 pt-2.5 pb-2 ${
-          choisie ? "bg-primaire" : "bg-fond"
-        }`}
-      >
-        {choisie && (
-          <span
-            aria-hidden="true"
-            className="t-coche absolute top-1.5 right-1.5 flex size-4 items-center justify-center rounded-full bg-white"
-          >
-            <IconeCoche className="text-primaire size-2.5 [stroke-width:3]" />
-          </span>
-        )}
-
-        <Voiture
-          mode="ecurie"
-          ecurie={livree.slug}
-          titre={`Livrée ${livree.nom}`}
-          className="h-[88px] w-auto"
-        />
-
-        <span
-          className={`w-full truncate text-center text-[11px] font-medium ${
-            choisie ? "text-white" : "text-texte-doux"
-          }`}
-        >
-          {livree.nom}
-        </span>
-      </button>
-    </li>
   );
 }
 
@@ -419,14 +369,12 @@ export default function MonProfil() {
 
                 <div className="rounded-carte bg-surface shadow-carte p-4">
                   <p className="text-label text-texte-doux mb-3 uppercase">
-                    Ma voiture
+                    Ma livrée
                   </p>
 
                   {/* L'aperçu est au-dessus des réglages et centré : c'est le
-                      sujet de l'écran, et il reste sous les yeux quel que soit
-                      le mode. Les deux modes ne peuvent pas se le partager
-                      côte à côte — la rangée des livrées prend toute la
-                      largeur. */}
+                      sujet de l'écran, et il reste sous les yeux pendant qu'on
+                      règle les couleurs comme pendant qu'on essaie un skin. */}
                   <Voiture
                     mode={voiture.mode}
                     ecurie={voiture.ecurie}
@@ -438,69 +386,39 @@ export default function MonProfil() {
                     className="mx-auto h-[140px] w-auto"
                   />
 
-                  <div className="mt-3.5">
-                    <BasculeVue
-                      options={MODES}
-                      valeur={voiture.mode}
-                      onChange={(mode) => {
-                        modifier({ mode });
+                  {/* Les deux couleurs et le numéro forment **une seule
+                      section**. Elles restent réglables même quand un skin est
+                      actif : ce sont elles qu'on retrouve en le retirant, et
+                      les masquer ferait perdre de vue ce vers quoi on revient.
+                      C'est aussi ce que la base garde — le slug et les deux
+                      couleurs cohabitent en colonnes distinctes. */}
+                  <div className="mt-1.5">
+                    <SelecteurCouleur
+                      libelle="Coque"
+                      valeur={voiture.couleur1}
+                      interdite={voiture.couleur2}
+                      ouvert={ouvert === 1}
+                      onOuvrir={() => setOuvert(ouvert === 1 ? null : 1)}
+                      onChange={(hex) => {
+                        modifier({ couleur1: hex });
                         setOuvert(null);
                       }}
-                      etiquette="Type de livrée"
+                    />
+                    <SelecteurCouleur
+                      libelle="Ailerons"
+                      valeur={voiture.couleur2}
+                      interdite={voiture.couleur1}
+                      ouvert={ouvert === 2}
+                      onOuvrir={() => setOuvert(ouvert === 2 ? null : 2)}
+                      onChange={(hex) => {
+                        modifier({ couleur2: hex });
+                        setOuvert(null);
+                      }}
                     />
                   </div>
 
-                  {enEcurie ? (
-                    <div className="mt-3.5">
-                      {/* La rangée déborde des deux côtés du bloc (`-mx-4`)
-                          puis retrouve son rembourrage : les cartes touchent
-                          alors le bord de l'écran, ce qui dit qu'il y en a
-                          d'autres au-delà. */}
-                      <ul className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        {LIVREES_DESSINEES.map((livree) => (
-                          <CarteLivree
-                            key={livree.slug}
-                            livree={livree}
-                            choisie={voiture.ecurie === livree.slug}
-                            onChoisir={() => modifier({ ecurie: livree.slug })}
-                          />
-                        ))}
-                      </ul>
-                      {!voiture.ecurie && (
-                        <p className="text-corps-sm text-secondaire mt-2">
-                          Choisis une livrée pour l'appliquer à ta voiture.
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="mt-1.5">
-                      <SelecteurCouleur
-                        libelle="Coque"
-                        valeur={voiture.couleur1}
-                        interdite={voiture.couleur2}
-                        ouvert={ouvert === 1}
-                        onOuvrir={() => setOuvert(ouvert === 1 ? null : 1)}
-                        onChange={(hex) => {
-                          modifier({ couleur1: hex });
-                          setOuvert(null);
-                        }}
-                      />
-                      <SelecteurCouleur
-                        libelle="Ailerons"
-                        valeur={voiture.couleur2}
-                        interdite={voiture.couleur1}
-                        ouvert={ouvert === 2}
-                        onOuvrir={() => setOuvert(ouvert === 2 ? null : 2)}
-                        onChange={(hex) => {
-                          modifier({ couleur2: hex });
-                          setOuvert(null);
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {/* Le numéro est hors des deux modes : il s'écrit sur le
-                      museau quelle que soit la livrée. */}
+                  {/* Le numéro est hors du skin : il s'écrit sur le museau
+                      quelle que soit la livrée. */}
                   <div className="flex min-h-tactile items-center justify-between gap-3 py-1.5">
                     <label
                       htmlFor="numero-voiture"
@@ -535,6 +453,33 @@ export default function MonProfil() {
                       />
                     </div>
                   </div>
+
+                  {/* Le skin est une ligne de plus, au même rang que les deux
+                      couleurs, et non un second mode : `null` vaut « ma
+                      livrée ». `mode` s'en déduit — il n'est plus choisi à la
+                      main, donc les deux ne peuvent plus se contredire. */}
+                  <SelecteurSkin
+                    valeur={voiture.mode === "ecurie" ? voiture.ecurie : null}
+                    couleur1={voiture.couleur1}
+                    couleur2={voiture.couleur2}
+                    ouvert={ouvert === 3}
+                    onOuvrir={() => setOuvert(ouvert === 3 ? null : 3)}
+                    onChange={(slug) => {
+                      modifier(
+                        slug
+                          ? { mode: "ecurie", ecurie: slug }
+                          : { mode: "perso" },
+                      );
+                      setOuvert(null);
+                    }}
+                  />
+
+                  {enEcurie && voiture.ecurie && (
+                    <p className="text-corps-sm text-secondaire mt-2">
+                      Le skin remplace tes couleurs sur la piste et dans les
+                      classements. Retire-le pour retrouver ta livrée.
+                    </p>
+                  )}
 
                   {/* L'avertissement ne bloque jamais l'enregistrement :
                       l'unicité du numéro est indicative, et deux membres qui

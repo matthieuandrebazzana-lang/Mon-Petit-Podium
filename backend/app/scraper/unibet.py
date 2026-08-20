@@ -134,12 +134,23 @@ REPLI_QUALIFICATIONS = timedelta(hours=22)
 # à chaque appel (`path.Category`), mais elle ne change pas d'un GP à l'autre.
 CATEGORIE_F1 = "Formule 1"
 
-# Unibet écrit ses horaires en heure de Paris, sans jamais le dire : le champ
-# `start` vaut « 2608231500 » pour un départ annoncé à 15h00. Les stocker tels
-# quels en UTC décalerait toute la programmation des jobs de l'étape 6 (fermeture
-# des pronostics 5 min avant le départ, résultats 1h30 après) d'une ou deux
-# heures selon la saison.
-FUSEAU_UNIBET = ZoneInfo("Europe/Paris")
+# **Le champ `start` d'Unibet est en UTC**, contrairement à ce que l'étape 4
+# avait conclu. Il vaut « 2608231300 » (AAMMJJHHMM) pour le GP des Pays-Bas
+# 2026, dont OpenF1 — source autorisée, en UTC — donne le départ à
+# `2026-08-23T13:00:00+00:00`, soit 15h00 à Zandvoort. Les quatre séances du
+# week-end concordent à la minute près avec OpenF1 :
+#
+#     Course        start 2608231300   OpenF1 13:00Z
+#     Qualification start 2608221400   OpenF1 14:00Z
+#     Sprint        start 2608221000   OpenF1 10:00Z
+#     Essais 1      start 2608211030   OpenF1 10:30Z
+#
+# Le lire en heure de Paris le convertissait une seconde fois et **avançait tout
+# de deux heures** : la base portait 11:00 UTC, l'accueil affichait 13h pour un
+# départ à 15h, et surtout la fermeture des pronostics (départ - 5 min) comme le
+# job de résultats (départ + 1h30) tombaient deux heures trop tôt. Ce n'était
+# donc pas un défaut d'affichage mais un décalage de toute la programmation.
+FUSEAU_UNIBET = ZoneInfo("UTC")
 
 DELAI = httpx.Timeout(20.0, connect=10.0)
 
@@ -226,10 +237,11 @@ def en_points(prix: object) -> int | None:
 
 
 def date_de_depart(brut: object) -> datetime | None:
-    """Lit le champ `start` d'Unibet (« 2608231500 ») et le rend en UTC.
+    """Lit le champ `start` d'Unibet (« 2608231300 ») et le rend en UTC.
 
-    Le format est AAMMJJHHMM, en heure de Paris. Le siècle est implicite : ces
-    cotes portent sur des courses à venir, « 26 » ne peut être que 2026.
+    Le format est AAMMJJHHMM, **déjà en UTC** (voir `FUSEAU_UNIBET`). Le siècle
+    est implicite : ces cotes portent sur des courses à venir, « 26 » ne peut
+    être que 2026.
     """
     if not isinstance(brut, str) or not re.fullmatch(r"\d{10}", brut):
         return None

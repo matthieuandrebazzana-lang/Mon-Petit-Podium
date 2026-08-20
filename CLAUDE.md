@@ -565,7 +565,7 @@ Index unique sur `(gp_id, id_outcome_unibet)` — c'est lui, et lui seul, qui po
 
 **Le nœud racine ne rend pas que des GP.** Il rend aussi « Championnat du monde », au même rang et avec le même `tag: "League"` — le vainqueur du championnat, daté d'un 6 décembre de convenance. L'enregistrer créerait un faux Grand Prix, qui deviendrait le « prochain GP » de l'accueil. Le filtre retenu ne porte pas sur le nom du championnat mais sur l'événement : **seuls les événements dont le libellé donne le slug `course` sont retenus.** Le tri est sémantiquement juste (c'est la course que valide l'étape 6, pas les qualifications ni le sprint) et il écarte le championnat sans avoir à le nommer. `eType` ne sert à rien ici : il vaut `R` pour les deux. **Tout événement écarté est journalisé avec son libellé** — si Unibet renomme « Course », les logs le diront au lieu de laisser le scraper ne rien trouver en silence.
 
-**Les horaires d'Unibet sont en heure de Paris**, sans que rien ne le dise : `start` vaut « 2608231500 » (AAMMJJHHMM) pour un départ annoncé à 15h00, soit 13h00 UTC. Les stocker tels quels décalerait d'une à deux heures toute la programmation de l'étape 6 (fermeture 5 min avant le départ, résultats 1h30 après). La conversion est faite au scraping ; `date_course` est en UTC.
+~~**Les horaires d'Unibet sont en heure de Paris**~~ — **cette conclusion était fausse, et elle a été corrigée en version `0.40.0`.** Le champ `start` est **déjà en UTC** : il vaut « 2608231300 » pour un départ annoncé à 15h00 à Zandvoort, ce que les quatre séances du week-end confirment à la minute près contre OpenF1. Le lire en heure de Paris le convertissait une seconde fois et avançait `date_course` **de deux heures**, décalant d'autant la fermeture des pronostics et le job de résultats. Voir l'entrée `0.40.0` pour la mesure. `date_course` est bien en UTC, mais parce qu'il l'était déjà.
 
 **Un GP figé n'est jamais réécrit.** Avant d'écrire, le scraper lit le statut : `cotes_figees` ou `termine`, il enregistre le GP et **s'arrête là**, en journalisant combien de cotes il a ignorées. C'est la règle 4.3 — après les qualifications, tout le monde pronostique sur les mêmes cotes, et un scraping tardif ne doit pas les faire bouger sous les pronostics déjà saisis. Le statut n'est jamais transmis à l'upsert non plus : le préciser remettrait à `a_venir` un GP figé à chaque passage.
 
@@ -3752,6 +3752,131 @@ Les capitales et le crénage positif de `0,7px` sont **conservés** : c'est ce q
 
 **Ce qui reste à juger à l'œil** : le haut de la piste sans sa ligne d'arrivée (voir le point 2 ci-dessus), et le poids du nom du championnat en bas — 15px en blanc plein est un net changement d'équilibre sur un écran qui n'avait aucun texte appuyé.
 
+---
+
+**Skins d'écurie, damier des boutons, heure de départ et mise en page** (version `0.40.0`)
+
+Sept corrections, dont deux défauts de fond invisibles à la lecture du code. **Le backend change** — `backend/app/config.py` passe donc en `0.40.0` : le scraper lisait mal l'heure d'Unibet, et deux modèles de réponse filtraient le skin avant qu'il n'atteigne le client.
+
+---
+
+***L'heure de départ était fausse de deux heures, et ce n'était pas un défaut d'affichage.***
+
+C'est le point de la version. Le widget de l'accueil annonçait 13h pour un départ à 15h. La chaîne a été reprise de bout en bout — mise en forme, transport, base, scraper — et c'est **à la source** qu'était l'erreur.
+
+`frontend/src/lib/format.js` est juste : `11:00 UTC` rendu en heure locale donne bien « 13h00 » à Paris. La base portait donc `11:00 UTC` là où le départ est à `13:00 UTC`. Interrogé, Unibet rend `start = "2608231300"` pour la course — et le scraper lisait ce « 13:00 » **comme de l'heure de Paris**, le convertissait en `11:00 UTC`, et enregistrait deux heures trop tôt.
+
+**L'étape 4 avait conclu que `start` était en heure de Paris. C'est faux, et OpenF1 le tranche** — source autorisée, publiée en UTC. Les quatre séances du week-end concordent à la minute près :
+
+| Séance | Unibet `start` | OpenF1 | Local Zandvoort |
+|---|---|---|---|
+| Essais 1 | `2608211030` | `10:30Z` | 12h30 |
+| Sprint | `2608221000` | `10:00Z` | 12h00 |
+| Qualification | `2608221400` | `14:00Z` | 16h00 |
+| **Course** | `2608231300` | **`13:00Z`** | **15h00** |
+
+`FUSEAU_UNIBET` passe donc de `Europe/Paris` à `UTC`, et la constante porte désormais le relevé qui le prouve. La conclusion de l'étape 4 est **barrée sur place** dans ce fichier : la laisser telle quelle aurait fait refaire l'erreur à la première session qui rebranche le scraper.
+
+**Ce n'était pas cosmétique.** `date_course` gouverne la fermeture des pronostics (départ − 5 min) et le job de résultats (départ + 1h30, fenêtre de 3h). Avec deux heures d'avance, les pronostics se seraient fermés à 12h55 pour une course à 15h00, et le job aurait interrogé OpenF1 de 12h30 à 15h30 — c'est-à-dire **avant la fin de la course**, en épuisant sa fenêtre pendant qu'elle se courait. Le repli `date_course − 22h` des qualifications était décalé d'autant.
+
+**La ligne en base reste fausse jusqu'au prochain scraping.** `_enregistrer` réécrit `date_course` et `date_qualifications` même pour un GP figé — c'est une donnée de programme, pas une cote — donc un `POST /scraper/declencher?figer=false` suffit à la corriger. C'est noté au « Reste à faire », avec le `update` de statut qui l'accompagne.
+
+---
+
+***Le skin n'apparaissait nulle part, et la base n'y était pour rien.***
+
+Le second défaut de fond. La migration `20260819124500` fait servir `livree_mode` et `livree_ecurie` par `classement_du_championnat` et `pronostics_du_championnat` depuis la version `0.33.0`, et `livreeDuMembre` sait les lire. Entre les deux, **les modèles Pydantic ne les déclaraient pas** : `response_model` de FastAPI ne laisse passer que les champs du modèle, et les deux colonnes étaient **filtrées avant d'atteindre le client**. `livreeDuMembre` recevait une ligne sans `livree_mode`, retombait sur `perso` — son repli volontaire — et **aucun skin n'a jamais pu s'afficher**, ni sur la piste, ni au classement, ni sur le tableau des résultats.
+
+Les deux champs sont ajoutés à `LigneClassement` (`routes/championnats.py`) et au modèle des membres de `routes/pronostics.py`, **avec des valeurs par défaut** : c'est le piège de `cree_par` de la version `0.4.1`, et un backend déployé avant la migration rendrait sinon **toute** la réponse en `500` au lieu de perdre un champ. Vérifié dans les deux sens — une ligne complète porte son skin, une ligne sans les colonnes se sérialise en `perso` sans lever.
+
+`LigneCalendrier` **n'est pas touchée** : la migration 12 ne remplace que deux fonctions, et `calendrier_du_championnat` ne sert pas la livrée. Lui ajouter des champs que la base n'envoie jamais n'aurait produit que des défauts morts.
+
+*La clé de cache du classement est versionnée* — `classement:{profil}:v2:{championnat}`. Les lignes déjà en `localStorage` ont été écrites par le backend qui filtrait : sans ce marqueur, un téléphone qui a déjà ouvert la vue piste continuerait de peindre en `perso` au premier rendu, à partir d'un cache que rien n'invalide. Le marqueur est placé **après** l'identifiant du compte pour que `oublierCachePrefixe("classement:<profil>:")`, appelé par « Mon profil » à chaque enregistrement, continue de tout balayer d'un coup.
+
+---
+
+***Le sélecteur de skin, et ce que `matti.svg` contient vraiment.***
+
+`assets/matti.svg` porte **onze pastilles carrées** (255,70 × 255,70, coins arrondis) qui montrent le motif d'une livrée : ni roues, ni ailerons, ni museau. Ce ne sont pas des voitures, et **la demande les décrivait comme telles** — la question a été posée avant d'écrire quoi que ce soit, parce que la réponse changeait trois des sept points.
+
+L'arbitrage retenu : **vignettes du sélecteur uniquement**. La voiture réellement dessinée — aperçu du profil, vue piste, classements — reste celle de `composants/VoituresEcuries.jsx`. La raison n'est pas esthétique : depuis la version `0.39.0`, **le pseudo peint sur l'aileron arrière est le seul moyen de distinguer deux membres sur la piste**, la légende n'y affichant plus que le score. Une pastille carrée n'a aucun endroit où l'écrire, et l'écran signature serait devenu muet.
+
+*Extraction, jamais reproduction* — `composants/SkinsEcuries.jsx`, découpé par script comme les tracés de circuits (`0.15.0`), les icônes de la barre (`0.22.0`), les logos des cartes d'action (`0.28.0`) et les drapeaux (`0.24.0`). Les `viewBox` sont les **vraies boîtes englobantes**, mesurées en échantillonnant les courbes de Bézier : une tranche arithmétique (4179,74 / 11 = 379,98) aurait laissé 124 unités de vide sous chaque tuile et fait flotter les vignettes dans leur cadre.
+
+*L'écran perd sa bascule à deux modes.* « Ma livrée » et « Livrée écurie » s'excluaient dans un contrôle segmenté : choisir une écurie faisait disparaître les sélecteurs de couleur, et le membre perdait de vue ce vers quoi il pouvait revenir. Les couleurs et le numéro forment désormais **une seule section**, et le skin est **une ligne de plus** au même rang que « Coque » et « Ailerons » — un accordéon, rendu exactement comme elles, avec la transition déjà installée (*accordion expand*, transitions-dev 21).
+
+**Le mode n'est plus choisi à la main, il se déduit du skin** : `null` vaut « ma livrée ». Les deux ne peuvent donc plus se contredire. La première case de la grille rend les couleurs du membre plutôt que d'afficher « Aucun » — elle montre ce vers quoi on revient, et c'est le pendant du drapeau `retirer_numero` de l'étape 8, où `null` seul aurait été indiscernable d'un champ non transmis.
+
+**Les couleurs restent réglables quand un skin est actif.** Elles ne peignent alors plus rien, mais ce sont elles qu'on retrouve en le retirant, et la base les garde en colonnes distinctes. Une ligne sous le sélecteur le dit plutôt que de les masquer.
+
+*Écart assumé* — la demande veut « une grille scrollable ». La grille tient en trois rangées de quatre et **ne défile pas dans son propre cadre** : un conteneur scrollable niché dans un accordéon lui-même dans une page qui défile est ce qu'`/apple-design` proscrit — le geste part au mauvais étage une fois sur deux. C'est la page qui défile.
+
+---
+
+***Cadillac et Haas étaient bien inversés.*** Rendues côte à côte, la voiture nommée `haas` portait la livrée **noir et blanc de Cadillac**, et `cadillac` le **blanc et rouge de Haas**. Les deux clés sont échangées dans `GEOMETRIE` et dans `FORMES` : **aucune coordonnée n'est réécrite**, c'est le nom qui change de dessin.
+
+***Alpine et Mercedes reçoivent leurs nouveaux dessins.*** `assets/VOITUREs_am.svg` en contient deux, mesurés à **141,11 × 288,09 chacun — exactement la boîte des onze autres**, au ratio près (0,4898). Ils se substituent donc sans qu'une seule valeur de la vue piste ne bouge. Leurs points d'ancrage sont lus dans les `<text>` de la planche et tombent aux mêmes positions relatives que les autres (24,88 % pour le numéro, 95,70 % pour le nom) ; les aplats sous les deux textes sont **échantillonnés sur le rendu**, pas devinés — c'est d'eux que `encreSur` tire l'encre, et la planche écrit ses deux textes en blanc y compris sur les ailerons clairs.
+
+*Écart assumé sur le cadrage* — la demande donnait « Alpine y≈0 à y≈391, Mercedes y≈391 à y≈782 », soit la moitié de la hauteur du fichier. Les deux voitures occupent en réalité `29,39 → 317,48` et `459,01 → 747,10` : des tranches arithmétiques auraient laissé 100 unités de vide sous chacune. Ce sont les boîtes réelles qui font foi, comme partout ailleurs dans le projet.
+
+---
+
+***Le damier des boutons.***
+
+`assets/06.svg` pèse 91 Ko — trop pour être inliné. La planche répète **quatorze fois la même vague**, translatée de 52,33 unités : vérifié forme par forme, écart maximal 0,05 unité sur une boîte de 542, soit l'arrondi des coordonnées source. Elle est donc écrite **une seule fois** dans un `<defs>` et reprise par `<use>`, ce qui la ramène à **7 Ko**. Rendu contrôlé au pixel près contre l'original : 0,034 % des pixels diffèrent, tous sur l'anticrénelage des bords.
+
+Le motif est inliné en data-URI dans `--motif-damier`, comme `--grain-fond` et les drapeaux : aucun aller-retour réseau avant que les boutons n'aient leur texture, et le précache reste à 14 entrées. Il se pose sur un `<span>` décoratif en `absolute inset-0`, **comme `lueur-haute`** — un pseudo-élément aurait obligé chaque appelant à ajouter `relative` et `overflow-hidden` sans que rien ne le rappelle. Sur la carte de championnat il passe **sous** la lueur : celle-ci est un galbe de lumière, elle doit porter sur la surface finie.
+
+***L'opacité est mesurée, pas choisie à l'œil.*** À 0,15, le motif **assombrit** les deux aplats les plus clairs — terracotta 4,09 → 4,41, vert sauge 4,86 → 5,06 — et retire au plus un point aux autres. Le pire cas pour du texte plein reste **4,41:1**.
+
+| Surface | Encre | Avant | Avec damier |
+|---|---|---|---|
+| Bordeaux `#800111` | blanc | 10,88 | **10,89** |
+| Bleu ardoise | blanc | 9,08 | 8,66 |
+| Amber `#E8A020` | `#1A1A1A` | 7,86 | 6,85 |
+| Terracotta | blanc | 4,09 | **4,41** |
+| Carte blanche | `#1A1A1A` | 17,40 | 14,07 |
+
+**Une conséquence, et elle est corrigée.** Sur une carte blanche le damier ramène le fond à `#E7E7E7`, où le gris `texte-doux` des sous-titres d'action tomberait à **2,30:1** — il était déjà sous le seuil AA à 2,85:1 sur blanc. Ils passent au marron `secondaire`, qui tient **8,54:1**. C'est le même arbitrage qu'au bandeau de saison à la version `0.14.1`, et il était nécessaire pour que la texture demandée reste sûre.
+
+`Bouton.jsx` gagne une prop `damier`, **opt-in et jamais un défaut** : ce composant sert tous les boutons principaux de l'application, et texturer les vingt d'un coup irait bien au-delà de ce qui a été demandé. Seule la « Vue piste » la porte. Le motif disparaît sous `prefers-contrast: more`, comme le grain du fond.
+
+---
+
+***Le chevauchement de l'accueil : un `gap` qui n'existait pas.***
+
+Les cartes de championnat touchaient la carte « Créer un championnat ». Le `gap-2.5` était pourtant bien écrit — et c'est précisément ce qui rendait le défaut illisible : **la classe était là, elle ne s'appliquait pas**.
+
+`.t-stagger-line` pose `display: block` et cette règle est déclarée **hors de toute couche Tailwind**. En CSS en cascade par couches, une règle non affectée à une couche l'emporte sur **toutes** les règles empilées, quelle que soit leur spécificité : `.flex` vit dans `@layer utilities`, elle perd. Le `<Bloc>` restait donc en `display: block`, où `gap` n'a aucun effet — les enfants s'empilaient à 0 px.
+
+C'est le piège déjà documenté à la version `0.21.1` pour le calendrier et à la `0.34.0` pour le logo de la page publique. **Les trois cas connus sont refermés d'un coup** : l'accueil (visible), la liste des championnats et `Championnat.jsx` (latents, ce dernier était inscrit au « Reste à faire »). Le conteneur flex vit désormais **à l'intérieur** du `Bloc`, jamais sur lui — c'est le motif à suivre. **Rien n'est touché à `index.css`** : déplacer `.t-stagger-line` dans une couche changerait la précédence de toutes les transitions de l'application d'un coup, pour réparer une gouttière.
+
+---
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** Le sélecteur de skin reprend l'accordéon (21) et la coche (`t-coche`) déjà installés, les cartes gardent leur entrée échelonnée (18), et un damier fixe n'accompagne aucun changement d'état. Le portier d'`/animate` ne demandait rien de plus.
+
+*Apport d'`/apple-design`* — le skin devient une rangée de 44px comme les deux couleurs, avec le même chevron et le même retour à l'appui ; la grille ne niche pas de défilement dans un accordéon ; damier, lueur et pastilles sont `aria-hidden` et `pointer-events-none` ; et l'écran ne montre jamais un état qu'il ne connaît pas — la case « Ma livrée » dit ce vers quoi on revient plutôt que d'afficher « Aucun ».
+
+*Vérifié* :
+
+| Contrôle | Résultat |
+|---|---|
+| Heure de départ, **contre le vrai Unibet et le vrai OpenF1** | les **quatre séances** concordent à la minute près ; `date_de_depart` rend `2026-08-23T13:00:00+00:00`, soit 15h00 à Paris |
+| Modèles backend | `LigneClassement` et le modèle des membres portent le skin ; une ligne complète le sérialise, **une ligne sans les colonnes retombe sur `perso` sans lever** (pas de `500`) |
+| Pastilles matti | 11 pastilles, **l'ordre exact demandé**, `viewBox` toutes carrées à 255,70, décoratives ; slug inconnu et **clé héritée d'`Object`** → rien |
+| Voitures | 11 livrées ; **`haas` porte l'ancien cadre de `cadillac` et réciproquement** ; Alpine et Mercedes aux nouveaux cadres ; **les onze ont la même boîte 141,11 × 288,09** ; Alpine rend son numéro et son pseudo |
+| `livreeDuMembre` | skin reconnu, mode `ecurie` sans slug → `perso`, ligne vide → `perso`, `couleurLisible` suit la teinte de l'écurie |
+| Sélecteur de skin | **12 cases** (Ma livrée + 11), une seule pressée, accordéon ouvert/fermé, valeur affichée juste |
+| Damier | présent sur la carte de championnat, les deux cartes d'action et « Vue piste » ; **absent du bouton par défaut** ; décoratif et hors du chemin du doigt ; posé **avant** la lueur ; `overflow-hidden` sur les cartes blanches |
+| Contraste, **mesuré sur les six aplats et sur le blanc** | pire cas texte plein **4,41:1** ; le damier améliore terracotta et vert sauge ; sous-titres d'action passés au marron (**2,30 → 8,54:1**) |
+| Mise en page | **plus aucun `<Bloc>` ne porte de classe de disposition**, sur les trois écrans concernés |
+| CSS compilé | `.motif-damier` généré avec `background-size:cover` et `opacity:.15` ; `@media (prefers-contrast:more){.motif-damier{display:none}}` présent ; **data-URI décodée depuis le bundle : 6 977 octets, 14 répétitions, SVG valide** |
+| Rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite) | **43 contrôles passent** ; les **cinq écrans** touchés se montent sans lever |
+| Aperçus rendus | les 11 voitures côte à côte (inversion et nouveaux dessins confirmés à l'œil) ; la grille de skins **à sa taille réelle** ; le damier composité sur les cinq surfaces, texte lisible partout |
+| `npm run build` | passe, **14 entrées au précache** (inchangé), version `0.40.0` dans le bundle |
+
+**Un point relevé et laissé tel quel** : le numéro peint sur le museau est rendu **tête-bêche** (`rotate(180)`), sur les onze livrées comme sur la voiture personnalisable. C'est le calage de la planche d'origine, antérieur à cette version et uniforme — donc hors du périmètre demandé. À trancher si le numéro doit se lire dans le sens de l'écran.
+
 ### Bugs connus
 
 *(Aucun.)*
@@ -3811,6 +3936,8 @@ Ordre d'application, si l'une manque :
 
 Points non couverts, à traiter le moment venu :
 - **Le GP Pays-Bas est figé prématurément en base, et c'est à défaire** (constaté en version `0.38.0`). `public.grands_prix` porte `statut = 'cotes_figees'` pour `33b835cc-5c17-40f7-a41f-3e95fc14885a` alors que les qualifications sont annoncées au **22 août 2026 à 12h00 UTC** : le job automatique ne pouvait pas l'avoir posé, il ne se déclenche qu'à partir de qualifs + 2h. Le statut vient donc d'un `POST /scraper/declencher` passé à la main **sans `?figer=false`** — le piège décrit à la version `0.11.0`. **Depuis la version `0.39.0`, le symptôme visible est corrigé** : les trois surfaces exigent en plus que les qualifications soient passées (`cotesArretees`), donc plus aucun bouton « Pronostiquer » ne s'affiche avant l'heure. **La donnée, elle, reste fausse** — le GP est toujours marqué figé, et le job du samedi ne le refigera pas puisqu'il ne traite que les GP en `a_venir`. À défaire dans le SQL Editor : `update public.grands_prix set statut = 'a_venir' where id = '33b835cc-5c17-40f7-a41f-3e95fc14885a' and statut = 'cotes_figees';` Le job du samedi le refigera alors de lui-même après les qualifications. **Tout essai de scraper d'ici là doit porter `?figer=false`.**
+
+  **Sa `date_course` est fausse elle aussi, et pour une autre raison** (version `0.40.0`) : la base porte `2026-08-23T11:00:00+00:00` là où OpenF1 donne `13:00:00+00:00`, parce que le scraper lisait l'heure d'Unibet comme de l'heure de Paris et la convertissait une seconde fois. Le code est corrigé ; **la ligne en base ne le sera qu'au prochain scraping**, `_enregistrer` réécrivant `date_course` et `date_qualifications` même pour un GP figé. Passer le `update` ci-dessus puis un `POST /scraper/declencher?figer=false` remet les deux d'aplomb en une fois.
 - **Décompte des Grands Prix restants figé à 12 — sur l'accueil uniquement, et la réponse existe désormais.** Depuis la version `0.14.1`, le bandeau de bas d'écran (`GP_RESTANTS` dans `frontend/src/ecrans/Accueil.jsx`) affiche une constante, parce que `public.grands_prix` ne contient que le Grand Prix suivant. **La version `0.20.0` a créé la liste qui manquait** : `frontend/src/lib/calendrier2026.js` porte les douze Grands Prix de la saison, et l'onglet Calendrier en tire déjà un décompte qui **exclut les courses terminées**. Le bandeau de l'accueil, lui, n'a pas été rebranché — c'est hors du périmètre de cette version, et c'est désormais quelques lignes : compter `GP_2026` filtré par `etatDuGpSaison`, exactement comme le fait `CalendrierGlobal`. **À faire, sans quoi les deux écrans se contrediront dès la première course courue** — l'accueil dira « 12 restants » quand le calendrier en montrera 11. `chargerGrandsPrixRestants` (`lib/pronostics.js`) reste en place mais n'est plus la bonne réponse : elle compte les lignes en base, c'est-à-dire une seule course.
 - **Couleurs d'écurie en désaccord avec la grille du backend — tranché en version `0.30.0`, et dans le bon sens.** Le désaccord sur huit pilotes que relevait la version `0.27.0` venait entièrement de `frontend/src/lib/ecuries.js` : `backend/app/calcul/pilotes.py` **avait raison sur les vingt-deux**, donc **le calcul des points n'a jamais été faux** et rien n'est à recalculer. Le frontend est corrigé, le backend n'est pas touché. Un contrôle du jeu de tests lit désormais `pilotes.py` et compare les deux grilles ligne à ligne : elles ne peuvent plus diverger en silence.
 - **`frontend/src/lib/ecuries.js` est à mettre à jour chaque saison**, au même titre que `pilotes.py` et `calendrier2026.js`. Une table périmée ne fait aucun dégât silencieux : un pilote absent ressort sans teinte, ce qui se voit à l'écran.
@@ -3847,7 +3974,7 @@ Points non couverts, à traiter le moment venu :
 
 Point secondaire : `frontend/public/flags.svg` **n'est utilisé par aucun écran** (les drapeaux partent en SVG inline avec le bundle) et coûte 30 Ko au précache du service worker. Le retirer est sans effet sur l'application.
 
-**Un point depuis la `0.21.1` — le piège des règles hors couche, et son revers.** `.t-stagger-line`, `.t-skel-bar` et, depuis la version `0.28.0`, `.section-collante` sont déclarées hors de toute couche Tailwind : **elles battent n'importe quelle classe utilitaire**, quelle que soit sa spécificité. Pour la troisième c'est délibéré — voir la version `0.28.0`, où un `relative` posé à côté de `section-collante` avait silencieusement désactivé le collage d'un en-tête et l'avait décalé de 107px sur les cotes. **Le corollaire vaut pour tout ce qui reste dans `@utility` : deux utilitaires de même spécificité se départagent par leur ordre d'émission, jamais par l'ordre du `class`.** Devant un comportement de mise en page inexplicable, la première chose à regarder est le CSS compilé (`grep -o '\.ma-classe{[^}]*}' dist/assets/*.css`), pas le JSX. Un `flex`, un `gap` ou un `bg-*` posé sur un élément qui porte l'une de ces classes ne s'applique pas, et rien dans le JSX ne le laisse voir. Le motif à suivre est celui de l'accueil : **le conteneur flex vit à l'intérieur du `Bloc`, jamais sur le `Bloc` lui-même**. Un cas subsiste, sans conséquence visible : `Championnat.jsx` porte un `gap-2.5` mort sur le `Bloc` des deux boutons de confirmation de départ — à reprendre avec le même motif si l'empilement paraît serré sur un appareil réel.
+**Un point depuis la `0.21.1` — le piège des règles hors couche, et son revers.** `.t-stagger-line`, `.t-skel-bar` et, depuis la version `0.28.0`, `.section-collante` sont déclarées hors de toute couche Tailwind : **elles battent n'importe quelle classe utilitaire**, quelle que soit sa spécificité. Pour la troisième c'est délibéré — voir la version `0.28.0`, où un `relative` posé à côté de `section-collante` avait silencieusement désactivé le collage d'un en-tête et l'avait décalé de 107px sur les cotes. **Le corollaire vaut pour tout ce qui reste dans `@utility` : deux utilitaires de même spécificité se départagent par leur ordre d'émission, jamais par l'ordre du `class`.** Devant un comportement de mise en page inexplicable, la première chose à regarder est le CSS compilé (`grep -o '\.ma-classe{[^}]*}' dist/assets/*.css`), pas le JSX. Un `flex`, un `gap` ou un `bg-*` posé sur un élément qui porte l'une de ces classes ne s'applique pas, et rien dans le JSX ne le laisse voir. Le motif à suivre est celui de l'accueil : **le conteneur flex vit à l'intérieur du `Bloc`, jamais sur le `Bloc` lui-même**. **Les trois cas connus sont refermés en version `0.40.0`** — l'accueil, la liste des championnats et `Championnat.jsx` : le premier avait une conséquence bien visible (les cartes de championnat collées à « Créer un championnat »), les deux autres étaient latents. Aucun `<Bloc>` ne porte plus de classe de disposition, et un contrôle le vérifie.
 
 **Deux points propres à la `0.21.0`**, tous deux sur la lisibilité du tracé maintenant qu'il traverse le texte. **Sur les neuf drapeaux à bande claire** (la Malaisie et Abu Dhabi les ont rejoints en version `0.21.2`), le trait blanc à 60 % passe sur une bande ramenée au gris moyen par le voile : mesuré à 2,70:1 pour eux et 2,44:1 au pire (Brésil) — les valeurs n'ont pas bougé depuis la `0.21.0`, seul Las Vegas descend de 5,81 à 3,11:1 en passant du noir au rouge, ce qui reste au-dessus des neuf autres. Lisible, donc, mais discret — s'il paraît fantomatique sur un vrai écran, deux leviers d'une ligne, dans cet ordre : monter le trait de 60 à 70 % de blanc, ou approfondir la surcouche de 15 à 25 % (elle assombrit alors aussi le fond du texte, ce qui ne fait que renforcer sa lisibilité). **Ne pas toucher au voile**, calculé pour le texte. Et **le croisement texte / tracé** : l'ombre portée le rend lisible en rendu statique, mais c'est exactement le genre de détail qui se juge à la lumière du jour, sur les cartes où le tracé passe pile derrière le quantième (Espagne, Azerbaïdjan, Brésil).
 

@@ -143,6 +143,16 @@ class MembrePronostics(BaseModel):
     couleur1: str = "#800111"
     couleur2: str = "#FFFFFF"
     numero: int | None = None
+    # **Le skin, et il doit être déclaré ici pour exister.** `response_model`
+    # de FastAPI ne laisse passer que les champs du modèle : la fonction SQL
+    # les servait depuis la migration `20260819124500`, mais ils étaient
+    # **filtrés avant d'atteindre le client**, si bien que `livreeDuMembre`
+    # retombait toujours sur `perso` et qu'aucun skin n'apparaissait jamais sur
+    # la piste ni au classement. Valeurs par défaut pour la même raison que les
+    # deux couleurs : un backend déployé avant la migration rendrait sinon
+    # TOUTE la réponse en `500` (piège de `cree_par`, version 0.4.1).
+    livree_mode: str = "perso"
+    livree_ecurie: str | None = None
     # Ce que le membre a marqué sur ce Grand Prix. `None` tant qu'aucun de ses
     # pronostics n'a été noté — jamais `0`, qui dirait « tout raté ».
     total_points: int | None = None

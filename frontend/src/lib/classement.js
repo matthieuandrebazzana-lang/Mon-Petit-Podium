@@ -25,6 +25,23 @@ export function chargerClassement(championnatId, signal) {
 }
 
 /**
+ * Version de la **forme** des lignes mises en cache.
+ *
+ * À incrémenter dès qu'un champ nouveau apparaît dans le classement, et c'est
+ * ce qui vient de se passer : les lignes écrites avant la version `0.40.0` ne
+ * portent ni `livree_mode` ni `livree_ecurie` — le modèle FastAPI les filtrait
+ * avant qu'elles n'atteignent le client. Sans ce marqueur, un téléphone qui a
+ * déjà ouvert la vue piste continuerait de peindre les voitures en mode
+ * `perso` au premier rendu, à partir d'un cache que rien n'invalide, et le skin
+ * n'apparaîtrait qu'après le retour du réseau.
+ *
+ * Le marqueur est placé **après l'identifiant du compte** pour que
+ * `oublierCachePrefixe("classement:<profil>:")`, appelé par « Mon profil » à
+ * chaque enregistrement de voiture, continue de tout balayer d'un coup.
+ */
+const SCHEMA_CLASSEMENT = "v2";
+
+/**
  * Clé de cache du classement, fabriquée ici et non écrite en dur à ses points
  * d'usage — la vue liste et la vue piste lisent le même cache, et deux chaînes
  * séparées divergeraient au premier renommage.
@@ -34,7 +51,7 @@ export function chargerClassement(championnatId, signal) {
  * fût-ce une fraction de seconde, le championnat de l'autre.
  */
 export function cleClassement(profilId, championnatId) {
-  return `classement:${profilId}:${championnatId}`;
+  return `classement:${profilId}:${SCHEMA_CLASSEMENT}:${championnatId}`;
 }
 
 /** Somme des points du championnat : sert à savoir si la saison a commencé. */
