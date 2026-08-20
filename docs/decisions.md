@@ -1,0 +1,438 @@
+# Décisions
+
+**Pourquoi** les choix ont été faits, pas comment ils fonctionnent — le *comment* vit dans
+les documents techniques.
+
+Format : la décision, la raison, les alternatives écartées, la conséquence.
+
+---
+
+## 1. Railway pour le backend
+
+**Décision.** FastAPI sur Railway, plan gratuit, un seul processus.
+
+**Raison.** Le projet a besoin d'un runtime **persistant** : le scraping Unibet doit
+tourner sur horloge, et le job de résultats interroge OpenF1 toutes les cinq minutes
+pendant trois heures après un départ. Railway déploie depuis GitHub sans configuration et
+laisse tourner un `AsyncIOScheduler` attaché à la boucle de FastAPI.
+
+**Écarté.**
+- *Fonctions serverless (Vercel, Supabase Edge)* — pas de processus persistant. Il aurait
+  fallu un cron externe et un état de progression en base, alors que la fenêtre horaire se
+  calcule aujourd'hui **sans état conservé nulle part**.
+- *`pg_cron` dans Supabase* — le scraping demande des appels HTTP sortants et du parsing
+  JSON qu'on n'écrit pas raisonnablement en PL/pgSQL.
+
+**Conséquence.** Le plan gratuit met le service en **veille**. Trois adaptations qui
+découlent toutes de là : le cache *stale-while-revalidate* ; les `502/503/504` classés
+« réseau » et non « serveur » ; et surtout **la fenêtre de rattrapage de 4 h** du job de
+scraping — un déclenchement à l'heure pile serait manqué **définitivement** si le service
+dort à cet instant.
+
+**Conséquence à surveiller.** Les deux schedulers supposent **un seul processus**. À
+plusieurs instances : `pg_try_advisory_lock` ou worker dédié.
+
+---
+
+## 2. `security definer` sur les fonctions RLS — contre la récursion PostgreSQL
+
+**Décision.** Toutes les fonctions de lecture agrégée sont `security definer` et réservées
+à `service_role`. `est_membre(uuid)` l'est aussi et sert dans les politiques elles-mêmes.
+
+**Raison.** Deux problèmes distincts, une seule réponse.
+
+**(a) La récursion.** La politique naturelle s'écrit « il existe une ligne dans
+`membres_championnat` avec ce `championnat_id` et `profil_id = auth.uid()` ». Écrite telle
+quelle dans une politique **de** `membres_championnat`, elle interroge la table qu'elle
+protège : **PostgreSQL détecte la récursion et refuse la requête (`42P17`)**. Ce n'est pas
+une lenteur, c'est un refus. `est_membre`, en `security definer`, lit sans repasser par les
+politiques.
+
+**(b) L'amputation silencieuse.** Une fonction paramétrée par un championnat lit forcément
+les pronostics d'autrui. Sous l'identité de l'appelant, la RLS filtrerait les membres avec
+qui il ne partage rien — **exactement ce qu'il faut protéger, mais qui rendrait un
+classement silencieusement amputé au lieu d'un refus franc.**
+
+**Écarté.**
+- *Sous-requête littérale dans la politique* — `42P17`. **Ne jamais la réinsérer.**
+- *Fonctions `security invoker`* — classement faux sans que rien ne le dise. **Un refus
+  franc vaut mieux qu'un résultat silencieusement incomplet.**
+- *Désactiver la RLS et tout faire passer par le backend* — elle protège l'autre chemin,
+  celui du frontend qui lit directement Supabase (§3).
+
+**Conséquence.** **L'autorisation est portée par la route**, qui vérifie l'appartenance
+**avant** l'appel. `exiger_membre` est réutilisée à quatre endroits, jamais recopiée.
+
+---
+
+## 3. Deux chemins de données, arbitrés par la politique RLS
+
+**Décision.** Écritures et agrégations par FastAPI ; lectures directes à Supabase là où une
+politique RLS décrit exactement le cas.
+
+**Raison.** Sur le plan gratuit, un aller-retour Railway peut coûter un réveil. **L'accueil
+est le premier écran de l'app** : lui faire attendre ce délai pour son bloc principal
+serait le pire endroit où le payer. Quand la RLS décrit déjà le cas, passer par Railway
+n'ajoute **rien qu'un cold start**.
+
+**Écarté.**
+- *Tout par le backend* — cohérent, mais chaque écran paierait le réveil.
+- *Tout en direct* — impossible : retrouver un championnat par son code alors qu'on n'en
+  est pas membre est hors RLS par construction, et les agrégations seraient amputées (§2).
+
+**Conséquence.** **Le critère est la politique RLS, jamais la commodité.** Une route qui
+servirait un cas déjà couvert par la RLS serait du code mort ; une lecture directe d'une
+donnée qu'aucune politique ne décrit serait un trou.
+
+---
+
+## 4. Les points sont des entiers — cote × 100
+
+**Décision.** `cotes.valeur` est un `integer` valant `round(cote × 100)`. **Rien en base ne
+stocke une cote.**
+
+**Raison.** Trois à la fois.
+
+1. **C'est la règle du jeu, pas un détail d'implémentation.** Une cote de 2,80 rapporte
+   280 points : le nombre affiché **est** la donnée.
+2. **Aucun flottant, donc aucune somme approximative.** Un total de saison est une somme
+   d'entiers exacte.
+3. **Cela rend la règle « ne jamais afficher de cote brute » structurellement tenable** :
+   il n'y a **rien à afficher**. Un frontend ne peut pas écrire « ×2,80 » par mégarde.
+
+**Écarté.**
+- *`numeric(4,2)`* — exact aussi, mais laisserait la cote disponible à l'affichage, donc la
+  règle serait une convention à faire respecter à la main.
+- *Conversion à l'affichage* — la question « quel arrondi ? » se reposerait à chaque écran.
+
+**Conséquence.** `lib/format.js` est le **seul** endroit qui habille un nombre de points.
+Des tests vérifient qu'aucun « ×N » ne sort des écrans.
+
+**Une exception, et elle porte un autre nom** : `points_fia` (25, 18, 15…) s'écrit
+« 25 pts FIA » et **jamais** via `formaterPoints` — les confondre ferait lire le classement
+F1 comme un classement de pronostics.
+
+*Cross-contrôle rassurant* : Unibet expose un champ `sort` valant exactement
+`round(price × 100)` — zéro écart sur 44 cotes.
+
+---
+
+## 5. Scraping à qualifications + 2 h
+
+**Décision.** Le scraping se déclenche **deux heures après les qualifications**, et fige
+alors les cotes.
+
+**Raison.** **Pour capter les pénalités.** Les commissaires rendent leurs décisions dans
+les heures qui suivent les qualifications ; une grille de départ n'est définitive
+qu'ensuite. Scraper avant, c'est enregistrer les cotes d'une grille qui va changer.
+
+Figer garantit ensuite que **tous les joueurs pronostiquent avec exactement les mêmes
+cotes** : personne n'est avantagé par le moment où il ouvre l'app.
+
+**Écarté.**
+- *Scraper en continu jusqu'au départ* — les cotes bougeraient sous les pronostics déjà
+  saisis. Un joueur du samedi soir et un joueur du dimanche matin ne joueraient pas au même
+  jeu.
+- *Figer juste avant le départ* — la fenêtre de pronostic serait réduite à quelques heures.
+- *Un horaire fixe (« samedi 18 h »)* — les GP se courent sur tous les fuseaux.
+
+**Conséquences.**
+
+**(a) Il faut connaître l'heure des qualifications.** D'où `date_qualifications`, et le
+repli `date_course − 22 h` quand Unibet ne l'annonce pas — **journalisé à chaque fois**,
+pour que le repli ne devienne pas le régime normal sans qu'on s'en aperçoive.
+
+**(b) La DERNIÈRE qualification l'emporte.** Un week-end sprint en compte deux ; retenir la
+première ferait figer **un jour trop tôt**.
+
+**(c) `?figer=false` est indispensable.** Sans lui, le premier essai de la saison — passé un
+mardi — figerait des cotes de mardi. **C'est arrivé** (voir `bugs-connus.md` §11).
+
+**(d) Le statut seul ne suffit plus à ouvrir les pronostics.** Un `curl` avance le statut,
+il n'avance pas l'heure des qualifications : `cotesArretees` exige les deux.
+
+---
+
+## 6. Migrations Supabase appliquées à la main
+
+**Décision.** Les quatorze fichiers SQL sont joués **un par un dans le SQL Editor**. Aucune
+CI, aucun `supabase db push` automatique.
+
+**Raison.** **La clé anonyme ne peut pas toucher au schéma `auth`**, et plusieurs migrations
+posent un trigger sur `auth.users` ou lisent cette table. Automatiser demanderait de faire
+circuler un jeton d'administration de projet — un secret bien plus puissant que la clé de
+service, pour un projet qui déploie quelques fois par semaine.
+
+**Écarté.**
+- *Supabase CLI en CI* — le jeton ci-dessus, et une CI qui peut réécrire le schéma de
+  production.
+- *Migrations jouées par le backend au démarrage* — une migration jouée par un service qui
+  redémarre tout seul est une migration qu'on ne contrôle pas.
+
+**Conséquences.**
+
+**(a) Toutes les migrations sont idempotentes** (`if not exists`, `create or replace`,
+blocs `do $$` qui vérifient l'existence d'une contrainte). Les rejouer ne casse rien.
+
+**(b) Mais PAS dans le désordre.** Plusieurs `create or replace` la même fonction : rejouer
+une migration **antérieure** restaure sa version d'avant. **Le tableau des conflits d'ordre
+est dans `database.md` §6** — c'est la seule chose à surveiller.
+
+**(c) Un décalage code / base est possible.** D'où la règle des **valeurs par défaut sur
+tout nouveau champ d'un modèle Pydantic** : un backend déployé avant sa migration perd un
+champ au lieu de rendre `500` sur toute la réponse.
+
+**(d) Elles ne se vérifient pas toutes seules.** Les onze premières ont été jouées contre un
+PostgreSQL jetable ; **les 12, 13 et 14 ne l'ont pas été** (voir `roadmap.md`).
+
+---
+
+## 7. OpenF1 pour les résultats
+
+**Décision.** `api.openf1.org` comme source des résultats de course.
+
+**Raison.** Gratuite, sans clé, et **elle publie en UTC** — ce qui en a fait la source
+autorisée pour trancher le fuseau d'Unibet. Elle expose tout ce dont la validation a
+besoin : classement, abandons, safety car, meilleur tour, grille de départ.
+
+**Écarté.**
+- *API officielle F1* — pas d'accès public documenté.
+- *Ergast / jolpica* — ne donne ni `race_control` ni les tours, donc ni safety car ni
+  meilleur tour.
+- *Scraper les résultats sur Unibet* — le bookmaker n'est pas une source de résultats, et
+  ce serait un second scraper à maintenir.
+
+**Conséquences.**
+
+**(a) On interroge par `session_key`, jamais par `meeting_key`** — un *meeting* est un
+week-end entier, et sa réponse mélange cinq sessions.
+
+**(b) Le rapprochement GP ↔ course se fait sur la DATE**, jamais sur le nom (« GP Pays Bas »
+contre « Dutch Grand Prix »), avec un refus au-delà de 36 h d'écart : **mieux vaut ne pas
+noter un GP que le noter sur les résultats d'un autre.**
+
+**(c) Le rapprochement des NOMS de pilotes est le point le plus fragile.** Cinq clés par
+pilote, plus des alias. **Une clé revendiquée par deux pilotes est retirée** plutôt
+qu'attribuée au premier venu.
+
+**(d) `donnees_brutes` est conservé** — pour rejouer un calcul **sans rappeler l'API**, des
+semaines après la course, quand un validateur manquant est enfin écrit.
+
+**(e) 3 requêtes/seconde maximum**, `429` au-delà. Une récupération en enchaîne six.
+
+---
+
+## 8. `NULL` et `0` ne se confondent jamais
+
+**Décision.** `points_gagnes` a trois états : `NULL` (inconnu **ou non validé**), `0`
+(raté), `> 0` (réussi).
+
+**Raison.** **Marquer « raté » un pronostic qu'on n'a pas su valider volerait le joueur en
+silence, et rien à l'écran ne permettrait de s'en apercevoir.** Les marchés Unibet varient
+d'un GP à l'autre : ce cas n'est pas une hypothèse d'école, et seules trois des neuf
+familles reconnues ont été confrontées à de vrais libellés.
+
+`NULL` se **voit** dans les logs, s'affiche « en attente », et se **rattrape** par un
+second passage — le JSON brut étant conservé, il suffit d'écrire le validateur manquant.
+
+**Écarté.** *Tout mettre à 0 par défaut* — le score serait faux et personne ne le saurait.
+
+**Conséquence.** La convention se propage à toute la chaîne : `meilleure_cote` vaut `NULL`
+et non `0` pour qui n'a rien réussi ; `mes_points` vaut `NULL` sur un GP non jugé ; un
+total ignore les non-jugés au lieu de les compter zéro ; l'interface distingue « Aucun
+prono », « Pronos pas encore validés » et « 0 pts ».
+
+**Corollaire** : `attribuer_points` n'écrit **que** les `NULL` — c'est la base qui porte
+l'idempotence, et **le `0` d'un raté n'est jamais réécrit**.
+
+---
+
+## 9. Le calendrier de la saison vit côté frontend
+
+**Décision.** `lib/calendrier2026.js` porte les douze GP. La base ne garde que ce qu'elle
+seule sait.
+
+**Raison.** **Unibet n'expose jamais que le GP suivant** : `public.grands_prix` n'en
+contient qu'un. Un calendrier lu en base afficherait une course au milieu d'une saison qui
+en compte douze. **Le calendrier de la F1 est une donnée publique et stable — il n'a pas à
+être découvert chez un bookmaker.**
+
+**Écarté.**
+- *Une table `calendrier` en base* — une migration par correction de date, et une donnée
+  publique traitée comme un secret.
+- *Une seconde source (API de calendrier)* — une dépendance de plus pour douze lignes.
+
+**Conséquences.** **Les douze cartes s'affichent quoi qu'il arrive** — Railway endormi, base
+vide, appel en échec : l'écran reste plein, seuls les états manquent. C'est l'inverse d'un
+écran de liste ordinaire. Et **la table est à mettre à jour chaque saison**, avec les
+drapeaux et les tracés, les trois devant porter les mêmes slugs.
+
+---
+
+## 10. Une source unique par question
+
+**Décision.** Toute question à laquelle plusieurs endroits doivent répondre **de la même
+façon** a exactement **un** propriétaire.
+
+| Question | Propriétaire |
+|---|---|
+| Combien vaut ce pronostic ? | `lib/format.js` |
+| De quelle couleur est cette écurie ? | `lib/ecuries.js` |
+| Que porte cette voiture ? | `livreeDuMembre` |
+| Quel est l'état de ce GP ? | `ETATS_GP` |
+| Les cotes sont-elles arrêtées ? | `cotesArretees` |
+| Où va ce bouton de retour ? | `origineRetour` |
+| La barre s'affiche-t-elle ici ? | `lib/navigation.js` |
+| Quelle encre sur cet aplat ? | `tonalites` / `encreSurAplat` |
+
+**Raison.** **Deux textes écrits séparément divergent au premier ajustement, et le symptôme
+est toujours discret** : un GP qui change d'état en passant d'un onglet à l'autre, un membre
+en livrée Ferrari au classement et à ses couleurs sur la piste, un bloc amber recevant du
+texte blanc parce qu'un écran l'a écrit de mémoire.
+
+**Écarté.** *La duplication « pour découpler »* — les deux copies ne sont pas découplées,
+elles sont **d'accord par accident**.
+
+**Conséquence.** Certains modules sont partagés entre deux calculs pourtant différents.
+Les deux calendriers **calculent** leur état différemment (ils n'ont pas les mêmes données)
+mais **lisent la même table de libellés et de couleurs** : c'est ce qui doit être commun,
+et rien de plus.
+
+---
+
+## 11. Les palettes hors thème, à périmètre borné
+
+**Décision.** Quatre familles de couleurs vivent hors du design system : 20 couleurs de
+voiture, 11 teintes d'écurie, 13 drapeaux, 6 aplats de bloc.
+
+**Raison.** La palette compte **sept couleurs**. Dix livrées distinctes, onze écuries ou
+douze drapeaux n'en sortiraient pas — et les y forcer donnerait des voitures
+indistinguables ou des drapeaux faux.
+
+**Écarté.** *Étendre le design system* — le rouge de la marque cesserait d'être le rouge de
+la marque.
+
+**Conséquence.** **Le périmètre est la contrepartie, et il est strict** : ces couleurs ne
+peignent **que** l'objet qu'elles décrivent — jamais un fond d'écran, un bouton ou un texte
+d'interface. Des tests vérifient le cloisonnement. Quatre des aplats de bloc reprennent
+d'ailleurs le design system plutôt que d'inventer un ton de plus.
+
+---
+
+## 12. Le contraste se mesure, il ne se choisit pas
+
+**Décision.** Chaque encre posée sur une surface est **calculée**, jamais écrite par
+l'écran.
+
+**Raison.** **Les valeurs prescrites à l'œil se sont révélées fausses plus souvent que
+justes** :
+
+| Prescrit | Mesuré | Retenu |
+|---|---|---|
+| Voile de drapeau à 0,30 | blanc à **2,11:1** | dérivé, 0,42 minimum |
+| Rang à 30 % d'opacité | **1,6:1** sur le bordeaux | 80 % (3,20:1 au pire) |
+| Icône ambre sur pastille pâle | **2,2:1** | aplat plein + encre calculée |
+| `texte-doux` sur beige | **2,0:1** | marron `secondaire` (9,4:1) |
+| Bande blanche à 85 % | vert à **3,45:1** | opaque |
+
+**Écarté.** *Faire confiance à l'œil* — sur un fond beige texturé, il se trompe
+systématiquement dans le même sens.
+
+**Conséquence.** `tonalites`, `encreSurAplat`, `encreSurBlanc`, `encreSur` et
+`voileNecessaire` **portent l'arbitrage une fois pour toutes**. Un aplat ou un drapeau
+ajouté demain reçoit la bonne réponse sans que personne ne refasse le calcul.
+
+**Corollaire mesuré** : l'amber n'existe **que comme aplat**, jamais comme encre.
+
+---
+
+## 13. Un pronostic compte dans tous les championnats
+
+**Décision.** Un joueur remplit **un** pronostic par GP, qui compte dans **tous** ses
+championnats. Le championnat dit **qui** classer, pas quels pronostics compter.
+
+**Raison.** C'est le modèle mental juste : on pronostique **une course**, pas « une course
+dans un championnat ». Cloisonner obligerait à ressaisir les mêmes pronostics autant de
+fois qu'on a de championnats.
+
+**Écarté.** *Des pronostics par championnat* — insupportable à la saisie, et il faudrait
+décider ce qui arrive aux pronostics quand on rejoint un championnat en cours de saison.
+
+**Conséquence, et c'est le point délicat.** Le `TODO` initial demandait d'effacer les
+pronostics d'un membre qui quitte un championnat. **Les effacer au départ d'un seul
+détruirait son classement dans les autres.** Ils ne sont donc effacés que **lorsqu'il ne
+lui reste aucune adhésion** — l'intention (aucun pronostic orphelin ne survit) sans le
+dommage collatéral.
+
+---
+
+## 14. Le drapeau `is_admin` décide d'un affichage, jamais d'un droit
+
+**Décision.** `is_admin` conditionne l'affichage de la section d'administration. Les routes
+restent fermées par `X-Admin-Secret`.
+
+**Raison.** Le garde existait déjà, à temps constant, avec « variable absente ⇒ route
+fermée ». Y ajouter une vérification de drapeau **lu côté client** n'aurait rien renforcé.
+
+**Écarté.** *Une route qui exige le jeton et vérifie `is_admin` en base* — c'est la bonne
+réponse le jour où ce sera nécessaire, et **le secret ne quitterait alors jamais Railway**.
+Ce n'est pas un ajustement de l'écran mais une réécriture de la route.
+
+**Conséquence assumée, et il faut la connaître.** **Le secret voyage en clair dans le
+bundle** : Vite inline les `VITE_*` à la construction. Quiconque ouvre les outils de
+développement le lit, administrateur ou non. Et la politique « Chacun modifie son profil »
+porte sur la **ligne**, pas sur la colonne : un membre peut écrire son propre `is_admin`.
+
+**Ce que cela protège encore** : un passant qui ne lit pas le bundle, et les autres origines
+(le CORS n'autorise que les nôtres). **Ce que cela ne protège plus** : un déclenchement de
+scraper par quelqu'un de déterminé.
+
+---
+
+## 15. Le mode admin est un état de session
+
+**Décision.** `modeAdminActif` vit en `useState` dans `AuthContexte`. **Il repart éteint à
+chaque rechargement.**
+
+**Raison.** C'est une préférence d'affichage valable le temps qu'on regarde. Le persister
+lui donnerait le défaut documenté sur `pseudo` et `is_admin` — **une valeur qui survit à ce
+qu'elle décrit** — et un mode de vérification demande un geste explicite.
+
+**Conséquence, et c'est ce qu'il ne faut pas défaire.** Le contexte expose **`modeAdmin`**,
+la conjonction `estAdmin && modeAdminActif`, **nommée une fois plutôt que recopiée**.
+
+> **Une conjonction qu'on recopie finit par être écrite à moitié, et la moitié qui saute est
+> toujours la même** — le mode, parce qu'il est le terme récent. On obtiendrait une surface
+> visible interrupteur éteint, c'est-à-dire le défaut même que ce mode existe pour
+> supprimer.
+
+`MonProfil.jsx` est le **seul** endroit qui lise `estAdmin` et non `modeAdmin` — la section
+doit rester visible pour pouvoir rallumer l'interrupteur. **Un commentaire le dit à son
+point de montage**, sans quoi la prochaine session l'« alignerait » sur les autres.
+
+---
+
+## 16. Ne pas supprimer le code qui redevient utile
+
+**Décision.** Le code remplacé mais éprouvé reste en place, **simplement non monté**.
+
+| Gardé | Redevient utile quand |
+|---|---|
+| `BoutonsOAuth` (`OAUTH_ACTIF = false`) | les clés OAuth sont renseignées |
+| `Onglets` | Unibet ouvre dix marchés |
+| `ApercusApp` | les vraies captures existent |
+| `TraceCircuit` | une vignette de 20 × 32 px est nécessaire |
+| `chargerGrandsPrixRestants` | le calendrier complet est en base |
+
+**Raison.** Ce code est **déjà écrit, déjà vérifié**. Le supprimer et le réécrire plus tard
+coûte davantage, et la deuxième version n'aurait pas les mêmes tests.
+
+**Écarté.** *Supprimer et compter sur `git`* — personne ne va chercher dans l'historique un
+composant dont il ignore qu'il a existé.
+
+**Conséquence.** **Aucun coût de bundle** : le code n'étant plus importé, l'arbre est
+secoué et les chaînes concernées sont **absentes du bundle de production** — vérifié.
+
+**Une règle de mise en œuvre** : le retour anticipé d'un composant désactivé se place
+**après les hooks**, jamais avant. React interdit un `return` qui court-circuiterait
+`useState`.
