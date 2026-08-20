@@ -3575,7 +3575,91 @@ La lecture retient donc les **deux statuts non courus**, `a_venir` et `cotes_fig
 | Calendrier d'un championnat | figé → « Pronostiquer » ; **`a_venir` → aucun bouton et aucun lien**, carte complète et pastille conservées ; terminé → « Voir les résultats » |
 | `npm run build` | passe, 145 modules, 14 entrées au précache, version `0.37.0` dans le bundle |
 
-**Ce qui n'a pas pu être vérifié ici** : la correction de `chargerProchainGp` porte sur une requête Supabase, donc elle ne se juge que contre la vraie base — les contrôles ci-dessus servent le bloc depuis un cache pré-rempli et ne passent jamais par la lecture. **À confronter au premier samedi de qualifications** : une fois le job de figeage passé, l'accueil doit annoncer le Grand Prix du week-end et non celui de la semaine d'avant.
+**Ce qui n'a pas pu être vérifié ici** : la correction de `chargerProchainGp` porte sur une requête Supabase, donc elle ne se juge que contre la vraie base — les contrôles ci-dessus servent le bloc depuis un cache pré-rempli et ne passent jamais par la lecture. **Fait en version `0.38.0`** : la lecture a été exercée contre le vrai projet, le champ `statut` traverse bien jusqu'au rendu, et la règle tient sur les deux valeurs. Reste à confronter au premier samedi de qualifications que l'accueil annonce bien le Grand Prix du week-end et non celui de la semaine d'avant.
+
+---
+
+**Règle du statut vérifiée contre la vraie base, et vue piste sans chevauchement** (version `0.38.0`)
+
+Une vérification qui n'a rien changé au code, et une correction de fond sur l'écran signature. **Aucune migration, aucun changement backend** : `backend/app/config.py` reste en `0.14.0`, faire bouger la version rendue par `/health` laisserait croire à un déploiement Railway qui n'a pas eu lieu (même raison qu'aux versions `0.2.2`, `0.5.1`, `0.8.1`, `0.12.x`, `0.14.1`, `0.15.0`, `0.16.x`, `0.18.x` et `0.20.0`).
+
+---
+
+***La règle de la version `0.37.0` fonctionne. C'est la base qui ne dit pas ce qu'on croyait.***
+
+Le bouton « Pronostiquer » restait visible sur le widget de l'accueil et dans les deux calendriers, et le statut du Grand Prix était supposé être `a_venir`. La règle a donc été reprise à l'endroit exact où elle pouvait se rompre — la lecture, le transport du champ, et les trois rendus — **contre le vrai projet Supabase** et non contre un cache pré-rempli. C'est précisément le contrôle que la version `0.37.0` inscrivait comme restant à faire.
+
+Le champ traverse tout, et le verdict est ailleurs :
+
+```
+chargerProchainGp → { id: 33b835cc…, nom: "GP Pays Bas",
+                      date_course: "2026-08-23T11:00:00+00:00",
+                      statut: "cotes_figees" }
+```
+
+**Le Grand Prix est déjà figé en base, avec 146 cotes réparties sur dix marchés** — vainqueur, podium, top 6, top 10, écurie, tour le plus rapide, nationalité du vainqueur, écart du gagnant. Le bouton s'affiche donc parce que la condition est *remplie*, pas parce qu'elle est ignorée, et il mène à un tableau des cotes qui a bien quelque chose à montrer.
+
+***Reste que ce figeage est prématuré, et sa cause est écrite noir sur blanc à la version `0.11.0`.*** Les qualifications sont annoncées au **22 août 2026 à 12h00 UTC** ; le job automatique ne se déclenche qu'à partir de qualifs + 2h, soit le 22 à 14h00. Deux jours plus tôt, aucune horloge n'a pu figer quoi que ce soit : le statut vient d'un `POST /scraper/declencher` passé à la main **sans `?figer=false`**. C'est le piège que le CLAUDE.md décrivait mot pour mot en créant ce paramètre — « le premier `curl` de la saison, passé un mardi, pour vérifier que le scraper écrit bien, figerait des cotes de mardi, sur une grille non définitive, et il faudrait un `update` à la main dans le SQL Editor pour les débloquer ».
+
+C'est donc une donnée à corriger, pas un code à réparer. Dans le SQL Editor :
+
+```sql
+update public.grands_prix set statut = 'a_venir'
+ where id = '33b835cc-5c17-40f7-a41f-3e95fc14885a' and statut = 'cotes_figees';
+```
+
+Le job du samedi le refigera de lui-même après les qualifications, avec les cotes de la grille définitive (règle 4.3), et le bouton reparaîtra à ce moment-là. **Les essais de scraper d'ici là doivent porter `?figer=false`.**
+
+*Une seule chose a été durcie, et elle ne touche pas la règle* : le contrôle du cas « statut absent ». Un cache `localStorage` écrit par une version antérieure à la `0.37.0` porte un Grand Prix sans son statut ; la comparaison est alors fausse et le bouton disparaît. C'est le bon sens — **on se ferme, on ne s'ouvre jamais, sur une donnée qu'on n'a pas** — et le *stale-while-revalidate* le corrige à la première réponse fraîche. Le cas est désormais couvert par un contrôle explicite plutôt que d'être une propriété tacite de `===`.
+
+---
+
+***Vue piste — un score, une hauteur ; les ex æquo côte à côte.***
+
+C'est la vraie correction de la version. `positionsDesVoitures` calculait une hauteur **par membre**, proportionnelle à ses points : deux membres à égalité obtenaient deux fois la même valeur et leurs voitures se posaient au pixel près l'une sur l'autre, la seconde masquant la première entièrement. Le cas n'est pas marginal — c'est l'état de tout un championnat avant le premier Grand Prix, et celui de deux joueurs qui se suivent tout au long de la saison.
+
+`dispositionDesVoitures(lignes, hauteur, largeur)` la remplace, et `grouperParScore` la précède. Le regroupement porte sur les **voisins immédiats** et non sur une table de scores : `classement_du_championnat` trie déjà par points décroissants, donc deux membres à égalité sont toujours consécutifs, et grouper les voisins garantit que l'ordre affiché reste exactement celui du classement, départage de la règle 4.6 compris. `total_points` est ramené à `0` avant comparaison — c'est la convention de l'étape 6, et sans cela deux membres sans le moindre pronostic noté ne seraient jamais regroupés, `null !== null` étant faux.
+
+**Quatre points de mise en œuvre à ne pas défaire :**
+
+1. **Le décalage latéral ne peut pas vivre sur l'élément animé.** `.t-voiture` porte `transform: translateY(…)` pour l'entrée depuis le bas de l'écran (étape 7) ; y ajouter un `translateX` écraserait l'un ou l'autre. Il est posé en `left` sur un conteneur intérieur, ce qui laisse l'animation intacte quel que soit le nombre de voitures de la rangée. Le retard d'entrée reste celui du **classement** et non celui de la rangée, pour que la cascade suive l'ordre des rangs.
+2. **La largeur de la piste est mesurée, plus seulement sa hauteur.** C'est elle qui décide combien de voitures tiennent côte à côte ; la supposer reviendrait à en superposer deux sur un écran étroit, c'est-à-dire le défaut qu'on corrige. Une largeur non encore mesurée laisse une voiture par rangée — le comportement d'avant, jamais une division par zéro.
+3. **La zone de la légende est réservée des DEUX côtés.** La rangée reste ainsi centrée sur la route, comme la demande le prescrit. Réservée du seul côté droit, elle donnerait plus de place aux voitures mais décalerait toute la grille vers la gauche, ce qui se lirait comme un défaut de calage.
+4. **Un groupe trop nombreux pour une rangée en occupe plusieurs**, empilées. C'est une grille de départ, et c'est exactement l'image qu'il faut : le cas se produit surtout avant le premier Grand Prix, quand tout le monde est encore à zéro. Vingt membres à zéro donnent cinq rangées de quatre, à taille pleine.
+
+***Le non-chevauchement est obtenu en deux temps, et le second a un prix qu'il faut connaître.***
+
+Les pas horizontal et vertical valent désormais la dimension du dessin **plus** une gouttière (10px et 6px) : deux boîtes voisines ne peuvent plus se rencontrer. C'est déjà un changement — l'écart vertical valait `0,9 × HAUTEUR_VOITURE`, soit **six pixels de moins que la voiture elle-même** : deux boîtes consécutives se recouvraient par construction, indépendamment de toute égalité de points.
+
+Quand la piste n'a pas la hauteur de porter toutes les rangées à ce pas-là, **ce sont les voitures qui rapetissent**, du même facteur en largeur et en hauteur, jamais l'écart qui se referme. C'est le seul moyen de tenir la garantie sur un championnat où chacun a son propre score (règle 4.5 : aucune limite de membres). **Le prix est une voiture plus petite**, et il se voit : dix membres aux scores distincts tiennent encore à 89 % de la taille pleine, quatorze descendent à 63 %. C'est le compromis qu'impose « aucun chevauchement, quelle que soit la configuration » ; l'ancien code gardait des voitures pleine taille au prix d'un recouvrement franc, qui rendait la vue muette là où elle doit dire quelque chose. **Si la lisibilité doit primer sur la garantie, c'est `GOUTTIERE_VERTICALE` qu'il faut ramener à zéro**, pas la logique de groupes.
+
+**Une seule légende par score**, calée au milieu des rangées de son groupe : les membres d'un groupe ont le même score par définition, et en poser une par voiture les empilerait toutes au même endroit, à droite, illisibles. Un groupe d'une seule voiture affiche le pseudo, comme avant. Un groupe à égalité affiche « N ex æquo » — aligner N pseudos les uns sous les autres déborderait sur le groupe voisin, et la piste identifie déjà chacun par sa livrée et son numéro, ce qui est sa raison d'être depuis l'étape 7. Le nom complet reste porté par chaque voiture, pour le lecteur d'écran comme au survol.
+
+***La légende ne rapetisse pas avec la voiture — c'est son contenu qui se réduit.*** Un score de neuf pixels de haut ne se lit plus. Trois formes, choisies sur l'espace réellement disponible **autour de chaque légende** et non sur le pas moyen : le score, son unité et le nom ; puis le score et son unité ; puis le score seul. Deux groupes proches se réduisent sans imposer la même réduction à tout le monde. **Ce défaut-là n'a été trouvé que par l'aperçu rendu avec la feuille compilée** — les légendes se recouvraient dès que les voitures se resserraient, et aucun contrôle textuel ne le montrait. C'est la cinquième fois qu'un rendu avec la vraie feuille de style attrape ce qu'un rendu HTML seul laisse passer.
+
+*Mouvement* — **aucune transition nouvelle, aucun jeton nouveau.** L'entrée des voitures depuis le bas (d'après *texts reveal*, transitions-dev 18) est conservée telle quelle, `--voiture-depart` et `--voiture-retard` compris, et la légende d'un groupe monte avec la première voiture qu'elle nomme.
+
+*Apport d'`/apple-design`* — la légende est `pointer-events-none`, elle ne peut pas voler l'appui d'une voiture qui passerait dessous ; chaque voiture garde son `titre` complet (rang, pseudo, points), seul porteur de l'identité pour un lecteur d'écran une fois les pseudos regroupés ; et le placement reste mesuré et non deviné, sur les deux dimensions (§7, cohérence spatiale).
+
+*Vérifié* :
+
+| Contrôle | Résultat |
+|---|---|
+| Règle du statut, **contre le vrai projet Supabase** | le GP est lu, **le champ `statut` est présent** et vaut `cotes_figees` ; le calendrier de la saison porte le même statut depuis la même source ; l'action servie est cohérente avec lui |
+| Le bloc de l'accueil, sur les deux statuts | `a_venir` → **aucun bouton, aucun lien, aucun libellé de pronostic**, avec ou sans pronostics enregistrés, et **le widget reste complet** (nom, départ, fermeture) ; `cotes_figees` → bouton présent dans les deux cas ; **statut absent (cache antérieur) → aucun bouton**, on se ferme sans jamais s'ouvrir |
+| Géométrie de la piste, **78 configurations** (13 jeux de scores × 6 tailles d'écran) | **697 contrôles passent** |
+| Non-chevauchement | **aucune paire de boîtes ne se rencontre**, dans aucune configuration : 1 membre, 2 / 3 à égalité, 5 / 12 / 25 tous à zéro, 5 / 25 scores distincts, groupes serrés, écart d'un point, `null` mêlés — sur iPhone SE, 13, Pro Max, écran étroit, court et très court |
+| Tenue à l'écran | toutes les voitures dans la piste, dans la largeur, **et hors de la bande réservée à la légende** |
+| Ordre | un membre mieux classé n'est jamais plus bas qu'un moins bien classé |
+| Égalités | **même hauteur au pixel près**, décalages opposés, **moyenne des décalages nulle** (la rangée est centrée sur la route) ; un membre seul reste exactement au centre, comme avant |
+| Échelle | 2 membres → taille pleine ; **20 membres à égalité → taille pleine** et plusieurs rangées ; 20 scores distincts → voitures réduites mais jamais invisibles |
+| Légendes | **une par score distinct**, jamais une par membre ; variante toujours connue ; **aucune superposition** sur toute hauteur de piste réelle (≥ 480px) |
+| Cas dégénérés | hauteur nulle, liste vide, largeur non mesurée → aucune exception, une voiture par rangée et l'écart tenu |
+| Rendu hors navigateur (`react-dom/server` via le chargeur SSR de Vite) | trois voitures et deux légendes rendues ; **décalage latéral porté en `left` et non dans le `transform` animé** ; voiture seule centrée ; « 2 ex æquo » sur le groupe, le pseudo sur le solo ; mon groupe mis en avant ; entrée et retard conservés ; nom de chaque pilote porté par sa voiture ; **aucune cote brute « ×N »** |
+| Aperçu rendu avec la feuille compilée | six pistes dessinées à 390 × 600 : podium classique, trois à égalité, deux à égalité en tête, 8 et 20 membres à zéro, 14 scores distincts — **aucune voiture masquée, grilles centrées sur la route, légendes lisibles et séparées** |
+| `npm run build` | passe, **145 modules**, 14 entrées au précache, version `0.38.0` dans le bundle |
+
+**Ce qui reste à juger sur un iPhone réel** : la taille des voitures au-delà de dix membres aux scores distincts. À 63 % (quatorze membres), le numéro et le pseudo peints sur la voiture ne se lisent plus — la légende de droite porte alors seule l'information. C'est le compromis décrit plus haut, et il se corrige d'une constante si l'arbitrage doit changer.
 
 ---
 
@@ -3635,6 +3719,7 @@ Ordre d'application, si l'une manque :
   ```
 
 Points non couverts, à traiter le moment venu :
+- **Le GP Pays-Bas est figé prématurément en base, et c'est à défaire** (constaté en version `0.38.0`). `public.grands_prix` porte `statut = 'cotes_figees'` pour `33b835cc-5c17-40f7-a41f-3e95fc14885a` alors que les qualifications sont annoncées au **22 août 2026 à 12h00 UTC** : le job automatique ne pouvait pas l'avoir posé, il ne se déclenche qu'à partir de qualifs + 2h. Le statut vient donc d'un `POST /scraper/declencher` passé à la main **sans `?figer=false`** — le piège décrit à la version `0.11.0`. Conséquence visible : le bouton « Pronostiquer » s'affiche sur l'accueil et les deux calendriers, et les cotes proposées sont celles d'une grille non définitive. À défaire dans le SQL Editor — `update public.grands_prix set statut = 'a_venir' where id = '33b835cc-5c17-40f7-a41f-3e95fc14885a' and statut = 'cotes_figees';` — le job du samedi refigera de lui-même après les qualifications. **Tout essai de scraper d'ici là doit porter `?figer=false`.**
 - **Décompte des Grands Prix restants figé à 12 — sur l'accueil uniquement, et la réponse existe désormais.** Depuis la version `0.14.1`, le bandeau de bas d'écran (`GP_RESTANTS` dans `frontend/src/ecrans/Accueil.jsx`) affiche une constante, parce que `public.grands_prix` ne contient que le Grand Prix suivant. **La version `0.20.0` a créé la liste qui manquait** : `frontend/src/lib/calendrier2026.js` porte les douze Grands Prix de la saison, et l'onglet Calendrier en tire déjà un décompte qui **exclut les courses terminées**. Le bandeau de l'accueil, lui, n'a pas été rebranché — c'est hors du périmètre de cette version, et c'est désormais quelques lignes : compter `GP_2026` filtré par `etatDuGpSaison`, exactement comme le fait `CalendrierGlobal`. **À faire, sans quoi les deux écrans se contrediront dès la première course courue** — l'accueil dira « 12 restants » quand le calendrier en montrera 11. `chargerGrandsPrixRestants` (`lib/pronostics.js`) reste en place mais n'est plus la bonne réponse : elle compte les lignes en base, c'est-à-dire une seule course.
 - **Couleurs d'écurie en désaccord avec la grille du backend — tranché en version `0.30.0`, et dans le bon sens.** Le désaccord sur huit pilotes que relevait la version `0.27.0` venait entièrement de `frontend/src/lib/ecuries.js` : `backend/app/calcul/pilotes.py` **avait raison sur les vingt-deux**, donc **le calcul des points n'a jamais été faux** et rien n'est à recalculer. Le frontend est corrigé, le backend n'est pas touché. Un contrôle du jeu de tests lit désormais `pilotes.py` et compare les deux grilles ligne à ligne : elles ne peuvent plus diverger en silence.
 - **`frontend/src/lib/ecuries.js` est à mettre à jour chaque saison**, au même titre que `pilotes.py` et `calendrier2026.js`. Une table périmée ne fait aucun dégât silencieux : un pilote absent ressort sans teinte, ce qui se voit à l'écran.

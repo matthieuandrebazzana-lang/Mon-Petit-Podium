@@ -31,14 +31,14 @@ import { useDonnees } from "../lib/useDonnees.js";
  */
 
 // Largeur de la voiture, et hauteur qui s'en déduit du rapport du viewBox
-// (141.12 × 288.09). Les deux sont fixes : c'est la piste qui s'adapte à
-// l'écran, pas la voiture, dont le numéro deviendrait illisible en dessous.
+// (141.12 × 288.09). Ce sont les dimensions **à taille pleine** : la piste les
+// réduit toutes les deux, du même facteur, quand elle n'a pas la place de les
+// porter sans chevauchement (voir `dispositionDesVoitures`).
 //
 // **Les deux valeurs ont changé avec le nouveau dessin, sans que la piste
 // bouge.** L'ancien `assets/voiture.svg` portait près de deux fois la largeur
 // du dessin en marge vide : sa boîte de 56 × 68 ne montrait qu'une voiture de
-// 29 × 59. La boîte est désormais celle du dessin, d'où 29 × 59 — la voiture
-// occupe exactement la même place à l'écran qu'avant.
+// 29 × 59. La boîte est désormais celle du dessin, d'où 29 × 59.
 const LARGEUR_VOITURE = 29;
 const HAUTEUR_VOITURE = Math.round(LARGEUR_VOITURE * (288.09 / 141.12));
 
@@ -46,81 +46,251 @@ const HAUTEUR_VOITURE = Math.round(LARGEUR_VOITURE * (288.09 / 141.12));
 const MARGE_HAUTE = 16;
 const MARGE_BASSE = 12;
 
-// Écart vertical souhaité entre deux voitures. En dessous, elles se
-// chevauchent ; au-delà, la piste se vide inutilement. Le facteur monte de 0,78
-// à 0,90 parce que la boîte ne porte plus de marge : 0,78 d'une boîte qui
-// contenait 13 % de vide donnait le même écart absolu qu'ici.
-const ECART_SOUHAITE = Math.round(HAUTEUR_VOITURE * 0.9);
+// Gouttières entre deux voitures. Elles **s'ajoutent** à la boîte du dessin et
+// ne l'entament jamais : le pas est donc toujours strictement supérieur à la
+// dimension de la voiture, et deux voitures ne peuvent pas se toucher.
+//
+// C'est ce qui change avec cette version. L'écart vertical valait
+// `0,9 × HAUTEUR_VOITURE`, soit six pixels **de moins** que la voiture
+// elle-même : deux boîtes consécutives se recouvraient déjà par construction.
+const GOUTTIERE_VERTICALE = 6;
+const GOUTTIERE_HORIZONTALE = 10;
+const PAS_VERTICAL = HAUTEUR_VOITURE + GOUTTIERE_VERTICALE;
+const PAS_HORIZONTAL = LARGEUR_VOITURE + GOUTTIERE_HORIZONTALE;
+
+// Place réservée à la légende, **de chaque côté** de la piste. Elle est prise
+// symétriquement pour que la rangée reste centrée sur la route : 28px de
+// décalage (`right-7`) plus la largeur maximale du texte (76px). Réservée du
+// seul côté droit, elle donnerait plus de place aux voitures mais décalerait
+// toute la grille vers la gauche, ce qui se lirait comme un défaut de calage.
+const ZONE_LEGENDE = 104;
+
+// Hauteur des trois formes de légende, mesurée sur le rendu : le score seul
+// (15px), le score et son unité, puis le nom ou le nombre d'ex æquo.
+//
+// **La légende ne rapetisse pas avec la voiture**, et c'est voulu : un score de
+// neuf pixels de haut ne se lit plus. C'est son contenu qui se réduit quand la
+// place manque — l'unité d'abord, le nom ensuite. Sans ces deux paliers, deux
+// légendes voisines se recouvraient dès que les voitures se resserraient, ce
+// que l'aperçu rendu avec la feuille compilée montrait sans équivoque.
+const LEGENDE_COMPLETE = 50;
+const LEGENDE_REDUITE = 33;
+
+// En deçà, la voiture n'est plus qu'une tache. On ne descend jamais jusqu'à
+// zéro, qui rendrait un SVG de taille nulle.
+const ECHELLE_MINIMALE = 0.08;
 
 // Décalage d'entrée entre deux voitures — doit rester égal à --voiture-stagger.
 const RETARD_ENTREE = 100;
 
 /**
- * Position verticale (le centre) de chaque voiture, du leader au dernier.
+ * Les membres regroupés par score, dans l'ordre du classement.
  *
- * La hauteur est **proportionnelle aux points** : le leader se pose tout en
- * haut, quelqu'un à la moitié de ses points se pose à mi-piste. Si personne n'a
- * encore marqué, la fraction vaut zéro pour tout le monde et les voitures se
- * regroupent en bas — la grille de départ avant le premier Grand Prix.
+ * Le regroupement se fait sur les **voisins immédiats** et non sur une table de
+ * scores : `classement_du_championnat` trie déjà par points décroissants, donc
+ * deux membres à égalité sont toujours consécutifs, et grouper les voisins
+ * garantit que l'ordre affiché reste exactement celui du classement — départage
+ * de la règle 4.6 compris.
  *
- * Deux passes de relaxation suivent le placement proportionnel, et elles ne
- * sont pas un ornement : sans elles, deux membres séparés de dix points
- * verraient leurs voitures se superposer, et la vue ne dirait plus rien. La
- * passe descendante impose l'écart minimal depuis le leader, la passe montante
- * rattrape ce qui a débordé en bas. L'écart minimal est plafonné à la place
- * réellement disponible, ce qui garantit que tout le monde tient à l'écran quel
- * que soit le nombre de membres (règle 4.5 : aucune limite).
+ * `total_points` peut valoir `null` pour qui n'a rien marqué (convention de
+ * l'étape 6) : il est ramené à 0, sans quoi deux membres sans le moindre
+ * pronostic noté ne seraient jamais regroupés, `null !== null` étant faux.
+ * L'index d'origine voyage avec le membre — c'est lui qui donne le retard
+ * d'entrée, et il doit rester celui du classement, pas celui du groupe.
  */
-export function positionsDesVoitures(lignes, hauteur) {
-  const nombre = lignes.length;
-  if (nombre === 0 || hauteur <= 0) return [];
+export function grouperParScore(lignes) {
+  const groupes = [];
 
-  const haut = MARGE_HAUTE + HAUTEUR_VOITURE / 2;
-  const bas = Math.max(haut, hauteur - MARGE_BASSE - HAUTEUR_VOITURE / 2);
-  const course = bas - haut;
+  lignes.forEach((ligne, index) => {
+    const points = ligne.total_points ?? 0;
+    const dernier = groupes[groupes.length - 1];
 
-  const maximum = Math.max(...lignes.map((ligne) => ligne.total_points ?? 0), 0);
-
-  const positions = lignes.map((ligne) => {
-    const fraction = maximum > 0 ? (ligne.total_points ?? 0) / maximum : 0;
-    return bas - fraction * course;
+    if (dernier && dernier.points === points) dernier.membres.push({ ligne, index });
+    else groupes.push({ points, membres: [{ ligne, index }] });
   });
 
-  const ecart = nombre > 1 ? Math.min(ECART_SOUHAITE, course / (nombre - 1)) : 0;
-
-  for (let i = 1; i < nombre; i += 1) {
-    positions[i] = Math.max(positions[i], positions[i - 1] + ecart);
-  }
-  positions[nombre - 1] = Math.min(positions[nombre - 1], bas);
-  for (let i = nombre - 2; i >= 0; i -= 1) {
-    positions[i] = Math.min(positions[i], positions[i + 1] - ecart);
-  }
-
-  return positions;
+  return groupes;
 }
 
 /**
- * Une voiture sur la piste, et sa légende.
+ * Où se pose chaque voiture, et où se pose la légende de chaque score.
  *
- * Voiture et légende vivent dans **une seule rangée** positionnée en absolu.
- * Deux éléments placés séparément, l'un au centre et l'autre à droite,
- * finiraient par se décaler d'un pixel ou deux ; ici l'alignement est une
- * conséquence de la structure, pas d'un calcul à tenir en double.
+ * **Un score, une hauteur.** C'est la règle qui gouverne tout le reste : la
+ * position verticale dit les points, donc deux membres à égalité doivent se
+ * poser à la même hauteur — et se répartir **latéralement**, côte à côte,
+ * centrés sur la route. Jusqu'ici la hauteur se calculait par membre : deux
+ * scores identiques donnaient deux fois la même valeur, et les voitures se
+ * superposaient au pixel près, l'une masquant l'autre entièrement.
+ *
+ * Un groupe trop nombreux pour tenir sur une seule rangée en occupe plusieurs,
+ * empilées : c'est une grille de départ, et c'est exactement l'image qu'il faut
+ * — le cas se produit surtout avant le premier Grand Prix, quand tout le monde
+ * est encore à zéro.
+ *
+ * **Aucune voiture n'en chevauche une autre, quelle que soit la configuration
+ * de scores**, et c'est obtenu en deux temps :
+ *
+ * 1. Les pas horizontal et vertical valent la dimension du dessin **plus** une
+ *    gouttière. Deux boîtes voisines ne peuvent donc pas se rencontrer.
+ * 2. Quand la piste n'a pas la hauteur de porter toutes les rangées à ce
+ *    pas-là, ce sont **les voitures qui rapetissent**, du même facteur en
+ *    largeur et en hauteur, jamais l'écart qui se referme. C'est le seul moyen
+ *    de tenir la garantie sur un championnat où chacun a son propre score
+ *    (règle 4.5 : aucune limite de membres) ; le prix en est une voiture plus
+ *    petite, ce qui se voit, là où un chevauchement rendait la vue muette.
+ *
+ * Le placement reste **proportionnel aux points** : le leader se pose tout en
+ * haut, un groupe à la moitié de ses points à mi-piste. Les deux passes de
+ * relaxation qui suivent imposent l'écart minimal, la descendante depuis le
+ * leader, la montante en rattrapant ce qui a débordé en bas.
+ */
+export function dispositionDesVoitures(lignes, hauteur, largeur) {
+  const vide = {
+    echelle: 1,
+    largeurVoiture: LARGEUR_VOITURE,
+    hauteurVoiture: HAUTEUR_VOITURE,
+    voitures: [],
+    legendes: [],
+  };
+  if (lignes.length === 0 || hauteur <= 0) return vide;
+
+  const groupes = grouperParScore(lignes);
+
+  // Combien de voitures tiennent côte à côte, mesuré à taille pleine : le
+  // nombre de rangées ne doit pas dépendre de l'échelle, qui en dépend
+  // elle-même. Une largeur non encore mesurée laisse une voiture par rangée,
+  // c'est-à-dire le comportement d'avant, jamais une division par zéro.
+  const utile = Math.max(0, (largeur || 0) - 2 * ZONE_LEGENDE);
+  const parRangee = Math.max(1, Math.floor(utile / PAS_HORIZONTAL));
+
+  const rangees = [];
+  groupes.forEach((groupe, indexGroupe) => {
+    for (let debut = 0; debut < groupe.membres.length; debut += parRangee) {
+      rangees.push({
+        indexGroupe,
+        membres: groupe.membres.slice(debut, debut + parRangee),
+      });
+    }
+  });
+
+  const disponible = hauteur - MARGE_HAUTE - MARGE_BASSE;
+  const requis = (rangees.length - 1) * PAS_VERTICAL + HAUTEUR_VOITURE;
+  const echelle = Math.min(1, Math.max(ECHELLE_MINIMALE, disponible / requis));
+
+  const hauteurVoiture = HAUTEUR_VOITURE * echelle;
+  const largeurVoiture = LARGEUR_VOITURE * echelle;
+  const pasHorizontal = PAS_HORIZONTAL * echelle;
+
+  const haut = MARGE_HAUTE + hauteurVoiture / 2;
+  const bas = Math.max(haut, hauteur - MARGE_BASSE - hauteurVoiture / 2);
+  const course = bas - haut;
+
+  // L'écart tient dans la course par construction, l'échelle ayant été choisie
+  // pour cela. Le plafond ne sert que dans le cas dégénéré où elle a buté sur
+  // `ECHELLE_MINIMALE` : tout le monde reste alors à l'écran, ce qui vaut mieux
+  // qu'une voiture invisible sortie de la piste.
+  const ecart =
+    rangees.length > 1
+      ? Math.min(PAS_VERTICAL * echelle, course / (rangees.length - 1))
+      : 0;
+
+  const maximum = Math.max(...groupes.map((groupe) => groupe.points), 0);
+
+  const centres = rangees.map(({ indexGroupe }) => {
+    const fraction = maximum > 0 ? groupes[indexGroupe].points / maximum : 0;
+    return bas - fraction * course;
+  });
+
+  for (let i = 1; i < centres.length; i += 1) {
+    centres[i] = Math.max(centres[i], centres[i - 1] + ecart);
+  }
+  centres[centres.length - 1] = Math.min(centres[centres.length - 1], bas);
+  for (let i = centres.length - 2; i >= 0; i -= 1) {
+    centres[i] = Math.min(centres[i], centres[i + 1] - ecart);
+  }
+
+  // Les voitures d'une rangée sont réparties autour de son axe : le décalage du
+  // j-ième d'une rangée de k vaut `(j - (k-1)/2)` pas. Une rangée seule reste
+  // donc exactement au centre de la route, comme avant cette version.
+  const voitures = [];
+  rangees.forEach((rangee, indexRangee) => {
+    const taille = rangee.membres.length;
+    rangee.membres.forEach(({ ligne, index }, place) => {
+      voitures.push({
+        ligne,
+        index,
+        centre: centres[indexRangee],
+        decalage: (place - (taille - 1) / 2) * pasHorizontal,
+      });
+    });
+  });
+
+  // Une seule légende par score — les membres d'un groupe ont le même par
+  // définition, et en poser une par voiture les empilerait toutes au même
+  // endroit, à droite, illisibles. Elle se cale au milieu des rangées du
+  // groupe.
+  const legendes = groupes.map((groupe, indexGroupe) => {
+    const siennes = centres.filter(
+      (_, index) => rangees[index].indexGroupe === indexGroupe,
+    );
+    return {
+      points: groupe.points,
+      membres: groupe.membres.map(({ ligne }) => ligne),
+      premier: groupe.membres[0].index,
+      centre: (siennes[0] + siennes[siennes.length - 1]) / 2,
+    };
+  });
+
+  // Ce que chaque légende a la place de dire. La mesure porte sur l'espace
+  // réellement disponible **autour d'elle**, pas sur le pas moyen : deux
+  // groupes proches se réduisent, sans imposer la même réduction à tout le
+  // monde. La première et la dernière n'ont qu'un voisin.
+  legendes.forEach((legende, index) => {
+    const avant = index > 0 ? legende.centre - legendes[index - 1].centre : Infinity;
+    const apres =
+      index < legendes.length - 1 ? legendes[index + 1].centre - legende.centre : Infinity;
+    const espace = Math.min(avant, apres);
+
+    legende.variante =
+      espace >= LEGENDE_COMPLETE
+        ? "complete"
+        : espace >= LEGENDE_REDUITE
+          ? "reduite"
+          : "minimale";
+  });
+
+  return { echelle, largeurVoiture, hauteurVoiture, voitures, legendes };
+}
+
+/**
+ * Une voiture sur la piste.
+ *
+ * L'élément animé porte `translateY` pour son entrée : le décalage latéral ne
+ * peut donc pas vivre sur lui, les deux transformations s'écraseraient. Il est
+ * posé sur un conteneur intérieur, en `left`, ce qui laisse l'animation
+ * intacte quel que soit le nombre de voitures de la rangée.
  *
  * Exporté nommément pour pouvoir être rendu hors navigateur : le composant
  * d'écran, lui, dépend de la session, qui ne se résout que dans un effet.
  *
  * Depuis l'étape 8, la voiture porte les **vraies couleurs** du membre et le
  * **numéro qu'il a choisi** — l'une et l'autre servies par le classement. Le
- * rang ne s'affiche que faute de numéro choisi : c'était le comportement
- * provisoire de l'étape 7, il devient le repli.
+ * rang ne s'affiche que faute de numéro choisi.
  *
  * `livreeDuMembre` décide de ce qui est peint : un membre qui a choisi une
  * livrée d'écurie roule ici dans cette livrée, exactement comme sur son
  * profil. C'est la même fonction des deux côtés — deux lectures séparées de
  * `livree_mode` finiraient par se contredire.
  */
-export function LigneDePiste({ ligne, centre, hauteur, retard, estMoi }) {
+export function VoitureSurPiste({
+  ligne,
+  centre,
+  decalage,
+  largeurVoiture,
+  hauteurVoiture,
+  hauteur,
+  retard,
+}) {
   const voiture = livreeDuMembre(ligne);
   const numero = ligne.numero ?? ligne.rang;
 
@@ -128,38 +298,80 @@ export function LigneDePiste({ ligne, centre, hauteur, retard, estMoi }) {
     <div
       className="t-voiture absolute inset-x-0"
       style={{
-        top: `${centre - HAUTEUR_VOITURE / 2}px`,
-        height: `${HAUTEUR_VOITURE}px`,
+        top: `${centre - hauteurVoiture / 2}px`,
+        height: `${hauteurVoiture}px`,
         // Chaque voiture part du bas de l'écran : la distance dépend de son
         // point d'arrivée, une valeur commune ferait démarrer le leader du
         // milieu de la piste.
-        "--voiture-depart": `${hauteur - centre + HAUTEUR_VOITURE}px`,
+        "--voiture-depart": `${hauteur - centre + hauteurVoiture}px`,
         "--voiture-retard": `${retard}ms`,
       }}
     >
-      <Voiture
-        {...voiture}
-        numero={numero}
-        nom={ligne.pseudo}
-        titre={`${ligne.rang}. ${ligne.pseudo}, ${ligne.total_points} points`}
-        className="absolute left-1/2 h-full -translate-x-1/2"
-      />
+      <div
+        className="absolute top-0 -translate-x-1/2"
+        style={{
+          left: `calc(50% + ${decalage}px)`,
+          width: `${largeurVoiture}px`,
+          height: `${hauteurVoiture}px`,
+        }}
+      >
+        <Voiture
+          {...voiture}
+          numero={numero}
+          nom={ligne.pseudo}
+          titre={`${ligne.rang}. ${ligne.pseudo}, ${ligne.total_points ?? 0} points`}
+          className="h-full w-full"
+        />
+      </div>
+    </div>
+  );
+}
 
-      {/* Légende alignée sur la voiture. L'ombre portée n'est pas décorative :
-          ce texte passe tantôt sur l'asphalte, tantôt sur une bordure blanche,
-          et doit rester lisible sur les deux. */}
-      <div className="absolute top-1/2 right-7 -translate-y-1/2 text-right [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
-        <p className="text-[15px] leading-none font-medium text-white">
-          {ligne.total_points}
-        </p>
-        <p className="text-label-sm mt-1 text-white/70">pts</p>
+/**
+ * La légende d'un score, à droite de la rangée qu'elle nomme.
+ *
+ * Un groupe d'une seule voiture affiche le pseudo, comme avant cette version.
+ * Un groupe à égalité affiche « N ex æquo » : aligner N pseudos les uns sous
+ * les autres déborderait sur le groupe voisin, et la piste identifie déjà
+ * chacun par sa livrée et son numéro — c'est sa raison d'être. Le nom complet
+ * reste porté par chaque voiture, pour le lecteur d'écran comme au survol.
+ *
+ * L'ombre portée n'est pas décorative : ce texte passe tantôt sur l'asphalte,
+ * tantôt sur une bordure blanche, et doit rester lisible sur les deux.
+ */
+export function LegendeDeGroupe({ legende, hauteur, retard, moi }) {
+  const seul = legende.membres.length === 1;
+  const estMoi = legende.membres.some((membre) => membre.profil_id === moi);
+
+  return (
+    <div
+      className="t-voiture pointer-events-none absolute inset-x-0"
+      style={{
+        top: `${legende.centre}px`,
+        "--voiture-depart": `${hauteur - legende.centre}px`,
+        "--voiture-retard": `${retard}ms`,
+      }}
+    >
+      <div className="absolute right-7 -translate-y-1/2 text-right [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
         <p
-          className={`mt-1.5 max-w-[86px] truncate text-[11px] ${
-            estMoi ? "font-medium text-white" : "text-white/70"
+          className={`text-[15px] leading-none font-medium ${
+            estMoi ? "text-white" : "text-white/90"
           }`}
         >
-          {ligne.pseudo}
+          {legende.points}
         </p>
+        {legende.variante !== "minimale" && (
+          <p className="text-label-sm mt-1 text-white/70">pts</p>
+        )}
+        {legende.variante === "complete" && (
+          <p
+            className={`mt-1.5 max-w-[76px] truncate text-[11px] ${
+              estMoi ? "font-medium text-white" : "text-white/70"
+            }`}
+          >
+            {seul ? legende.membres[0].pseudo : `${legende.membres.length} ex æquo`}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -183,21 +395,31 @@ export default function Piste() {
 
   const lignes = useMemo(() => donnees ?? [], [donnees]);
 
-  // La hauteur de la piste dépend de l'écran, et sur iOS elle change quand la
-  // barre d'adresse de Safari se rétracte. Elle est donc mesurée, pas devinée.
+  // La piste est mesurée, pas devinée : sa hauteur dépend de l'écran et, sur
+  // iOS, elle change quand la barre d'adresse de Safari se rétracte.
+  //
+  // **Sa largeur est mesurée elle aussi depuis cette version.** C'est elle qui
+  // décide combien de voitures à égalité tiennent côte à côte sur une rangée ;
+  // la supposer reviendrait à en superposer deux sur un écran étroit, c'est-à-
+  // dire le défaut qu'on corrige.
   const zone = useRef(null);
-  const [hauteur, setHauteur] = useState(0);
+  const [taille, setTaille] = useState({ hauteur: 0, largeur: 0 });
 
   useEffect(() => {
     const element = zone.current;
     if (!element) return undefined;
 
     const observateur = new ResizeObserver(([entree]) => {
-      setHauteur(entree.contentRect.height);
+      setTaille({
+        hauteur: entree.contentRect.height,
+        largeur: entree.contentRect.width,
+      });
     });
     observateur.observe(element);
     return () => observateur.disconnect();
   }, []);
+
+  const { hauteur, largeur } = taille;
 
   // Les voitures montent une fois qu'elles ont une position à rejoindre :
   // les lancer avant la mesure les ferait converger vers zéro puis sauter.
@@ -208,9 +430,9 @@ export default function Piste() {
     return () => cancelAnimationFrame(image);
   }, [hauteur, lignes.length]);
 
-  const positions = useMemo(
-    () => positionsDesVoitures(lignes, hauteur),
-    [lignes, hauteur],
+  const disposition = useMemo(
+    () => dispositionDesVoitures(lignes, hauteur, largeur),
+    [lignes, hauteur, largeur],
   );
 
   return (
@@ -262,14 +484,30 @@ export default function Piste() {
       </div>
 
       <div ref={zone} className="relative flex-1">
-        {lignes.map((ligne, index) => (
-          <LigneDePiste
-            key={ligne.profil_id}
-            ligne={ligne}
-            centre={positions[index] ?? 0}
+        {/* Les voitures d'abord, les légendes ensuite : à égalité de points
+            plusieurs voitures partagent une hauteur, et une seule légende les
+            nomme. Le retard d'entrée reste celui du **classement** et non celui
+            de la rangée, pour que la cascade suive l'ordre des rangs. */}
+        {disposition.voitures.map((placement) => (
+          <VoitureSurPiste
+            key={placement.ligne.profil_id}
+            ligne={placement.ligne}
+            centre={placement.centre}
+            decalage={placement.decalage}
+            largeurVoiture={disposition.largeurVoiture}
+            hauteurVoiture={disposition.hauteurVoiture}
             hauteur={hauteur}
-            retard={index * RETARD_ENTREE}
-            estMoi={ligne.profil_id === utilisateur?.id}
+            retard={placement.index * RETARD_ENTREE}
+          />
+        ))}
+
+        {disposition.legendes.map((legende) => (
+          <LegendeDeGroupe
+            key={`${legende.points}-${legende.premier}`}
+            legende={legende}
+            hauteur={hauteur}
+            retard={legende.premier * RETARD_ENTREE}
+            moi={utilisateur?.id}
           />
         ))}
 
