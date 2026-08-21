@@ -171,7 +171,7 @@ export function etatDuGpSaison(gp, maintenant = Date.now()) {
  * pastille (voir `ETATS_GP`) : sur le noir de Las Vegas, une bande blanche à
  * 85 % poserait le vert sauge à 3,45:1. Il faut 97 % pour tenir 4,5:1.
  */
-export function actionDuGp(gp, etat) {
+export function actionDuGp(gp, etat, previsualisation = false) {
   if (!gp.gp_id) return null;
 
   if (etat.cle === "termine") {
@@ -193,7 +193,13 @@ export function actionDuGp(gp, etat) {
   // deux calendriers la calculent sans jamais la déduire du statut, et ce n'est
   // pas un bouton qui doit renverser cette règle. Le geste proposé est donc plus
   // exigeant que le mot affiché, ce qui est le bon sens du doute.
-  if (etat.cle === "ouvert" && cotesArretees(gp)) {
+  //
+  // **`previsualisation` lève la seconde condition, jamais la première.** Le
+  // mode montre l'application comme si les cotes étaient arrêtées ; il ne
+  // prétend pas qu'un Grand Prix sans cotes en base en ait. `etat.cle` est lu
+  // dans les données, pas dans le statut — ouvrir un tableau de cotes vide ne
+  // montrerait rien de ce que le mode existe pour montrer.
+  if (etat.cle === "ouvert" && (cotesArretees(gp) || previsualisation)) {
     return {
       vers: `/grands-prix/${gp.gp_id}/cotes`,
       libelle: "Pronostiquer",

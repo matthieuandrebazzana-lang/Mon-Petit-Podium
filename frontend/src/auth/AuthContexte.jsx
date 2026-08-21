@@ -58,6 +58,31 @@ export function AuthProvider({ children }) {
    *    doivent hériter ni du droit de l'autre, ni de son mode.
    */
   const [modeAdminActif, setModeAdminActif] = useState(false);
+  /**
+   * Mode prévisualisation — le second interrupteur de la section
+   * « Administration », **subordonné au premier**.
+   *
+   * Il répond à une question que le mode admin ne pose pas : « à quoi
+   * ressemble l'application quand ce Grand Prix est ouvert aux pronostics ? ».
+   * Allumé, les surfaces qui exigent des cotes arrêtées se comportent comme si
+   * elles l'étaient — sans qu'une seule ligne ne bouge en base.
+   *
+   * **Ce mode ne change rien pour personne d'autre, et c'est sa définition.**
+   * Le statut `cotes_figees` n'est pas touché, aucune route n'est appelée, le
+   * job automatique du samedi continue son travail à l'identique. C'est
+   * l'inverse exact de « Figer les cotes », le bouton d'à côté, qui écrit et ne
+   * sait pas revenir en arrière — d'où la confirmation sur place que celui-ci
+   * n'a pas besoin de demander.
+   *
+   * **État de session, jamais persisté**, pour les trois raisons déjà écrites
+   * sur `modeAdminActif` juste au-dessus, et une quatrième qui lui est propre :
+   * ce mode montre volontairement quelque chose de faux. Le retrouver allumé
+   * après un rechargement, sans se souvenir de l'avoir allumé, ferait prendre
+   * la prévisualisation pour la réalité — précisément le seul défaut qu'un
+   * mode de vérification puisse avoir.
+   */
+  const [modePrevisualisationActif, setModePrevisualisationActif] =
+    useState(false);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -126,10 +151,14 @@ export function AuthProvider({ children }) {
    */
   useEffect(() => {
     setEstAdmin(false);
-    // Le mode retombe avec le droit : sans cela, un administrateur qui se
-    // déconnecte laisserait son mode allumé au compte suivant, qui le
-    // retrouverait actif à la seconde où son propre `is_admin` reviendrait vrai.
+    // Les deux modes retombent avec le droit : sans cela, un administrateur qui
+    // se déconnecte laisserait ses modes allumés au compte suivant, qui les
+    // retrouverait actifs à la seconde où son propre `is_admin` reviendrait
+    // vrai. La prévisualisation est éteinte ici **en plus** de l'être par
+    // dérivation : elle survivrait sinon en état brut, prête à se rallumer avec
+    // le mode admin du compte suivant.
     setModeAdminActif(false);
+    setModePrevisualisationActif(false);
     if (!compte) return undefined;
 
     const controleur = new AbortController();
@@ -313,6 +342,27 @@ export function AuthProvider({ children }) {
        * son interrupteur dans la session courante.
        */
       modeAdmin: estAdmin && modeAdminActif,
+      // Le second interrupteur nu, pour la même section et elle seule.
+      modePrevisualisationActif,
+      setModePrevisualisationActif,
+      /**
+       * **Le drapeau que lisent les surfaces conditionnées par `cotes_figees`.**
+       *
+       * Trois termes, pas deux, et le troisième ne suffit jamais seul : c'est la
+       * même mécanique que `modeAdmin` ci-dessus, poussée d'un cran. Un
+       * administrateur qui éteint son mode admin doit retrouver l'application
+       * telle que la voient les autres **d'un seul geste** — s'il fallait
+       * éteindre deux interrupteurs pour cela, le second serait oublié une fois
+       * sur deux, et le mode de vérification mentirait exactement quand on lui
+       * fait confiance.
+       *
+       * Il vaut `false` pour tout le monde sauf un administrateur qui a allumé
+       * ses deux interrupteurs dans la session courante. **Il ne gouverne que
+       * de l'affichage** : aucune écriture, aucune route, aucun statut en base
+       * ne dépend de lui, et le job automatique l'ignore.
+       */
+      modePrevisualisation:
+        estAdmin && modeAdminActif && modePrevisualisationActif,
       chargement,
       recuperation,
       configure: supabaseConfigure,
@@ -329,6 +379,7 @@ export function AuthProvider({ children }) {
     session,
     estAdmin,
     modeAdminActif,
+    modePrevisualisationActif,
     chargement,
     recuperation,
     pseudoDisponible,

@@ -3,6 +3,7 @@ import { useAuth } from "./auth/AuthContexte.jsx";
 import { RouteProtegee, RoutePublique } from "./composants/Routes.jsx";
 import Alerte from "./composants/Alerte.jsx";
 import NavBarre from "./composants/NavBarre.jsx";
+import BandeauPrevisualisation from "./composants/BandeauPrevisualisation.jsx";
 import Landing from "./ecrans/Landing.jsx";
 import Inscription from "./ecrans/Inscription.jsx";
 import Connexion from "./ecrans/Connexion.jsx";
@@ -119,6 +120,14 @@ export default function App() {
           décide seule de s'afficher ou non, à partir du chemin courant et de la
           session. */}
       <NavBarre />
+
+      {/* Hors de <Routes> pour la raison exacte de la barre ci-dessus : la
+          pastille est `position: fixed`, et `Ecran` porte un `transform` qui en
+          ferait le bloc conteneur. Montée ici, elle traverse toute
+          l'application — ce qui est le point, puisque le mode qu'elle annonce
+          la traverse aussi. Elle décide seule de s'afficher, à partir du mode
+          admin et du mode prévisualisation. */}
+      <BandeauPrevisualisation />
     </>
   );
 }

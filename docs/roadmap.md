@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **21 août 2026**, version `0.42.0`.
+État au **21 août 2026**, version `0.44.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -29,6 +29,12 @@ Puis `POST /scraper/declencher?figer=false` — il réécrit `date_course` et
 fois.
 
 > **Tout essai de scraper d'ici là doit porter `?figer=false`.**
+
+> **Depuis la version `0.44.0`, il n'y a plus aucune raison d'écrire en base pour REGARDER
+> l'écran des pronostics.** Le « Mode prévisualisation » de la section Administration fait
+> voir l'application comme si les cotes étaient figées, sans toucher au statut. Le
+> correctif ci-dessus reste nécessaire — il répare une donnée réellement fausse — mais la
+> vérification qui avait causé l'accident se fait maintenant sans écrire.
 
 ### 1.2 Vérifier les migrations appliquées
 
@@ -272,6 +278,11 @@ chose.
 `--icon-swap-dur` est **partagé avec l'étoile de favori et les icônes de la barre** — le
 toucher les changerait toutes les trois. Si l'interrupteur seul doit ralentir, un jeton
 propre se justifierait, **pas avant d'avoir regardé**.
+
+**Depuis la version `0.44.0` la question porte sur DEUX interrupteurs**, celui du mode admin
+et celui de la prévisualisation, qui partagent le composant `Bascule` — donc le même jeton.
+C'est un argument de plus pour regarder : un défaut de perception se verrait deux fois de
+suite, à un centimètre d'écart.
 
 ---
 

@@ -68,8 +68,15 @@ const HAUTEUR_TRACE = 160;
  * le même pour tout le monde, mais l'état des pronostics ne l'est pas : deux
  * personnes qui se relaient sur le même téléphone ne doivent jamais hériter du
  * bouton de l'autre, fût-ce le temps d'un rafraîchissement.
+ *
+ * **`previsualisation` arrive par prop et non par `useAuth`, et ce n'est pas un
+ * détour.** Ce composant est exporté nommément précisément pour être rendu hors
+ * navigateur, sans monter `AuthProvider` ; `useAuth` lève dès qu'il ne trouve
+ * pas de contexte, et l'appeler ici rendrait ce rendu impossible. Le drapeau est
+ * donc lu par `Accueil`, qui vit déjà dans le contexte, et descend comme une
+ * donnée ordinaire — par défaut `false`, c'est-à-dire la règle ordinaire.
  */
-export function BlocProchainGp({ profilId }) {
+export function BlocProchainGp({ profilId, previsualisation = false }) {
   const chargeur = useCallback((signal) => chargerAccueilGp(profilId, signal), [profilId]);
   const { donnees, chargement } = useDonnees(
     profilId ? cleAccueilGp(profilId) : null,
@@ -178,7 +185,14 @@ export function BlocProchainGp({ profilId }) {
   // porte le statut `termine`, jamais `cotes_figees` : lui appliquer la règle
   // fermerait l'accès aux résultats le dimanche soir, c'est-à-dire au moment où
   // tout le monde ouvre l'application.
-  const avecBouton = couru || cotesArretees(gp);
+  //
+  // **Le mode prévisualisation lève cette condition, et lui seul.** Il vaut
+  // `false` pour tout le monde sauf un administrateur qui a allumé ses deux
+  // interrupteurs dans la session courante : la règle ci-dessus reste donc
+  // entière pour les membres, le statut en base n'est pas touché, et le job du
+  // samedi continue de le faire basculer normalement. La pastille
+  // « Prévisualisation » est ce qui empêche de prendre ce bouton pour le vrai.
+  const avecBouton = couru || cotesArretees(gp) || previsualisation;
 
   const destination = couru
     ? `/grands-prix/${gp.id}/resultats`
@@ -661,7 +675,7 @@ export function BlocSaison() {
 
 /** Maquette 04 — accueil connecté : mes championnats et les deux actions. */
 export default function Accueil() {
-  const { pseudo: pseudoJeton, utilisateur } = useAuth();
+  const { pseudo: pseudoJeton, utilisateur, modePrevisualisation } = useAuth();
 
   // Le pseudo affiché est relu **en base à chaque montage**, jamais pris dans
   // le jeton. `useAuth().pseudo` ne lit pas `public.profils` : il lit
@@ -711,7 +725,10 @@ export default function Accueil() {
 
       <div className="mt-3 flex flex-1 flex-col gap-3">
         <Bloc rang={1}>
-          <BlocProchainGp profilId={utilisateur?.id ?? null} />
+          <BlocProchainGp
+            profilId={utilisateur?.id ?? null}
+            previsualisation={modePrevisualisation}
+          />
         </Bloc>
 
         {/* **Le conteneur flex vit A L'INTERIEUR du `Bloc`, jamais sur lui.**

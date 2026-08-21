@@ -65,9 +65,16 @@ const HAUTEUR_BANDE = 46;
  *  — même valeur, pour que les deux écrans ne divergent pas. */
 const OMBRE_TEXTE = "[text-shadow:0_1px_3px_rgba(0,0,0,0.45)]";
 
-export default function CarteGpSaison({ gp, chargement = false, retour = null }) {
+export default function CarteGpSaison({
+  gp,
+  chargement = false,
+  retour = null,
+  previsualisation = false,
+}) {
   const etat = etatDuGpSaison(gp);
-  const action = actionDuGp(gp, etat);
+  // Le drapeau descend de l'écran, qui le lit dans le contexte : la carte reste
+  // une fonction de ses props, comme les autres composants de cette planche.
+  const action = actionDuGp(gp, etat, previsualisation);
   const jour = jourDe(gp.date);
 
   // Le pays hôte donne à la fois les couleurs de la carte et le tracé du

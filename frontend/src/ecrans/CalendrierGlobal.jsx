@@ -40,7 +40,7 @@ import { useDonnees } from "../lib/useDonnees.js";
 /* -------------------------------------------------------------------------- */
 
 export default function CalendrierGlobal() {
-  const { utilisateur } = useAuth();
+  const { utilisateur, modePrevisualisation } = useAuth();
 
   // La clé porte l'identifiant du compte, comme partout ailleurs : la réponse
   // est la même pour tout le monde, mais deux personnes qui se relaient sur le
@@ -102,6 +102,7 @@ export default function CalendrierGlobal() {
                 gp={gp}
                 chargement={chargement && !donnees}
                 retour="/calendrier"
+                previsualisation={modePrevisualisation}
               />
             ))}
           </div>

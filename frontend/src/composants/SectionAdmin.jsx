@@ -28,30 +28,26 @@ import { useAuth } from "../auth/AuthContexte.jsx";
  */
 
 /**
- * L'interrupteur « Mode admin actif ».
+ * La rangée d'interrupteur — la forme, écrite **une seule fois**.
  *
- * **Un interrupteur qui se démet lui-même**, et c'est ce qui gouverne sa
- * composition. Éteint, l'administrateur voit l'application exactement comme la
- * voient les autres : plus aucune surface d'administration nulle part, et les
- * conditions ordinaires — `cotesArretees` et les autres — s'appliquent sans
- * exception. C'est la seule façon de vérifier ce que voit un membre sans se
- * créer un second compte.
- *
- * **Il est posé en tête de la section, avant ce qu'il gouverne**, et c'est la
- * règle de mapping d'`/apple-design` §16 : un contrôle vit près de ce qu'il
- * commande. Il est aussi le seul élément de la section à ne jamais disparaître —
- * s'il s'éteignait avec le reste, il n'y aurait plus rien pour le rallumer.
- *
- * **Neutralisé pendant un envoi.** Sans cela, s'éteindre à mi-course laisserait
- * une requête en vol dont le résultat s'afficherait au retour, des minutes plus
- * tard, comme s'il venait d'arriver. Les deux boutons sont déjà neutralisés à
- * ce moment-là ; l'interrupteur les rejoint.
+ * La section en porte deux, et elles doivent être indiscernables : « things
+ * that look the same must behave the same » (/apple-design §16.4). Deux
+ * rangées écrites séparément auraient divergé au premier ajustement — une
+ * hauteur de piste, un poids de libellé, une couleur mesurée retouchée d'un
+ * côté seulement — et le second interrupteur aurait cessé de se lire comme un
+ * interrupteur.
  *
  * Le contrôle est une **rangée entière**, pas une pastille de 46px posée au
  * bout : la cible fait toute la largeur, et le libellé dit l'état plutôt que de
  * le laisser deviner à la couleur seule.
  */
-export function BasculeModeAdmin({ actif, onBasculer, disabled = false }) {
+export function Bascule({
+  libelle,
+  description,
+  actif,
+  onBasculer,
+  disabled = false,
+}) {
   return (
     <button
       type="button"
@@ -62,15 +58,11 @@ export function BasculeModeAdmin({ actif, onBasculer, disabled = false }) {
       className="min-h-tactile -my-1 flex w-full items-center justify-between gap-4 py-1 text-left disabled:opacity-50"
     >
       <span className="flex flex-col gap-0.5">
-        <span className="text-corps-sm text-texte font-medium">
-          Mode admin actif
-        </span>
+        <span className="text-corps-sm text-texte font-medium">{libelle}</span>
         {/* L'état est dit, pas seulement peint : la couleur seule ne suffit ni
             au daltonien, ni à qui vient d'ouvrir l'écran. */}
         <span className="text-label-sm text-texte-doux normal-case">
-          {actif
-            ? "Les outils d'administration sont visibles."
-            : "Tu vois l'app comme un membre ordinaire."}
+          {description}
         </span>
       </span>
 
@@ -100,6 +92,78 @@ export function BasculeModeAdmin({ actif, onBasculer, disabled = false }) {
   );
 }
 
+/**
+ * L'interrupteur « Mode admin actif ».
+ *
+ * **Un interrupteur qui se démet lui-même**, et c'est ce qui gouverne sa
+ * composition. Éteint, l'administrateur voit l'application exactement comme la
+ * voient les autres : plus aucune surface d'administration nulle part, et les
+ * conditions ordinaires — `cotesArretees` et les autres — s'appliquent sans
+ * exception. C'est la seule façon de vérifier ce que voit un membre sans se
+ * créer un second compte.
+ *
+ * **Il est posé en tête de la section, avant ce qu'il gouverne**, et c'est la
+ * règle de mapping d'`/apple-design` §16 : un contrôle vit près de ce qu'il
+ * commande. Il est aussi le seul élément de la section à ne jamais disparaître —
+ * s'il s'éteignait avec le reste, il n'y aurait plus rien pour le rallumer.
+ *
+ * **Neutralisé pendant un envoi.** Sans cela, s'éteindre à mi-course laisserait
+ * une requête en vol dont le résultat s'afficherait au retour, des minutes plus
+ * tard, comme s'il venait d'arriver. Les deux boutons sont déjà neutralisés à
+ * ce moment-là ; l'interrupteur les rejoint.
+ */
+export function BasculeModeAdmin({ actif, onBasculer, disabled = false }) {
+  return (
+    <Bascule
+      libelle="Mode admin actif"
+      description={
+        actif
+          ? "Les outils d'administration sont visibles."
+          : "Tu vois l'app comme un membre ordinaire."
+      }
+      actif={actif}
+      onBasculer={onBasculer}
+      disabled={disabled}
+    />
+  );
+}
+
+/**
+ * L'interrupteur « Mode prévisualisation ».
+ *
+ * **Il ne touche à rien, et sa description doit le dire.** Le voisin immédiat
+ * de cette rangée est « Figer les cotes », un bouton qui écrit en base et dont
+ * personne ne sait revenir en arrière sans un `update` à la main. Deux
+ * commandes voisines dont l'une est réversible et l'autre non doivent se
+ * distinguer par leur texte, pas par la mémoire de celui qui appuie : la
+ * description dit donc « rien n'est modifié en base » à l'état allumé, là où
+ * l'interrupteur d'au-dessus se contente de dire ce qu'il montre.
+ *
+ * **Subordonné au mode admin, donc posé sous lui et à l'intérieur de ce qu'il
+ * commande** (/apple-design §16, mapping). Il ne s'affiche jamais mode admin
+ * éteint : ce serait offrir de fausser l'affichage à quelqu'un qui vient
+ * justement de demander à voir l'application telle qu'elle est.
+ *
+ * **Neutralisé pendant un envoi**, comme son voisin et pour la même raison —
+ * changer ce qu'on regarde pendant qu'une requête est en vol brouille la
+ * lecture de son résultat.
+ */
+export function BasculePrevisualisation({ actif, onBasculer, disabled = false }) {
+  return (
+    <Bascule
+      libelle="Mode prévisualisation"
+      description={
+        actif
+          ? "Tu vois les Grands Prix comme s'ils étaient ouverts. Rien n'est modifié en base."
+          : "Voir l'app comme si les cotes étaient déjà figées."
+      }
+      actif={actif}
+      onBasculer={onBasculer}
+      disabled={disabled}
+    />
+  );
+}
+
 /** Les quatre phases de l'indicateur de statut. */
 export const REPOS = "repos";
 export const EN_COURS = "encours";
@@ -116,6 +180,8 @@ export const ECHEC = "echec";
 export function VueAdmin({
   modeActif = false,
   onBasculerMode,
+  previsualisationActive = false,
+  onBasculerPrevisualisation,
   confirmation = false,
   etat = { phase: REPOS },
   tentative = 0,
@@ -149,6 +215,19 @@ export function VueAdmin({
         </p>
       ) : (
         <>
+          {/* La prévisualisation est posée **juste sous** l'interrupteur qui la
+              gouverne, avant les boutons du scraper : c'est la seule autre
+              commande de la section qui agisse sur ce que l'écran montre, et
+              non sur ce que la base contient. Le filet la sépare de ce qui
+              suit, qui écrit pour de bon. */}
+          <div className="border-squelette mt-3 border-t pt-3">
+            <BasculePrevisualisation
+              actif={previsualisationActive}
+              onBasculer={onBasculerPrevisualisation}
+              disabled={enCours}
+            />
+          </div>
+
           <p className="text-corps-sm text-secondaire mt-3.5">
             Le scraping tourne déjà tout seul, deux heures après les
             qualifications. Ces deux boutons servent à le forcer entre-temps.
@@ -256,7 +335,12 @@ export function VueAdmin({
  * il n'écrit que des cotes, sur des Grands Prix qui ne sont pas encore arrêtés.
  */
 export default function SectionAdmin() {
-  const { modeAdminActif, setModeAdminActif } = useAuth();
+  const {
+    modeAdminActif,
+    setModeAdminActif,
+    modePrevisualisationActif,
+    setModePrevisualisationActif,
+  } = useAuth();
   const [confirmation, setConfirmation] = useState(false);
   const [etat, setEtat] = useState({ phase: REPOS });
   // Rejoue la secousse d'`Alerte` à chaque tentative : sans elle, réessayer et
@@ -290,6 +374,13 @@ export default function SectionAdmin() {
     if (modeAdminActif) {
       setConfirmation(false);
       setEtat({ phase: REPOS });
+      // **La prévisualisation s'éteint avec le mode qui la porte.** Le drapeau
+      // dérivé du contexte suffirait à la neutraliser — il conjugue les trois
+      // termes — mais l'interrupteur brut resterait allumé sous la surface, et
+      // se rallumerait tout seul au prochain « Mode admin actif ». Un
+      // interrupteur qu'on n'a pas touché et qui revient allumé est un
+      // interrupteur auquel on cesse de se fier.
+      setModePrevisualisationActif(false);
     }
     setModeAdminActif(!modeAdminActif);
   }
@@ -298,6 +389,10 @@ export default function SectionAdmin() {
     <VueAdmin
       modeActif={modeAdminActif}
       onBasculerMode={basculerMode}
+      previsualisationActive={modePrevisualisationActif}
+      onBasculerPrevisualisation={() =>
+        setModePrevisualisationActif(!modePrevisualisationActif)
+      }
       confirmation={confirmation}
       etat={etat}
       tentative={tentative}

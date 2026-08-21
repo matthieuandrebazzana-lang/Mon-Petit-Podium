@@ -89,7 +89,7 @@ export function etatDuGp(gp, maintenant = Date.now()) {
 /*  Une carte de Grand Prix                                                   */
 /* -------------------------------------------------------------------------- */
 
-export function CarteGrandPrix({ gp }) {
+export function CarteGrandPrix({ gp, previsualisation = false }) {
   const etat = etatDuGp(gp);
   const date = formaterJourMois(gp.date_course);
 
@@ -112,6 +112,14 @@ export function CarteGrandPrix({ gp }) {
   // cotes traînent en base ouvrirait un tableau que le scraper n'a pas encore
   // arrêté ; sans le second, un figeage manuel passé un mardi ferait pronostiquer
   // sur une grille de départ qui n'existe pas encore (règle 4.3).
+  //
+  // **Le mode prévisualisation ne lève que le second test, jamais le premier.**
+  // `etat.cle` se lit dans les données — `cotes_disponibles`, les résultats,
+  // l'heure de départ — et non dans le statut : c'est `cotesArretees` seule qui
+  // porte la condition `cotes_figees`, donc c'est elle seule que le mode
+  // court-circuite. Un Grand Prix sans une cote en base garde son absence de
+  // bouton, en prévisualisation comme ailleurs, parce que le tableau qu'il
+  // ouvrirait serait vide.
   const action =
     etat.cle === "termine"
       ? {
@@ -122,7 +130,7 @@ export function CarteGrandPrix({ gp }) {
           // et l'urgence ne se distinguerait plus de l'archive.
           style: "bg-fond text-primaire",
         }
-      : etat.cle === "ouvert" && cotesArretees(gp)
+      : etat.cle === "ouvert" && (cotesArretees(gp) || previsualisation)
         ? {
             vers: `/grands-prix/${gp.gp_id}/cotes`,
             libelle: "Pronostiquer",
@@ -323,7 +331,7 @@ function SqueletteCalendrier() {
 
 export default function Calendrier() {
   const { id } = useParams();
-  const { utilisateur } = useAuth();
+  const { utilisateur, modePrevisualisation } = useAuth();
 
   const [tentative, setTentative] = useState(0);
 
@@ -447,7 +455,11 @@ export default function Calendrier() {
                   </div>
                 ) : (
                   grandsPrix.map((gp) => (
-                    <CarteGrandPrix key={gp.gp_id} gp={gp} />
+                    <CarteGrandPrix
+                      key={gp.gp_id}
+                      gp={gp}
+                      previsualisation={modePrevisualisation}
+                    />
                   ))
                 )}
               </div>

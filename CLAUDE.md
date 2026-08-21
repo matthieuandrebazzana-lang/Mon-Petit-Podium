@@ -196,15 +196,23 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.43.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+**Version `0.44.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
 les onze étapes de développement sont livrées : fondations, authentification, championnats,
 scraper Unibet, pronostics, résultats OpenF1, classements, profils, finitions, navigation,
 scraping automatique.
 
-**Cette version** met en place la mémoire externe : la connaissance détaillée passe de ce
-fichier — qui avait atteint 4 200 lignes chargées à chaque session — vers les douze
-documents de `docs/`. Aucune information n'est perdue ; ce fichier ne garde que ce qui doit
-être su systématiquement.
+**Cette version** ajoute le **mode prévisualisation** : un second interrupteur dans la
+section Administration, subordonné au mode admin, qui fait voir l'application comme si les
+cotes du prochain Grand Prix étaient déjà figées. Il ne lève qu'une condition,
+`cotesArretees` — la seule fonction du projet qui lise le statut `cotes_figees` — et
+**n'écrit rien** : les autres membres ne voient aucune différence, et le job automatique
+continue à l'identique. Une pastille « Prévisualisation » en bas de l'écran empêche de
+confondre cette vue avec la vraie. Il n'y a donc plus de raison d'écrire en base pour
+regarder un écran, ce qui était la cause de l'accident du GP des Pays-Bas. Voir
+`docs/decisions.md` §15 bis.
+
+*La version `0.43.0` avait mis en place la mémoire externe : la connaissance détaillée est
+passée de ce fichier vers les douze documents de `docs/`.*
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :

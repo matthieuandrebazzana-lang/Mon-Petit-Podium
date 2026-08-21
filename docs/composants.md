@@ -219,7 +219,7 @@ le mode personnalisé — ce qui se voit à l'écran au lieu de planter.
 | `couleurs.js` | aplats de bloc, contraste, encres |
 | `palette.js` | 20 couleurs de voiture, luminance, `livreeDuMembre` |
 | `ecuries.js` | onze écuries, grille 2026 — voir `ecuries.md` |
-| `calendrier.js` | `ETATS_GP`, `cotesArretees` |
+| `calendrier.js` | `ETATS_GP`, `cotesArretees` — **seule lectrice du statut `cotes_figees`** |
 | `calendrier2026.js` | **la liste des GP** — voir `calendrier.md` |
 | `navigation.js` | barre, onglets, `origineRetour` |
 | `pronostics.js` | marchés, favoris, exclusion croisée |
@@ -230,6 +230,43 @@ Trois règles ont été **sorties des écrans** vers `lib/pronostics.js` — `op
 seraient vérifiables qu'en montant un DOM que le projet n'outille pas. Sorties de là, elles
 s'éprouvent directement. Même motif pour `VueAdmin`, fonction pure de ses props, séparée de
 `SectionAdmin` qui porte l'état.
+
+### `SectionAdmin` — deux interrupteurs, une seule rangée
+
+La section porte **deux** bascules depuis la version `0.44.0` : « Mode admin actif » et
+« Mode prévisualisation », la seconde subordonnée à la première et montée à l'intérieur de
+ce que la première commande.
+
+> **La rangée est écrite une seule fois** — le composant `Bascule`, dont
+> `BasculeModeAdmin` et `BasculePrevisualisation` ne sont que deux habillages. Deux rangées
+> écrites séparément auraient divergé au premier ajustement, et le second interrupteur
+> aurait cessé de se lire comme un interrupteur. Les couleurs mesurées (pouce blanc à
+> 3,41:1 sur `secondaire/60`, 10,88:1 sur `primaire`) vivent donc à un seul endroit.
+
+### `BandeauPrevisualisation` — la pastille de statut
+
+Montée dans `App.jsx` **hors de `<Routes>`**, comme `NavBarre` et pour la même raison
+structurelle : `Ecran` porte un `transform`, qui ferait de lui le bloc conteneur de tout
+`position: fixed` posé à l'intérieur — la pastille défilerait avec la page.
+
+| Point | Valeur |
+|---|---|
+| Montage | seulement si `modeAdmin` — un membre ordinaire ne l'a jamais dans son DOM |
+| Visibilité | `data-actif`, piloté par `modePrevisualisation` |
+| Interaction | **aucune** : `pointer-events: none`, donc pas de cible 44 × 44 à tenir |
+| Place | bas gauche, au-dessus de la barre — les deux autres coins sont pris par l'en-tête |
+| Barre ou non | `barreVisible` de `lib/navigation.js`, **jamais une seconde liste d'écrans** |
+| Contraste | `primaire` sur `materiau-chrome` : 10,88:1 sur blanc, **5,48:1** sur le noir de Las Vegas |
+
+La position, la hauteur de barre et la transition vivent dans `index.css`
+(`.bandeau-previsualisation`) : trois `calc()` sur les zones sûres et sur `--spacing-nav`
+que des valeurs arbitraires Tailwind rendraient illisibles. Le JSX ne garde que le matériau,
+l'encre et la typographie.
+
+> **La transition porte sur `translate`, pas sur `transform`.** C'est le piège déjà
+> documenté sur `.t-bascule-pouce` : en Tailwind 4 les utilitaires de translation écrivent
+> la propriété indépendante `translate`, et transitionner `transform` ne ferait
+> rigoureusement rien.
 
 ### `useDonnees` — `setDonnees` vs `remplacer`
 

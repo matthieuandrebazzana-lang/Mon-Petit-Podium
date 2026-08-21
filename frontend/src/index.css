@@ -559,6 +559,79 @@
   }
 }
 
+/* ---------------------------------------------------------------
+   Pastille « Prévisualisation »
+   Le rappel permanent qu'un administrateur regarde l'application dans un état
+   qu'elle n'a pas. Le composant est `BandeauPrevisualisation.jsx` ; ce qui vit
+   ici est ce que des valeurs arbitraires Tailwind rendraient illisible — trois
+   `calc()` sur les zones sûres et sur la hauteur de la barre basse.
+   --------------------------------------------------------------- */
+.bandeau-previsualisation {
+  position: fixed;
+  /* Alignée sur la marge de contenu d'`.ecran`, zone sûre comprise : une
+     pastille qui ne tombe pas sur la même verticale que les blocs se lit comme
+     un défaut d'alignement plutôt que comme une couche flottante. */
+  left: calc(var(--spacing-safe-left) + --spacing(4));
+  bottom: calc(var(--spacing-safe-bottom) + --spacing(3));
+  /* Sous la barre de navigation (z-30) rien ne la couvrirait, mais au-dessus
+     elle passerait devant la barre. `z-40` la pose au-dessus du contenu et des
+     en-têtes collantes, en dessous de rien d'autre — il n'y a pas de modale
+     dans l'app. */
+  z-index: 40;
+  /* Ce n'est pas un contrôle : elle ne doit jamais intercepter un appui destiné
+     à ce qu'elle recouvre. */
+  pointer-events: none;
+  /* — Mouvement (portier /animate) —
+     Elle anime, et le palier le justifie : un administrateur bascule ce mode
+     quelques fois par semaine, jamais cent fois par jour. Le but est **le
+     retour d'état** — son arrivée EST la confirmation que l'interrupteur a
+     pris, puisque les deux sont visibles ensemble sur l'écran du profil.
+
+     Transition et non `@keyframes` : l'interrupteur peut être basculé deux fois
+     en une seconde, et une transition repart de la valeur courante là où des
+     keyframes redémarreraient de zéro.
+
+     `translate` et non `transform` — c'est le piège déjà relevé sur
+     `.t-bascule-pouce` : en Tailwind 4 les utilitaires de translation écrivent
+     la propriété indépendante `translate`, et transitionner `transform` ne
+     ferait rigoureusement rien. Ici la valeur est écrite en clair juste en
+     dessous, mais le nom doit rester le même d'un bout à l'autre du fichier.
+
+     `visibility` est de la partie pour que la pastille éteinte sorte vraiment
+     de l'arbre d'accessibilité ; elle ne s'interpole pas, elle bascule en fin
+     de transition à l'extinction et au premier frame à l'allumage. */
+  transition:
+    opacity var(--duration-quick) var(--ease-smooth-out),
+    translate var(--duration-quick) var(--ease-smooth-out),
+    visibility var(--duration-quick) var(--ease-smooth-out);
+}
+
+/* Au-dessus de la barre basse là où elle existe. La question « cet écran
+   porte-t-il la barre ? » a UN propriétaire, `lib/navigation.js` : le composant
+   l'interroge et pose l'attribut, ce fichier ne fait que traduire la réponse en
+   pixels. Une seconde liste d'écrans aurait divergé au premier ajouté, et le
+   symptôme aurait été une pastille posée sur l'onglet Accueil. */
+.bandeau-previsualisation[data-barre="vrai"] {
+  bottom: calc(
+    var(--spacing-safe-bottom) + var(--spacing-nav) + --spacing(2)
+  );
+}
+
+/* Éteinte : elle descend de la distance la plus courte du vocabulaire du projet
+   et s'efface. Elle repart par le même chemin qu'elle a pris — la symétrie
+   d'/apple-design §7, qui vaut aussi pour quatre pixels. */
+.bandeau-previsualisation[data-actif="faux"] {
+  opacity: 0;
+  translate: 0 var(--distance-micro);
+  visibility: hidden;
+}
+
+.bandeau-previsualisation[data-actif="vrai"] {
+  opacity: 1;
+  translate: 0 0;
+  visibility: visible;
+}
+
 /* Barre d'action collée en bas (refonte de la maquette 09).
    Le bouton de validation reste sous le pouce quel que soit le défilement.
    Trois points, chacun nécessaire :
@@ -1621,5 +1694,16 @@
      pour la coche et le titre compact ci-dessus. */
   .t-bascule-pouce {
     transition: none !important;
+  }
+  /* La pastille de prévisualisation garde son fondu et perd son déplacement :
+     l'opacité est ce qui dit qu'elle arrive ou qu'elle part, les quatre pixels
+     n'étaient que de la manière. Même arbitrage que pour le pouce ci-dessus. */
+  .bandeau-previsualisation {
+    transition:
+      opacity var(--duration-quick) var(--ease-smooth-out),
+      visibility var(--duration-quick) var(--ease-smooth-out);
+  }
+  .bandeau-previsualisation[data-actif="faux"] {
+    translate: none;
   }
 }

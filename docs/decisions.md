@@ -410,6 +410,48 @@ la conjonction `estAdmin && modeAdminActif`, **nommée une fois plutôt que reco
 doit rester visible pour pouvoir rallumer l'interrupteur. **Un commentaire le dit à son
 point de montage**, sans quoi la prochaine session l'« alignerait » sur les autres.
 
+### 15 bis. Le mode prévisualisation ment à l'écran, jamais en base
+
+**Décision (version `0.44.0`).** Un second interrupteur, **subordonné au premier**, fait
+voir à l'administrateur l'application comme si les cotes du Grand Prix étaient déjà figées.
+`modePrevisualisationActif` vit en `useState` dans `AuthContexte`, exactement comme
+`modeAdminActif`, et le contexte expose la conjonction des **trois** termes sous le nom
+`modePrevisualisation`.
+
+**Raison.** Vérifier l'écran des pronostics avant les qualifications demandait jusqu'ici
+d'écrire en base — `update … set statut = 'cotes_figees'` — c'est-à-dire de casser la donnée
+pour regarder l'interface. C'est très exactement l'accident du GP des Pays-Bas
+(`bugs-connus.md` §4). Le mode déplace la question de la base vers l'affichage.
+
+**Ce qu'il ne touche pas, et c'est sa définition** : aucune écriture, aucune route, aucun
+statut. Les autres membres ne voient rien de différent, et le job automatique du samedi
+continue de figer les cotes à son heure.
+
+> **Il ne lève qu'une condition : `cotesArretees`.** C'est la seule fonction du projet qui
+> lise le statut `cotes_figees`. Les trois surfaces qui portent un bouton de pronostics
+> écrivent donc `cotesArretees(gp) || previsualisation` — et **rien d'autre**. En
+> particulier `etat.cle === "ouvert"` reste entier : il se lit dans les données, pas dans le
+> statut, et ouvrir un tableau de cotes vide ne montrerait rien de ce que le mode existe
+> pour montrer.
+
+**Le drapeau descend par prop dans `BlocProchainGp` et `CarteGpSaison`**, jamais par
+`useAuth`. Le premier est exporté nommément pour être rendu hors navigateur, sans
+`AuthProvider` : `useAuth` lève dès qu'il ne trouve pas de contexte, et l'appeler là rendrait
+ce rendu impossible. Les écrans, eux, vivent dans le contexte et le lisent.
+
+**Une marque à l'écran est la contrepartie obligatoire.** La pastille
+« Prévisualisation » (`BandeauPrevisualisation.jsx`) est montée dans `App.jsx`, hors de
+`<Routes>`, pour la raison structurelle de `NavBarre` — `Ecran` porte un `transform`, qui
+ferait de lui le bloc conteneur de tout `position: fixed` posé dessous. Sans elle, un
+administrateur qui a allumé l'interrupteur trois écrans plus tôt conclurait de bonne foi que
+le job du samedi a tourné : **c'est le seul défaut qu'un mode de vérification puisse
+avoir.**
+
+**Éteindre le mode admin éteint aussi la prévisualisation, en état brut.** La conjonction
+suffirait à la neutraliser, mais l'interrupteur resterait allumé sous la surface et se
+rallumerait tout seul au prochain « Mode admin actif ». Un interrupteur qu'on n'a pas touché
+et qui revient allumé est un interrupteur auquel on cesse de se fier.
+
 ---
 
 ## 16. Ne pas supprimer le code qui redevient utile
