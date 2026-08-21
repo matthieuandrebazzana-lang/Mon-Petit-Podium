@@ -196,77 +196,86 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.49.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+**Version `0.50.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
 les onze étapes de développement sont livrées : fondations, authentification, championnats,
 scraper Unibet, pronostics, résultats OpenF1, classements, profils, finitions, navigation,
 scraping automatique.
 
-**Cette version refond la vue piste de fond en comble. Rien au backend — sa version reste
-`0.45.0`.**
+**Cette version ajoute les photos** — celle d'un joueur, celle d'un championnat. Le backend
+change aussi : sa version passe à `0.50.0`.
 
-**Le fond vient de `assets/vue_piste.svg`, extraite dans `FondPiste.jsx`**, et il est
-**beige** `#F4EFEA` — à un point du `--color-fond` de l'app, là où cet écran peignait un
-asphalte `#1A1A1A`. **Toute l'encre de l'écran s'inverse donc** : le blanc qui tenait
-17,4:1 sur le noir ne vaut plus rien, `--color-texte` le remplace à 15,23:1, le squelette
-retrouve le gris `squelette` du reste de l'app et l'état vide le marron `secondaire`
-(9,24:1). Les règles `.piste-fond`, `.piste-kerb` et `.piste-axe` sont parties avec
-l'asphalte : les kerbs sont désormais **des chemins**, pas des dégradés répétés.
-`preserveAspectRatio="none"` rend les deux échelles indépendantes, donc les kerbs gardent
-leur largeur proportionnelle quel que soit le rapport de forme — sur les iPhone visés
-l'écart est nul à deux dixièmes près.
+**Rien n'est stocké en base : deux colonnes ne portent que des URL.** `profils.avatar_url`
+et `championnats.photo_url` pointent vers deux compartiments **publics** de Supabase
+Storage, plafonnés à **2 Mo**, limités à jpg, png et webp (migration 16). Une image de
+2 Mo en base64 pèserait 2,7 Mo dans une colonne `text`, serait relue à chaque classement
+et traverserait le réseau à chaque affichage.
 
-**Le bandeau porte le nom du championnat, dans SA couleur** — `couleurChampionnat`, la même
-qu'à l'accueil et sur l'écran championnat. Le damier du projet est par-dessus à **11 %**,
-posé par `--damier-opacite` et non par un second `opacity:`. Il reste **gris** là où la
-planche l'écrivait en blanc : sous le gris l'encre blanche ne descend jamais sous
-**9,99:1**, contre 7,56:1 sous un damier blanc. **Les deux `<rect>` du bandeau ont été
-retirés de la planche** — un nom centré dans les 10,94 % qu'elle lui donne tomberait sous
-la Dynamic Island. Le nom vivait en pied d'écran ; l'y laisser l'aurait écrit deux fois.
+**Le dépôt emprunte les DEUX chemins de données, et c'est le critère de la section 3
+appliqué tel quel.** Le **fichier** va directement à Supabase : les politiques de
+`storage.objects` décrivent exactement le cas — **le premier segment du chemin EST
+l'autorisation**, comparé à `auth.uid()` pour un avatar, remonté à `cree_par` pour un
+championnat. L'**URL** passe par FastAPI, parce que c'est une écriture. C'est là que
+`app/api/stockage.py` vérifie qu'elle désigne bien notre projet : sans cette vérification,
+une URL libre en base serait **un pixel espion posé sur l'écran des autres joueurs**, leur
+photo s'affichant au classement, sur la piste et au résumé d'un GP.
 
-**Le placement des voitures est entièrement neuf, et il sépare deux questions que l'ancien
-confondait.** La hauteur ne dépend plus que du **score** : l'échelle se tend sur le
-meilleur et le moins bon, la zone de jeu est toujours intégralement occupée, et **plus
-aucune relaxation ne déplace personne**. Le chevauchement se mesure ensuite **à l'écran**,
-sans jamais consulter un score, et se propage en cascade ; seules les voitures d'un groupe
-encombré rétrécissent, là où l'ancien réduisait tout l'écran d'un coup. Un groupe peut donc
-réunir des scores différents et dessiner un escalier en travers de la piste — c'est exact,
-et c'est le prix de la règle « une hauteur, un score » (`docs/decisions.md` §19).
+**La photo est entrée DANS `Pastille`, pas dans un `Avatar` posé à côté.** « Comment
+représente-t-on un joueur dans un rond » est une question posée par cinq écrans : elle a un
+propriétaire. Sans photo, ce sont les initiales sur teinte dérivée du pseudo — l'affichage
+d'origine, qui n'est pas un cas dégradé.
 
-**La légende de droite a disparu, le score est passé sous chaque voiture.** Elle chiffrait
-un groupe, ce qui n'a plus de sens quand un groupe est géométrique, et elle occupait les
-104px que les voitures utilisent maintenant d'un kerb à l'autre. Le score s'efface quand la
-voiture touche son plancher de taille : vingt nombres dans dix-sept pixels chacun ne font
-pas vingt nombres. Une liste `sr-only` porte le classement complet.
+**Une seule règle gouverne les trois listes** — classement, vue piste, résumé d'un GP :
+**la colonne de pastilles n'apparaît que si quelqu'un, dans cette liste, a une photo.**
+Posée ligne par ligne, la question donnerait une liste ébréchée ; jamais posée, un
+championnat sans photo gagnerait une colonne d'initiales posées à côté du pseudo qu'elles
+abrègent. Avec elle, **un championnat sans photo dessine exactement l'écran d'avant, au
+pixel près**.
 
-**Un seul mouvement a été ajouté, sans un jeton nouveau.** `.t-place` transitionne
-`translate` — la propriété indépendante, pas `transform`, que `.t-voiture` anime déjà pour
-son entrée — avec `--voiture-dur` et `--ease-in-out-fort`. Elle sert un cas précis : le
-cache peint la grille d'avant, le réseau rend celle d'après, et sans elle les voitures se
-téléportent. **La taille, elle, ne s'anime pas** : elle change quand la mise en page se
-recalcule, ce qui n'est pas un changement d'état. L'entrée échelonnée existante n'a pas
-bougé.
+**Sur la piste, la pastille est au-dessus de la voiture, jamais à sa place.** Le pseudo est
+peint sur l'aileron arrière, dans le SVG : le remplacer voudrait dire un visage de douze
+pixels contre le seul identifiant que la piste porte depuis la `0.39.0`. La **coiffe** de
+30px est calculée une fois pour toute la piste — une hauteur réservée qui dépendrait de la
+présence d'une photo donnerait des altitudes différentes pour des scores égaux
+(`docs/decisions.md` §19). Elle entre dans **trois** calculs, et en oublier un se voit.
 
-**Deux défauts n'ont été trouvés qu'au rendu contre la feuille compilée**, et ni l'un ni
-l'autre ne se voyait dans le JSX : les glyphes de « Classement » croisaient ceux d'un nom
-de championnat long dans la bande 79-103, et la première voiture d'un groupe de douze
-passait à quatre pixels du kerb. D'où les 92px du bandeau et la gouttière portée à 12.
+**Un seul mouvement, aucun jeton nouveau.** `.t-photo` transitionne **l'opacité seule** avec
+`--duration-fast` et `--ease-smooth-out`. Pas d'échelle : la pastille est déjà là, ronde,
+à sa taille — c'est son contenu qui se substitue. `.t-photo-envoi` floute le **conteneur**
+pendant l'envoi, parce qu'au premier dépôt il n'y a encore aucune image à flouter.
 
-*La version `0.48.0` avait retouché l'accueil, la liste des championnats et l'écran
-championnat : les cartes affichent « 1/3 » et non plus « 1 », six teintes Pantone sombres
-remplacent les aplats (`docs/decisions.md` §18), le damier passe à 7,5 % sur les deux
-cartes d'action et l'icône du bouton « Vue piste » est retirée. La `0.47.0` avait corrigé
-les vignettes Racing Bulls et Red Bull et l'ordre de peinture de Mercedes et Alpine
-(`docs/bugs-connus.md` §17). La `0.45.0` avait fait passer le multiplicateur des points de
+**Un défaut qu'`onLoad` seul ne voit pas a été traité d'emblée** : une image déjà en cache
+est décodée avant que React n'ait posé son gestionnaire, `onLoad` n'est jamais appelé, et
+une photo animée en opacité reste **invisible pour toujours** — le cas ordinaire dès la
+deuxième visite d'un écran. `lib/usePhoto.js` lit `naturalWidth` par une fonction de
+référence.
+
+**Deux écarts assumés, tous deux signalés.** Le rayon des photos de carte est
+`rounded-champ` (14px) et non les 12px demandés : l'échelle des formes ne connaît pas le
+12, et un `rounded-[12px]` aurait ouvert une sixième valeur de rayon pour un écart
+invisible. Et sur une carte d'accueil portant une photo, **le nom du championnat tronque
+plus tôt** — la photo prend 68 des 311 pixels de la rangée, au nom, qui passe d'environ
+vingt-deux caractères à quinze. Cela ne touche que les championnats dont on a choisi une
+photo.
+
+*La version `0.49.0` avait refondu la vue piste de fond en comble : fond beige
+`#F4EFEA` extrait de `assets/vue_piste.svg`, inversion de toute l'encre de l'écran, bandeau
+portant le nom du championnat dans SA couleur sous un damier gris à 11 %, placement des
+voitures séparant enfin la hauteur (le score seul) du chevauchement (mesuré à l'écran), et
+score passé sous chaque voiture. La `0.48.0` avait retouché l'accueil et l'écran
+championnat — « 1/3 » au lieu de « 1 », six teintes Pantone sombres
+(`docs/decisions.md` §18). La `0.45.0` avait fait passer le multiplicateur des points de
 **100 à 10** et livré la **migration 15**, qui efface sans convertir. **Un scraping reste
 obligatoire.***
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :
 
-1. **Appliquer la migration 15, puis déclencher un scraping** — sans cotes en base, aucun
-   GP n'est pronosticable. Elle règle au passage le statut figé prématurément du GP des
-   Pays-Bas ; sa `date_course` fausse de deux heures se remet d'aplomb au scraping
-   (`docs/bugs-connus.md` §4 et §11).
+1. **Appliquer les migrations 15 puis 16, puis déclencher un scraping.** Sans cotes en
+   base, aucun GP n'est pronosticable ; la 15 règle au passage le statut figé
+   prématurément du GP des Pays-Bas (`docs/bugs-connus.md` §4 et §11). **La 16 crée les
+   deux compartiments Storage en même temps que les colonnes** : sans elle, aucun dépôt de
+   photo n'aboutit — mais rien ne tombe en panne, le backend servant `null` partout.
 2. **Vérifier les migrations appliquées** dans le SQL Editor, et définir les variables
    d'environnement de production sur Vercel et Railway.
-3. **Tester sur iPhone réel** — jamais fait.
+3. **Tester sur iPhone réel** — jamais fait. Le sélecteur de photo en particulier : c'est
+   le premier `<input type="file">` du projet, et il n'a jamais rencontré Safari iOS.

@@ -47,6 +47,26 @@ export function quitterChampionnat(id) {
 }
 
 /**
+ * Enregistre — ou retire — la photo d'un championnat. Créateur seul.
+ *
+ * **Elle s'appelle APRÈS la création, jamais pendant**, et c'est le chemin de
+ * stockage qui l'impose : une photo de championnat vit sous
+ * `{championnat_id}/photo.{ext}`, donc sous un identifiant que seule la création
+ * rend. La transmettre à `POST /championnats` obligerait à la déposer ailleurs
+ * puis à la déplacer.
+ *
+ * **Son échec n'annule pas la création.** L'écran de création laisse partir le
+ * joueur vers son championnat même si la photo n'a pas pu être enregistrée : il
+ * a un championnat sans photo, pas un formulaire à refaire.
+ */
+export function enregistrerPhotoChampionnat(id, url) {
+  return appelApi(`/championnats/${id}`, {
+    methode: "PATCH",
+    corps: url ? { photo_url: url } : { retirer_photo: true },
+  });
+}
+
+/**
  * Championnat + liste de ses membres, lus sous RLS.
  *
  * Deux requêtes plutôt qu'une jointure imbriquée : `membres_championnat`
@@ -59,7 +79,7 @@ export async function chargerChampionnat(id, signal) {
   try {
     const requete = supabase
       .from("championnats")
-      .select("id, nom, code_invitation, cree_par, cree_le")
+      .select("id, nom, code_invitation, cree_par, cree_le, photo_url")
       .eq("id", id)
       .maybeSingle();
 
@@ -83,14 +103,17 @@ export async function chargerChampionnat(id, signal) {
     if (erreurMembres) return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
 
     const identifiants = (lignes ?? []).map((ligne) => ligne.profil_id);
-    let pseudos = new Map();
+    // La ligne entière est indexée, et non le seul pseudo : la photo s'y ajoute
+    // depuis la migration `20260821180000`, et une `Map` par colonne aurait
+    // demandé une lecture de plus à chaque champ affiché.
+    let membres = new Map();
 
     if (identifiants.length > 0) {
       const { data: profils } = await supabase
         .from("profils")
-        .select("id, pseudo")
+        .select("id, pseudo, avatar_url")
         .in("id", identifiants);
-      pseudos = new Map((profils ?? []).map((p) => [p.id, p.pseudo]));
+      membres = new Map((profils ?? []).map((p) => [p.id, p]));
     }
 
     return {
@@ -102,7 +125,11 @@ export async function chargerChampionnat(id, signal) {
         // migration des profils n'ait pas encore tourné sur ce projet.
         membres: (lignes ?? []).map((ligne) => ({
           id: ligne.profil_id,
-          pseudo: pseudos.get(ligne.profil_id) || "Pilote",
+          pseudo: membres.get(ligne.profil_id)?.pseudo || "Pilote",
+          // `?? null` et non `|| null` : une colonne absente (base non encore
+          // migrée) et une photo non choisie doivent valoir la même chose, sans
+          // que la pastille ait à s'en souvenir.
+          avatarUrl: membres.get(ligne.profil_id)?.avatar_url ?? null,
           rejointLe: ligne.rejoint_le,
         })),
       },

@@ -4,6 +4,7 @@ import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTeteEcran from "../composants/EnTeteEcran.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import Pastille from "../composants/Pastille.jsx";
+import PhotoChampionnat from "../composants/PhotoChampionnat.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { Pave } from "../composants/Squelette.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
@@ -509,6 +510,21 @@ export function CarteChampionnat({ championnat }) {
             plus clair des six aplats (terreau), sous le damier et la lueur,
             elle tient **4,97:1** — au-dessus du plancher AA d'un texte
             ordinaire, et le total est ici du grand texte (3:1). */}
+        {/* La photo, entre le nom et le rang — la « zone milieu-droite » de la
+            demande. Elle est **centrée sur la rangée** (`self-center`) alors que
+            le nom et le rang s'alignent par le haut : un carré de cinquante-six
+            pixels calé sur la ligne de base d'un nom de vingt paraîtrait tomber.
+
+            Le composant s'efface tout seul sans photo, et la carte retrouve
+            alors exactement la composition d'avant cette version : rien ne
+            réserve sa place, aucune gouttière ne subsiste. */}
+        <PhotoChampionnat
+          url={championnat.photo_url}
+          nom={championnat.nom}
+          taille={56}
+          className="self-center"
+        />
+
         {position && (
           <span className="shrink-0 text-right">
             <span

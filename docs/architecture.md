@@ -10,7 +10,7 @@ Comment le projet est construit, ce qui tourne où, et pourquoi.
 MonPetitPodium/
 ├── frontend/          React + Vite + Tailwind 4 (PWA)  → Vercel
 ├── backend/           FastAPI (Python)                 → Railway
-├── supabase/migrations/   14 fichiers SQL, appliqués à la main
+├── supabase/migrations/   16 fichiers SQL, appliqués à la main
 ├── assets/            planches SVG source (logo, drapeaux, tracés, voitures)
 ├── maquettes/         16 écrans HTML autonomes de la v1
 └── docs/              cette documentation
@@ -58,6 +58,14 @@ est portée par la route, qui vérifie l'appartenance **avant** l'appel.
 
 **(B) En direct à Supabase** — les lectures qu'une politique RLS décrit déjà exactement :
 prochain GP, pronostics du joueur, pseudo, drapeau `is_admin`, numéros déjà pris.
+
+**Le dépôt d'une photo emprunte les DEUX chemins, et c'est le critère appliqué tel quel.**
+Le **fichier** va directement à Supabase Storage : les politiques de `storage.objects`
+décrivent exactement le cas — le premier segment du chemin est l'identifiant du
+propriétaire, comparé à `auth.uid()` — et faire transiter deux mégaoctets par le plan
+gratuit de Railway n'ajouterait qu'un cold start. L'**URL**, elle, passe par FastAPI :
+c'est une écriture en base, et c'est là que le backend vérifie qu'elle désigne bien notre
+projet. Voir `database.md` §9.
 
 **Le critère est la politique RLS, pas la commodité.** Si la RLS décrit le cas, on lit
 en direct — passer par Railway n'ajouterait qu'un cold start. Si la RLS ne le décrit
@@ -285,10 +293,11 @@ l'appelant, **verbe explicite** pour ce qui n'est pas un CRUD (`/rejoindre`, `/q
 | `POST /championnats/rejoindre` | jeton | code normalisé. `404` inconnu, `409` déjà membre — **par la clé primaire**, pas par une lecture préalable |
 | `GET /championnats/{id}/classement` | jeton + **membre** | |
 | `GET /championnats/{id}/calendrier` | jeton + **membre** | `?saison=`. **Le profil vient du jeton, jamais de l'URL** |
+| `PATCH /championnats/{id}` | jeton + **créateur** | photo seule. `403` si l'appelant n'est pas le créateur |
 | `DELETE /championnats/{id}/quitter` | jeton | **`204`**, ou `404` si non membre |
 | `GET /profils/{id}` | jeton | ouvert à tout connecté (aligné sur la RLS) |
 | `GET /profils/{id}/stats` | jeton + **championnat partagé** | `403` — **rendu AVANT de lire le profil visé** |
-| `PATCH /profils/moi` | jeton | partiel. **Aucun identifiant dans le chemin** |
+| `PATCH /profils/moi` | jeton | partiel, photo comprise. **Aucun identifiant dans le chemin** |
 | `GET /grands-prix/{id}/cotes` | **publique** | groupées par marché |
 | `GET /scraper/cotes` | **publique** | toutes les cotes en base |
 | `POST /grands-prix/{id}/favoris` | jeton | bascule → `{favori: bool}` |
@@ -312,6 +321,11 @@ publique à quelqu'un qui se croit connecté.
 **`exiger_membre`** est réutilisée à quatre endroits, jamais recopiée. **`exiger_secret`**
 vérifie le secret **avant** la configuration Supabase — répondre « Supabase n'est pas
 configuré » à qui n'a pas le bon secret lui apprendrait quelque chose pour rien.
+
+> **`PATCH /championnats/{id}` refuse en `403`, jamais en `404`.** Le championnat existe,
+> l'appelant en est peut-être membre : lui répondre « il n'existe pas » serait faux. Le
+> créateur est vérifié **par la route**, à partir de l'identifiant du jeton — la politique
+> RLS dit la même chose, mais le backend écrit avec la clé de service, qui la contourne.
 
 > **`LIMITE_CLASSEMENTS = 12`** — rien ne borne le nombre d'adhésions. Au-delà, les cartes
 > suivantes s'affichent **sans rang** plutôt que d'allonger indéfiniment la route la plus

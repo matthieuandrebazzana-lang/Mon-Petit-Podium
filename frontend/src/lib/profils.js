@@ -44,6 +44,30 @@ export function enregistrerVoiture(modifications) {
   return appelApi("/profils/moi", { methode: "PATCH", corps: modifications });
 }
 
+/**
+ * Enregistre — ou retire — la photo de profil de l'appelant.
+ *
+ * **Même route que la voiture, et c'est voulu** : `PATCH /profils/moi` est une
+ * modification partielle, elle ne touche que ce qu'on lui transmet. Une route
+ * dédiée aurait fait un second endroit où l'identité de l'appelant se déduit
+ * d'un jeton, donc un second endroit à vérifier.
+ *
+ * **Le fichier, lui, n'est jamais passé ici** : il est déjà déposé dans Supabase
+ * Storage (`lib/stockage.js`), et seule son URL remonte. C'est cette URL que le
+ * backend confronte à celle du projet — la vérification qui empêche d'enregistrer
+ * l'adresse d'un serveur tiers.
+ *
+ * `null` veut dire « retire ma photo », et se transmet par un drapeau explicite :
+ * un `avatar_url: null` serait indiscernable d'un champ non transmis, exactement
+ * comme pour le numéro de voiture.
+ */
+export function enregistrerAvatar(url) {
+  return appelApi("/profils/moi", {
+    methode: "PATCH",
+    corps: url ? { avatar_url: url } : { retirer_avatar: true },
+  });
+}
+
 /** Maquettes 12 et 14 : le profil et sa grille de stats, en une seule attente. */
 export async function chargerProfilComplet(profilId, signal) {
   const [profil, stats] = await Promise.all([

@@ -153,6 +153,10 @@ class MembrePronostics(BaseModel):
     # TOUTE la réponse en `500` (piège de `cree_par`, version 0.4.1).
     livree_mode: str = "perso"
     livree_ecurie: str | None = None
+    # La photo du membre (migration `20260821180000`). `None` quand il n'en a
+    # pas : la rangée affiche alors ses initiales. Valeur par défaut pour la
+    # même raison que les champs ci-dessus.
+    avatar_url: str | None = None
     # Ce que le membre a marqué sur ce Grand Prix. `None` tant qu'aucun de ses
     # pronostics n'a été noté — jamais `0`, qui dirait « tout raté ».
     total_points: int | None = None

@@ -4,6 +4,7 @@ import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import Pastille from "../composants/Pastille.jsx";
 import Voiture from "../composants/Voiture.jsx";
 import { livreeDuMembre } from "../lib/palette.js";
 import { Barre, Carte, Pave, Rangee } from "../composants/Squelette.jsx";
@@ -232,7 +233,7 @@ function choixDuPronostic(pronostic) {
  * l'étape 5 : le joueur garde le reste du classement sous les yeux, et le geste
  * de retour ne se fait pas voler par une couche qui s'interpose.
  */
-function LigneMembre({ ligne, estMoi }) {
+function LigneMembre({ ligne, estMoi, avecPhotos = false }) {
   const [ouvert, setOuvert] = useState(false);
 
   return (
@@ -261,6 +262,23 @@ function LigneMembre({ ligne, estMoi }) {
           titre={`Voiture de ${ligne.pseudo}`}
           className="h-[34px] w-[17px] shrink-0"
         />
+
+        {/* La pastille d'identité, collée au pseudo. Elle est en `xs` — 28px —
+            parce que cette rangée porte déjà cinq choses : un rang, une voiture,
+            un nom, un score et un chevron. À 36px elle prendrait sa place sur le
+            seul élément qui en manque, le pseudo.
+
+            Même règle qu'au classement du championnat : la colonne n'apparaît
+            que si quelqu'un, dans ce Grand Prix, a une photo — sinon la rangée
+            reste exactement celle d'avant cette version. */}
+        {avecPhotos && (
+          <Pastille
+            nom={ligne.pseudo}
+            graine={ligne.profil_id}
+            photo={ligne.avatar_url}
+            taille="xs"
+          />
+        )}
 
         <span className="min-w-0 flex-1">
           <span className="text-texte block truncate text-[14px] font-medium">
@@ -392,6 +410,9 @@ export default function ResultatsGp() {
   const retour = championnatId ? `/championnats/${championnatId}` : "/accueil";
 
   const membres = classerLesMembres(donnees?.membres);
+  // Une seule question pour toute la liste, la même qu'au classement du
+  // championnat et qu'à la vue piste : quelqu'un a-t-il une photo ?
+  const avecPhotos = membres.some((ligne) => Boolean(ligne.avatar_url));
   const moi = membres.find((ligne) => ligne.profil_id === utilisateur?.id) ?? null;
 
   function reessayer() {
@@ -519,6 +540,7 @@ export default function ResultatsGp() {
                                 key={ligne.profil_id}
                                 ligne={ligne}
                                 estMoi={ligne.profil_id === utilisateur?.id}
+                                avecPhotos={avecPhotos}
                               />
                             ))}
                           </ul>

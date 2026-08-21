@@ -90,6 +90,21 @@ export function IconeCopie(props) {
   );
 }
 
+/* Appareil photo — l'affordance de dépôt d'une photo, posée sur la pastille du
+   profil et sur le cadre vide de la création d'un championnat. Le tracé suit la
+   grille et l'épaisseur des autres icônes du fichier : un boîtier, sa bosse de
+   viseur, et l'objectif. Il n'a pas d'équivalent dans les maquettes, qui ne
+   prévoyaient pas de photo — c'est le seul ajout de cette version, et il reste
+   dans le même vocabulaire de tracé. */
+export function IconeAppareilPhoto(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M3 8a2 2 0 0 1 2-2h2.2l1.3-2h7l1.3 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <circle cx="12" cy="12.5" r="3.4" />
+    </svg>
+  );
+}
+
 export function IconeCoche(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" {...props}>

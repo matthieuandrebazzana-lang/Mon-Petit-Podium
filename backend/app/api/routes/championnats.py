@@ -18,10 +18,12 @@ from pydantic import BaseModel, Field
 from app.api import journal
 from app.api.deps import utilisateur_courant
 from app.api.routes.pronostics import exiger_membre
+from app.api.stockage import COMPARTIMENT_CHAMPIONNATS, url_de_photo_valide
 from app.supabase_client import (
     ErreurSupabase,
     appeler_fonction,
     inserer,
+    mettre_a_jour,
     selectionner,
 )
 
@@ -89,6 +91,24 @@ class Adhesion(BaseModel):
     code: str = Field(min_length=1, max_length=32)
 
 
+class ModificationChampionnat(BaseModel):
+    """Modification partielle d'un championnat : aujourd'hui, sa photo seule.
+
+    Le nom n'y figure PAS, et c'est un choix de portée, pas un oubli : le
+    renommer changerait ce que lisent tous ses membres, et cette route n'existe
+    que pour poser une photo au moment de la création. Le jour où le nom devient
+    modifiable, il prendra sa place ici — avec la même validation de longueur que
+    `creer`, tirée d'un helper commun plutôt que recopiée.
+
+    `retirer_photo` est un drapeau explicite, comme `retirer_numero` au profil :
+    un `photo_url: null` serait indiscernable d'un champ non transmis, et la
+    photo ne pourrait plus jamais être retirée.
+    """
+
+    photo_url: str | None = Field(default=None, max_length=512)
+    retirer_photo: bool = False
+
+
 class LigneClassement(BaseModel):
     """Un membre au classement, déjà rangé par la fonction SQL (règle 4.6)."""
 
@@ -125,6 +145,10 @@ class LigneClassement(BaseModel):
     # TOUTE la réponse en `500` (piège de `cree_par`, version 0.4.1).
     livree_mode: str = "perso"
     livree_ecurie: str | None = None
+    # La photo du membre (migration `20260821180000`). `None` quand il n'en a
+    # pas : le classement affiche alors ses initiales, comme il l'a toujours
+    # fait. Valeur par défaut pour la même raison que les champs ci-dessus.
+    avatar_url: str | None = None
 
 
 class LigneCalendrier(BaseModel):
@@ -227,6 +251,11 @@ class Championnat(BaseModel):
     # rendent un championnat qu'on vient de créer ou de rejoindre, l'écran
     # d'arrivée n'affiche pas de Grand Prix.
     prochain_gp: ProchainGp | None = None
+    # La photo du championnat (migration `20260821180000`). `None` quand il n'en
+    # a pas, et l'interface n'affiche alors RIEN à son emplacement — pas de
+    # cadre vide, pas d'image de remplacement : une carte sans photo est
+    # exactement la carte d'avant cette version.
+    photo_url: str | None = None
     # La position de l'appelant dans ce championnat. `None` quand le classement
     # n'a pas pu être lu, ou au-delà de `LIMITE_CLASSEMENTS`. Valeur par défaut
     # pour la même raison que `prochain_gp` : la création et l'adhésion rendent
@@ -287,6 +316,12 @@ def en_championnat(
         est_createur=ligne["cree_par"] is not None
         and str(ligne["cree_par"]) == utilisateur,
         prochain_gp=prochain_gp,
+        # `.get` et non `[…]` : `mes_championnats` sert cette colonne depuis la
+        # migration `20260821180000`, mais `creer_championnat` rend la ligne
+        # entière et `rejoindre` un `select *` — trois sources dont une seule
+        # peut être en retard sur la migration. Une clé absente vaut « pas de
+        # photo », jamais une exception qui emporterait toute la liste.
+        photo_url=ligne.get("photo_url"),
         position=position,
     )
 
@@ -538,6 +573,100 @@ async def rejoindre(
 
     return en_championnat(
         championnat, utilisateur, nombre_membres=await compter_membres(championnat["id"])
+    )
+
+
+@router.patch("/{championnat_id}", response_model=Championnat)
+@journaliser_echecs("Enregistrement de la photo du championnat")
+async def modifier(
+    championnat_id: UUID,
+    corps: ModificationChampionnat,
+    utilisateur: str = Depends(utilisateur_courant),
+) -> Championnat:
+    """Modifie un championnat — sa photo, et rien d'autre à ce jour.
+
+    **Le créateur seul, et c'est la route qui le vérifie.** La politique RLS
+    « Seul le createur modifie » dit déjà exactement cela, mais le backend écrit
+    avec la clé de service, qui la contourne (`docs/architecture.md` §4) :
+    l'autorisation est donc portée ici, à partir de l'identifiant du **jeton
+    vérifié**, jamais d'une valeur reçue de l'appelant.
+
+    Le refus est un `403` et non un `404` : le championnat existe, l'appelant en
+    est peut-être membre, et lui répondre « il n'existe pas » serait faux.
+
+    **Pourquoi cette route existe alors que la photo se choisit à la création.**
+    Le chemin de stockage d'une photo est `{championnat_id}/photo.{ext}` : il a
+    besoin d'un identifiant que seule la création rend. L'écran crée donc le
+    championnat, dépose la photo sous l'identifiant obtenu, puis appelle cette
+    route. Une photo transmise à `POST /championnats` obligerait à la déposer
+    d'abord ailleurs, puis à la déplacer — deux fois plus d'opérations de
+    stockage pour le même résultat.
+
+    **Son échec n'annule pas la création** : l'écran d'arrivée affiche le
+    championnat sans sa photo plutôt que de perdre le championnat. C'est le même
+    arbitrage que pour le rang d'une carte et le prochain Grand Prix.
+    """
+    try:
+        trouves = await selectionner(
+            "championnats",
+            {"id": f"eq.{championnat_id}", "select": "*", "limit": "1"},
+        )
+    except ErreurSupabase as erreur:
+        raise echec_lisible("Chargement du championnat", erreur) from erreur
+
+    if not trouves:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ce championnat n'existe pas.",
+        )
+
+    championnat = trouves[0]
+    createur = championnat.get("cree_par")
+    if createur is None or str(createur) != utilisateur:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seul le créateur du championnat peut changer sa photo.",
+        )
+
+    valeurs: dict = {}
+    # Le retrait l'emporte sur l'envoi, comme au profil : de deux intentions
+    # contradictoires dans un même corps, celle qui efface est la seule qui ne
+    # laisse pas de trace non voulue.
+    if corps.retirer_photo:
+        valeurs["photo_url"] = None
+    elif corps.photo_url is not None:
+        valeurs["photo_url"] = url_de_photo_valide(
+            corps.photo_url, COMPARTIMENT_CHAMPIONNATS, "une photo de championnat"
+        )
+
+    if not valeurs:
+        # Rien à écrire : on rend l'état courant plutôt qu'un PATCH vide, que
+        # PostgREST refuserait.
+        return en_championnat(
+            championnat,
+            utilisateur,
+            nombre_membres=await compter_membres(championnat["id"]),
+        )
+
+    try:
+        modifiees = await mettre_a_jour(
+            "championnats", {"id": f"eq.{championnat_id}"}, valeurs
+        )
+    except ErreurSupabase as erreur:
+        raise echec_lisible(
+            "Enregistrement de la photo du championnat", erreur
+        ) from erreur
+
+    if not modifiees:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ce championnat n'existe pas.",
+        )
+
+    return en_championnat(
+        modifiees[0],
+        utilisateur,
+        nombre_membres=await compter_membres(championnat["id"]),
     )
 
 

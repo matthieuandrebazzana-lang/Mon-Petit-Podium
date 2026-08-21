@@ -1,11 +1,21 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import Champ from "../composants/Champ.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
-import { creerChampionnat } from "../lib/championnats.js";
+import { IconeAppareilPhoto } from "../composants/Icones.jsx";
+import {
+  creerChampionnat,
+  enregistrerPhotoChampionnat,
+} from "../lib/championnats.js";
+import {
+  COMPARTIMENT_CHAMPIONNATS,
+  deposerPhoto,
+  refusDuFichier,
+  TYPES_ACCEPTES_ATTRIBUT,
+} from "../lib/stockage.js";
 import { oublierCache } from "../lib/useDonnees.js";
 import { useAuth } from "../auth/AuthContexte.jsx";
 
@@ -24,7 +34,23 @@ function validerNom(valeur) {
   return null;
 }
 
-/** Maquette 05 — création d'un championnat. */
+/**
+ * Maquette 05 — création d'un championnat.
+ *
+ * > ### La photo est choisie ici, mais déposée APRÈS la création
+ * >
+ * > Une photo de championnat vit sous `{championnat_id}/photo.{ext}`, donc sous
+ * > un identifiant que seule la création rend. L'écran retient donc le fichier
+ * > choisi, crée le championnat, puis dépose et enregistre — dans cet ordre. La
+ * > déposer d'abord obligerait à lui trouver un chemin provisoire, puis à la
+ * > déplacer, pour le même résultat en deux fois plus d'opérations.
+ * >
+ * > **Un échec de la photo n'annule jamais la création.** Le joueur arrive sur
+ * > son championnat sans photo plutôt que sur un formulaire à refaire : le
+ * > championnat est ce qu'il venait chercher, la photo est un ornement. Le
+ * > champ est d'ailleurs facultatif de bout en bout — sans fichier choisi,
+ * > `photo_url` reste `null` et tout se comporte exactement comme avant.
+ */
 export default function CreerChampionnat() {
   const naviguer = useNavigate();
   const { utilisateur } = useAuth();
@@ -34,6 +60,66 @@ export default function CreerChampionnat() {
   const [alerte, setAlerte] = useState(null);
   const [envoi, setEnvoi] = useState(false);
   const [tentative, setTentative] = useState(0);
+
+  // Le fichier retenu et son aperçu. L'aperçu est une URL d'objet locale : la
+  // photo n'a encore été envoyée nulle part, et montrer autre chose que le
+  // fichier réellement choisi serait une promesse fausse.
+  const champFichier = useRef(null);
+  const [photo, setPhoto] = useState(null);
+  const [apercu, setApercu] = useState(null);
+
+  function choisirPhoto(evenement) {
+    const fichier = evenement.target.files?.[0];
+    // Le champ est vidé tout de suite : sans cela, rechoisir LE MÊME fichier
+    // après un refus ne déclencherait aucun `change`.
+    evenement.target.value = "";
+    if (!fichier) return;
+
+    const refus = refusDuFichier(fichier);
+    if (refus) {
+      setAlerte(refus);
+      setTentative((n) => n + 1);
+      return;
+    }
+
+    // L'URL précédente est révoquée : chaque `createObjectURL` retient son
+    // fichier en mémoire jusqu'à ce qu'on le relâche, et changer trois fois
+    // d'avis retiendrait trois images de deux mégaoctets.
+    if (apercu) URL.revokeObjectURL(apercu);
+
+    setAlerte(null);
+    setPhoto(fichier);
+    setApercu(URL.createObjectURL(fichier));
+  }
+
+  function retirerPhoto() {
+    if (apercu) URL.revokeObjectURL(apercu);
+    setPhoto(null);
+    setApercu(null);
+  }
+
+  /**
+   * Dépose la photo et l'attache au championnat tout juste créé.
+   *
+   * Ne rend rien et ne lève rien : son échec est journalisé par les couches du
+   * dessous et **n'interrompt pas la navigation**. C'est le même arbitrage que
+   * pour le rang d'une carte d'accueil — une lecture secondaire en panne ne fait
+   * jamais perdre la principale.
+   */
+  async function attacherPhoto(championnatId) {
+    const depot = await deposerPhoto({
+      compartiment: COMPARTIMENT_CHAMPIONNATS,
+      dossier: championnatId,
+      base: "photo",
+      fichier: photo,
+    });
+    if (!depot.ok) return;
+
+    // L'URL n'est enregistrée qu'après un dépôt réussi : l'inverse laisserait en
+    // base l'adresse d'un objet inexistant, donc une image cassée sur la carte
+    // d'accueil de chaque membre.
+    await enregistrerPhotoChampionnat(championnatId, depot.donnees);
+  }
 
   async function soumettre(evenement) {
     evenement.preventDefault();
@@ -50,17 +136,22 @@ export default function CreerChampionnat() {
     setAlerte(null);
 
     const resultat = await creerChampionnat(nom.trim());
-    setEnvoi(false);
 
     if (!resultat.ok) {
+      setEnvoi(false);
       setAlerte(resultat.message);
       return;
     }
 
+    if (photo) await attacherPhoto(resultat.donnees.id);
+
+    setEnvoi(false);
+
     // La liste de l'accueil vient d'un cache : sans cette invalidation, le
     // championnat tout juste créé n'y apparaîtrait qu'au rafraîchissement
     // suivant, et le retour depuis l'écran du championnat semblerait l'avoir
-    // perdu.
+    // perdu. L'effacement vient APRÈS la photo : fait avant, il laisserait une
+    // liste rechargée sans elle.
     if (utilisateur) oublierCache(`championnats:${utilisateur.id}`);
 
     // `nouveau` fait mettre le code d'invitation en avant à l'arrivée, et
@@ -96,6 +187,89 @@ export default function CreerChampionnat() {
             erreur={erreurNom}
             tentative={tentative}
           />
+
+          {/* Le sélecteur de fichier natif, invisible mais dans le DOM : c'est
+              le cadre ci-dessous qui l'ouvre. `hidden` et non un parent en
+              `display:none` — un `<input type="file">` réellement retiré du
+              rendu ne s'ouvre plus sur iOS. */}
+          <input
+            ref={champFichier}
+            type="file"
+            accept={TYPES_ACCEPTES_ATTRIBUT}
+            onChange={choisirPhoto}
+            className="hidden"
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+
+          {/* **La photo suit le nom, et le libellé dit qu'elle est facultative.**
+              Elle est sous le champ qu'elle complète, pas au-dessus : le nom est
+              la seule chose obligatoire de cet écran, et rien ne doit passer
+              devant lui.
+
+              Le cadre est un carré de 72px, la taille exacte qu'aura la photo
+              sur l'écran du championnat : ce qu'on choisit ici est montré à la
+              taille où on le reverra. Un aperçu plus grand que la destination
+              ferait paraître cadré ce qui ne l'est pas.
+
+              **Sans photo, le cadre reste un cadre vide et cliquable** — et
+              c'est le seul endroit de cette version où un emplacement vide est
+              dessiné. Ailleurs, une photo absente n'affiche rien du tout ; ici
+              le vide EST le contrôle, il faut bien qu'il ait une silhouette. Il
+              est en `bg-fond` sans bordure : la section 5 proscrit les traits
+              fins, et un aplat plus foncé que la carte blanche suffit à dire
+              « ceci est une zone ». */}
+          <div className="mt-4 flex items-center gap-3.5">
+            <button
+              type="button"
+              onClick={() => champFichier.current?.click()}
+              disabled={envoi}
+              aria-label={
+                photo ? "Changer la photo du championnat" : "Ajouter une photo"
+              }
+              className="rounded-widget bg-fond text-secondaire pressable relative flex size-[72px] shrink-0 items-center justify-center overflow-hidden"
+            >
+              {apercu ? (
+                <img
+                  src={apercu}
+                  alt=""
+                  draggable="false"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : (
+                <IconeAppareilPhoto className="size-6" />
+              )}
+            </button>
+
+            <div className="min-w-0 flex-1">
+              {/* Le libellé n'est pas dans le cadre : à 72px, « Ajouter une
+                  photo (optionnel) » n'y tiendrait qu'en quatre lignes de neuf
+                  pixels. Posé à côté, il reste lisible et sert de seconde zone
+                  de lecture pour un contrôle qui n'a pas d'étiquette propre. */}
+              <p className="text-corps-sm text-texte font-medium">
+                {photo ? "Photo du championnat" : "Ajouter une photo"}
+              </p>
+              <p className="text-texte-doux mt-0.5 text-[12px]">
+                {photo
+                  ? "Elle s'affichera sur la carte du championnat."
+                  : "Optionnel · JPG, PNG ou WEBP, 2 Mo maximum"}
+              </p>
+
+              {/* Le retrait n'existe que quand il y a quelque chose à retirer.
+                  Marron `secondaire` et non `texte-doux`, qui ne vaut que 2,0:1
+                  sur blanc : c'est une action qu'on vient lire. */}
+              {photo && (
+                <button
+                  type="button"
+                  onClick={retirerPhoto}
+                  disabled={envoi}
+                  className="text-secondaire min-h-tactile pressable -my-2 -ml-1 px-1 py-2 text-[13px] font-medium disabled:opacity-50"
+                >
+                  Retirer
+                </button>
+              )}
+            </div>
+          </div>
         </Bloc>
 
         {/* Le code n'existe pas encore : il est tiré par le serveur à la

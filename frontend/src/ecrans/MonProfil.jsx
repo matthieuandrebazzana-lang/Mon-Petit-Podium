@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
@@ -14,14 +14,23 @@ import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
 import SelecteurSkin from "../composants/SelecteurSkin.jsx";
 import Repli from "../composants/Repli.jsx";
 import SectionAdmin from "../composants/SectionAdmin.jsx";
+import { IconeAppareilPhoto } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import {
   chargerNumerosPris,
   chargerProfilComplet,
   cleProfil,
+  enregistrerAvatar,
   enregistrerVoiture,
   porteurDuNumero,
 } from "../lib/profils.js";
+import {
+  COMPARTIMENT_AVATARS,
+  deposerPhoto,
+  refusDuFichier,
+  supprimerPhoto,
+  TYPES_ACCEPTES_ATTRIBUT,
+} from "../lib/stockage.js";
 import { livreeDuMembre } from "../lib/palette.js";
 import { oublierCachePrefixe, useDonnees } from "../lib/useDonnees.js";
 import { APP_VERSION } from "../config.js";
@@ -113,7 +122,10 @@ function SqueletteProfil() {
           encore inconnu. */}
       <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-4 p-5">
         <div className="flex flex-1 items-center gap-3.5">
-          <div className="size-[42px] shrink-0 rounded-full bg-white/25" />
+          {/* 56px, la taille réelle de la pastille depuis qu'elle porte une
+              photo : une silhouette qui mentirait de quatorze pixels ferait
+              sauter le pseudo à l'arrivée des données. */}
+          <div className="size-[56px] shrink-0 rounded-full bg-white/25" />
           <div className="min-w-0 flex-1">
             <div className="h-4 w-28 rounded-full bg-white/25" />
             <div className="mt-2 h-2.5 w-20 rounded-full bg-white/20" />
@@ -148,19 +160,78 @@ function SqueletteProfil() {
 }
 
 /**
- * Bloc rouge d'en-tête : pseudo, voiture et numéro (maquettes 12 et 14).
+ * Bloc rouge d'en-tête : photo, pseudo, voiture et numéro (maquettes 12 et 14).
  *
  * `voiture` reçoit la ligne complète — profil ou ligne de classement — et
  * `livreeDuMembre` en tire ce qu'il faut peindre. Passer les deux couleurs
  * séparément ferait perdre la livrée d'écurie en chemin.
+ *
+ * > ### La pastille passe de 42 à 56px, sur les DEUX profils
+ * >
+ * > `ProfilMembre` rend ce même composant, et c'est ce qui fait tout l'intérêt
+ * > des deux écrans : « deux profils qui ne se liraient pas de la même façon ne
+ * > se compareraient plus ». La photo qui arrive ici arrive donc aux deux, à la
+ * > même taille — et 56px est la taille imposée par le seul des deux qui soit
+ * > tactile, la règle iOS des 44 × 44 (CLAUDE.md §3.5) ne laissant pas le choix.
+ * > Rendre la mienne plus grande que celle des autres aurait cassé la
+ * > comparaison pour un pixel de vanité.
+ *
+ * **`onPhoto` fait de la pastille un bouton, et c'est le seul écart entre les
+ * deux écrans.** Sans lui — le profil d'un autre membre — elle reste un
+ * `<span>` : rien n'y est modifiable, et un bouton qui n'agit pas serait un
+ * bouton de trop dans l'ordre de tabulation.
  */
-export function HeroProfil({ pseudo, voiture, numero, action }) {
+export function HeroProfil({
+  pseudo,
+  voiture,
+  numero,
+  action,
+  avatarUrl,
+  onPhoto,
+  envoiPhoto = false,
+}) {
   const livree = livreeDuMembre(voiture);
+
+  const pastille = (
+    <Pastille nom={pseudo} graine={pseudo} taille="xl" photo={avatarUrl} />
+  );
 
   return (
     <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-4 p-5">
       <div className="flex min-w-0 items-center gap-3.5">
-        <Pastille nom={pseudo} graine={pseudo} taille="lg" />
+        {onPhoto ? (
+          <button
+            type="button"
+            onClick={onPhoto}
+            disabled={envoiPhoto}
+            /* Le libellé porte l'action ET son état courant : la pastille
+               elle-même est `aria-hidden`, c'est donc la seule chose qui soit
+               annoncée. « Changer » plutôt que « Ajouter » quand il y a déjà une
+               photo — un libellé qui décrit mal ce qui va se passer est pire
+               qu'un libellé générique. */
+            aria-label={
+              avatarUrl ? "Changer ma photo de profil" : "Ajouter une photo de profil"
+            }
+            className="pressable relative shrink-0 rounded-full"
+          >
+            <span className={envoiPhoto ? "t-photo-envoi block" : "block"}>
+              {pastille}
+            </span>
+            {/* L'appareil photo dit ce que le rond fait, et il le dit sans
+                libellé — c'est le seul endroit de l'écran où une pastille est
+                cliquable, et rien d'autre ne l'annoncerait. Blanc sur bordeaux,
+                l'icône y tient 10,88:1, très au-dessus des 3:1 qu'un élément
+                graphique porteur de sens demande. */}
+            <span
+              aria-hidden="true"
+              className="bg-surface text-primaire shadow-carte absolute -right-0.5 -bottom-0.5 flex size-[22px] items-center justify-center rounded-full"
+            >
+              <IconeAppareilPhoto className="size-[13px]" />
+            </span>
+          </button>
+        ) : (
+          pastille
+        )}
         <div className="min-w-0">
           <p className="truncate text-[22px] font-medium text-white">
             {pseudo || "Pilote"}
@@ -241,6 +312,120 @@ export default function MonProfil() {
     setEnregistre(false);
     setSaisie((precedente) => ({ ...precedente, ...champs }));
   }, []);
+
+  // ---- Photo de profil ----------------------------------------------------
+  // Trois états séparés de ceux de la voiture, et volontairement : les deux
+  // enregistrements empruntent la même route (`PATCH /profils/moi`) mais ne
+  // partent pas ensemble — la photo part au moment où le fichier est choisi, la
+  // voiture au moment où l'on appuie sur « Enregistrer ». Un état commun ferait
+  // apparaître le message d'échec de l'un sous le bouton de l'autre.
+  const champFichier = useRef(null);
+  const [envoiPhoto, setEnvoiPhoto] = useState(false);
+  const [echecPhoto, setEchecPhoto] = useState(null);
+  const [tentativePhoto, setTentativePhoto] = useState(0);
+
+  /**
+   * Périme tout ce qui peint CE membre chez les autres.
+   *
+   * Sa voiture et sa photo s'affichent aux classements (vue liste et vue piste)
+   * et au résumé de chaque Grand Prix. Ces écrans lisent un cache
+   * *stale-while-revalidate* : sans effacement, ils garderaient l'ancienne image
+   * jusqu'au prochain chargement complet. Tous ses championnats sont concernés —
+   * sa voiture et sa photo sont les mêmes partout (section 5) — et l'écran ne
+   * les connaît pas, d'où l'effacement par préfixe.
+   *
+   * **Une seule fonction pour les deux enregistrements.** Écrite deux fois, elle
+   * aurait fini par oublier un préfixe d'un côté, et le symptôme — une photo
+   * périmée sur un seul des deux écrans — serait resté invisible longtemps.
+   */
+  const oublierMesApparitions = useCallback(() => {
+    oublierCachePrefixe(`classement:${profilId}:`);
+    oublierCachePrefixe(`resultats:${profilId}:`);
+  }, [profilId]);
+
+  /** Écrit le profil frais partout où l'écran le lit — état, cache, saisie. */
+  const adopterProfil = useCallback(
+    (frais) => {
+      remplacer({ ...donnees, profil: frais });
+      oublierMesApparitions();
+    },
+    [donnees, oublierMesApparitions, remplacer],
+  );
+
+  async function choisirPhoto(evenement) {
+    const fichier = evenement.target.files?.[0];
+    // Le champ est vidé tout de suite : sans cela, rechoisir LE MÊME fichier
+    // après un refus ne déclencherait aucun `change`, et l'écran resterait muet
+    // sur un geste que le joueur vient pourtant de refaire.
+    evenement.target.value = "";
+    if (!fichier) return;
+
+    setTentativePhoto((n) => n + 1);
+
+    // Le refus local d'abord : deux mégaoctets montés sur un réseau mobile avant
+    // d'être refusés par le compartiment seraient deux mégaoctets perdus.
+    const refus = refusDuFichier(fichier);
+    if (refus) {
+      setEchecPhoto(refus);
+      return;
+    }
+
+    setEnvoiPhoto(true);
+    setEchecPhoto(null);
+
+    const depot = await deposerPhoto({
+      compartiment: COMPARTIMENT_AVATARS,
+      dossier: profilId,
+      base: "avatar",
+      fichier,
+    });
+
+    if (!depot.ok) {
+      setEnvoiPhoto(false);
+      setEchecPhoto(depot.message);
+      return;
+    }
+
+    // L'URL n'est enregistrée qu'APRÈS le dépôt réussi : l'inverse laisserait en
+    // base l'adresse d'un objet qui n'existe pas, donc une image cassée sur
+    // l'écran de tous les membres du championnat.
+    const enregistrement = await enregistrerAvatar(depot.donnees);
+    setEnvoiPhoto(false);
+
+    if (!enregistrement.ok) {
+      setEchecPhoto(enregistrement.message);
+      return;
+    }
+
+    adopterProfil(enregistrement.donnees);
+  }
+
+  async function retirerPhoto() {
+    setTentativePhoto((n) => n + 1);
+    setEnvoiPhoto(true);
+    setEchecPhoto(null);
+
+    // La base d'abord, le stockage ensuite : c'est la colonne qui décide de ce
+    // qui s'affiche. Un objet resté en stockage sans être référencé n'est plus
+    // visible nulle part ; une colonne qui garderait l'URL d'un objet supprimé
+    // afficherait une image cassée partout (`lib/stockage.js`).
+    const enregistrement = await enregistrerAvatar(null);
+
+    if (!enregistrement.ok) {
+      setEnvoiPhoto(false);
+      setEchecPhoto(enregistrement.message);
+      return;
+    }
+
+    await supprimerPhoto({
+      compartiment: COMPARTIMENT_AVATARS,
+      dossier: profilId,
+      base: "avatar",
+    });
+
+    setEnvoiPhoto(false);
+    adopterProfil(enregistrement.donnees);
+  }
 
   const [envoi, setEnvoi] = useState(false);
   // Échec de l'ENREGISTREMENT, à ne pas confondre avec celui du chargement
@@ -329,25 +514,19 @@ export default function MonProfil() {
 
     setEnregistre(true);
 
-    // **`remplacer` et non `setDonnees` : le cache doit suivre.** `setDonnees`
-    // ne touche que l'état React ; le cache `localStorage` gardait alors la
-    // version d'avant, et c'est lui qui est relu au montage suivant. C'est
-    // précisément ce qui faisait réapparaître l'ancienne couleur en revenant
-    // sur le profil.
-    remplacer({ ...donnees, profil: resultat.donnees });
+    // **`adopterProfil` et non `setDonnees` : le cache doit suivre.**
+    // `setDonnees` ne touche que l'état React ; le cache `localStorage` gardait
+    // alors la version d'avant, et c'est lui qui est relu au montage suivant.
+    // C'est précisément ce qui faisait réapparaître l'ancienne couleur en
+    // revenant sur le profil. Il périme au passage tout ce qui peint ce membre
+    // ailleurs — c'est le même besoin que pour la photo, donc la même fonction.
+    adopterProfil(resultat.donnees);
 
     // Le profil rendu par la route fait foi : il porte les valeurs normalisées
     // par le backend (couleurs en majuscules), pas celles de la saisie. La
     // saisie repart de lui, et redevient suiveuse du serveur.
     setSaisie(saisieDepuis(resultat.donnees));
     setEdite(false);
-
-    // Les classements affichent cette voiture : leur cache doit repartir de
-    // zéro, sinon la vue liste et la vue piste garderaient l'ancienne livrée
-    // jusqu'au prochain chargement complet. Tous les championnats du membre
-    // sont concernés — sa voiture est la même partout (section 5) — et l'écran
-    // ne les connaît pas : d'où l'effacement par préfixe.
-    oublierCachePrefixe(`classement:${profilId}:`);
   }
 
   async function seDeconnecter() {
@@ -386,6 +565,26 @@ export default function MonProfil() {
           >
             {profil && (
               <div className="flex flex-col gap-3">
+                {/* Le sélecteur de fichier natif, invisible mais dans le DOM :
+                    c'est la pastille du bloc rouge qui l'ouvre. `hidden` et non
+                    `display:none` sur un parent — un `<input type="file">`
+                    réellement retiré du rendu ne s'ouvre plus sur iOS.
+
+                    Il n'a **ni `capture` ni `multiple`** : `capture` forcerait
+                    l'appareil photo et retirerait l'accès à la photothèque, qui
+                    est d'où viennent presque toutes les photos de profil ; une
+                    sélection multiple n'aurait aucun sens pour une image qui en
+                    remplace une autre. */}
+                <input
+                  ref={champFichier}
+                  type="file"
+                  accept={TYPES_ACCEPTES_ATTRIBUT}
+                  onChange={choisirPhoto}
+                  className="hidden"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+
                 <HeroProfil
                   pseudo={profil.pseudo}
                   voiture={{
@@ -396,7 +595,40 @@ export default function MonProfil() {
                   }}
                   numero={numeroSaisi}
                   action="Saison 2026"
+                  avatarUrl={profil.avatar_url}
+                  onPhoto={() => champFichier.current?.click()}
+                  envoiPhoto={envoiPhoto}
                 />
+
+                {/* Ce que la photo a besoin de dire, et rien de plus. Le refus
+                    d'un fichier est un message posé sous le bloc qu'il concerne,
+                    jamais une alerte qui remplacerait l'écran — la photo est un
+                    enrichissement, son échec ne doit rien emporter.
+
+                    Le retrait n'existe **que quand il y a quelque chose à
+                    retirer** : un bouton « Supprimer la photo » toujours présent
+                    laisserait croire qu'il en existe une. Il est écrit en marron
+                    `secondaire` et non en `texte-doux`, qui ne vaut que 2,0:1
+                    sur le beige — c'est une phrase qu'on vient lire, et de plus
+                    une action qui efface. */}
+                {echecPhoto && (
+                  <Alerte ton="erreur" tentative={tentativePhoto}>
+                    {echecPhoto}
+                  </Alerte>
+                )}
+
+                {profil.avatar_url && (
+                  <div className="-mt-1 flex">
+                    <button
+                      type="button"
+                      onClick={retirerPhoto}
+                      disabled={envoiPhoto}
+                      className="text-secondaire min-h-tactile pressable -my-2 px-1 py-2 text-[13px] font-medium disabled:opacity-50"
+                    >
+                      Supprimer la photo
+                    </button>
+                  </div>
+                )}
 
                 <GrilleStats stats={donnees?.stats} />
 

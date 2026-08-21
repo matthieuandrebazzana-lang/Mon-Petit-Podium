@@ -135,7 +135,13 @@ function BlocCode({ code, couleur, miseEnAvant }) {
  * fins qui cernent un bloc ; celui-ci est un aplat posé à l'intérieur, et il
  * remplace justement la pastille d'initiale qui tenait ce rôle avant.
  */
-export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
+export function LigneClassement({
+  ligne,
+  estMoi,
+  estCreateur,
+  aDesPoints,
+  avecPhotos = false,
+}) {
   const podium = ligne.rang <= 3;
 
   // Sous-ligne : les deux critères qui départagent avant l'ordre d'inscription
@@ -188,6 +194,27 @@ export function LigneClassement({ ligne, estMoi, estCreateur, aDesPoints }) {
           <span className="text-texte-doux flex size-8 shrink-0 items-center justify-center text-[17px] leading-none font-medium">
             {ligne.rang}
           </span>
+        )}
+
+        {/* La pastille d'identité, collée au pseudo qu'elle illustre — pas au
+            rang, qui dit autre chose. C'est la règle de proximité
+            d'/apple-design §16 : un élément se pose à côté de ce qu'il décrit.
+
+            **Elle n'apparaît QUE si quelqu'un, dans ce championnat, a une
+            photo** (`avecPhotos`). Sans cette condition, un championnat où
+            personne n'en a gagnerait une colonne d'initiales posées à côté du
+            pseudo qu'elles abrègent — la même information deux fois, et
+            quarante-huit pixels pris au seul texte de la rangée. Avec elle, la
+            colonne est soit absente, soit alignée pour tout le monde : ceux qui
+            n'ont pas de photo y gardent leurs initiales, et la liste ne
+            s'ébrèche pas. */}
+        {avecPhotos && (
+          <Pastille
+            nom={ligne.pseudo}
+            graine={ligne.profil_id}
+            photo={ligne.avatar_url}
+            couleur={teinteVoiture}
+          />
         )}
 
         <div className="min-w-0 flex-1">
@@ -321,6 +348,12 @@ export default function Championnat() {
   // sources qui compte les membres sans dépendre de la RLS.
   const effectif = lignes.length || membres.length;
   const aDesPoints = saisonCommencee(lignes);
+  // **Une seule question, posée une fois pour toute la liste** : ce championnat
+  // compte-t-il au moins une photo ? Elle décide de la présence de la colonne de
+  // pastilles, pas de son contenu — voir `LigneClassement`. Posée ligne par
+  // ligne, elle donnerait une liste ébréchée, certaines rangées portant une
+  // pastille et d'autres non.
+  const avecPhotos = lignes.some((ligne) => Boolean(ligne.avatar_url));
 
   return (
     <Ecran direction="avant">
@@ -334,6 +367,7 @@ export default function Championnat() {
         retourVers="/accueil"
         libelleRetour="Accueil"
         teinte={teinte}
+        photo={donnees?.photo_url}
       />
 
       <div className="mt-3 flex flex-1 flex-col gap-3">
@@ -368,6 +402,7 @@ export default function Championnat() {
                           estMoi={ligne.profil_id === utilisateur?.id}
                           estCreateur={ligne.profil_id === donnees.cree_par}
                           aDesPoints={aDesPoints}
+                          avecPhotos={avecPhotos}
                         />
                       ))}
                     </ul>
@@ -379,7 +414,11 @@ export default function Championnat() {
                             to={`/profils/${membre.id}`}
                             className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3 p-4"
                           >
-                            <Pastille nom={membre.pseudo} graine={membre.id} />
+                            <Pastille
+                              nom={membre.pseudo}
+                              graine={membre.id}
+                              photo={membre.avatarUrl}
+                            />
                             <span className="text-corps-sm text-texte min-w-0 flex-1 truncate font-medium">
                               {membre.pseudo}
                             </span>

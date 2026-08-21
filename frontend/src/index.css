@@ -1837,3 +1837,60 @@
     translate: none;
   }
 }
+
+/* — Arrivée d'une photo, version `0.50.0` —
+   Avatar d'un joueur et photo d'un championnat. Elle se pose sur la seule chose
+   qui change vraiment : l'URL est là dès que les données arrivent, le pixel
+   arrive plus tard, et sans transition la photo apparaîtrait d'un coup au milieu
+   d'un écran déjà peint.
+
+   **Aucun jeton nouveau.** `--duration-fast` est la durée d'un échange d'icônes
+   du projet, `--ease-smooth-out` la courbe des entrées que fixe le tableau du
+   design system. C'est la règle d'extension du vocabulaire, pas de fork.
+
+   **L'opacité seule, jamais une échelle.** Ce n'est pas l'entrée d'un élément —
+   la pastille est déjà là, ronde, à sa taille, avec l'initiale dedans : c'est
+   son CONTENU qui se substitue. Une photo qui monterait de `scale(0.95)` se
+   lirait comme un second objet qui arrive par-dessus le premier, ce qui est
+   exactement l'inverse de ce qui se passe. Une transition, pas une `@keyframes`
+   : le remplacement d'une photo peut s'enchaîner deux fois de suite, et une
+   image-clé repartirait de zéro au lieu de se recibler.
+
+   **Le flou est réservé à l'ENVOI**, pas à l'arrivée. Il dit « cette photo n'est
+   pas encore la tienne » pendant que le fichier monte, et c'est le seul moment
+   où il y a deux états à faire tenir ensemble — l'usage exact que le design
+   system donne à `--blur-small`. */
+.t-photo {
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-smooth-out);
+}
+.t-photo[data-chargee="true"] {
+  opacity: 1;
+}
+
+/* L'envoi en cours. Il porte sur le CONTENEUR de la photo, pas sur l'image :
+   pendant qu'un premier fichier monte, il n'y a encore aucune image à flouter —
+   ce sont les initiales qui sont à l'écran, et c'est bien elles qui doivent dire
+   que quelque chose est en train de se passer. */
+.t-photo-envoi {
+  filter: blur(var(--blur-small));
+  opacity: 0.55;
+  transition:
+    filter var(--duration-fast) var(--ease-smooth-out),
+    opacity var(--duration-fast) var(--ease-smooth-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Le fondu RESTE : mouvement réduit veut dire moins de mouvement, pas une
+     photo qui surgit sans prévenir — et une opacité ne déplace rien. Seule sa
+     durée tombe à celle d'un changement d'état perceptible sans être une
+     traversée. Même arbitrage que pour la piste de l'interrupteur. */
+  .t-photo {
+    transition-duration: var(--duration-quick);
+  }
+  /* Le flou d'envoi, lui, se pose d'un coup : il n'est pas là pour être vu
+     arriver, il est là pour dire un état. */
+  .t-photo-envoi {
+    transition: none;
+  }
+}

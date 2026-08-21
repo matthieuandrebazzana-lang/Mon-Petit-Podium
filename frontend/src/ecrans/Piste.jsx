@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import FondPiste from "../composants/FondPiste.jsx";
+import Pastille from "../composants/Pastille.jsx";
 import Voiture from "../composants/Voiture.jsx";
 import { IconeChevronGauche } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
@@ -8,7 +9,7 @@ import { chargerChampionnat } from "../lib/championnats.js";
 import { chargerClassement, cleClassement } from "../lib/classement.js";
 import { couleurChampionnat } from "../lib/couleurs.js";
 import { messageDeChargement } from "../lib/erreurs.js";
-import { livreeDuMembre } from "../lib/palette.js";
+import { couleurLisible, livreeDuMembre } from "../lib/palette.js";
 import { useDonnees } from "../lib/useDonnees.js";
 
 /**
@@ -72,6 +73,43 @@ const MARGE_BASSE = 16;
 // `regrouperParChevauchement`.
 const HAUTEUR_LEGENDE = 16;
 
+// La pastille d'identité posée AU-DESSUS d'une voiture, et l'air qui l'en
+// sépare. Elle vient avec les photos (version `0.50.0`).
+//
+// > ### Au-dessus, et non à la place du pseudo
+// >
+// > La demande laissait le choix. Le pseudo est peint **sur l'aileron arrière**
+// > de la voiture, à l'intérieur du SVG : le remplacer par une photo voudrait
+// > dire peindre une image dans la planche, à une taille où un visage
+// > n'occuperait qu'une douzaine de pixels de haut — donc rien de
+// > reconnaissable, en échange du seul identifiant que la piste porte depuis la
+// > version `0.39.0`. Posée au-dessus, la pastille est ronde, isolée du dessin,
+// > et se lit **avec** le pseudo au lieu de le remplacer.
+//
+// **26px n'est pas choisi au hasard** : c'est la moitié de `LARGEUR_VOITURE`.
+// Une pastille plus large que la voiture qu'elle coiffe se lirait comme un objet
+// posé dessus plutôt que comme sa tête.
+const HAUTEUR_AVATAR = 26;
+const ESPACE_AVATAR = 4;
+
+/**
+ * La hauteur réservée AU-DESSUS d'une voiture, à sa taille pleine.
+ *
+ * **Zéro quand personne, dans ce championnat, n'a de photo** — et c'est la seule
+ * règle qui compte ici. Réserver trente pixels par voiture pour une rangée de
+ * pastilles vides comprimerait la zone de jeu de tout le monde au bénéfice de
+ * personne : un championnat sans photo doit dessiner exactement la piste
+ * d'avant, au pixel près.
+ *
+ * Elle est calculée **une fois pour toute la piste**, jamais voiture par
+ * voiture : une hauteur réservée qui dépendrait de la présence d'une photo
+ * donnerait des voitures à des altitudes différentes pour des scores égaux, ce
+ * qui contredirait la règle « une hauteur, un score » (`docs/decisions.md` §19).
+ */
+export function coiffeDesVoitures(avecAvatars) {
+  return avecAvatars ? HAUTEUR_AVATAR + ESPACE_AVATAR : 0;
+}
+
 // Décalage d'entrée entre deux voitures — doit rester égal à --voiture-stagger.
 const RETARD_ENTREE = 100;
 
@@ -104,10 +142,12 @@ function pointsDe(ligne) {
  * Les bornes sont calculées à la **taille pleine** de la voiture, la seule
  * connue à ce stade : la taille se déduit des groupes, qui se déduisent des
  * hauteurs. La légende compte dans la borne basse, sinon le score du dernier
- * sortirait sous la piste.
+ * sortirait sous la piste — et la coiffe dans la borne haute, sinon la pastille
+ * du premier sortirait sous le bandeau. Les deux valent leur taille PLEINE ici :
+ * un groupe réduit occupe moins, jamais plus, donc la borne reste juste.
  */
-export function hauteursParScore(lignes, hauteur) {
-  const haut = MARGE_HAUTE + HAUTEUR_VOITURE / 2;
+export function hauteursParScore(lignes, hauteur, coiffe = 0) {
+  const haut = MARGE_HAUTE + coiffe + HAUTEUR_VOITURE / 2;
   const bas = Math.max(
     haut,
     hauteur - MARGE_BASSE - HAUTEUR_LEGENDE - HAUTEUR_VOITURE / 2,
@@ -149,12 +189,17 @@ export function hauteursParScore(lignes, hauteur) {
  * > de la voiture du dessous. Le seuil décrit bien « la hauteur d'une voiture »,
  * > au sens de ce qu'elle occupe.
  *
+ * La coiffe entre dans le seuil pour la raison qui y a déjà mis la légende : ce
+ * qu'une voiture occupe à l'écran, c'est le dessin **plus** ce qui l'accompagne.
+ * Au seuil sans coiffe, la pastille d'un groupe se poserait sur le score du
+ * groupe du dessus.
+ *
  * Les lignes arrivent triées par points décroissants
  * (`classement_du_championnat`), donc par hauteur croissante : le balayage se
  * fait dans l'ordre du classement, une seule fois.
  */
-export function regrouperParChevauchement(hauteurs) {
-  const seuil = HAUTEUR_VOITURE + HAUTEUR_LEGENDE;
+export function regrouperParChevauchement(hauteurs, coiffe = 0) {
+  const seuil = coiffe + HAUTEUR_VOITURE + HAUTEUR_LEGENDE;
   const groupes = [];
 
   hauteurs.forEach((centre, index) => {
@@ -193,13 +238,14 @@ export function regrouperParChevauchement(hauteurs) {
  * La hauteur du groupe reste celle de la passe 1 : **réduire une voiture ne la
  * déplace pas**. Sa hauteur dit ses points, et elle seule.
  */
-export function dispositionDesVoitures(lignes, hauteur, largeur) {
+export function dispositionDesVoitures(lignes, hauteur, largeur, avecAvatars = false) {
   if (lignes.length === 0 || hauteur <= 0 || largeur <= 0) return [];
 
-  const hauteurs = hauteursParScore(lignes, hauteur);
+  const coiffe = coiffeDesVoitures(avecAvatars);
+  const hauteurs = hauteursParScore(lignes, hauteur, coiffe);
   const placements = [];
 
-  regrouperParChevauchement(hauteurs).forEach(({ membres }) => {
+  regrouperParChevauchement(hauteurs, coiffe).forEach(({ membres }) => {
     const cellule = largeur / membres.length;
     const largeurVoiture = Math.max(
       LARGEUR_MINIMALE,
@@ -213,6 +259,11 @@ export function dispositionDesVoitures(lignes, hauteur, largeur) {
     // chiffres : vingt scores écrits côte à côte dans dix-sept pixels chacun ne
     // font pas vingt nombres, ils font une bavure. Le classement les donne, et
     // la liste `sr-only` de cet écran aussi.
+    // Le même juge sert à la pastille : au plancher, un visage de neuf pixels
+    // n'est plus un visage, et une rangée de ronds indistincts au-dessus d'une
+    // grille serrée ajoute du bruit sans ajouter d'information. **La place
+    // réservée, elle, ne bouge pas** — la retirer déplacerait les voitures d'un
+    // groupe encombré, et leur hauteur ne doit dépendre que du score.
     const scoreLisible = largeurVoiture > LARGEUR_MINIMALE;
 
     membres.forEach((index, place) => {
@@ -224,6 +275,15 @@ export function dispositionDesVoitures(lignes, hauteur, largeur) {
         decalage: (place + 0.5) * cellule - largeur / 2,
         largeurVoiture,
         hauteurVoiture: HAUTEUR_VOITURE * echelle,
+        // La coiffe à l'échelle du groupe. Elle sert deux fois dans le rendu :
+        // à réserver la boîte au-dessus de la voiture, et à remonter la voiture
+        // d'autant pour que son CENTRE reste à la hauteur que le score lui a
+        // donnée. Sans la seconde, la coiffe pousserait chaque voiture vers le
+        // bas et l'échelle des scores mentirait de trente pixels.
+        coiffe: coiffe * echelle,
+        tailleAvatar: scoreLisible
+          ? Math.max(14, Math.round(largeurVoiture * 0.5))
+          : 0,
         // Le score ne rétrécit pas au même rythme que la voiture : sous 11px il
         // cesserait d'être lisible, et un chiffre illisible ne vaut pas mieux
         // qu'un chiffre absent.
@@ -259,8 +319,16 @@ export function dispositionDesVoitures(lignes, hauteur, largeur) {
  * d'écran, lui, dépend de la session, qui ne se résout que dans un effet.
  */
 export function VoitureSurPiste({ placement, hauteur, retard, estMoi }) {
-  const { ligne, centre, decalage, largeurVoiture, hauteurVoiture, tailleScore } =
-    placement;
+  const {
+    ligne,
+    centre,
+    decalage,
+    largeurVoiture,
+    hauteurVoiture,
+    tailleScore,
+    coiffe,
+    tailleAvatar,
+  } = placement;
   const voiture = livreeDuMembre(ligne);
   const numero = ligne.numero ?? ligne.rang;
   const points = pointsDe(ligne);
@@ -269,7 +337,9 @@ export function VoitureSurPiste({ placement, hauteur, retard, estMoi }) {
     <div
       className="t-place absolute top-0 left-1/2"
       style={{
-        translate: `${decalage - largeurVoiture / 2}px ${centre - hauteurVoiture / 2}px`,
+        translate: `${decalage - largeurVoiture / 2}px ${
+          centre - hauteurVoiture / 2 - coiffe
+        }px`,
         width: `${largeurVoiture}px`,
       }}
     >
@@ -278,11 +348,40 @@ export function VoitureSurPiste({ placement, hauteur, retard, estMoi }) {
         style={{
           // Chaque voiture part du bas de l'écran : la distance dépend de son
           // point d'arrivée, une valeur commune ferait démarrer le leader du
-          // milieu de la piste.
-          "--voiture-depart": `${hauteur - centre + hauteurVoiture}px`,
+          // milieu de la piste. La coiffe s'y ajoute — c'est elle qui remonte
+          // le bloc, et sans elle la pastille du leader serait déjà visible
+          // au-dessus du bandeau avant que sa voiture ne parte.
+          "--voiture-depart": `${hauteur - centre + hauteurVoiture + coiffe}px`,
           "--voiture-retard": `${retard}ms`,
         }}
       >
+        {/* La pastille d'identité, quand ce championnat en compte au moins une
+            (`coiffe > 0`). La boîte garde sa hauteur même sans rien dedans :
+            c'est elle qui aligne toutes les voitures sur la même ligne de
+            départ, qu'un membre ait posé une photo ou non.
+
+            **Elle porte la couleur de la voiture**, pas une teinte tirée du
+            pseudo : sur cet écran c'est la voiture qui identifie, et un rond
+            d'une autre couleur posé sur son toit ferait deux signaux
+            concurrents pour la même personne. Ceux qui n'ont pas de photo y ont
+            donc leur initiale sur leur propre livrée. */}
+        {coiffe > 0 && (
+          <div
+            className="flex items-end justify-center"
+            style={{ height: `${coiffe}px` }}
+          >
+            {tailleAvatar > 0 && (
+              <Pastille
+                nom={ligne.pseudo}
+                graine={ligne.profil_id}
+                photo={ligne.avatar_url}
+                couleur={couleurLisible(ligne)}
+                taillePx={tailleAvatar}
+              />
+            )}
+          </div>
+        )}
+
         {/* La hauteur est portée par une boîte, jamais par le SVG :
             `Voiture` ne prend pas de `style`, et la lui passer serait une
             prop muette que rien à l'écran ne signalerait. */}
@@ -367,9 +466,17 @@ export default function Piste() {
     return () => cancelAnimationFrame(image);
   }, [hauteur, lignes.length]);
 
+  // Une seule question pour toute la piste, la même qu'au classement : ce
+  // championnat compte-t-il au moins une photo ? Elle décide de la coiffe
+  // réservée au-dessus de chaque voiture, jamais de ce qui s'y dessine.
+  const avecAvatars = useMemo(
+    () => lignes.some((ligne) => Boolean(ligne.avatar_url)),
+    [lignes],
+  );
+
   const placements = useMemo(
-    () => dispositionDesVoitures(lignes, hauteur, largeur),
-    [lignes, hauteur, largeur],
+    () => dispositionDesVoitures(lignes, hauteur, largeur, avecAvatars),
+    [lignes, hauteur, largeur, avecAvatars],
   );
 
   return (

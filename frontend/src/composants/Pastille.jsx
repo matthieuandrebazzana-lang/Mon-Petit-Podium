@@ -1,5 +1,5 @@
 /**
- * Pastille d'initiale, reprise des maquettes 04 et 07.
+ * Pastille d'identité d'un membre — sa photo, ou ses initiales.
  *
  * Les couleurs sont tirées de la palette de la section 5 — aucune teinte
  * nouvelle n'entre par cette porte. Le choix est déterministe : la même
@@ -7,9 +7,23 @@
  * l'autre, sinon la liste des membres changerait de couleurs à chaque
  * rafraîchissement, ce qui empêche de reconnaître quelqu'un du coin de l'œil.
  *
- * Cette pastille est provisoire : l'étape 8 la remplacera par la voiture
- * personnalisée de chaque membre.
+ * > ### Pourquoi la photo entre ICI et non dans un composant à côté
+ * >
+ * > « Comment représente-t-on un membre dans un rond ? » est **une** question,
+ * > posée par l'accueil, le classement, les deux écrans de profil et le résumé
+ * > d'un Grand Prix. Elle doit donc avoir **un** propriétaire (CLAUDE.md §6).
+ * > Un `Avatar` posé à côté aurait laissé cinq appelants à convertir un par un,
+ * > et celui qu'on aurait oublié serait resté aux initiales sans que rien ne le
+ * > signale. Avec la photo ici, tout appelant qui transmet `photo` l'obtient, et
+ * > tout appelant qui l'ignore garde exactement le comportement d'avant.
+ *
+ * **`photo` absente n'est pas un cas dégradé.** C'est l'état par défaut de tout
+ * compte, et les initiales sur teinte dérivée du pseudo sont une réponse
+ * complète : elles distinguent, elles sont stables, elles se lisent en 36px. La
+ * photo est un enrichissement, jamais un prérequis.
  */
+
+import { usePhoto } from "../lib/usePhoto.js";
 
 const COULEURS = ["bg-primaire", "bg-accent", "bg-secondaire", "bg-primaire-fonce"];
 
@@ -20,28 +34,104 @@ function couleurPour(graine) {
   return COULEURS[total % COULEURS.length];
 }
 
+const DIMENSIONS = {
+  // 28px — la rangée d'un membre au résumé d'un Grand Prix, qui porte déjà un
+  // rang, une voiture, un score et un chevron. La pastille y est un repère de
+  // reconnaissance, pas le sujet : à 36px elle prendrait la place du pseudo.
+  xs: "size-7 text-[12px]",
+  sm: "size-9 text-corps-sm",
+  md: "size-9 text-corps-sm",
+  lg: "size-[42px] text-[16px]",
+  // Ajoutée avec les photos : la pastille des deux écrans de profil devient le
+  // sujet de son bloc et non plus une vignette à côté d'un nom. **56px et non
+  // 48 :** sur « Mon profil » elle est tactile, et la règle iOS du CLAUDE.md
+  // §3.5 impose 44 × 44 au minimum — 48px moins l'anneau de 2px n'en laisserait
+  // que 44 tout juste, sans marge d'erreur pour un doigt.
+  xl: "size-[56px] text-[21px]",
+};
+
 /**
  * @param {string} [couleur] livrée du membre (étape 7), en `#rrggbb`. Quand elle
  *   est fournie, la pastille prend la couleur de sa voiture : la même personne
  *   se reconnaît alors du même coup d'œil au classement et sur la vue piste.
  *   Sans elle, on retombe sur la teinte déterministe ci-dessus.
+ * @param {string} [photo] URL publique de sa photo (migration
+ *   `20260821180000`). Absente, ce sont les initiales — l'affichage d'origine.
+ * @param {number} [taillePx] diamètre exact, en pixels, quand aucune taille de
+ *   l'échelle ne convient. **Un seul appelant l'emploie, la vue piste**, et pour
+ *   une raison qui lui est propre : la taille d'une voiture y est calculée à
+ *   l'exécution, elle ne peut donc pas sortir d'une échelle fixe. Partout
+ *   ailleurs, `taille` est la bonne porte — une échelle qu'on contourne à la
+ *   première difficulté cesse d'être une échelle.
  */
-export default function Pastille({ nom = "", graine, taille = "md", couleur }) {
+export default function Pastille({
+  nom = "",
+  graine,
+  taille = "md",
+  couleur,
+  photo,
+  taillePx,
+}) {
   const initiale = nom.trim().charAt(0).toUpperCase() || "?";
-  const dimensions =
-    taille === "lg"
-      ? "size-[42px] text-[16px]"
-      : taille === "sm"
-        ? "size-9 text-corps-sm"
-        : "size-9 text-corps-sm";
+  // Le diamètre explicite l'emporte, et emporte alors AUSSI la taille de
+  // caractère : une initiale de 14px dans un rond de 20 déborde.
+  const dimensions = taillePx ? "" : (DIMENSIONS[taille] ?? DIMENSIONS.md);
+  const mesures = taillePx
+    ? {
+        width: `${taillePx}px`,
+        height: `${taillePx}px`,
+        fontSize: `${Math.max(9, Math.round(taillePx * 0.44))}px`,
+        lineHeight: 1,
+      }
+    : null;
+
+  // **L'image se révèle une fois chargée, elle ne clignote pas.** L'URL arrive
+  // avec les données, le pixel arrive plus tard : sans cet état, la photo
+  // apparaîtrait d'un coup au milieu d'un écran déjà peint. Les initiales
+  // tiennent la place jusque-là — elles ont la bonne taille et la bonne forme,
+  // ce qui fait de l'arrivée un fondu et non un saut.
+  //
+  // `cassee` couvre le cas d'une URL en base dont l'objet a disparu du
+  // stockage : la pastille redevient alors ce qu'elle est sans photo, plutôt
+  // qu'un rond vide. Toute la mécanique — cache du navigateur compris — vit dans
+  // `usePhoto`, partagée avec la photo d'un championnat.
+  const { chargee, cassee, aLImage, auChargement, aLEchec } = usePhoto(photo);
+  const affichable = Boolean(photo) && !cassee;
 
   return (
     <span
       aria-hidden="true"
-      style={couleur ? { backgroundColor: couleur } : undefined}
-      className={`${dimensions} ${couleur ? "" : couleurPour(graine || nom)} flex shrink-0 items-center justify-center rounded-full font-medium text-white`}
+      style={{
+        ...(couleur ? { backgroundColor: couleur } : null),
+        ...mesures,
+      }}
+      className={`${dimensions} ${
+        couleur || affichable ? "" : couleurPour(graine || nom)
+      } relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium text-white select-none ${
+        affichable ? "bg-squelette" : ""
+      }`}
     >
-      {initiale}
+      {/* L'initiale reste sous la photo tant qu'elle n'est pas chargée, et
+          disparaît une fois qu'elle l'est : la garder dessous coûterait un
+          glyphe qui transparaîtrait au travers d'un PNG à fond transparent. */}
+      {!chargee && <span>{initiale}</span>}
+
+      {affichable && (
+        <img
+          src={photo}
+          alt=""
+          // `decoding="async"` évite que le décodage d'une image de deux
+          // mégaoctets ne bloque la peinture d'une liste de douze membres.
+          decoding="async"
+          loading="lazy"
+          draggable="false"
+          ref={aLImage}
+          onLoad={auChargement}
+          onError={aLEchec}
+          data-chargee={chargee ? "true" : "false"}
+          className="t-photo absolute inset-0 h-full w-full object-cover"
+        />
+      )}
     </span>
   );
 }

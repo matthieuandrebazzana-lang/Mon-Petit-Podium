@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **21 août 2026**, version `0.48.0`.
+État au **22 août 2026**, version `0.50.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -42,7 +42,23 @@ fois. **Ce scraping est de toute manière obligatoire après la migration 15**, 
 > correctif ci-dessus reste nécessaire — il répare une donnée réellement fausse — mais la
 > vérification qui avait causé l'accident se fait maintenant sans écrire.
 
-### 1.2 Vérifier les migrations appliquées
+### 1.2 Appliquer la migration 16, et créer les deux compartiments avec elle
+
+`20260821180000_photos_profil_championnat` ajoute `profils.avatar_url` et
+`championnats.photo_url`, **et crée les compartiments `avatars` et `championnats` dans
+Supabase Storage avec leurs politiques**. Tant qu'elle n'est pas jouée :
+
+- les colonnes n'existent pas → le backend sert `null` partout (valeurs par défaut des
+  modèles Pydantic, règle 3.3), donc **aucune photo, mais aucune panne** ;
+- les compartiments n'existent pas → tout dépôt échoue, et l'écran le dit en français.
+
+Elle **supprime puis recrée `mes_championnats`** (changement de type de retour) : vérifier
+au passage que les `revoke`/`grant` de fin de bloc sont bien passés, sans quoi la fonction
+resterait exécutable par `anon`. Voir `database.md` §6.
+
+**Rien à convertir, rien à reprendre** : aucun compte n'a de photo avant elle.
+
+### 1.3 Vérifier les migrations appliquées
 
 **La liste des migrations appliquées est à revérifier dans le SQL Editor.** Une lecture
 partie par erreur vers le vrai projet a rendu une ligne réelle de `public.grands_prix` :
@@ -56,7 +72,7 @@ conflits dans `database.md` §6).
 Docker indisponible), contrairement aux onze premières. La 13 a été comparée ligne à ligne
 à la 10 : trois lignes de différence, toutes attendues. **À surveiller au premier passage.**
 
-### 1.3 Variables d'environnement de production
+### 1.4 Variables d'environnement de production
 
 | Où | Variable | État |
 |---|---|---|
@@ -65,7 +81,7 @@ Docker indisponible), contrairement aux onze premières. La 13 a été comparée
 | Railway | `ENVIRONMENT=production` | **à ajouter** — sinon `/docs` reste public |
 | Railway | `FRONTEND_URL` | non bloquante, mais préférable |
 
-### 1.4 Rebrancher le décompte de l'accueil
+### 1.5 Rebrancher le décompte de l'accueil
 
 `GP_RESTANTS = 12` dans `ecrans/Accueil.jsx`. La réponse existe : compter `GP_2026` filtré
 par `etatDuGpSaison`, comme le fait déjà `CalendrierGlobal`.
@@ -73,7 +89,7 @@ par `etatDuGpSaison`, comme le fait déjà `CalendrierGlobal`.
 > **Sans cela, les deux écrans se contrediront dès la première course courue** — l'accueil
 > dira « 12 restants » quand le calendrier en montrera 11. Voir `calendrier.md` §10.
 
-### 1.5 Tester sur iPhone réel
+### 1.6 Tester sur iPhone réel
 
 **Jamais fait.** Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors
 navigateur. Points à regarder en priorité :
@@ -143,7 +159,22 @@ base au moment du figeage).
 `/nouveau-mot-de-passe`, en production **et** sur `localhost:5173`). Puis repasser
 `OAUTH_ACTIF` à `true` dans `composants/BoutonsOAuth.jsx` — **rien d'autre à toucher**.
 
-### 2.6 Parcours jamais exercés contre le vrai Supabase
+### 2.6 Les photos, ce qui reste à faire
+
+Livrées en version `0.50.0` (dépôt, affichage, retrait). Trois manques assumés :
+
+- **Aucun recadrage ni redimensionnement.** L'image est envoyée telle quelle et cadrée par
+  `object-fit: cover` : une photo en 4:3 perd ses bords sur un rond de 56px, et un fichier
+  de 2 Mo est retéléchargé en entier pour une vignette de 28px. Un redimensionnement en
+  `<canvas>` avant l'envoi réglerait les deux d'un coup — c'est le seul endroit où le
+  gain vaudrait le code ajouté.
+- **La photo d'un championnat ne se change plus après sa création.** `PATCH
+  /championnats/{id}` existe et accepte le créateur ; il manque l'écran qui l'appelle.
+- **Rien ne nettoie le stockage à la suppression d'un compte ou d'un championnat.** La
+  ligne part par cascade, l'objet reste. Sans conséquence visible — plus rien ne le
+  référence — mais le compartiment grossit indéfiniment.
+
+### 2.7 Parcours jamais exercés contre le vrai Supabase
 
 - **Authentification** — inscription, confirmation par email, connexion, réinitialisation.
 - **Championnats** — le backend a été validé contre une doublure et la migration contre un

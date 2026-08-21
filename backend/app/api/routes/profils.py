@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 from app.api.deps import utilisateur_courant
 from app.api.journal import echec_lisible as _echec_lisible
 from app.api.journal import journaliser_echecs
+from app.api.stockage import COMPARTIMENT_AVATARS, url_de_photo_valide
 from app.supabase_client import (
     ErreurSupabase,
     appeler_fonction,
@@ -47,7 +48,8 @@ DOMAINE = "profils"
 # listes séparées finiraient par diverger, et le profil d'un autre membre
 # afficherait une voiture différente de la sienne au classement.
 COLONNES_PROFIL = (
-    "id,pseudo,couleur1,couleur2,numero,livree_mode,livree_ecurie,is_admin,cree_le"
+    "id,pseudo,couleur1,couleur2,numero,livree_mode,livree_ecurie,is_admin,"
+    "avatar_url,cree_le"
 )
 
 # Bornes du numéro (1 à 99), doublées par la contrainte `profils_numero_valide`.
@@ -123,6 +125,18 @@ class ProfilServi(BaseModel):
     # `is_admin` glissé dans le corps d'un PATCH est ignoré, comme le sont déjà
     # `id` et `pseudo`. Se promouvoir soi-même par cette route est impossible.
     is_admin: bool = False
+    # Photo de profil (migration `20260821180000`). `None` est l'état par défaut
+    # et ne se confond avec rien : l'interface affiche alors les initiales du
+    # pseudo sur une teinte dérivée de lui, ce qu'elle a toujours fait. Valeur
+    # par défaut pour la raison des trois champs ci-dessus — un backend déployé
+    # avant la migration perd un champ au lieu de rendre `500` sur toute la
+    # réponse (piège de `cree_par`, version `0.4.1`).
+    #
+    # **L'URL est vérifiée à l'ÉCRITURE, jamais à la lecture.** Ce qui est en
+    # base y a déjà été jugé par `url_de_photo_valide` ; refiltrer ici ferait
+    # disparaître silencieusement les photos du jour où l'URL du projet
+    # changerait, au lieu de le signaler.
+    avatar_url: str | None = None
     cree_le: datetime
 
 
@@ -145,6 +159,12 @@ class ModificationProfil(BaseModel):
     # base — c'est le dernier choix du membre, qu'il retrouve s'il rebascule.
     livree_mode: str | None = Field(default=None, max_length=16)
     livree_ecurie: str | None = Field(default=None, max_length=32)
+    # La photo, et son drapeau de retrait — même motif que `numero` : un
+    # `avatar_url: null` serait indiscernable d'un champ non transmis, et
+    # personne ne pourrait plus retirer sa photo. Le bouton « Supprimer la
+    # photo » de l'écran de profil envoie `retirer_avatar`.
+    avatar_url: str | None = Field(default=None, max_length=512)
+    retirer_avatar: bool = False
 
 
 class StatsProfil(BaseModel):
@@ -299,6 +319,16 @@ async def modifier_mon_profil(
                 f"{NUMERO_MAXIMUM} (reçu : {corps.numero})."
             )
         valeurs["numero"] = corps.numero
+
+    # La photo. Le retrait l'emporte sur l'envoi, comme pour le numéro : deux
+    # intentions contradictoires dans un même corps se tranchent en faveur de
+    # celle qui efface, la seule qui ne laisse pas de trace non voulue.
+    if corps.retirer_avatar:
+        valeurs["avatar_url"] = None
+    elif corps.avatar_url is not None:
+        valeurs["avatar_url"] = url_de_photo_valide(
+            corps.avatar_url, COMPARTIMENT_AVATARS, "une photo de profil"
+        )
 
     if corps.livree_ecurie is not None:
         valeurs["livree_ecurie"] = livree_valide(corps.livree_ecurie)

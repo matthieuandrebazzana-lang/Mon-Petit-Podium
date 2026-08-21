@@ -252,6 +252,8 @@ le mode personnalisé — ce qui se voit à l'écran au lieu de planter.
 | `calendrier2026.js` | **la liste des GP** — voir `calendrier.md` |
 | `navigation.js` | barre, onglets, `origineRetour` |
 | `pronostics.js` | marchés, favoris, exclusion croisée |
+| `stockage.js` | **seul juge d'un fichier photo** : dépôt, formats, plafond, ménage |
+| `usePhoto.js` | l'état de chargement d'une image, cache du navigateur compris |
 
 Trois règles ont été **sorties des écrans** vers `lib/pronostics.js` — `optionsDisponibles`
 (exclusion croisée), `enConflit` et `bonusEpingles` (les bonus encore épinglés). Raison :
@@ -366,7 +368,12 @@ téléphone ne doivent jamais voir les données de l'autre. `classement` porte e
 marqueur de version (`:v2:`), placé **après** l'identifiant pour que
 `oublierCachePrefixe("classement:<profil>:")` continue de tout balayer.
 
-**Les caches sont invalidés après création, adhésion, départ et modification de voiture** —
+**Les caches sont invalidés après création, adhésion, départ, modification de voiture et
+changement de photo** — `MonProfil` porte pour cela une fonction unique,
+`oublierMesApparitions`, qui balaie `classement:` **et** `resultats:` : la voiture comme la
+photo se peignent aux deux endroits, et deux effacements écrits séparément auraient fini
+par en oublier un. C'est le défaut qu'avait la version `0.49.0`, où seul `classement:`
+était balayé après un changement de livrée —
 sans quoi le retour sur l'accueil semblerait avoir perdu le championnat. L'accueil, la
 liste des championnats et le calendrier global **partagent `championnats:{profil}`** :
 passer de l'un à l'autre n'attend rien, et une adhésion les invalide tous les trois.
@@ -425,3 +432,105 @@ bundle de production**.
 - Un compteur dont l'icône seule ne dirait rien est **nommé en `sr-only`**.
 - Les éléments cliquables gardent **44 px**, absorbés par des **marges négatives** là où
   elles déplaceraient le calage — sans elles, chaque rangée de cote gagnerait 26 px.
+
+---
+
+## 8. Les photos — une pastille, un carré, un juge
+
+Version `0.50.0`. Trois fichiers, et chacun répond à **une** question.
+
+| Fichier | La question dont il est propriétaire |
+|---|---|
+| `composants/Pastille.jsx` | comment représente-t-on un **joueur** dans un rond ? |
+| `composants/PhotoChampionnat.jsx` | comment montre-t-on la photo d'un **championnat** ? |
+| `lib/stockage.js` | ce fichier est-il acceptable, et où va-t-il ? |
+| `lib/usePhoto.js` | cette image est-elle chargée ? |
+
+> **La photo est entrée DANS `Pastille`, pas dans un `Avatar` posé à côté.** Cinq écrans
+> posent la même question — accueil, classement, les deux profils, résumé d'un GP. Un
+> composant concurrent aurait laissé cinq appelants à convertir un par un, et celui qu'on
+> aurait oublié serait resté aux initiales sans que rien ne le signale.
+
+> **`photo` absente n'est pas un cas dégradé.** Les initiales sur teinte dérivée du pseudo
+> distinguent, sont stables d'un écran à l'autre, et se lisent à 36px. Elles restent
+> l'affichage de tout compte qui n'a rien déposé.
+
+> ### La règle « au moins une photo », et pourquoi elle vaut aux trois endroits
+>
+> Le classement d'un championnat, la vue piste et le résumé d'un Grand Prix posent la même
+> question **une fois pour toute la liste** : quelqu'un a-t-il une photo ? Elle décide de
+> la **présence** de la colonne (ou, sur la piste, de la coiffe réservée), jamais de son
+> contenu.
+>
+> Posée ligne par ligne, elle donnerait une liste ébréchée — certaines rangées avec une
+> pastille, d'autres sans. Jamais posée, un championnat où personne n'a de photo gagnerait
+> une colonne d'initiales posées **à côté du pseudo qu'elles abrègent** : la même
+> information deux fois, et quarante-huit pixels pris au seul texte de la rangée.
+>
+> Avec elle, l'écran d'un championnat sans photo est **exactement** celui d'avant cette
+> version, au pixel près.
+
+### Sur la piste : au-dessus de la voiture, jamais à sa place
+
+Le pseudo est peint **sur l'aileron arrière**, à l'intérieur du SVG — c'est le seul
+identifiant que la piste porte depuis la version `0.39.0`. Le remplacer par une photo
+voudrait dire peindre une image dans la planche, à une taille où un visage n'occuperait
+qu'une douzaine de pixels. La pastille est donc posée **au-dessus**, ronde, isolée du
+dessin, et se lit *avec* le pseudo.
+
+Elle porte la **couleur de la voiture**, pas la teinte tirée du pseudo : sur cet écran
+c'est la voiture qui identifie, et un rond d'une autre couleur posé sur son toit ferait
+deux signaux concurrents pour la même personne.
+
+> **La coiffe est calculée une fois pour toute la piste, jamais voiture par voiture.** Une
+> hauteur réservée qui dépendrait de la présence d'une photo donnerait des voitures à des
+> altitudes différentes pour des scores égaux — exactement ce que la règle « une hauteur,
+> un score » interdit (`decisions.md` §19). `coiffeDesVoitures` rend donc 0 ou 30, pour
+> tout le monde.
+>
+> Elle entre dans **trois** calculs, et en oublier un se voit : la borne haute de
+> `hauteursParScore` (sinon la pastille du premier passe sous le bandeau), le seuil de
+> `regrouperParChevauchement` (sinon la pastille d'un groupe se pose sur le score du groupe
+> du dessus), et la distance d'entrée `--voiture-depart` (sinon la pastille du leader est
+> visible avant que sa voiture ne parte).
+
+### `usePhoto` — le défaut que `onLoad` seul ne voit pas
+
+Une image **déjà en cache** est décodée avant que React n'ait posé son gestionnaire :
+l'événement `load` part dans le vide, `onLoad` n'est jamais appelé, et une photo qui
+s'anime en opacité reste **invisible pour toujours**. Ce n'est pas un cas de bord — c'est
+le cas ordinaire dès la deuxième visite d'un écran.
+
+Le remède est une **fonction de référence** : React l'appelle à l'entrée dans le DOM, et
+`naturalWidth > 0` dit alors si le pixel est déjà là. `complete` seul ne suffirait pas — il
+vaut `true` pour une image en échec aussi.
+
+L'URL est retenue dans l'état et comparée **pendant le rendu** : changer de photo change
+l'URL (elle porte un horodatage, voir `database.md` §9), et sans cette comparaison la
+nouvelle image hériterait du `chargee` de l'ancienne. Une réinitialisation dans un effet
+laisserait passer une image d'écart, donc un clignotement.
+
+### Le mouvement : un fondu, aucun jeton nouveau
+
+`.t-photo` transitionne **l'opacité seule**, avec `--duration-fast` et
+`--ease-smooth-out` — deux jetons qui existaient déjà. Pas d'échelle : la pastille est
+déjà là, ronde, à sa taille, avec son initiale dedans ; c'est son **contenu** qui se
+substitue. Une photo montant de `scale(0.95)` se lirait comme un second objet arrivant
+par-dessus le premier.
+
+`.t-photo-envoi` pose un flou pendant que le fichier monte, et il porte sur le
+**conteneur**, pas sur l'image : au premier dépôt il n'y a encore aucune image à flouter,
+ce sont les initiales qui doivent dire que quelque chose se passe.
+
+Sous `prefers-reduced-motion`, **le fondu reste** (une opacité ne déplace rien) et sa durée
+tombe à `--duration-quick` ; le flou d'envoi se pose d'un coup.
+
+### Écart assumé sur le rayon
+
+La demande prescrivait `12px` sur la carte de l'accueil. L'échelle des formes du design
+system ne connaît pas le 12 : elle va de 24 (bloc) à 14 (`rounded-champ`, « champs et
+petits éléments »), et « tout écran puise dans ces jetons, jamais dans des valeurs en dur ».
+La carte prend donc **`rounded-champ`**, à deux pixels de la valeur demandée ; l'en-tête du
+championnat prend `rounded-widget`, qui vaut exactement les 16 demandés. Un
+`rounded-[12px]` aurait ouvert une sixième valeur de rayon dans un projet qui en compte
+cinq, pour un écart invisible à cette taille.

@@ -43,6 +43,7 @@ public.grands_prix
 | `livree_mode` | text, défaut `perso` | `perso` \| `ecurie` |
 | `livree_ecurie` | text, nullable | slug (`^[a-z0-9-]{2,32}$`) |
 | `is_admin` | boolean, **not null** défaut `false` | affichage seul, voir §5 |
+| `avatar_url` | text, **nullable** | URL publique Storage, jamais de base64 |
 
 Contraintes : `pseudo` 2–20 caractères ; `numero` entre 1 et 99 ; couleurs au format
 `#RRGGBB` ; **couleurs distinctes à la casse près** ; `livree_ecurie` obligatoire si
@@ -66,6 +67,14 @@ Contraintes : `pseudo` 2–20 caractères ; `numero` entre 1 et 99 ; couleurs au
 > Une énumération en base figerait la grille — les onze voitures sont un actif du
 > frontend qui se relit chaque saison.
 
+> **`avatar_url` ne porte QUE l'URL** (migration 16). Une image de 2 Mo en base64 pèserait
+> 2,7 Mo dans une colonne `text`, serait relue à chaque classement et traverserait le
+> réseau à chaque affichage. La contrainte `profils_avatar_url_format` ne vérifie que la
+> **forme** (`https://`, ≤ 512 caractères) : y coder l'URL du projet Supabase figerait la
+> base sur un projet, et une restauration ailleurs refuserait toutes les photos
+> existantes. **Le rattachement au projet se juge côté backend**, dans
+> `app/api/stockage.py`, seul endroit qui connaisse `SUPABASE_URL` — voir §9.
+
 ### `public.championnats`
 
 | Colonne | Type | Note |
@@ -75,6 +84,7 @@ Contraintes : `pseudo` 2–20 caractères ; `numero` entre 1 et 99 ; couleurs au
 | `code_invitation` | text **unique** | `^[A-Z0-9]{6}$` |
 | `cree_par` | uuid **nullable** | → `auth.users`, **`on delete set null`** |
 | `cree_le` | timestamptz | |
+| `photo_url` | text, **nullable** | URL publique Storage, mêmes règles qu'`avatar_url` |
 
 > **`cree_par` est nullable et ne cascade pas.** Supprimer le compte du créateur ne doit
 > pas emporter le championnat de tous les autres membres : il survit, sans créateur.
@@ -220,6 +230,7 @@ Objet `{ session, session_result, drivers, race_control, laps, starting_grid, pi
 | `favoris` | **strictement privés** | soi-même |
 | `pronostics` | les siens, **ou** ceux d'un membre d'un championnat partagé | soi-même |
 | `pronostic_podium` | via l'existence du pronostic parent | son auteur |
+| `storage.objects` (2 compartiments) | **tous, `anon` compris** | le propriétaire du dossier (§9) |
 
 > **Lecture publique des GP, cotes et résultats** : ils sont affichés tels quels chez le
 > bookmaker, et la landing doit pouvoir annoncer le prochain GP sans session.
@@ -243,13 +254,13 @@ Objet `{ session, session_result, drivers, race_control, laps, starting_grid, pi
 | Fonction | Rôle |
 |---|---|
 | `creer_championnat(nom, code, createur)` | championnat **+** son créateur, une transaction |
-| `mes_championnats(profil)` | championnats + effectif, une requête |
+| `mes_championnats(profil)` | championnats + effectif + photo, une requête |
 | `quitter_championnat(profil, championnat)` | retrait **+** effacement conditionnel, atomiques |
 | `enregistrer_pronostics(...)` | efface le jeu précédent et écrit le nouveau, une transaction |
 | `pronostics_du_joueur(profil, gp)` | pronostics rapprochés des cotes (`left join`) |
 | `pronostics_du_championnat(championnat, gp)` | tous les membres, voiture et total |
 | `attribuer_points(gp, jsonb)` | **la fonction la plus sensible du projet** |
-| `classement_du_championnat(championnat)` | classement trié et rangé |
+| `classement_du_championnat(championnat)` | classement trié et rangé, avatars compris |
 | `stats_du_profil(profil, saison)` | les quatre chiffres de la grille 2×2 |
 | `calendrier_du_championnat(championnat, profil, saison)` | une ligne par GP |
 | `classement_du_grand_prix(gp)` | classement de la course |
@@ -353,7 +364,7 @@ applicatif de plus**.
 
 ---
 
-## 6. Les quinze migrations
+## 6. Les seize migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -372,6 +383,7 @@ applicatif de plus**.
 | 13 | `20260820120000_calendrier_date_qualifications` | ajoute le champ au calendrier | 10, 11 |
 | 14 | `20260820150000_profil_is_admin` | `is_admin` | 1 |
 | 15 | `20260821143000_points_diviseur_10` | remise à zéro des points (diviseur 10) | 3, 5, 6 |
+| 16 | `20260821180000_photos_profil_championnat` | `avatar_url`, `photo_url`, 2 compartiments Storage | 1, 2, 12 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -386,9 +398,23 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **5** après **10** ou **12** | voiture + total au tableau des résultats | rejouer 10 puis 12 |
 | **8** ou **10** après **12** | la livrée d'écurie | rejouer 12 |
 | **10** après **13** | `date_qualifications` au calendrier | rejouer 13 |
+| **2**, **8**, **10** ou **12** après **16** | les photos aux cartes, classements et résultats | rejouer 16 |
 
 **Les migrations 11, 14 et 15 ne remplacent aucune fonction** : elles ne peuvent pas
 entrer en conflit d'ordre.
+
+> **La 16 est la seule qui SUPPRIME une fonction avant de la recréer.** `mes_championnats`
+> déclare un `returns table (…)`, et PostgreSQL refuse de remplacer une fonction dont le
+> type de retour change (`42P13`) — ajouter `photo_url` au tableau EST un changement de
+> type. D'où un `drop function if exists` suivi d'un `create`, et surtout **les `revoke`
+> et le `grant` reposés juste après** : `drop` emporte les droits avec la fonction, et une
+> fonction recréée est exécutable par `public` par défaut. Les oublier l'ouvrirait à
+> `anon`, donc à quiconque détient la clé publique du frontend.
+>
+> Elle remplace par ailleurs `classement_du_championnat` et `pronostics_du_championnat`,
+> comme la 12 avant elle. Rejouer la 2, la 8, la 10 ou la 12 par-dessus fait disparaître
+> les photos des cartes, des classements et du tableau des résultats — sans rien casser
+> d'autre, le frontend retombant sur les initiales.
 
 > **La 15 est la seule qui touche aux DONNÉES et non au schéma.** Elle vide
 > `public.cotes`, repasse à `NULL` les deux colonnes `points_gagnes` et rouvre les GP
@@ -468,3 +494,69 @@ Depuis la v0.9.0 ils ne quittent plus le serveur : **il faut ouvrir les logs Rai
 > **`PT423` prouve que le refus est atomique** : la fonction commence par effacer le jeu
 > précédent, et lève ensuite si la fermeture est passée — **la transaction annule le
 > `delete`**. Un test le vérifie explicitement.
+
+---
+
+## 9. Supabase Storage — deux compartiments, et où vit l'autorisation
+
+Migration 16. Les images ne sont **jamais** en base : `profils.avatar_url` et
+`championnats.photo_url` ne portent que des URL publiques (§1).
+
+| Compartiment | Chemin d'un objet | Qui écrit |
+|---|---|---|
+| `avatars` | `{profil_id}/avatar.{ext}` | le profil lui-même (`auth.uid()`) |
+| `championnats` | `{championnat_id}/photo.{ext}` | le **créateur** du championnat |
+
+Les deux sont **publics**, plafonnés à **2 Mo**, et n'acceptent que `image/jpeg`,
+`image/png` et `image/webp`.
+
+> **Le premier segment du chemin EST l'autorisation.** La politique compare
+> `(storage.foldername(name))[1]` à `auth.uid()` pour un avatar, et remonte à
+> `championnats.cree_par` pour une photo de championnat. Personne ne peut donc écrire dans
+> le dossier d'un autre, quel que soit le client utilisé — c'est la base qui refuse, pas le
+> code de l'écran. **Aucune récursion à craindre** ici : la sous-requête porte sur
+> `public.championnats`, pas sur `storage.objects` que la politique protège (§2).
+
+> **Trois politiques d'écriture par compartiment, et il en faut bien trois** : `insert`
+> pose la première photo, `update` écrase la suivante — le chemin est stable —, `delete`
+> sert au bouton « Supprimer la photo ». Sous RLS, ce qu'aucune politique n'autorise est
+> refusé : en oublier une fermerait silencieusement un des trois gestes.
+
+> **Compartiments publics, et c'est un arbitrage.** Une photo de profil s'affiche sur la
+> carte d'un autre joueur, dans un classement partagé, sur la piste. Un compartiment privé
+> obligerait à signer une URL par image et par affichage, donc un aller-retour réseau par
+> vignette d'un classement de douze. Même raisonnement que la lecture publique des GP et
+> des cotes (§2).
+
+> **Le plafond et la liste des types vivent dans le COMPARTIMENT, pas dans le client.**
+> `frontend/src/lib/stockage.js` fait la même vérification, mais pour dire non tout de
+> suite — 2 Mo montés sur un réseau mobile avant d'être refusés seraient 2 Mo perdus. Le
+> `heic` d'un iPhone n'est pas dans la liste et n'a pas à y être : Safari convertit en JPEG
+> à la sélection d'un fichier.
+
+> ### L'URL enregistrée en base est vérifiée par le backend, et il faut que ce soit là
+>
+> Le chemin d'écriture est celui de `docs/architecture.md` §3 : **le fichier va
+> directement à Supabase** (la RLS Storage décrit exactement le cas), **l'URL passe par
+> FastAPI** (c'est une écriture en base). `app/api/stockage.py` confronte alors l'URL reçue
+> à `SUPABASE_URL` : elle doit désigner **notre** projet et **le bon compartiment**.
+>
+> Sans cette vérification, une URL libre en base deviendrait un **pixel espion posé sur
+> l'écran des autres joueurs** — sa photo s'affiche au classement, sur la piste, au résumé
+> d'un Grand Prix, et chaque affichage révélerait l'IP et le `User-Agent` de ces joueurs au
+> serveur choisi par l'auteur de l'URL. L'app est ouverte au public : ce n'est pas une
+> hypothèse d'école.
+>
+> **Sans `SUPABASE_URL`, tout est refusé** (`503`) plutôt que tout accepté. Le service
+> démarre sans les clés pour garder `/health` joignable (`architecture.md` §5) ; dans cet
+> état, laisser passer serait l'inverse du sens du doute voulu ici.
+
+> **Le chemin d'un objet est stable, donc son URL publique aussi** — et c'est ce qui oblige
+> à un horodatage. Sans le `?v=…` que `lib/stockage.js` ajoute, remplacer sa photo ne
+> changerait **rien** : ni le navigateur, ni le CDN de Supabase, ni la colonne en base. Le
+> paramètre périme le cache et fait changer la colonne, deux effets pour un.
+
+> **Changer de format laisse un orphelin, et c'est traité.** Remplacer un PNG par un JPEG
+> écrit `photo.jpg` **à côté** de `photo.png` : la base ne pointe plus que sur le nouveau,
+> l'ancien resterait indéfiniment. `lib/stockage.js` efface les autres extensions **après**
+> le dépôt — effacer d'abord laisserait quelqu'un sans photo si l'envoi échouait ensuite.

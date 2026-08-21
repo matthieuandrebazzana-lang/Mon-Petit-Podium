@@ -94,7 +94,11 @@ export default function ProfilMembre() {
             chargement={chargement && !donnees}
             squelette={
               <div className="flex flex-col gap-3">
-                <div className="rounded-bloc bg-primaire shadow-bloc h-[104px]" />
+                {/* 116px : la pastille passe à 56px avec la photo, et le bloc
+                    la borde de 20px en haut comme en bas (`p-5`). Une silhouette
+                    plus courte ferait sauter la grille de stats à l'arrivée des
+                    données. */}
+                <div className="rounded-bloc bg-primaire shadow-bloc h-[116px]" />
                 <div className="grid grid-cols-2 gap-2.5">
                   {[0, 1, 2, 3].map((rang) => (
                     <div
@@ -108,11 +112,17 @@ export default function ProfilMembre() {
           >
             {profil && (
               <div className="flex flex-col gap-3">
+                {/* Sa photo, sans aucun moyen de la changer : `onPhoto` n'est
+                    pas transmis, la pastille reste un `<span>`. C'est le seul
+                    écart entre les deux profils, et il dit exactement ce que dit
+                    la RLS — la voiture et la photo d'un autre membre ne sont pas
+                    les nôtres. */}
                 <HeroProfil
                   pseudo={profil.pseudo}
                   voiture={profil}
                   numero={profil.numero}
                   action="Saison 2026"
+                  avatarUrl={profil.avatar_url}
                 />
 
                 <GrilleStats stats={donnees?.stats} />

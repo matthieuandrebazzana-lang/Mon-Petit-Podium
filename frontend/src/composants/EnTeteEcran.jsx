@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { IconeChevronGauche } from "./Icones.jsx";
+import PhotoChampionnat from "./PhotoChampionnat.jsx";
 
 /**
  * En-tête à grand titre rétractable — le geste de navigation d'iOS.
@@ -22,6 +23,10 @@ import { IconeChevronGauche } from "./Icones.jsx";
  * un `position: sticky` posé à l'intérieur se collerait à leur boîte plutôt
  * qu'à la fenêtre, et l'en-tête défilerait avec la page.
  *
+ * **`photo` n'existe qu'en mode teinté**, et c'est un choix de portée : seul
+ * l'écran d'un championnat a une photo à montrer. En mode ordinaire elle serait
+ * une image posée à côté d'un grand titre beige, sans rien à quoi se rattacher.
+ *
  * **`teinte` bascule l'en-tête en mode coloré** (l'écran d'un championnat).
  * La barre porte alors sa couleur en permanence et le grand titre devient un
  * aplat pleine largeur qui la prolonge : les deux se lisent comme un seul bloc,
@@ -41,6 +46,7 @@ export default function EnTeteEcran({
   retourEtat = null,
   action = null,
   teinte = null,
+  photo = null,
   children,
 }) {
   const naviguer = useNavigate();
@@ -123,16 +129,35 @@ export default function EnTeteEcran({
             aria-hidden="true"
             className="lueur-haute pointer-events-none absolute inset-0"
           />
-          <div className="relative">
-            <h1 className={`text-titre-lg line-clamp-2 ${teinte.ton.texte}`}>
-              {titre}
-            </h1>
-            {sousTitre && (
-              <p className={`mt-1 text-[13px] ${teinte.ton.texteDoux}`}>
-                {sousTitre}
-              </p>
-            )}
-            {children}
+          {/* La photo est en haut à droite, et le titre coule à sa gauche :
+              `items-start` les aligne par le haut, ce qui met le carré au niveau
+              de la première ligne du nom plutôt qu'au milieu d'un nom qui en
+              prend deux. Le `line-clamp-2` du titre gagne ici son utilité — un
+              nom de quarante caractères dispose de quatre-vingt-quatre pixels de
+              moins, et se coupe au lieu de pousser la photo hors du bloc. */}
+          <div className="relative flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <h1 className={`text-titre-lg line-clamp-2 ${teinte.ton.texte}`}>
+                {titre}
+              </h1>
+              {sousTitre && (
+                <p className={`mt-1 text-[13px] ${teinte.ton.texteDoux}`}>
+                  {sousTitre}
+                </p>
+              )}
+              {children}
+            </div>
+
+            {/* 72px et `rounded-widget` (16px), la valeur demandée. Le composant
+                s'efface tout seul quand il n'y a pas de photo : l'en-tête
+                retrouve alors exactement sa composition d'avant, le titre
+                occupant toute la largeur. */}
+            <PhotoChampionnat
+              url={photo}
+              nom={titre}
+              taille={72}
+              arrondi="rounded-widget"
+            />
           </div>
         </div>
       ) : (
