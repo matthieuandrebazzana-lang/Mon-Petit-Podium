@@ -248,10 +248,17 @@ quoi la répétition se voit en damier ; le contraste du bruit est **étiré dan
 répète quatorze fois la même forme : elle est écrite **une fois** dans un `<defs>` et
 reprise par `<use>`, ce qui la ramène de 91 Ko à 7 Ko.
 
-> **Deux opacités, et la seconde passe par une VARIABLE.** `motif-damier-doux` ramène le
-> motif à **7,5 %** sur les deux cartes d'action — les seules à le poser sur du blanc, où
+> **Trois opacités, et les deux dernières passent par la VARIABLE.**
+> `motif-damier-doux` ramène le motif à **7,5 %** sur les deux cartes d'action — les seules à le poser sur du blanc, où
 > 15 % ne se lit plus comme une texture mais comme un gris sale (#E7E7E7 contre #F3F3F3).
 > Les aplats colorés gardent les 15 %.
+>
+> Le **bandeau de la vue piste** est le troisième cas, à **11 %** — la valeur de sa
+> planche. Il ne passe par aucun utilitaire nouveau : `.piste-bandeau` pose
+> `--damier-opacite: 0.11`, que le calque hérite. Le damier reste celui du projet, **gris
+> `#616160`**, là où la planche l'écrivait en blanc : c'est le gris qui contraste le mieux
+> — sous lui l'encre blanche ne descend jamais sous **9,99:1** sur les six teintes de
+> championnat, contre 7,56:1 sous un damier blanc.
 >
 > L'opacité est écrite `opacity: var(--damier-opacite, 0.15)`, et l'utilitaire doux ne
 > pose **que la variable**. Un `opacity-[0.075]` de Tailwind écrirait la même propriété
@@ -295,6 +302,16 @@ Vingt-et-une transitions du skill Transitions.dev sont installées avec leurs je
 > leurs panneaux avec le sien. La réponse a été un sélecteur distinct qui **réemploie
 > `--acc-expand`, `--acc-collapse` et `--acc-ease` sans en ajouter un seul**. C'est la forme
 > que doit prendre toute extension : des règles nouvelles, des jetons existants.
+
+> **Étendre le vocabulaire, jamais le forker — le cas `.t-place` (version `0.49.0`).** Le
+> déplacement d'une voiture sur la piste, quand un classement rejoué change les scores,
+> **n'ajoute aucun jeton** : la durée est `--voiture-dur` (celle de l'entrée déjà
+> installée, même objet, même écran) et la courbe `--ease-in-out-fort`, que ce tableau
+> réserve aux **déplacements**. Elle porte sur `translate`, la propriété indépendante, et
+> non sur `transform` — `.t-voiture` anime déjà `transform` sur l'élément intérieur, et les
+> deux s'écraseraient sur un même élément. **La taille d'une voiture, elle, ne s'anime
+> pas** : elle change quand la mise en page se recalcule, ce qui n'est pas un changement
+> d'état, et `width` n'est de toute façon pas une propriété à animer.
 
 **Les valeurs imposées** : jamais `scale(0)` (une chose doit avoir une silhouette avant
 d'être remplie), jamais d'`ease-in` sur une interface, jamais `transition: all`,
@@ -363,6 +380,20 @@ bords) et **`coiffe-ecran`** (la couleur court sous la zone sûre, **jamais le t
 > **Une couleur qui s'arrêterait sous la Dynamic Island se lirait comme un bandeau posé de
 > travers.** L'aplat la coiffe donc, et seul le texte reste dans la zone sûre. Même règle
 > pour la vue piste, qui court **sous** les zones sûres.
+
+> ### Le bandeau de la vue piste : la hauteur est un plancher, pas une proportion
+> La planche donne le bandeau à 140,13 sur 1280,4, soit **10,94 %** de la hauteur d'écran.
+> Un nom centré dans ces 10,94 % tombe **sous la Dynamic Island** — 93px de bandeau sur un
+> iPhone 15 Pro, dont 59 pris par la zone sûre. La hauteur est donc
+> `max(10.9427%, safe-top + 92px)`, et les 92px sont mesurés : 38 pour la rangée du bouton
+> de retour, 54 pour celle du nom. **À 80px les deux rangées se touchaient** — les glyphes
+> de « Classement » et ceux d'un nom long se croisaient dans la bande 79-103, ce que seul
+> le rendu contre la feuille compilée a montré.
+>
+> Le **rayon des coins** suit la largeur (`min(10.6361vw, 62.7px)`) pour rester
+> **circulaire** : un rayon en pourcentage rendrait une ellipse, qui se lit comme une
+> faute. Le rembourrage horizontal du nom (24px) couvre la courbe du coin bas, qui ne mord
+> au plus que 19px.
 
 > **Les zones sûres se traitent séparément du rembourrage.** `pt-safe-top` et `pb-3`
 > écriraient la même propriété : la marge du home indicator **s'ajouterait** au

@@ -570,3 +570,46 @@ garantirait. Il **casserait toujours l'écran de détail**, atteint par lien dir
 connaît aucune liste et ne saurait pas quelle couleur peindre ; et deux membres du même
 championnat le verraient de deux couleurs différentes. Reconnaître un championnat à sa
 couleur d'un écran à l'autre reste ce qui a le plus de valeur.
+
+---
+
+## 19. La vue piste ne garantit plus le non-chevauchement, elle le mesure
+
+**Version `0.49.0`.** L'ancien placement partait des **scores** : il groupait les ex æquo,
+posait chaque groupe proportionnellement à ses points, puis **relâchait les écarts en deux
+passes** — une descendante depuis le leader, une montante pour rattraper ce qui débordait
+en bas — et réduisait toutes les voitures du même facteur jusqu'à ce que la garantie tienne.
+
+**Le prix était que la hauteur d'une voiture ne disait plus tout à fait ses points.** Dès
+que deux scores voisins se rencontraient, la relaxation les écartait : la position affichée
+devenait un compromis entre le score et la place disponible. Et la réduction était
+**globale** — un seul groupe serré rapetissait toutes les voitures de l'écran, y compris
+celles qui avaient la place.
+
+Le nouveau système sépare les deux questions.
+
+| Question | Qui répond | Ce qui en dépend |
+|---|---|---|
+| à quelle hauteur ? | **le score, seul** | rien d'autre |
+| de quelle taille, et à quelle abscisse ? | **la géométrie** | la hauteur, déjà fixée |
+
+La passe 1 tend l'échelle sur `max` et `min` — la zone de jeu est donc **toujours
+intégralement occupée**, et une hauteur se relit en points sans correction. La passe 2
+regarde ce qui se chevauche **à l'écran**, sans jamais consulter un score, et ne réduit que
+les voitures concernées.
+
+**Deux conséquences assumées.**
+
+La première : un groupe peut réunir des **scores différents**, et ses voitures gardent
+alors des hauteurs différentes. Le résultat est un escalier en travers de la piste plutôt
+qu'une rangée alignée — c'est exact, et c'est ce que la règle « une hauteur, un score »
+impose.
+
+La seconde : la légende de droite a disparu. Elle chiffrait **un groupe**, ce qui n'a plus
+de sens dès qu'un groupe est géométrique, et elle occupait les 104px de marge que les
+voitures utilisent désormais d'un kerb à l'autre. **Le score est passé sous chaque
+voiture** — ce qui en dit plus qu'avant, un nombre par personne au lieu d'un par égalité.
+Il s'efface quand la voiture a touché son plancher de taille : les cellules sont alors plus
+étroites qu'un nombre à trois chiffres, et vingt scores côte à côte ne feraient pas vingt
+nombres mais une bavure. La liste `sr-only` de l'écran, elle, les donne tous.
+

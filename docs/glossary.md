@@ -91,7 +91,10 @@ il faut aussi que les qualifications soient passées (`metier.md` §3).
 passage. **Ne garantit pas** que tous les pronostics ont été notés.
 
 **Piste** (*vue piste*) — l'écran signature : les voitures des membres réparties
-verticalement selon leurs points, sur une route qui occupe tout l'écran.
+verticalement selon leurs points, sur une route qui occupe tout l'écran. Depuis la version
+`0.49.0` la route est **beige** et vient de `assets/vue_piste.svg`, un **bandeau** aux
+couleurs du championnat la coiffe, et la hauteur d'une voiture dit ses points **sans
+correction** — c'est la taille qui cède quand la place manque, jamais la position.
 
 **Bloc** — un widget de l'interface : surface autonome très arrondie, sur fond beige.
 C'est aussi le nom du composant React (`Bloc`) qui porte l'animation d'entrée.

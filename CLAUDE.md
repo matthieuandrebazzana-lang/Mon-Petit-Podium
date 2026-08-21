@@ -196,60 +196,69 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.48.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+**Version `0.49.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
 les onze étapes de développement sont livrées : fondations, authentification, championnats,
 scraper Unibet, pronostics, résultats OpenF1, classements, profils, finitions, navigation,
 scraping automatique.
 
-**Cette version retouche l'accueil, la liste des championnats et l'écran championnat. Rien
-au backend — sa version reste `0.45.0`.**
+**Cette version refond la vue piste de fond en comble. Rien au backend — sa version reste
+`0.45.0`.**
 
-**Les cartes de championnat affichent « 1/3 » et non plus « 1 ».** Un rang seul ne dit pas
-s'il est bon : premier sur trois et premier sur douze ne valent pas la même chose.
-L'effectif était déjà sur la carte, à douze pixels et à l'autre bout de la rangée — trop
-loin du chiffre pour être lu avec lui. **Les deux nombres ne sont pas de même corps** (48px
-pour la position, 24px pour le total) : la hiérarchie passe par la taille, pas par
-l'opacité. **La fraction est `aria-hidden`** et doublée d'une phrase en `sr-only` — « 1/3 »
-s'annoncerait « un barre oblique trois ». Aucun appel réseau nouveau : le total est
-`nombre_membres`, déjà servi. La carte vit dans `Accueil.jsx` et sert **les deux écrans**.
+**Le fond vient de `assets/vue_piste.svg`, extraite dans `FondPiste.jsx`**, et il est
+**beige** `#F4EFEA` — à un point du `--color-fond` de l'app, là où cet écran peignait un
+asphalte `#1A1A1A`. **Toute l'encre de l'écran s'inverse donc** : le blanc qui tenait
+17,4:1 sur le noir ne vaut plus rien, `--color-texte` le remplace à 15,23:1, le squelette
+retrouve le gris `squelette` du reste de l'app et l'état vide le marron `secondaire`
+(9,24:1). Les règles `.piste-fond`, `.piste-kerb` et `.piste-axe` sont parties avec
+l'asphalte : les kerbs sont désormais **des chemins**, pas des dégradés répétés.
+`preserveAspectRatio="none"` rend les deux échelles indépendantes, donc les kerbs gardent
+leur largeur proportionnelle quel que soit le rapport de forme — sur les iPhone visés
+l'écart est nul à deux dixièmes près.
 
-**Six teintes Pantone sombres remplacent les aplats des cartes de championnat**, dans une
-**liste séparée** de celle des marchés (`docs/decisions.md` §18) — la couleur d'un marché
-est un repère fixe, celle d'un championnat distingue des championnats. Le gain est
-**mesuré, pas esthétique** : le blanc y tient de **10,35:1** à **18,12:1**, quand le
-terracotta ne valait que 4,41:1 sous le damier et que l'encre secondaire y tombait à
-2,79:1. Pire cas des six, encre secondaire comprise : **4,97:1**. **L'attribution n'a pas
-bougé** — toujours l'empreinte de l'identifiant, jamais le rang dans une liste, faute de
-quoi l'écran de détail ne saurait pas quelle couleur peindre.
+**Le bandeau porte le nom du championnat, dans SA couleur** — `couleurChampionnat`, la même
+qu'à l'accueil et sur l'écran championnat. Le damier du projet est par-dessus à **11 %**,
+posé par `--damier-opacite` et non par un second `opacity:`. Il reste **gris** là où la
+planche l'écrivait en blanc : sous le gris l'encre blanche ne descend jamais sous
+**9,99:1**, contre 7,56:1 sous un damier blanc. **Les deux `<rect>` du bandeau ont été
+retirés de la planche** — un nom centré dans les 10,94 % qu'elle lui donne tomberait sous
+la Dynamic Island. Le nom vivait en pied d'écran ; l'y laisser l'aurait écrit deux fois.
 
-**Le damier passe à 7,5 % sur les deux cartes d'action**, et **l'opacité est une variable**
-(`--damier-opacite`), pas un second `opacity:`. Un `opacity-[0.075]` de Tailwind écrirait
-la même propriété dans la même couche : c'est l'**ordre de la feuille compilée** qui les
-départagerait, pas l'ordre des classes du JSX. Les aplats colorés gardent les 15 % : ces
-deux cartes sont les seules à poser le motif sur du blanc, où 15 % ne se lit plus comme une
-texture mais comme un gris sale.
+**Le placement des voitures est entièrement neuf, et il sépare deux questions que l'ancien
+confondait.** La hauteur ne dépend plus que du **score** : l'échelle se tend sur le
+meilleur et le moins bon, la zone de jeu est toujours intégralement occupée, et **plus
+aucune relaxation ne déplace personne**. Le chevauchement se mesure ensuite **à l'écran**,
+sans jamais consulter un score, et se propage en cascade ; seules les voitures d'un groupe
+encombré rétrécissent, là où l'ancien réduisait tout l'écran d'un coup. Un groupe peut donc
+réunir des scores différents et dessiner un escalier en travers de la piste — c'est exact,
+et c'est le prix de la règle « une hauteur, un score » (`docs/decisions.md` §19).
 
-**L'icône du bouton « Vue piste » est retirée** — `IconeVoiture` dessine une cabine, une
-caisse et deux roues, c'est-à-dire un **camion**, qui ne dit rien d'une vue piste. Le
-libellé nomme déjà sa destination. **Le damier y était déjà**, à ses 15 % (10,89:1 pour le
-blanc sur le bordeaux ainsi assombri) : seul le décentrement du libellé a disparu.
-`IconeVoiture` reste dans `Icones.jsx`, simplement plus importée.
+**La légende de droite a disparu, le score est passé sous chaque voiture.** Elle chiffrait
+un groupe, ce qui n'a plus de sens quand un groupe est géométrique, et elle occupait les
+104px que les voitures utilisent maintenant d'un kerb à l'autre. Le score s'efface quand la
+voiture touche son plancher de taille : vingt nombres dans dix-sept pixels chacun ne font
+pas vingt nombres. Une liste `sr-only` porte le classement complet.
 
-**Aucune animation n'a été ajoutée.** Une carte d'accueil se voit des dizaines de fois par
-jour : le portier des skills de mouvement y ferme la porte, et le changement de format ne
-signale aucun changement d'état. L'entrée échelonnée, l'appui et la jauge existants n'ont
-pas bougé.
+**Un seul mouvement a été ajouté, sans un jeton nouveau.** `.t-place` transitionne
+`translate` — la propriété indépendante, pas `transform`, que `.t-voiture` anime déjà pour
+son entrée — avec `--voiture-dur` et `--ease-in-out-fort`. Elle sert un cas précis : le
+cache peint la grille d'avant, le réseau rend celle d'après, et sans elle les voitures se
+téléportent. **La taille, elle, ne s'anime pas** : elle change quand la mise en page se
+recalcule, ce qui n'est pas un changement d'état. L'entrée échelonnée existante n'a pas
+bougé.
 
-*La version `0.47.0` avait corrigé deux dessins : les vignettes Racing Bulls et Red Bull du
-sélecteur de skin, reprises de `assets/matt.svg`, et Mercedes et Alpine barrées de gris —
-un défaut d'**ordre de peinture**, pas de collision de classes (`docs/bugs-connus.md` §17).
-`composants.md` compte depuis QUATRE règles d'extraction. La `0.46.0` avait réordonné la
-personnalisation du profil et fait quitter le DOM à Coque et Ailerons sous un skin
-d'écurie (`docs/decisions.md` §17). La `0.45.0` avait fait passer le multiplicateur des
-points de **100 à 10** — une cote de 2,80 rapporte **28 points** — et livré la **migration
-15** (`20260821143000_points_diviseur_10`), qui efface sans convertir : `points_gagnes`
-repasse à `NULL`, `public.cotes` est vidée, les GP `cotes_figees` sont rouverts. **Un
-scraping reste obligatoire.***
+**Deux défauts n'ont été trouvés qu'au rendu contre la feuille compilée**, et ni l'un ni
+l'autre ne se voyait dans le JSX : les glyphes de « Classement » croisaient ceux d'un nom
+de championnat long dans la bande 79-103, et la première voiture d'un groupe de douze
+passait à quatre pixels du kerb. D'où les 92px du bandeau et la gouttière portée à 12.
+
+*La version `0.48.0` avait retouché l'accueil, la liste des championnats et l'écran
+championnat : les cartes affichent « 1/3 » et non plus « 1 », six teintes Pantone sombres
+remplacent les aplats (`docs/decisions.md` §18), le damier passe à 7,5 % sur les deux
+cartes d'action et l'icône du bouton « Vue piste » est retirée. La `0.47.0` avait corrigé
+les vignettes Racing Bulls et Red Bull et l'ordre de peinture de Mercedes et Alpine
+(`docs/bugs-connus.md` §17). La `0.45.0` avait fait passer le multiplicateur des points de
+**100 à 10** et livré la **migration 15**, qui efface sans convertir. **Un scraping reste
+obligatoire.***
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :

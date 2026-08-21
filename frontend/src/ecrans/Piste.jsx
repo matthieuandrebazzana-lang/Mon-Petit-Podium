@@ -1,379 +1,310 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import FondPiste from "../composants/FondPiste.jsx";
 import Voiture from "../composants/Voiture.jsx";
 import { IconeChevronGauche } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerChampionnat } from "../lib/championnats.js";
 import { chargerClassement, cleClassement } from "../lib/classement.js";
+import { couleurChampionnat } from "../lib/couleurs.js";
 import { messageDeChargement } from "../lib/erreurs.js";
 import { livreeDuMembre } from "../lib/palette.js";
 import { useDonnees } from "../lib/useDonnees.js";
 
 /**
- * Maquette 07b — la vue piste, écran signature de l'app.
+ * La vue piste — l'écran signature de l'app, refondu en version `0.49.0`.
  *
- * Une route occupe tout l'écran : asphalte sombre, bordures rouge et blanc sur
- * les deux côtés, ligne pointillée centrale. Aucun fond beige n'est visible.
- * Les voitures sont réparties verticalement selon les points — le leader tout
- * en haut, le dernier en bas — et **le score seul** s'affiche à droite de
- * chaque groupe.
+ * Trois choses ont changé, et la première commande les deux autres.
  *
- * **La ligne d'arrivée en damier a été retirée**, ainsi que son libellé. Elle
- * ancrait le haut de la piste, et sa disparition laisse ce rôle aux seuls
- * éléments qui restent : la position du leader et le nom du championnat qui
- * ferme l'écran en bas. La section 6 du CLAUDE.md a été mise à jour en
- * conséquence — la décrire encore aurait laissé le cahier des charges annoncer
- * un élément qui n'existe plus.
+ * **Le fond est la planche `assets/vue_piste.svg`**, extraite dans
+ * `FondPiste.jsx`. Elle pose un sol **beige** `#F4EFEA`, à un point du
+ * `--color-fond` de l'app, là où cet écran peignait jusqu'ici un asphalte
+ * `#1A1A1A`. Toute l'encre s'inverse donc : le blanc qui tenait 17,4:1 sur le
+ * noir ne vaut plus rien sur le beige, et c'est `--color-texte` qui prend le
+ * relais, à 15,23:1. Le squelette, les états vides et la légende des scores
+ * suivent tous ce basculement.
  *
- * **Écart assumé par rapport à la maquette 07b**, et il vient de la demande
- * elle-même : la maquette garde l'en-tête du championnat et la bascule
- * Classement / Piste au-dessus de la route, ainsi que la barre de navigation
- * basse. Ici la route occupe l'écran entier, et un unique bouton de retour en
- * haut à gauche ramène au classement. C'est l'écran signature : lui laisser
- * 150px de chrome au-dessus reviendrait à en faire un widget de plus.
+ * **Le bandeau porte le nom du championnat**, dans sa couleur — la même que sa
+ * carte d'accueil et que l'en-tête de son écran, puisée dans
+ * `couleurChampionnat`. Le nom du championnat vivait auparavant en pied
+ * d'écran ; l'y laisser l'aurait écrit deux fois.
  *
- * Le bouton nomme sa destination (« Classement ») plutôt que d'afficher un
- * « Retour » générique : c'est le seul moyen de sortir d'ici, il doit dire où
- * il mène.
+ * **Le placement des voitures est entièrement neuf** — voir
+ * `dispositionDesVoitures`.
+ *
+ * Ce qui n'a pas bougé : la piste occupe l'écran entier, sans en-tête de
+ * championnat ni barre de navigation, et un unique bouton en haut à gauche
+ * ramène au classement. C'est l'écran signature ; lui laisser 150px de chrome
+ * au-dessus reviendrait à en faire un widget de plus. Le bouton **nomme sa
+ * destination** plutôt que d'afficher un « Retour » générique : c'est le seul
+ * moyen de sortir d'ici, il doit dire où il mène.
  */
 
-// Largeur de la voiture, et hauteur qui s'en déduit du rapport du viewBox
-// (141.12 × 288.09). Ce sont les dimensions **à taille pleine** : la piste les
-// réduit toutes les deux, du même facteur, quand elle n'a pas la place de les
-// porter sans chevauchement (voir `dispositionDesVoitures`).
-//
-// **Les deux valeurs ont changé avec le nouveau dessin, sans que la piste
-// bouge.** L'ancien `assets/voiture.svg` portait près de deux fois la largeur
-// du dessin en marge vide : sa boîte de 56 × 68 ne montrait qu'une voiture de
-// 29 × 59. La boîte est désormais celle du dessin, d'où 29 × 59.
-const LARGEUR_VOITURE = 29;
+// La voiture à sa taille pleine, celle d'un groupe d'une seule. La hauteur se
+// déduit du rapport du viewBox du dessin (141,12 × 288,09) — les onze livrées
+// partagent cette boîte, elles se substituent sans qu'une valeur ne bouge.
+const LARGEUR_VOITURE = 52;
 const HAUTEUR_VOITURE = Math.round(LARGEUR_VOITURE * (288.09 / 141.12));
 
-// Marge au-dessus de la première voiture et au-dessous de la dernière.
-const MARGE_HAUTE = 16;
-const MARGE_BASSE = 12;
+// Le plancher de réduction. En deçà, la voiture cesse de se lire comme une
+// voiture. Il est **bas exprès** : à 18px de large, seize voitures tiennent
+// côte à côte sur une piste de 354px avant que le plancher ne morde.
+const LARGEUR_MINIMALE = 18;
 
-// Gouttières entre deux voitures. Elles **s'ajoutent** à la boîte du dessin et
-// ne l'entament jamais : le pas est donc toujours strictement supérieur à la
-// dimension de la voiture, et deux voitures ne peuvent pas se toucher.
+// Gouttière entre deux voitures d'un même groupe. Elle **s'ajoute** à la boîte
+// du dessin et ne l'entame jamais.
 //
-// C'est ce qui change avec cette version. L'écart vertical valait
-// `0,9 × HAUTEUR_VOITURE`, soit six pixels **de moins** que la voiture
-// elle-même : deux boîtes consécutives se recouvraient déjà par construction.
-const GOUTTIERE_VERTICALE = 6;
-const GOUTTIERE_HORIZONTALE = 10;
-const PAS_VERTICAL = HAUTEUR_VOITURE + GOUTTIERE_VERTICALE;
-const PAS_HORIZONTAL = LARGEUR_VOITURE + GOUTTIERE_HORIZONTALE;
+// Elle sert deux fois : les voitures étant centrées dans des cellules de
+// largeur égale, **la moitié de la gouttière tient lieu de marge aux deux
+// voitures extérieures**. À 8, la première d'un groupe de douze passait à
+// quatre pixels du kerb et paraissait le mordre ; à 12, elle en garde six, ce
+// qui se lit comme une marge.
+const GOUTTIERE_HORIZONTALE = 12;
 
-// Place réservée à la légende, **de chaque côté** de la piste. Elle est prise
-// symétriquement pour que la rangée reste centrée sur la route : 28px de
-// décalage (`right-7`) plus la largeur maximale du texte (76px). Réservée du
-// seul côté droit, elle donnerait plus de place aux voitures mais décalerait
-// toute la grille vers la gauche, ce qui se lirait comme un défaut de calage.
-const ZONE_LEGENDE = 104;
+// Marges au-dessus de la première voiture et au-dessous de la dernière. La zone
+// de jeu s'étend de l'une à l'autre : le meilleur score se pose tout en haut,
+// le dernier tout en bas, et l'échelle occupe donc toujours l'écran entier.
+const MARGE_HAUTE = 20;
+const MARGE_BASSE = 16;
 
-// Hauteur des deux formes de légende, mesurée sur le rendu : le score seul
-// (15px), puis le score et son unité.
-//
-// **La légende ne rapetisse pas avec la voiture**, et c'est voulu : un score de
-// neuf pixels de haut ne se lit plus. C'est son contenu qui se réduit quand la
-// place manque — l'unité tombe en dernier. Sans ce palier, deux légendes
-// voisines se recouvraient dès que les voitures se resserraient, ce que
-// l'aperçu rendu avec la feuille compilée montrait sans équivoque.
-//
-// Il y avait un troisième palier, le plus haut, qui portait le pseudo ou le
-// nombre d'ex æquo. **La légende ne dit plus que le score**, et ce palier n'a
-// donc plus d'objet : la légende est deux fois plus courte, et deux groupes
-// proches se recouvrent d'autant moins.
-const LEGENDE_REDUITE = 33;
-
-// En deçà, la voiture n'est plus qu'une tache. On ne descend jamais jusqu'à
-// zéro, qui rendrait un SVG de taille nulle.
-const ECHELLE_MINIMALE = 0.08;
+// La place que prend le score sous une voiture. Elle entre dans l'empreinte
+// verticale d'une voiture — voir la note sur le seuil dans
+// `regrouperParChevauchement`.
+const HAUTEUR_LEGENDE = 16;
 
 // Décalage d'entrée entre deux voitures — doit rester égal à --voiture-stagger.
 const RETARD_ENTREE = 100;
 
+/** Les points d'une ligne de classement. `total_points` vaut `null` pour qui
+ *  n'a rien marqué (convention de l'étape 6) : le `null` est ramené à 0, sans
+ *  quoi deux membres sans le moindre pronostic noté ne se compareraient jamais,
+ *  `null === null` étant vrai mais `null - null` valant 0 par accident. */
+function pointsDe(ligne) {
+  return ligne.total_points ?? 0;
+}
+
 /**
- * Les membres regroupés par score, dans l'ordre du classement.
+ * **Passe 1 — l'échelle verticale.**
  *
- * Le regroupement se fait sur les **voisins immédiats** et non sur une table de
- * scores : `classement_du_championnat` trie déjà par points décroissants, donc
- * deux membres à égalité sont toujours consécutifs, et grouper les voisins
- * garantit que l'ordre affiché reste exactement celui du classement — départage
- * de la règle 4.6 compris.
+ * Le meilleur score se pose en haut de la zone de jeu, le moins bon en bas, et
+ * chaque score intermédiaire se place proportionnellement entre les deux.
+ * L'échelle est donc **tendue sur les scores réels**, jamais sur une valeur
+ * fixe : la zone de jeu est intégralement utilisée quelle que soit la saison,
+ * qu'elle sépare 0 et 28 points ou 1 240 et 1 260.
  *
- * `total_points` peut valoir `null` pour qui n'a rien marqué (convention de
- * l'étape 6) : il est ramené à 0, sans quoi deux membres sans le moindre
- * pronostic noté ne seraient jamais regroupés, `null !== null` étant faux.
- * L'index d'origine voyage avec le membre — c'est lui qui donne le retard
- * d'entrée, et il doit rester celui du classement, pas celui du groupe.
+ * **Tout le monde à égalité se pose à mi-hauteur.** C'est le cas d'avant le
+ * premier Grand Prix, quand chacun est encore à zéro : il n'y a pas d'échelle à
+ * tendre, et coller la grille en haut ou en bas dirait quelque chose de faux.
+ *
+ * Les hauteurs sortent d'ici **exactes**, sans aucune correction d'écart : rien
+ * n'est repoussé, rien n'est relâché. Deux scores identiques rendent donc
+ * exactement la même valeur — c'est ce qui garantit que deux ex æquo forment
+ * toujours un groupe à la passe 2.
+ *
+ * Les bornes sont calculées à la **taille pleine** de la voiture, la seule
+ * connue à ce stade : la taille se déduit des groupes, qui se déduisent des
+ * hauteurs. La légende compte dans la borne basse, sinon le score du dernier
+ * sortirait sous la piste.
  */
-export function grouperParScore(lignes) {
+export function hauteursParScore(lignes, hauteur) {
+  const haut = MARGE_HAUTE + HAUTEUR_VOITURE / 2;
+  const bas = Math.max(
+    haut,
+    hauteur - MARGE_BASSE - HAUTEUR_LEGENDE - HAUTEUR_VOITURE / 2,
+  );
+
+  const points = lignes.map(pointsDe);
+  const maximum = Math.max(...points);
+  const minimum = Math.min(...points);
+
+  if (maximum === minimum) return points.map(() => (haut + bas) / 2);
+
+  return points.map(
+    (valeur) => haut + ((maximum - valeur) / (maximum - minimum)) * (bas - haut),
+  );
+}
+
+/**
+ * **Passe 2a — le regroupement, purement géométrique.**
+ *
+ * Deux voitures se chevauchent quand l'écart de leurs hauteurs est plus petit
+ * que l'empreinte d'une voiture. Le regroupement se propage en cascade : si A
+ * chevauche B et B chevauche C, les trois n'en font qu'un, **même si A et C ne
+ * se touchent pas**. C'est pour cela que la comparaison porte sur la voiture
+ * précédente et non sur la première du groupe.
+ *
+ * **Rien ici ne regarde les scores.** Deux scores voisins mais distincts sont
+ * regroupés si et seulement si leurs voitures se rencontrent à l'écran, et deux
+ * ex æquo le sont toujours, puisque la passe 1 leur rend la même hauteur au
+ * flottant près.
+ *
+ * > ### Écart assumé par rapport à la demande : le seuil vaut la voiture **et
+ * > sa légende**
+ * >
+ * > La demande écrit « inférieure à la hauteur d'une voiture ». Le seuil retenu
+ * > est `HAUTEUR_VOITURE + HAUTEUR_LEGENDE`, parce que chaque voiture porte son
+ * > score sous elle : son empreinte à l'écran est celle du dessin **plus** celle
+ * > du chiffre. Au seuil littéral, deux groupes tout juste séparés se touchent
+ * > par construction — la légende du groupe du dessus se poserait sur le museau
+ * > de la voiture du dessous. Le seuil décrit bien « la hauteur d'une voiture »,
+ * > au sens de ce qu'elle occupe.
+ *
+ * Les lignes arrivent triées par points décroissants
+ * (`classement_du_championnat`), donc par hauteur croissante : le balayage se
+ * fait dans l'ordre du classement, une seule fois.
+ */
+export function regrouperParChevauchement(hauteurs) {
+  const seuil = HAUTEUR_VOITURE + HAUTEUR_LEGENDE;
   const groupes = [];
 
-  lignes.forEach((ligne, index) => {
-    const points = ligne.total_points ?? 0;
+  hauteurs.forEach((centre, index) => {
     const dernier = groupes[groupes.length - 1];
+    const precedent = dernier?.membres[dernier.membres.length - 1];
 
-    if (dernier && dernier.points === points) dernier.membres.push({ ligne, index });
-    else groupes.push({ points, membres: [{ ligne, index }] });
+    if (precedent !== undefined && centre - hauteurs[precedent] < seuil) {
+      dernier.membres.push(index);
+    } else {
+      groupes.push({ membres: [index] });
+    }
   });
 
   return groupes;
 }
 
 /**
- * Où se pose chaque voiture, et où se pose la légende de chaque score.
+ * **Passe 2b — la taille et la place de chaque voiture, par groupe.**
  *
- * **Un score, une hauteur.** C'est la règle qui gouverne tout le reste : la
- * position verticale dit les points, donc deux membres à égalité doivent se
- * poser à la même hauteur — et se répartir **latéralement**, côte à côte,
- * centrés sur la route. Jusqu'ici la hauteur se calculait par membre : deux
- * scores identiques donnaient deux fois la même valeur, et les voitures se
- * superposaient au pixel près, l'une masquant l'autre entièrement.
+ * Un groupe d'une seule voiture la garde à sa taille pleine. Un groupe de N la
+ * réduit jusqu'à ce que N voitures tiennent **entre les deux kerbs**, gouttière
+ * comprise, et les répartit sur des cellules de largeur égale — ce qui les
+ * centre sur la piste sans qu'aucun calcul ne le demande, une cellule unique
+ * ayant son milieu au milieu de la piste.
  *
- * Un groupe trop nombreux pour tenir sur une seule rangée en occupe plusieurs,
- * empilées : c'est une grille de départ, et c'est exactement l'image qu'il faut
- * — le cas se produit surtout avant le premier Grand Prix, quand tout le monde
- * est encore à zéro.
+ * La réduction porte sur **les deux dimensions du même facteur** : une voiture
+ * étirée cesserait d'être une voiture.
  *
- * **Aucune voiture n'en chevauche une autre, quelle que soit la configuration
- * de scores**, et c'est obtenu en deux temps :
+ * **Le plancher peut faire déborder un groupe, et c'est le moindre mal.**
+ * Au-delà de seize ex æquo sur une piste de téléphone, les cellules deviennent
+ * plus étroites que `LARGEUR_MINIMALE` et les voitures se recouvrent d'un ou
+ * deux pixels. L'alternative — descendre sans plancher — rendrait des voitures
+ * de trois pixels, c'est-à-dire des taches. Un léger recouvrement se lit encore
+ * comme une grille de départ ; une tache ne se lit pas.
  *
- * 1. Les pas horizontal et vertical valent la dimension du dessin **plus** une
- *    gouttière. Deux boîtes voisines ne peuvent donc pas se rencontrer.
- * 2. Quand la piste n'a pas la hauteur de porter toutes les rangées à ce
- *    pas-là, ce sont **les voitures qui rapetissent**, du même facteur en
- *    largeur et en hauteur, jamais l'écart qui se referme. C'est le seul moyen
- *    de tenir la garantie sur un championnat où chacun a son propre score
- *    (règle 4.5 : aucune limite de membres) ; le prix en est une voiture plus
- *    petite, ce qui se voit, là où un chevauchement rendait la vue muette.
- *
- * Le placement reste **proportionnel aux points** : le leader se pose tout en
- * haut, un groupe à la moitié de ses points à mi-piste. Les deux passes de
- * relaxation qui suivent imposent l'écart minimal, la descendante depuis le
- * leader, la montante en rattrapant ce qui a débordé en bas.
+ * La hauteur du groupe reste celle de la passe 1 : **réduire une voiture ne la
+ * déplace pas**. Sa hauteur dit ses points, et elle seule.
  */
 export function dispositionDesVoitures(lignes, hauteur, largeur) {
-  const vide = {
-    echelle: 1,
-    largeurVoiture: LARGEUR_VOITURE,
-    hauteurVoiture: HAUTEUR_VOITURE,
-    voitures: [],
-    legendes: [],
-  };
-  if (lignes.length === 0 || hauteur <= 0) return vide;
+  if (lignes.length === 0 || hauteur <= 0 || largeur <= 0) return [];
 
-  const groupes = grouperParScore(lignes);
+  const hauteurs = hauteursParScore(lignes, hauteur);
+  const placements = [];
 
-  // Combien de voitures tiennent côte à côte, mesuré à taille pleine : le
-  // nombre de rangées ne doit pas dépendre de l'échelle, qui en dépend
-  // elle-même. Une largeur non encore mesurée laisse une voiture par rangée,
-  // c'est-à-dire le comportement d'avant, jamais une division par zéro.
-  const utile = Math.max(0, (largeur || 0) - 2 * ZONE_LEGENDE);
-  const parRangee = Math.max(1, Math.floor(utile / PAS_HORIZONTAL));
+  regrouperParChevauchement(hauteurs).forEach(({ membres }) => {
+    const cellule = largeur / membres.length;
+    const largeurVoiture = Math.max(
+      LARGEUR_MINIMALE,
+      Math.min(LARGEUR_VOITURE, cellule - GOUTTIERE_HORIZONTALE),
+    );
+    const echelle = largeurVoiture / LARGEUR_VOITURE;
 
-  const rangees = [];
-  groupes.forEach((groupe, indexGroupe) => {
-    for (let debut = 0; debut < groupe.membres.length; debut += parRangee) {
-      rangees.push({
-        indexGroupe,
-        membres: groupe.membres.slice(debut, debut + parRangee),
-      });
-    }
-  });
+    // **Le score s'efface quand la voiture a touché son plancher**, et
+    // seulement là. C'est le signe que les cellules sont devenues plus étroites
+    // que la voiture elle-même, donc plus étroites qu'un nombre à trois
+    // chiffres : vingt scores écrits côte à côte dans dix-sept pixels chacun ne
+    // font pas vingt nombres, ils font une bavure. Le classement les donne, et
+    // la liste `sr-only` de cet écran aussi.
+    const scoreLisible = largeurVoiture > LARGEUR_MINIMALE;
 
-  const disponible = hauteur - MARGE_HAUTE - MARGE_BASSE;
-  const requis = (rangees.length - 1) * PAS_VERTICAL + HAUTEUR_VOITURE;
-  const echelle = Math.min(1, Math.max(ECHELLE_MINIMALE, disponible / requis));
-
-  const hauteurVoiture = HAUTEUR_VOITURE * echelle;
-  const largeurVoiture = LARGEUR_VOITURE * echelle;
-  const pasHorizontal = PAS_HORIZONTAL * echelle;
-
-  const haut = MARGE_HAUTE + hauteurVoiture / 2;
-  const bas = Math.max(haut, hauteur - MARGE_BASSE - hauteurVoiture / 2);
-  const course = bas - haut;
-
-  // L'écart tient dans la course par construction, l'échelle ayant été choisie
-  // pour cela. Le plafond ne sert que dans le cas dégénéré où elle a buté sur
-  // `ECHELLE_MINIMALE` : tout le monde reste alors à l'écran, ce qui vaut mieux
-  // qu'une voiture invisible sortie de la piste.
-  const ecart =
-    rangees.length > 1
-      ? Math.min(PAS_VERTICAL * echelle, course / (rangees.length - 1))
-      : 0;
-
-  const maximum = Math.max(...groupes.map((groupe) => groupe.points), 0);
-
-  const centres = rangees.map(({ indexGroupe }) => {
-    const fraction = maximum > 0 ? groupes[indexGroupe].points / maximum : 0;
-    return bas - fraction * course;
-  });
-
-  for (let i = 1; i < centres.length; i += 1) {
-    centres[i] = Math.max(centres[i], centres[i - 1] + ecart);
-  }
-  centres[centres.length - 1] = Math.min(centres[centres.length - 1], bas);
-  for (let i = centres.length - 2; i >= 0; i -= 1) {
-    centres[i] = Math.min(centres[i], centres[i + 1] - ecart);
-  }
-
-  // Les voitures d'une rangée sont réparties autour de son axe : le décalage du
-  // j-ième d'une rangée de k vaut `(j - (k-1)/2)` pas. Une rangée seule reste
-  // donc exactement au centre de la route, comme avant cette version.
-  const voitures = [];
-  rangees.forEach((rangee, indexRangee) => {
-    const taille = rangee.membres.length;
-    rangee.membres.forEach(({ ligne, index }, place) => {
-      voitures.push({
-        ligne,
+    membres.forEach((index, place) => {
+      placements.push({
+        ligne: lignes[index],
         index,
-        centre: centres[indexRangee],
-        decalage: (place - (taille - 1) / 2) * pasHorizontal,
+        centre: hauteurs[index],
+        // Le milieu de la cellule, rapporté au milieu de la piste.
+        decalage: (place + 0.5) * cellule - largeur / 2,
+        largeurVoiture,
+        hauteurVoiture: HAUTEUR_VOITURE * echelle,
+        // Le score ne rétrécit pas au même rythme que la voiture : sous 11px il
+        // cesserait d'être lisible, et un chiffre illisible ne vaut pas mieux
+        // qu'un chiffre absent.
+        tailleScore: scoreLisible ? Math.max(11, Math.round(largeurVoiture * 0.26)) : 0,
       });
     });
   });
 
-  // Une seule légende par score — les membres d'un groupe ont le même par
-  // définition, et en poser une par voiture les empilerait toutes au même
-  // endroit, à droite, illisibles. Elle se cale au milieu des rangées du
-  // groupe.
-  const legendes = groupes.map((groupe, indexGroupe) => {
-    const siennes = centres.filter(
-      (_, index) => rangees[index].indexGroupe === indexGroupe,
-    );
-    return {
-      points: groupe.points,
-      membres: groupe.membres.map(({ ligne }) => ligne),
-      premier: groupe.membres[0].index,
-      centre: (siennes[0] + siennes[siennes.length - 1]) / 2,
-    };
-  });
-
-  // Ce que chaque légende a la place de dire. La mesure porte sur l'espace
-  // réellement disponible **autour d'elle**, pas sur le pas moyen : deux
-  // groupes proches se réduisent, sans imposer la même réduction à tout le
-  // monde. La première et la dernière n'ont qu'un voisin.
-  legendes.forEach((legende, index) => {
-    const avant = index > 0 ? legende.centre - legendes[index - 1].centre : Infinity;
-    const apres =
-      index < legendes.length - 1 ? legendes[index + 1].centre - legende.centre : Infinity;
-    const espace = Math.min(avant, apres);
-
-    legende.variante = espace >= LEGENDE_REDUITE ? "reduite" : "minimale";
-  });
-
-  return { echelle, largeurVoiture, hauteurVoiture, voitures, legendes };
+  return placements;
 }
 
 /**
- * Une voiture sur la piste.
+ * Une voiture sur la piste, et son score sous elle.
  *
- * L'élément animé porte `translateY` pour son entrée : le décalage latéral ne
- * peut donc pas vivre sur lui, les deux transformations s'écraseraient. Il est
- * posé sur un conteneur intérieur, en `left`, ce qui laisse l'animation
- * intacte quel que soit le nombre de voitures de la rangée.
+ * **Deux éléments emboîtés, deux propriétés de transformation distinctes.**
+ * L'extérieur porte `translate` — sa place sur la piste, qui glisse quand les
+ * scores changent. L'intérieur porte `.t-voiture`, dont l'entrée anime
+ * `transform`. Posées sur un même élément, les deux s'écraseraient ; c'est le
+ * piège déjà documenté pour le pouce de l'interrupteur, où Tailwind 4 écrit la
+ * propriété indépendante `translate` et transitionner `transform` ne fait
+ * rigoureusement rien.
+ *
+ * Le score est **sous chaque voiture, pas à côté du groupe**. La légende de
+ * droite d'avant chiffrait un groupe, ce qui n'a plus de sens : un groupe est
+ * désormais géométrique et peut réunir des scores différents. Elle occupait en
+ * plus la marge que les voitures utilisent maintenant d'un kerb à l'autre.
+ *
+ * `estMoi` passe le score en graisse 500, les autres en 400 : la hiérarchie
+ * passe par la graisse, jamais par l'opacité — les deux gardent leur 15,23:1
+ * sur le beige de la piste.
  *
  * Exporté nommément pour pouvoir être rendu hors navigateur : le composant
  * d'écran, lui, dépend de la session, qui ne se résout que dans un effet.
- *
- * Depuis l'étape 8, la voiture porte les **vraies couleurs** du membre et le
- * **numéro qu'il a choisi** — l'une et l'autre servies par le classement. Le
- * rang ne s'affiche que faute de numéro choisi.
- *
- * `livreeDuMembre` décide de ce qui est peint : un membre qui a choisi une
- * livrée d'écurie roule ici dans cette livrée, exactement comme sur son
- * profil. C'est la même fonction des deux côtés — deux lectures séparées de
- * `livree_mode` finiraient par se contredire.
  */
-export function VoitureSurPiste({
-  ligne,
-  centre,
-  decalage,
-  largeurVoiture,
-  hauteurVoiture,
-  hauteur,
-  retard,
-}) {
+export function VoitureSurPiste({ placement, hauteur, retard, estMoi }) {
+  const { ligne, centre, decalage, largeurVoiture, hauteurVoiture, tailleScore } =
+    placement;
   const voiture = livreeDuMembre(ligne);
   const numero = ligne.numero ?? ligne.rang;
+  const points = pointsDe(ligne);
 
   return (
     <div
-      className="t-voiture absolute inset-x-0"
+      className="t-place absolute top-0 left-1/2"
       style={{
-        top: `${centre - hauteurVoiture / 2}px`,
-        height: `${hauteurVoiture}px`,
-        // Chaque voiture part du bas de l'écran : la distance dépend de son
-        // point d'arrivée, une valeur commune ferait démarrer le leader du
-        // milieu de la piste.
-        "--voiture-depart": `${hauteur - centre + hauteurVoiture}px`,
-        "--voiture-retard": `${retard}ms`,
+        translate: `${decalage - largeurVoiture / 2}px ${centre - hauteurVoiture / 2}px`,
+        width: `${largeurVoiture}px`,
       }}
     >
       <div
-        className="absolute top-0 -translate-x-1/2"
+        className="t-voiture"
         style={{
-          left: `calc(50% + ${decalage}px)`,
-          width: `${largeurVoiture}px`,
-          height: `${hauteurVoiture}px`,
+          // Chaque voiture part du bas de l'écran : la distance dépend de son
+          // point d'arrivée, une valeur commune ferait démarrer le leader du
+          // milieu de la piste.
+          "--voiture-depart": `${hauteur - centre + hauteurVoiture}px`,
+          "--voiture-retard": `${retard}ms`,
         }}
       >
-        <Voiture
-          {...voiture}
-          numero={numero}
-          nom={ligne.pseudo}
-          titre={`${ligne.rang}. ${ligne.pseudo}, ${ligne.total_points ?? 0} points`}
-          className="h-full w-full"
-        />
-      </div>
-    </div>
-  );
-}
-
-/**
- * La légende d'un score, à droite de la rangée qu'elle chiffre.
- *
- * **Elle ne porte que le score, et aucun libellé.** Elle affichait auparavant
- * le pseudo sur un groupe d'un seul, et « N ex æquo » sur un groupe à égalité :
- * les deux sont retirés. Le premier faisait doublon — le pseudo est déjà peint
- * sur l'aileron arrière de la voiture (section 5), à quelques pixels de là. Le
- * second nommait un fait que la piste montre déjà, deux voitures posées à la
- * même hauteur, et il occupait la place au moment précis où elle manque le
- * plus. Le nom complet reste porté par chaque voiture, pour le lecteur d'écran
- * comme au survol.
- *
- * `estMoi` survit à ce retrait et garde son rôle : ma propre ligne passe au
- * blanc plein, les autres restent à 90 %. C'est le seul repère qui me situe
- * d'un coup d'œil maintenant que plus aucun nom n'est écrit ici.
- *
- * L'ombre portée n'est pas décorative : ce texte passe tantôt sur l'asphalte,
- * tantôt sur une bordure blanche, et doit rester lisible sur les deux.
- */
-export function LegendeDeGroupe({ legende, hauteur, retard, moi }) {
-  const estMoi = legende.membres.some((membre) => membre.profil_id === moi);
-
-  return (
-    <div
-      className="t-voiture pointer-events-none absolute inset-x-0"
-      style={{
-        top: `${legende.centre}px`,
-        "--voiture-depart": `${hauteur - legende.centre}px`,
-        "--voiture-retard": `${retard}ms`,
-      }}
-    >
-      <div className="absolute right-7 -translate-y-1/2 text-right [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
-        <p
-          className={`text-[15px] leading-none font-medium ${
-            estMoi ? "text-white" : "text-white/90"
-          }`}
-        >
-          {legende.points}
-        </p>
-        {legende.variante !== "minimale" && (
-          <p className="text-label-sm mt-1 text-white/70">pts</p>
+        {/* La hauteur est portée par une boîte, jamais par le SVG :
+            `Voiture` ne prend pas de `style`, et la lui passer serait une
+            prop muette que rien à l'écran ne signalerait. */}
+        <div style={{ height: `${hauteurVoiture}px` }}>
+          <Voiture
+            {...voiture}
+            numero={numero}
+            nom={ligne.pseudo}
+            titre={`${ligne.rang}. ${ligne.pseudo}, ${points} points`}
+            className="h-full w-full"
+          />
+        </div>
+        {tailleScore > 0 && (
+          <p
+            aria-hidden="true"
+            className={`text-texte mt-[3px] text-center tabular-nums ${
+              estMoi ? "font-medium" : "font-normal"
+            }`}
+            style={{ fontSize: `${tailleScore}px`, lineHeight: 1 }}
+          >
+            {points}
+          </p>
         )}
       </div>
     </div>
@@ -398,13 +329,16 @@ export default function Piste() {
 
   const lignes = useMemo(() => donnees ?? [], [donnees]);
 
-  // La piste est mesurée, pas devinée : sa hauteur dépend de l'écran et, sur
-  // iOS, elle change quand la barre d'adresse de Safari se rétracte.
-  //
-  // **Sa largeur est mesurée elle aussi depuis cette version.** C'est elle qui
-  // décide combien de voitures à égalité tiennent côte à côte sur une rangée ;
-  // la supposer reviendrait à en superposer deux sur un écran étroit, c'est-à-
-  // dire le défaut qu'on corrige.
+  // La couleur du championnat, jamais choisie ici : c'est la même que sur sa
+  // carte d'accueil et que l'en-tête de son écran. Le repli sur la première
+  // teinte couvre le premier rendu, avant que le championnat ne soit chargé —
+  // un bandeau transparent laisserait voir le sol beige sous un texte blanc.
+  const couleur = couleurChampionnat(championnat ?? { id });
+
+  // La piste est mesurée, pas devinée. La zone de jeu est **bornée aux deux
+  // kerbs** par sa feuille de style : sa largeur mesurée est donc directement
+  // celle dont les voitures disposent, sans qu'aucune fraction de la planche ne
+  // soit recopiée en JavaScript.
   const zone = useRef(null);
   const [taille, setTaille] = useState({ hauteur: 0, largeur: 0 });
 
@@ -433,108 +367,123 @@ export default function Piste() {
     return () => cancelAnimationFrame(image);
   }, [hauteur, lignes.length]);
 
-  const disposition = useMemo(
+  const placements = useMemo(
     () => dispositionDesVoitures(lignes, hauteur, largeur),
     [lignes, hauteur, largeur],
   );
 
   return (
     <main
-      className={`piste-fond t-piste fixed inset-0 flex flex-col overflow-hidden ${
+      className={`piste-sol t-piste fixed inset-0 flex flex-col overflow-hidden ${
         enPiste ? "is-en-piste" : ""
       }`}
     >
-      {/* Bordures et ligne médiane : posées sous tout le reste, sur toute la
-          hauteur de l'écran, y compris derrière les zones sûres. Une piste qui
-          s'arrêterait à la Dynamic Island se lirait comme un bandeau. */}
-      <div
-        aria-hidden="true"
-        className="piste-kerb pointer-events-none absolute inset-y-0 left-0"
-      />
-      <div
-        aria-hidden="true"
-        className="piste-kerb pointer-events-none absolute inset-y-0 right-0"
-      />
-      <div
-        aria-hidden="true"
-        className="piste-axe pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2"
-      />
+      {/* La planche, sous tout le reste et sur tout l'écran, zones sûres
+          comprises. Une piste qui s'arrêterait à la Dynamic Island se lirait
+          comme un bandeau posé de travers. */}
+      <FondPiste className="pointer-events-none absolute inset-0 h-full w-full select-none" />
 
+      {/* Le bandeau. Ordre de peinture : l'aplat, le damier, puis le contenu —
+          le même ordre que les blocs de Grand Prix, et pour la même raison, un
+          SVG comme un empilement de calques n'ayant pas d'autre `z-index` que
+          celui-là. */}
       <header
-        className="relative z-10 shrink-0 px-7 pb-3"
-        style={{
-          // Le bouton ne doit pas venir se coller sous la Dynamic Island :
-          // la zone sûre s'ajoute au rembourrage, elle ne le remplace pas.
-          paddingTop: "calc(var(--spacing-safe-top) + 12px)",
-        }}
+        className="piste-bandeau relative z-10 shrink-0 overflow-hidden"
+        style={{ backgroundColor: couleur.hex }}
       >
-        <button
-          type="button"
-          onClick={() => naviguer(`/championnats/${id}`)}
-          className="min-h-tactile pressable -mx-2 -my-2 flex items-center gap-1.5 px-2 py-2 text-[13px] font-medium text-white"
-        >
-          <IconeChevronGauche className="size-[15px] shrink-0" />
-          <span className="truncate">Classement</span>
-        </button>
+        <span
+          aria-hidden="true"
+          className="motif-damier pointer-events-none absolute inset-0"
+        />
+
+        {/* **Deux rangées : le retour, puis le nom centré sur ce qui reste.**
+            C'est la disposition d'`EnTeteEcran`, et les deux autres ont été
+            essayées puis écartées au rendu. Partager une seule rangée oblige à
+            réserver les 110px du bouton **des deux côtés** pour que le nom
+            reste centré sur la piste, et il ne resterait pas de quoi écrire un
+            nom de championnat. Superposer le nom au bouton, lui, faisait se
+            toucher les glyphes de « Classement » et ceux d'un nom long.
+
+            Le rembourrage horizontal du nom couvre la courbe des coins bas de
+            la planche : au plus bas de son corps, le coin ne mord que dix-neuf
+            pixels sur les vingt-quatre réservés. */}
+        <div className="relative h-full">
+          <div
+            className="flex shrink-0 items-center"
+            style={{ height: "var(--piste-retour-h)" }}
+          >
+            <button
+              type="button"
+              onClick={() => naviguer(`/championnats/${id}`)}
+              className="min-h-tactile pressable -my-1 flex items-center gap-1.5 px-4 py-1 text-[13px] font-medium text-white"
+            >
+              <IconeChevronGauche className="size-[15px] shrink-0" />
+              <span>Classement</span>
+            </button>
+          </div>
+
+          <h1
+            className="text-titre absolute inset-x-6 truncate text-center text-white"
+            style={{
+              top: "calc(var(--piste-retour-h) + (100% - var(--piste-retour-h)) / 2)",
+              transform: "translateY(-50%)",
+            }}
+          >
+            {championnat?.nom ?? ""}
+          </h1>
+        </div>
       </header>
 
-      {/* La ligne d'arrivée en damier et son libellé vivaient ici. Ils sont
-          retirés : la piste va désormais du bouton de retour au nom du
-          championnat sans interruption, et `MARGE_HAUTE` suffit à empêcher la
-          voiture de tête de venir toucher l'en-tête. La règle CSS
-          `.piste-arrivee` est partie avec eux — c'était du CSS de projet écrit
-          pour cet élément-là, pas un snippet vendu, et le garder n'aurait servi
-          qu'à peser dans chaque feuille. */}
-      <div ref={zone} className="relative flex-1">
-        {/* Les voitures d'abord, les légendes ensuite : à égalité de points
-            plusieurs voitures partagent une hauteur, et une seule légende en
-            chiffre le score. Le retard d'entrée reste celui du **classement** et non celui
-            de la rangée, pour que la cascade suive l'ordre des rangs. */}
-        {disposition.voitures.map((placement) => (
+      {/* La zone de jeu, bornée aux deux kerbs de la planche : 24,88 et 561,17
+          sur 589,5, mesurés sur les chemins et non déduits d'une tranche
+          arithmétique. Les voitures y disposent donc de toute la largeur de la
+          piste, et d'elle seule. */}
+      <div
+        ref={zone}
+        className="relative flex-1"
+        style={{ marginLeft: "4.2205%", marginRight: "4.8058%" }}
+      >
+        {placements.map((placement) => (
           <VoitureSurPiste
             key={placement.ligne.profil_id}
-            ligne={placement.ligne}
-            centre={placement.centre}
-            decalage={placement.decalage}
-            largeurVoiture={disposition.largeurVoiture}
-            hauteurVoiture={disposition.hauteurVoiture}
+            placement={placement}
             hauteur={hauteur}
             retard={placement.index * RETARD_ENTREE}
+            estMoi={placement.ligne.profil_id === utilisateur?.id}
           />
         ))}
 
-        {disposition.legendes.map((legende) => (
-          <LegendeDeGroupe
-            key={`${legende.points}-${legende.premier}`}
-            legende={legende}
-            hauteur={hauteur}
-            retard={legende.premier * RETARD_ENTREE}
-            moi={utilisateur?.id}
-          />
-        ))}
+        {/* La liste ordonnée que la piste dessine. Les voitures sont un dessin :
+            leur `title` se lit au survol, pas au lecteur d'écran, et le score
+            peint sous chacune est `aria-hidden` — « 28 » seul ne dit rien. */}
+        {lignes.length > 0 && (
+          <ol className="sr-only">
+            {lignes.map((ligne) => (
+              <li key={ligne.profil_id}>
+                {`${ligne.rang}. ${ligne.pseudo}, ${pointsDe(ligne)} points`}
+              </li>
+            ))}
+          </ol>
+        )}
 
-        {/* Squelette de la piste : des silhouettes de voitures aux bonnes
-            hauteurs, pas un texte. Elles sont volontairement peintes en blanc
-            translucide et non dans le gris `#E8E0D8` des autres écrans — c'est
-            le seul écran qui sorte de la surface `fond`, et un aplat beige clair
-            posé sur l'asphalte s'y lirait comme une vraie voiture blanche. La
-            silhouette, elle, est la même : voiture à gauche, score à droite. */}
+        {/* Squelette de la piste : des silhouettes aux bonnes hauteurs, pas un
+            texte. Elles passent du blanc translucide au gris `squelette` du
+            reste de l'app — c'est la planche beige qui le permet, là où
+            l'asphalte sombre d'avant l'aurait fait lire comme une vraie
+            voiture blanche. */}
         {lignes.length === 0 && chargement && (
           <div aria-hidden="true" className="absolute inset-0">
-            {[0.14, 0.34, 0.54, 0.74].map((fraction, rang) => (
+            {[0.12, 0.34, 0.56, 0.78].map((fraction, rang) => (
               <div
                 key={fraction}
-                className="absolute right-5 left-0 flex items-center gap-3"
-                style={{ top: `${fraction * 100}%` }}
-              >
-                <div className="flex flex-1 justify-center">
-                  <div
-                    className="h-[52px] w-[38px] rounded-[10px] bg-white/10"
-                    style={{ animation: `t-skel-pulse 1400ms ease-in-out ${rang * 140}ms infinite` }}
-                  />
-                </div>
-                <div className="h-3 w-12 shrink-0 rounded-full bg-white/10" />
-              </div>
+                className="bg-squelette absolute left-1/2 -translate-x-1/2 rounded-[12px]"
+                style={{
+                  top: `${fraction * 100}%`,
+                  width: `${LARGEUR_VOITURE}px`,
+                  height: `${HAUTEUR_VOITURE}px`,
+                  animation: `t-skel-pulse 1400ms ease-in-out ${rang * 140}ms infinite`,
+                }}
+              />
             ))}
           </div>
         )}
@@ -542,8 +491,8 @@ export default function Piste() {
         {/* Deux situations distinctes, et les confondre serait mentir : le
             classement a échoué, ou le championnat n'a réellement personne. */}
         {lignes.length === 0 && !chargement && (
-          <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 text-center">
-            <p className="text-corps-sm text-white/70">
+          <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 text-center">
+            <p className="text-corps-sm text-secondaire">
               {echec
                 ? messageDeChargement(echec)
                 : "Aucun membre à afficher sur la piste."}
@@ -552,7 +501,7 @@ export default function Piste() {
               <button
                 type="button"
                 onClick={recharger}
-                className="rounded-champ min-h-tactile pressable mt-3 inline-flex items-center justify-center bg-white/15 px-5 text-[14px] font-medium text-white"
+                className="rounded-champ min-h-tactile pressable bg-primaire mt-3 inline-flex items-center justify-center px-5 text-[14px] font-medium text-white"
               >
                 Réessayer
               </button>
@@ -561,37 +510,16 @@ export default function Piste() {
         )}
       </div>
 
-      {/* Le nom du championnat ferme l'écran en bas, au-dessus du home
-          indicator : il dit de quel championnat on regarde la piste, sans
-          rajouter d'en-tête.
-
-          **Il porte davantage depuis que la ligne d'arrivée est partie** : il
-          est le seul texte de chrome qui reste, et le seul repère qui situe la
-          piste. Il passe donc de 11px en `#999` à 15px en blanc plein et
-          graisse 500. Le gain n'est pas cosmétique — `text-white/50` sur
-          l'asphalte `#1A1A1A` ne vaut que 5,3:1 de contraste, le blanc plein
-          17,4:1.
-
-          Les capitales et leur crénage positif sont conservés : c'est ce que la
-          section 5 prescrit pour un label, et c'est aussi la règle d'/apple-design
-          §15 — on resserre les grands textes, on espace les petits. La
-          hiérarchie passe par la graisse et la taille, jamais par l'opacité.
-
-          L'ombre portée est celle des légendes, et pour la raison exacte : le
-          texte est centré, donc il croise la ligne médiane pointillée de la
-          piste, elle-même en blanc à 50 %. */}
-      <footer
-        className="relative z-10 shrink-0 px-7 pt-2"
-        style={{
-          // `pb-safe-bottom` et `pb-3` écriraient la même propriété : la marge
-          // du home indicator s'ajoute au rembourrage, elle ne le remplace pas.
-          paddingBottom: "calc(var(--spacing-safe-bottom) + 12px)",
-        }}
-      >
-        <p className="truncate text-center text-[15px] leading-none font-medium tracking-[0.7px] text-white uppercase [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
-          {championnat?.nom ?? ""}
-        </p>
-      </footer>
+      {/* Le pied d'écran ne porte plus rien. Il tient la marge du home
+          indicator, que la planche court sous elle mais qu'aucune voiture ne
+          doit atteindre — le nom du championnat qui vivait ici est passé dans
+          le bandeau, et l'écrire aux deux bouts de l'écran serait le dire deux
+          fois. */}
+      <div
+        aria-hidden="true"
+        className="shrink-0"
+        style={{ height: "var(--spacing-safe-bottom)" }}
+      />
     </main>
   );
 }

@@ -83,7 +83,7 @@ navigateur. Points à regarder en priorité :
 | **Matériaux translucides** | `backdrop-filter` sur la nav et la barre d'action : saccade au défilement ? traînée quand la barre d'adresse de Safari se rétracte ? |
 | **Zones sûres réelles** | `h-nav` (58 px) et `env(safe-area-inset-bottom)` face à un vrai home indicator |
 | **En-têtes collants** | `--entete-hauteur` = zone sûre + 60 px, face à un vrai `env(safe-area-inset-top)` |
-| **Vue piste** | hauteur mesurée par `ResizeObserver`, qui change quand la barre d'adresse se rétracte |
+| **Vue piste** | hauteur ET largeur mesurées par `ResizeObserver`, qui changent quand la barre d'adresse se rétracte. La planche s'étire alors verticalement : c'est le rapport de forme des kerbs qu'il faut regarder |
 | **Grain du fond** | tuile rastérisée mise en cache — à confirmer sur une longue liste de cotes |
 | **`prefers-reduced-transparency`** | activer « Réduire la transparence » : les matériaux doivent devenir opaques |
 | **`prefers-contrast: more`** | activer « Augmenter le contraste » : le grain disparaît, le voile s'approfondit |
@@ -178,17 +178,28 @@ de plus de dix membres dont personne n'a personnalisé verra le 11ᵉ porter les
 1ᵉʳ. **Le rendre unique par championnat est impossible en l'état** : une voiture est
 identique dans tous les championnats de son propriétaire.
 
-### 3.5 Le haut de la vue piste sans sa ligne d'arrivée
+### 3.5 Le haut de la vue piste
 
-Retirée à la demande. Le cahier des charges disait que c'est elle qui donnait son sens à la
-hauteur des voitures. **Si le haut paraît flotter sur un appareil réel, c'est ce point qu'il
-faut rouvrir.**
+**Réglé en version `0.49.0`.** La ligne d'arrivée avait été retirée en laissant le haut de
+la piste sans rien pour l'ancrer ; le **bandeau du championnat** joue désormais ce rôle, et
+il nomme en plus l'écran.
 
-### 3.6 Taille des voitures au-delà de dix membres aux scores distincts
+### 3.6 Un groupe de plus de seize voitures se recouvre
 
-Le non-chevauchement est garanti en **réduisant les voitures** : dix membres tiennent à
-89 %, quatorze à 63 % — où le numéro et le pseudo peints ne se lisent plus. Levier :
-`GOUTTIERE_VERTICALE` à ramener à zéro si la lisibilité doit primer.
+**Le plancher de `LARGEUR_MINIMALE` (18px) prime sur la garantie de non-chevauchement.**
+Au-delà de seize voitures dans un même groupe géométrique — le cas d'un championnat de
+plus de seize membres tous à égalité, donc avant le premier Grand Prix — les cellules
+deviennent plus étroites que la voiture et les dessins se recouvrent d'un ou deux pixels.
+L'alternative, descendre sans plancher, rendrait des voitures de trois pixels : un léger
+recouvrement se lit encore comme une grille de départ, une tache ne se lit pas. Levier :
+`LARGEUR_MINIMALE`, ou un retour aux rangées empilées si le cas devient courant.
+
+### 3.6 bis La cascade de regroupement est sensible au pixel près
+
+Deux voitures séparées de 121px se regroupent, de 123px non — et le regroupement se
+**propage**, donc une voiture peut faire basculer tout un écran d'un groupe de deux à un
+groupe de sept. C'est le comportement demandé ; il n'a pas de zone tampon, et rien ne lisse
+la bascule d'un chargement à l'autre.
 
 ### 3.7 Longueur de l'onglet Calendrier
 

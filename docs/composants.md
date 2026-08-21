@@ -108,6 +108,7 @@ lui appartient. Retoucher l'onglet déjà ouvert **ramène en haut de l'écran**
 | `DrapeauxGP` | **ordre des calques** : drapeau → lueur → voile → surcouche → contenu. Tout ce qui éclaircit passe **sous** le voile |
 | `TracesCircuits` | pose un `aspect-ratio` **en ligne** : à couper (`boiteLibre`) quand l'appelant fixe les deux dimensions |
 | `Repli` | anime `grid-template-rows`, pas un `transform` — et **ne doit jamais employer `.t-acc`** (§5) |
+| `FondPiste` | `preserveAspectRatio="none"` : la planche s'étire en hauteur. Les deux `<rect>` du bandeau en sont **volontairement absents** |
 | `Icones` | les variantes `pleine` emploient **`fill-rule="evenodd"`** : la porte de la maison est un **trou dans l'aplat**, jamais un rectangle blanc posé dessus — qui se verrait le jour où le fond n'est plus blanc |
 
 ---
@@ -148,8 +149,28 @@ React et part avec le bundle en SVG inline.
 | `matti.svg` | `SkinsEcuries.jsx` | 9 des 11 **pastilles carrées** |
 | `matt.svg` | `SkinsEcuries.jsx` | pastilles **Racing Bulls et Red Bull** (`0.47.0`) |
 | `06.svg` | `--motif-damier` (data-URI) | vague du damier |
+| `vue_piste.svg` | `FondPiste.jsx` | **le fond de la vue piste** (`0.49.0`) |
 | `voiture.svg` | — | **ancien dessin, remplacé** |
 | `logoV2.svg` | — | inutilisé |
+
+### `FondPiste` — la planche qui s'étire
+
+Le fond de la vue piste, extrait de `assets/vue_piste.svg` : le sol beige `#F4EFEA` et ses
+coins arrondis, quatre segments de ligne médiane, et **deux kerbs en chemins**, pas en
+dégradés répétés. Les anciennes règles `.piste-fond`, `.piste-kerb` et `.piste-axe` sont
+parties avec l'asphalte qu'elles peignaient.
+
+| Point | Pourquoi |
+|---|---|
+| `preserveAspectRatio="none"` | L'échelle horizontale et l'échelle verticale deviennent **indépendantes** : les kerbs gardent leur largeur proportionnelle à celle de la piste quel que soit le rapport de forme, seule la pente de leurs bandes s'incline. Sur les iPhone visés l'écart est nul à deux dixièmes près — planche 0,4604, iPhone 15 Pro 0,4613 |
+| **Les deux `<rect>` du bandeau sont retirés** | Le bandeau doit porter la **couleur du championnat**, le **damier** (un utilitaire CSS) et le **nom** — qui ne peut pas se centrer dans 10,94 % de la hauteur d'écran sans tomber sous la Dynamic Island. Il vit donc dans le DOM. Rien d'autre ne bouge : l'ordre relatif du reste est intact |
+| Les kerbs gardent `#7f1717` | Un kerb rouge et blanc est le signe **F1**, pas un repère de championnat. Il vaut 9,02:1 sur le beige, contre un plancher de 3:1 |
+| Le sol est **aussi** peint en CSS (`--piste-sol`) | Le dessin arrondit ses coins ; sans l'aplat, les quatre angles laisseraient voir le grain du `body` sur un écran qui n'en porte pas |
+
+> **La zone de jeu est bornée par des pourcentages mesurés sur les chemins**, 4,2205 % à
+> gauche et 4,8058 % à droite — les bords intérieurs des kerbs, à 24,88 et 561,17 sur
+> 589,5. Ce sont des **boîtes englobantes échantillonnées**, pas des tranches
+> arithmétiques : les deux kerbs de la planche ne sont pas symétriques.
 
 ### Les deux modules de tracés — ne pas les confondre
 
