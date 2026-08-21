@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **21 août 2026**, version `0.46.0`.
+État au **21 août 2026**, version `0.47.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.

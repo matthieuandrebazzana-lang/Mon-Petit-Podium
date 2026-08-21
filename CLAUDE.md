@@ -196,39 +196,44 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.46.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+**Version `0.47.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
 les onze étapes de développement sont livrées : fondations, authentification, championnats,
 scraper Unibet, pronostics, résultats OpenF1, classements, profils, finitions, navigation,
 scraping automatique.
 
-**Cette version réordonne la personnalisation du profil**, dont les quatre rangées suivent
-désormais la **portée** de chacune : **Numéro** (il s'écrit sur le museau quelle que soit
-la livrée), **Skin**, puis **Coque** et **Ailerons**, que le skin commande. Un contrôle est
-posé juste au-dessus de ce qu'il gouverne.
+**Cette version corrige deux dessins, et rien d'autre.**
 
-**Sous un skin d'écurie, Coque et Ailerons quittent le DOM** — ni grisés, ni transparents,
-ni `hidden` : sous une livrée fixe ils ne peignent plus rien, et un réglage sans effet qui
-reste tabulable est pire qu'un réglage absent. La version `0.40.0` avait tranché l'inverse
-pour que le membre voie vers quoi il revient ; **ce service est repris par la case « Ma
-livrée » du sélecteur de skin**, qui montre les deux couleurs en diagonale
-(`docs/decisions.md` §17).
+**Les vignettes Racing Bulls et Red Bull du sélecteur de skin** sont remplacées par les
+deux voitures de la nouvelle planche `assets/matt.svg`. Leurs cadrages sont **mesurés, pas
+prescrits** : les deux font `255,70 × 255,70`, exactement la taille des neuf pastilles de
+`matti.svg`, donc elles se substituent sans qu'une valeur du sélecteur ne bouge. **L'ordre
+des deux voitures dans la planche a été établi par rendu** — Racing Bulls au-dessus, Red
+Bull en dessous — jamais deviné d'après les couleurs du fichier. **Seules les vignettes de
+sélection changent** : la voiture du profil et celle de la vue piste restent celles de
+`VoituresEcuries.jsx`.
 
-Ils partent par un **repli** (`composants/Repli.jsx`), et c'est sa seule justification :
-retirer deux rangées d'un coup fait sauter le bouton d'enregistrement **sous le doigt**.
-`.t-repli` **réemploie les trois jetons de l'accordéon sans en créer un seul** ; le
-sélecteur est distinct parce que les règles de `.t-acc` descendent par combinateur de
-descendance et ouvriraient les grilles de couleurs imbriquées.
+**Mercedes et Alpine ne sont plus barrées de gris**, et **la cause n'était pas une
+collision de classes CSS** : il ne peut pas y en avoir, puisque le frontend ne contient ni
+une classe `cls-N`, ni une balise `<style>` — la règle 3 d'extraction les a toutes
+converties en attributs `fill` dès l'origine. Le vrai défaut est l'**ordre de peinture**.
+Le fond plat `#3C3C3B` ouvre le document dans la planche, sous la carrosserie ; le
+découpage l'avait recopié au rang 13 et 16, donc **par-dessus**. Mêmes formes, mêmes
+couleurs, même cadrage — un ordre différent suffisait à ruiner les deux dessins
+(`docs/bugs-connus.md` §17).
 
-**Aucune migration.** « Ma livrée » était déjà le défaut : `livree_mode text not null
-default 'perso'` depuis la migration 12, et `livreeDuMembre` rend `perso` pour toute ligne
-muette. Un nouveau joueur voit « Ma livrée » sélectionné, Coque et Ailerons visibles.
+**Les deux fragments ont été régénérés par script**, en ordre de document, et le rendu du
+JSX est désormais superposable à celui de la planche cadrée. Les neuf autres livrées
+n'ont pas été touchées : elles étaient déjà dans le bon ordre. **`composants.md` compte
+maintenant QUATRE règles d'extraction** — l'ordre de document en est une, et la règle
+« octet pour octet » ne protège pas d'elle.
 
-*La version `0.45.0` avait fait passer le multiplicateur des points de **100 à 10** — une
-cote de 2,80 rapporte **28 points** — et livré la **migration 15**
+*La version `0.46.0` avait réordonné la personnalisation du profil selon la portée de
+chaque réglage et fait quitter le DOM à Coque et Ailerons sous un skin d'écurie, par un
+repli (`docs/decisions.md` §17). La `0.45.0` avait fait passer le multiplicateur des points
+de **100 à 10** — une cote de 2,80 rapporte **28 points** — et livré la **migration 15**
 (`20260821143000_points_diviseur_10`), qui efface sans convertir : `points_gagnes` repasse
 à `NULL`, `public.cotes` est vidée, les GP `cotes_figees` sont rouverts. **Un scraping
-reste obligatoire.** La `0.44.0` avait ajouté le **mode prévisualisation**
-(`docs/decisions.md` §15 bis).*
+reste obligatoire.***
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :

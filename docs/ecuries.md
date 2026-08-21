@@ -209,7 +209,8 @@ pastilles indistinguables sur onze**.
 | `voitures_perso.svg` | 4 voitures, une seule utilisée | **`cls-6`** (coque), **`cls-14`** (ailerons) |
 | `voitures_ecuries.svg` | 9 livrées, en zigzag sur 2 colonnes | — (couleurs figées) |
 | `VOITUREs_am.svg` | Alpine et Mercedes | — |
-| `matti.svg` | 11 **pastilles carrées** | — |
+| `matti.svg` | 9 des 11 **pastilles carrées** | — |
+| `matt.svg` | pastilles **Racing Bulls et Red Bull** | — |
 
 > **`cls-2` n'existe pas dans la première voiture.** La planche empile quatre voitures,
 > chacune peinte par **son propre couple de classes** (`cls-6`/`cls-14`, `cls-13`/`cls-10`,
@@ -230,8 +231,17 @@ devinée d'après les couleurs du fichier. C'est ainsi qu'une inversion Cadillac
 
 ### Les skins ne sont PAS des voitures
 
-`assets/matti.svg` porte onze **pastilles carrées** (255,70 × 255,70) montrant le motif
-d'une livrée : ni roues, ni ailerons, ni museau.
+Les onze **pastilles carrées** (255,70 × 255,70) montrent le motif d'une livrée : ni
+roues, ni ailerons, ni museau. **Elles viennent de deux planches** : `assets/matti.svg`
+pour neuf d'entre elles, `assets/matt.svg` pour **Racing Bulls et Red Bull**, redessinées
+en version `0.47.0`. Les deux nouvelles mesurent **exactement 255,70 × 255,70 elles
+aussi** — vérifié en échantillonnant les courbes, pas supposé — donc elles se substituent
+sans qu'aucune valeur du sélecteur ne bouge.
+
+> **La planche `matt.svg` empile ses deux voitures, Racing Bulls au-dessus.** L'ordre a
+> été établi **en rendant les deux dessins**, comme celui des onze livrées, et non déduit
+> des couleurs du fichier : c'est ce contrôle qui avait attrapé l'inversion
+> Cadillac ↔ Haas.
 
 > **Elles servent UNIQUEMENT de vignettes dans le sélecteur du profil.** La voiture
 > réellement dessinée reste celle de `VoituresEcuries.jsx`, et la raison n'est pas

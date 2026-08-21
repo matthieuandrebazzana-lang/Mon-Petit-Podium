@@ -117,7 +117,7 @@ lui appartient. Retoucher l'onglet déjà ouvert **ramène en haut de l'écran**
 **Aucune n'est servie en production.** Tout est extrait **par script** dans un composant
 React et part avec le bundle en SVG inline.
 
-> ### Trois règles d'extraction, tenues à chaque fois
+> ### Quatre règles d'extraction, tenues à chaque fois
 >
 > 1. **Les données de chemin sont copiées OCTET POUR OCTET.** Le découpage se fait par
 >    script, jamais à la main : transcrire des chemins de plusieurs milliers de caractères
@@ -128,6 +128,12 @@ React et part avec le bundle en SVG inline.
 >    n'est réécrite : c'est le cadrage qui bouge.**
 > 3. **Les classes `.cls-N` deviennent des attributs.** Une balise `<style>` embarquée
 >    déclarerait ces classes au niveau du **document entier**.
+> 4. **L'ORDRE DE DOCUMENT est conservé** — c'est l'ordre de peinture, et un SVG n'a pas
+>    d'autre `z-index` que celui-là. Un fragment qui porte les bonnes formes, les bonnes
+>    couleurs et le bon cadrage peut malgré tout rendre un dessin faux : il suffit qu'une
+>    forme du dessous soit passée dessus. **La règle 1 ne protège pas de celle-ci** — les
+>    chemins étaient exacts au caractère près quand Mercedes et Alpine se sont retrouvées
+>    barrées de gris (`bugs-connus.md` §17).
 
 | Planche | Extraite dans | Contenu |
 |---|---|---|
@@ -139,7 +145,8 @@ React et part avec le bundle en SVG inline.
 | `flags.svg` | `DrapeauxSVG.jsx` | 6 drapeaux dessinés |
 | `voitures_perso.svg` | `Voiture.jsx` | voiture colorisable |
 | `voitures_ecuries.svg` + `VOITUREs_am.svg` | `VoituresEcuries.jsx` | 11 livrées |
-| `matti.svg` | `SkinsEcuries.jsx` | 11 **pastilles carrées** |
+| `matti.svg` | `SkinsEcuries.jsx` | 9 des 11 **pastilles carrées** |
+| `matt.svg` | `SkinsEcuries.jsx` | pastilles **Racing Bulls et Red Bull** (`0.47.0`) |
 | `06.svg` | `--motif-damier` (data-URI) | vague du damier |
 | `voiture.svg` | — | **ancien dessin, remplacé** |
 | `logoV2.svg` | — | inutilisé |

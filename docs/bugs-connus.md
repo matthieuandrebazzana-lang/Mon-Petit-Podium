@@ -388,3 +388,42 @@ s'appliquent pas (§1, §2, §7) et tout ce qui tient à la géométrie (§3, §
 
 **Le réflexe** : rendre l'écran avec la vraie feuille compilée, à 390 px de large, et
 regarder. C'est ce qui a attrapé les six.
+
+---
+
+## 17. Ordre de peinture perdu à l'extraction — Mercedes et Alpine barrées de gris
+
+**Symptôme.** Sur les deux seules livrées venues de `VOITUREs_am.svg`, un **aplat gris
+sombre** (`#3C3C3B`) couvrait les deux tiers arrière de la voiture. Alpine y perdait tout
+son rose, Mercedes son modelé gris clair et ses accents turquoise autour du cockpit.
+
+**Cause réelle — ce n'était PAS une collision de classes CSS.** L'hypothèse naturelle est
+que deux planches inlinées dans le même document se disputent leurs `.cls-N`. Elle est
+fausse ici, et elle ne peut pas être vraie : **le frontend ne contient ni une seule classe
+`cls-N`, ni une seule balise `<style>`** — la règle 3 d'extraction (`composants.md` §4) les
+a toutes converties en attributs `fill` dès l'origine. Un `grep` de trois secondes le dit.
+
+Le vrai défaut est l'**ordre de peinture**. Dans la planche, le polygone `#3C3C3B` — le
+fond plat, qui doit rester **sous** la carrosserie — est le **premier élément du
+document**, pour les deux voitures. Le découpage l'avait recopié au rang 13 (Mercedes) et
+16 (Alpine) : mêmes formes, mêmes couleurs, même cadrage, **mais peint par-dessus**.
+
+Un contrôle forme par forme le confirmait sans ambiguïté : 21 formes pour Mercedes,
+24 pour Alpine, **exactement les mêmes des deux côtés, dans un ordre différent**. Et
+les neuf livrées de `voitures_ecuries.svg` étaient, elles, dans le bon ordre — Cadillac
+ouvre bien son fragment par son `#3C3C3B`.
+
+**Correctif.** Les deux fragments **régénérés par script** depuis la planche, en ordre de
+document. Aucune coordonnée réécrite ; seule la séquence change. Le rendu du fragment JSX
+et celui de la planche cadrée sont désormais superposables.
+
+**Ne pas refaire.**
+
+- **Devant une zone de couleur fausse dans un SVG extrait, comparer l'ORDRE avant les
+  couleurs.** Les couleurs étaient justes au code hexadécimal près, et les chemins exacts
+  au caractère près : les deux contrôles habituels passaient.
+- **Un SVG n'a pas de `z-index`.** L'ordre de document est le seul empilement qui existe ;
+  le déplacer est une modification du dessin, pas une mise en forme.
+- **Le contrôle qui attrape ce défaut est le rendu comparé** — fragment extrait contre
+  planche cadrée, côte à côte. Un décompte des formes ou des `fill` ne le voit pas :
+  ils sont identiques.
