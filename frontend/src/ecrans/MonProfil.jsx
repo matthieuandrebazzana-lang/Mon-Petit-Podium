@@ -11,8 +11,8 @@ import SelecteurCouleur from "../composants/SelecteurCouleur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
-import { IconeCoche } from "../composants/Icones.jsx";
 import SelecteurSkin from "../composants/SelecteurSkin.jsx";
+import Repli from "../composants/Repli.jsx";
 import SectionAdmin from "../composants/SectionAdmin.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import {
@@ -29,16 +29,38 @@ import { APP_VERSION } from "../config.js";
 /**
  * Maquette 14 — mon profil : ma voiture, mes statistiques, ma personnalisation.
  *
- * **Une seule section « Ma livrée », et un skin par-dessus.** L'écran opposait
- * jusqu'ici deux modes dans un contrôle segmenté : choisir une écurie faisait
- * disparaître les sélecteurs de couleur, et le membre perdait de vue ce vers
- * quoi il pouvait revenir. Les couleurs et le numéro forment désormais une
- * section unique, et le skin est **une ligne de plus** au même rang que
- * « Coque » et « Ailerons » — un accordéon qui déplie les onze pastilles de
- * `assets/matti.svg`. Le mode n'est plus choisi à la main : il se déduit du
- * skin retenu, `null` valant « ma livrée ». Le choix vit sur le profil
- * (`livree_mode`, `livree_ecurie`), donc il est le même dans tous les
- * championnats du membre, ce que demande la section 5.
+ * **Une seule section « Ma livrée », et quatre rangées ordonnées par portée.**
+ * Le mode n'est plus choisi dans un contrôle segmenté : il se déduit du skin
+ * retenu, `null` valant « ma livrée » — les deux ne peuvent donc plus se
+ * contredire. Le choix vit sur le profil (`livree_mode`, `livree_ecurie`), donc
+ * il est le même dans tous les championnats du membre, ce que demande la
+ * section 5.
+ *
+ * L'ordre des rangées est **Numéro, Skin, Coque, Ailerons**, et il se lit :
+ *
+ * | Rangée | Portée |
+ * |---|---|
+ * | Numéro | s'écrit sur le museau **quelle que soit** la livrée |
+ * | Skin | commande les deux suivantes |
+ * | Coque · Ailerons | ne peignent que sous « Ma livrée » |
+ *
+ * **Coque et Ailerons quittent le DOM quand un skin d'écurie est actif** — ni
+ * grisés, ni transparents, ni `hidden` : sous une livrée fixe ils ne peignent
+ * plus rien, et un réglage sans effet qui reste tabulable est pire qu'un
+ * réglage absent. Ils partent par un repli (`composants/Repli.jsx`), sans quoi
+ * la carte perdrait quatre-vingt-dix pixels d'un coup et le bouton
+ * d'enregistrement sauterait sous le doigt.
+ *
+ * **La version `0.40.0` les gardait visibles**, au motif qu'un membre ayant
+ * essayé un skin devait voir vers quoi il revenait. Ce service est désormais
+ * rendu par la case « Ma livrée » du sélecteur, qui montre les deux couleurs en
+ * diagonale : la question n'est pas restée sans réponse, elle a changé de
+ * propriétaire (`docs/decisions.md` §17).
+ *
+ * **« Ma livrée » est ce que voit un nouveau joueur**, sans avoir rien à
+ * choisir : `livree_mode` vaut `perso` par défaut de colonne (migration 12), et
+ * `livreeDuMembre` rend `perso` pour toute ligne qui ne dit pas autre chose.
+ * Coque et Ailerons sont donc visibles au premier montage.
  *
  * **Écarts assumés par rapport à la maquette**, tous documentés dans le
  * CLAUDE.md :
@@ -107,15 +129,19 @@ function SqueletteProfil() {
           </Carte>
         ))}
       </div>
-      {/* La silhouette suit la vraie hauteur du bloc : l'aperçu fait 140px et le
-          contrôle segmenté 44px. Sans eux, l'écran sauterait de deux cents
-          pixels à l'arrivée des données. */}
+      {/* La silhouette suit la vraie hauteur du bloc : l'aperçu fait 140px, et
+          les quatre rangées 44px chacune — la zone tactile minimale, que
+          `min-h-tactile` impose. Elles sont **quatre** et non trois : c'est
+          l'état par défaut, « Ma livrée », donc Coque et Ailerons compris. Sans
+          elles, l'écran sauterait de deux cents pixels à l'arrivée des
+          données. */}
       <Carte className="flex flex-col gap-3">
         <Barre largeur="w-24" hauteur="h-2.5" />
         <Pave className="mx-auto h-[140px] w-[70px]" />
         <Pave className="h-[44px]" />
-        <Pave className="h-[46px]" />
-        <Pave className="h-[46px]" />
+        <Pave className="h-[44px]" />
+        <Pave className="h-[44px]" />
+        <Pave className="h-[44px]" />
       </Carte>
     </div>
   );
@@ -256,7 +282,13 @@ export default function MonProfil() {
   const voiture = saisie ?? saisieDepuis(profil);
   const numero = voiture.numero;
   const numeroSaisi = numero ? Number(numero) : null;
-  const enEcurie = voiture.mode === "ecurie";
+  // **Une seule question, un seul juge.** « Un skin est-il actif ? » commande
+  // désormais trois choses — le message d'explication, la valeur passée au
+  // sélecteur, et la présence même de Coque et Ailerons. Trois conditions
+  // écrites séparément auraient divergé au premier ajustement. Le slug est
+  // exigé avec le mode, comme le fait `livreeDuMembre` : un mode `ecurie` sans
+  // livrée ne peint rien.
+  const skinActif = voiture.mode === "ecurie" && Boolean(voiture.ecurie);
 
   const porteur = useMemo(() => porteurDuNumero(pris, numero), [pris, numero]);
 
@@ -387,40 +419,14 @@ export default function MonProfil() {
                     className="mx-auto h-[140px] w-auto"
                   />
 
-                  {/* Les deux couleurs et le numéro forment **une seule
-                      section**. Elles restent réglables même quand un skin est
-                      actif : ce sont elles qu'on retrouve en le retirant, et
-                      les masquer ferait perdre de vue ce vers quoi on revient.
-                      C'est aussi ce que la base garde — le slug et les deux
-                      couleurs cohabitent en colonnes distinctes. */}
-                  <div className="mt-1.5">
-                    <SelecteurCouleur
-                      libelle="Coque"
-                      valeur={voiture.couleur1}
-                      interdite={voiture.couleur2}
-                      ouvert={ouvert === 1}
-                      onOuvrir={() => setOuvert(ouvert === 1 ? null : 1)}
-                      onChange={(hex) => {
-                        modifier({ couleur1: hex });
-                        setOuvert(null);
-                      }}
-                    />
-                    <SelecteurCouleur
-                      libelle="Ailerons"
-                      valeur={voiture.couleur2}
-                      interdite={voiture.couleur1}
-                      ouvert={ouvert === 2}
-                      onOuvrir={() => setOuvert(ouvert === 2 ? null : 2)}
-                      onChange={(hex) => {
-                        modifier({ couleur2: hex });
-                        setOuvert(null);
-                      }}
-                    />
-                  </div>
-
-                  {/* Le numéro est hors du skin : il s'écrit sur le museau
-                      quelle que soit la livrée. */}
-                  <div className="flex min-h-tactile items-center justify-between gap-3 py-1.5">
+                  {/* **L'ordre suit la portée de chaque réglage.** Le numéro
+                      s'écrit sur le museau quelle que soit la livrée : il est
+                      donc au-dessus, hors de tout ce que le skin commande.
+                      Vient le skin, puis — seulement s'il vaut « Ma livrée » —
+                      les deux couleurs qu'il commande. Un contrôle est posé
+                      juste au-dessus de ce qu'il modifie ; posé en dessous, il
+                      faudrait un libellé pour dire ce qu'il gouverne. */}
+                  <div className="mt-1.5 flex min-h-tactile items-center justify-between gap-3 py-1.5">
                     <label
                       htmlFor="numero-voiture"
                       className="text-corps-sm text-texte-doux"
@@ -455,12 +461,14 @@ export default function MonProfil() {
                     </div>
                   </div>
 
-                  {/* Le skin est une ligne de plus, au même rang que les deux
-                      couleurs, et non un second mode : `null` vaut « ma
-                      livrée ». `mode` s'en déduit — il n'est plus choisi à la
-                      main, donc les deux ne peuvent plus se contredire. */}
+                  {/* Le skin n'est pas un second mode : `null` vaut « ma
+                      livrée », et c'est la valeur d'un nouveau joueur — celle du
+                      défaut de colonne (`livree_mode` vaut `perso`) comme celle
+                      que rend `livreeDuMembre` quand il ne trouve rien. `mode`
+                      s'en déduit, il n'est plus choisi à la main, donc les deux
+                      ne peuvent plus se contredire. */}
                   <SelecteurSkin
-                    valeur={voiture.mode === "ecurie" ? voiture.ecurie : null}
+                    valeur={skinActif ? voiture.ecurie : null}
                     couleur1={voiture.couleur1}
                     couleur2={voiture.couleur2}
                     ouvert={ouvert === 3}
@@ -475,10 +483,55 @@ export default function MonProfil() {
                     }}
                   />
 
-                  {enEcurie && voiture.ecurie && (
+                  {/* **Coque et Ailerons quittent le DOM sous un skin d'écurie**,
+                      ils ne sont ni grisés ni transparents : sous une livrée
+                      fixe ils ne peignent plus rien, et un réglage sans effet
+                      qui reste tabulable et lisible au lecteur d'écran est pire
+                      qu'un réglage absent.
+
+                      Ce qu'ils rendaient — voir vers quoi on revient — est
+                      repris par la case « Ma livrée » du sélecteur ci-dessus,
+                      qui montre les deux couleurs en diagonale. La question
+                      n'est donc pas restée sans réponse, elle a changé de
+                      propriétaire.
+
+                      Le repli sert le retour autant que le départ : les deux
+                      rangées reviennent en poussant le bouton d'enregistrement
+                      vers le bas au lieu de le faire apparaître dessous. */}
+                  <Repli visible={!skinActif}>
+                    <SelecteurCouleur
+                      libelle="Coque"
+                      valeur={voiture.couleur1}
+                      interdite={voiture.couleur2}
+                      ouvert={ouvert === 1}
+                      onOuvrir={() => setOuvert(ouvert === 1 ? null : 1)}
+                      onChange={(hex) => {
+                        modifier({ couleur1: hex });
+                        setOuvert(null);
+                      }}
+                    />
+                    <SelecteurCouleur
+                      libelle="Ailerons"
+                      valeur={voiture.couleur2}
+                      interdite={voiture.couleur1}
+                      ouvert={ouvert === 2}
+                      onOuvrir={() => setOuvert(ouvert === 2 ? null : 2)}
+                      onChange={(hex) => {
+                        modifier({ couleur2: hex });
+                        setOuvert(null);
+                      }}
+                    />
+                  </Repli>
+
+                  {/* La phrase prend la place que les deux rangées viennent de
+                      libérer, et c'est elle qui dit où elles sont parties. Le
+                      marron `secondaire` et non `texte-doux` : 9,4:1 sur blanc
+                      contre 2,0:1, et c'est une phrase qu'on vient lire. */}
+                  {skinActif && (
                     <p className="text-corps-sm text-secondaire mt-2">
-                      Le skin remplace tes couleurs sur la piste et dans les
-                      classements. Retire-le pour retrouver ta livrée.
+                      Le skin remplace ta livrée sur la piste et dans les
+                      classements. Choisis « Ma livrée » pour retrouver la coque
+                      et les ailerons.
                     </p>
                   )}
 

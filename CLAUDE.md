@@ -196,28 +196,39 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.45.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+**Version `0.46.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
 les onze étapes de développement sont livrées : fondations, authentification, championnats,
 scraper Unibet, pronostics, résultats OpenF1, classements, profils, finitions, navigation,
 scraping automatique.
 
-**Cette version** fait passer le multiplicateur des points de **100 à 10** : une cote de
-2,80 rapporte désormais **28 points** et non 280. La règle du §3.1 est inchangée par
-ailleurs — les points restent des entiers, une cote brute ne s'affiche jamais. Un seul
-endroit calcule : `en_points()` dans `backend/app/scraper/unibet.py`. **Le frontend ne
-convertit rien** et n'avait donc rien à changer : ce qui lui arrive est déjà un nombre de
-points.
+**Cette version réordonne la personnalisation du profil**, dont les quatre rangées suivent
+désormais la **portée** de chacune : **Numéro** (il s'écrit sur le museau quelle que soit
+la livrée), **Skin**, puis **Coque** et **Ailerons**, que le skin commande. Un contrôle est
+posé juste au-dessus de ce qu'il gouverne.
 
-La **migration 15** (`20260821143000_points_diviseur_10`) efface ce qui avait été calculé
-sur l'ancienne échelle, **sans rien convertir** : les deux colonnes `points_gagnes`
-repassent à `NULL` (jamais à `0`, qui voudrait dire « raté »), `public.cotes` est vidée, et
-les GP `cotes_figees` sont rouverts pour que le scraper puisse les réécrire. **Un scraping
-est obligatoire juste après** — sans cotes, aucun GP n'est pronosticable. Aucun vrai Grand
-Prix n'ayant été joué, il n'y avait pas de score à préserver.
+**Sous un skin d'écurie, Coque et Ailerons quittent le DOM** — ni grisés, ni transparents,
+ni `hidden` : sous une livrée fixe ils ne peignent plus rien, et un réglage sans effet qui
+reste tabulable est pire qu'un réglage absent. La version `0.40.0` avait tranché l'inverse
+pour que le membre voie vers quoi il revient ; **ce service est repris par la case « Ma
+livrée » du sélecteur de skin**, qui montre les deux couleurs en diagonale
+(`docs/decisions.md` §17).
 
-*La version `0.44.0` avait ajouté le **mode prévisualisation** — un interrupteur de la
-section Administration qui fait voir l'application comme si les cotes du prochain GP
-étaient figées, sans rien écrire en base (`docs/decisions.md` §15 bis).*
+Ils partent par un **repli** (`composants/Repli.jsx`), et c'est sa seule justification :
+retirer deux rangées d'un coup fait sauter le bouton d'enregistrement **sous le doigt**.
+`.t-repli` **réemploie les trois jetons de l'accordéon sans en créer un seul** ; le
+sélecteur est distinct parce que les règles de `.t-acc` descendent par combinateur de
+descendance et ouvriraient les grilles de couleurs imbriquées.
+
+**Aucune migration.** « Ma livrée » était déjà le défaut : `livree_mode text not null
+default 'perso'` depuis la migration 12, et `livreeDuMembre` rend `perso` pour toute ligne
+muette. Un nouveau joueur voit « Ma livrée » sélectionné, Coque et Ailerons visibles.
+
+*La version `0.45.0` avait fait passer le multiplicateur des points de **100 à 10** — une
+cote de 2,80 rapporte **28 points** — et livré la **migration 15**
+(`20260821143000_points_diviseur_10`), qui efface sans convertir : `points_gagnes` repasse
+à `NULL`, `public.cotes` est vidée, les GP `cotes_figees` sont rouverts. **Un scraping
+reste obligatoire.** La `0.44.0` avait ajouté le **mode prévisualisation**
+(`docs/decisions.md` §15 bis).*
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :

@@ -11,7 +11,7 @@ Les composants importants, leurs responsabilités, et où vivent les SVG.
 src/
 ├── App.jsx              routeur + les trois groupes de routes
 ├── auth/AuthContexte.jsx
-├── composants/          réutilisables (37 fichiers)
+├── composants/          réutilisables (38 fichiers)
 │   └── icones/          6 icônes extraites de planches SVG
 ├── ecrans/              un fichier par écran (20)
 └── lib/                 accès aux données, formatage, hooks (22)
@@ -107,6 +107,7 @@ lui appartient. Retoucher l'onglet déjà ouvert **ramène en haut de l'écran**
 | `Voiture` / `VoituresEcuries` | couleurs en **attribut `fill`**, jamais par classe — sinon deux voitures de couleurs différentes ne pourraient pas coexister |
 | `DrapeauxGP` | **ordre des calques** : drapeau → lueur → voile → surcouche → contenu. Tout ce qui éclaircit passe **sous** le voile |
 | `TracesCircuits` | pose un `aspect-ratio` **en ligne** : à couper (`boiteLibre`) quand l'appelant fixe les deux dimensions |
+| `Repli` | anime `grid-template-rows`, pas un `transform` — et **ne doit jamais employer `.t-acc`** (§5) |
 | `Icones` | les variantes `pleine` emploient **`fill-rule="evenodd"`** : la porte de la maison est un **trou dans l'aplat**, jamais un rectangle blanc posé dessus — qui se verrait le jour où le fond n'est plus blanc |
 
 ---
@@ -242,6 +243,34 @@ ce que la première commande.
 > écrites séparément auraient divergé au premier ajustement, et le second interrupteur
 > aurait cessé de se lire comme un interrupteur. Les couleurs mesurées (pouce blanc à
 > 3,41:1 sur `secondaire/60`, 10,88:1 sur `primaire`) vivent donc à un seul endroit.
+
+### `Repli` — une région qui se replie **et quitte le DOM**
+
+Introduit en version `0.46.0` pour Coque et Ailerons, que le profil retire dès qu'un skin
+d'écurie est actif (`docs/decisions.md` §17). Le composant est générique : il prend
+`visible` et des enfants.
+
+| Ce qu'il fait | Comment |
+|---|---|
+| Anime une hauteur inconnue | `grid-template-rows: 0fr → 1fr`, **aucune mesure en JS** |
+| Monte fermé puis ouvre | `requestAnimationFrame` — ouvrir dans le rendu du montage ne transitionnerait pas, le navigateur n'ayant jamais peint l'état de départ |
+| Démonte pour de bon | `setTimeout` sur `dureeCss("--acc-collapse")` |
+
+> ### `.t-repli` reprend les jetons de l'accordéon, mais **jamais son sélecteur**
+> Les règles de `.t-acc` emploient un combinateur de **descendance**
+> (`.t-acc[data-open="true"] .t-acc-panel`). Envelopper les deux `SelecteurCouleur` — qui
+> sont eux-mêmes des `.t-acc` — dans un `.t-acc` ouvert **ouvrirait leurs grilles de
+> couleurs avec le sien**. D'où un sélecteur à part, dont les règles descendent en enfant
+> **direct**, et qui **n'ajoute aucun jeton** : `--acc-expand`, `--acc-collapse` et
+> `--acc-ease` sont ceux de l'accordéon.
+
+> **La durée du démontage est lue dans la feuille compilée**, jamais recopiée en constante.
+> Une constante JavaScript et un jeton CSS divergent au premier ajustement, et le symptôme
+> serait discret — des enfants retirés une image trop tôt, donc un repli qui se termine par
+> un saut.
+
+**Ni `opacity: 0`, ni `hidden`, ni `disabled`** : un réglage sans effet qui reste tabulable
+et lisible au lecteur d'écran est pire qu'un réglage absent.
 
 ### `BandeauPrevisualisation` — la pastille de statut
 

@@ -248,6 +248,14 @@ projet, jamais de le forker.**
 
 Vingt-et-une transitions du skill Transitions.dev sont installées avec leurs jetons.
 
+> **Étendre le vocabulaire, jamais le forker — le cas `.t-repli` (version `0.46.0`).** Le
+> repli conditionnel du profil avait besoin de la mécanique de l'accordéon 21 sans son
+> en-tête, et **sans hériter de ses sélecteurs** : les règles de `.t-acc` descendent par
+> combinateur de descendance, donc un `.t-acc` ouvert autour d'autres `.t-acc` ouvrirait
+> leurs panneaux avec le sien. La réponse a été un sélecteur distinct qui **réemploie
+> `--acc-expand`, `--acc-collapse` et `--acc-ease` sans en ajouter un seul**. C'est la forme
+> que doit prendre toute extension : des règles nouvelles, des jetons existants.
+
 **Les valeurs imposées** : jamais `scale(0)` (une chose doit avoir une silhouette avant
 d'être remplie), jamais d'`ease-in` sur une interface, jamais `transition: all`,
 `transform` et `opacity` seuls, sous les 300 ms, et le repli `prefers-reduced-motion`

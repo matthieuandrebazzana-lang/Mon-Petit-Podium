@@ -485,3 +485,53 @@ secoué et les chaînes concernées sont **absentes du bundle de production** �
 **Une règle de mise en œuvre** : le retour anticipé d'un composant désactivé se place
 **après les hooks**, jamais avant. React interdit un `return` qui court-circuiterait
 `useState`.
+
+---
+
+## 17. Un réglage sans effet quitte le DOM
+
+**Décision (version `0.46.0`).** Sous un skin d'écurie, **Coque et Ailerons ne sont pas
+grisés : ils n'existent plus**. Ils partent par un repli
+(`frontend/src/composants/Repli.jsx`) puis sont démontés.
+
+**Raison.** Une livrée d'écurie a ses couleurs. Les deux sélecteurs ne peignent alors plus
+rien — ni l'aperçu, ni la vue piste, ni le classement. Les laisser grisés en garderait le
+pire : deux arrêts de tabulation et deux libellés lus par un lecteur d'écran, pour des
+commandes dont l'effet est nul. **Un réglage sans effet est pire absent que présent-inerte,
+parce qu'inerte il demande encore qu'on comprenne pourquoi.**
+
+**Ce que la décision retourne.** La version `0.40.0` avait tranché l'inverse, et son motif
+était bon : un membre qui essaie un skin doit voir vers quoi il revient. Ce service est
+désormais rendu par **la case « Ma livrée » du sélecteur de skin**, qui montre les deux
+couleurs en diagonale. La question a changé de propriétaire, elle n'est pas restée sans
+réponse — c'est la condition sans laquelle ce retournement n'aurait pas été fait.
+
+**L'ordre des quatre rangées suit la portée de chacune** : Numéro (s'écrit sur le museau
+quelle que soit la livrée), Skin (commande les deux suivantes), Coque, Ailerons. Un
+contrôle est posé **juste au-dessus de ce qu'il gouverne** ; posé en dessous, il faudrait
+un libellé pour dire ce qu'il commande.
+
+**Pourquoi ça s'anime, et c'est la seule raison retenue.** Retirer deux rangées à l'image
+suivante fait perdre à la carte quatre-vingt-dix pixels d'un coup : l'avertissement de
+numéro et le bouton d'enregistrement sautent **sous le doigt**. C'est le cas « changement
+brutal » — pas de la décoration. Le repli emprunte le `grid-template-rows: 0fr → 1fr` de
+l'accordéon, qui anime une hauteur inconnue sans jamais la mesurer en JavaScript.
+
+> **`.t-repli` n'est pas un fork de `.t-acc`, et le sélecteur distinct est obligatoire.**
+> Les règles de l'accordéon emploient un combinateur de **descendance**
+> (`.t-acc[data-open="true"] .t-acc-panel`). Un `.t-acc` ouvert enveloppant les deux
+> `SelecteurCouleur` — qui sont eux-mêmes des `.t-acc` — **ouvrirait leurs grilles de
+> couleurs avec le sien**. `.t-repli` reprend donc les trois jetons `--acc-expand`,
+> `--acc-collapse` et `--acc-ease` **sans en créer un seul**, et ses propres règles
+> descendent en enfant **direct**.
+
+**La durée du démontage est lue dans la feuille compilée** (`dureeCss("--acc-collapse")`),
+jamais recopiée en constante JavaScript. Deux valeurs écrites séparément divergent au
+premier ajustement, et le symptôme serait discret : des enfants retirés une image trop tôt,
+c'est-à-dire un repli qui se termine par le saut qu'il existait pour supprimer.
+
+**« Ma livrée » est le défaut, et il l'était déjà** : `livree_mode text not null default
+'perso'` depuis la migration 12 (`20260819124500_livree_ecurie.sql`), et `livreeDuMembre`
+rend `perso` pour toute ligne qui ne dit pas autre chose. **Aucune migration n'a été
+nécessaire** — un nouveau joueur voit « Ma livrée » sélectionné, Coque et Ailerons
+visibles, sans avoir rien choisi.

@@ -1238,6 +1238,48 @@
   transition: transform var(--acc-expand) var(--ease-in-out-fort);
 }
 
+/* — Repli conditionnel — l'accordéon 21 sans en-tête ni chevron —
+   Une région qui n'a plus lieu d'être quitte le DOM (`composants/Repli.jsx`),
+   mais elle s'y replie d'abord : sans cela la carte perd sa hauteur d'un coup
+   et tout ce qui la suit saute sous le doigt.
+
+   **Un sélecteur distinct, zéro jeton nouveau.** Les règles ci-dessus emploient
+   un combinateur de DESCENDANCE (`.t-acc[data-open="true"] .t-acc-panel`) : un
+   `.t-acc` ouvert enveloppant d'autres `.t-acc` — les deux sélecteurs de
+   couleur du profil en sont — ouvrirait leurs panneaux avec le sien. `.t-repli`
+   reprend donc les trois jetons de l'accordéon sans en inventer un seul, et ses
+   propres règles descendent en enfant DIRECT.
+
+   La piste porte ici le `data-open` elle-même : il n'y a pas d'en-tête à
+   coiffer, donc pas de troisième élément à empiler. */
+.t-repli {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--acc-collapse) var(--acc-ease);
+}
+.t-repli[data-open="true"] {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--acc-expand) var(--acc-ease);
+}
+.t-repli > .t-repli-inner {
+  overflow: hidden;
+  opacity: 0;
+  /* Le flou de 2px est celui de l'accordéon, et il travaille : sans lui, l'œil
+     suit deux rangées qui rétrécissent ; avec lui, il voit une seule matière
+     qui s'en va. */
+  filter: blur(2px);
+  transition:
+    opacity var(--acc-collapse) var(--acc-ease),
+    filter var(--acc-collapse) var(--acc-ease);
+}
+.t-repli[data-open="true"] > .t-repli-inner {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity var(--acc-expand) var(--acc-ease),
+    filter var(--acc-expand) var(--acc-ease);
+}
+
 /* — Icon swap (transitions-dev 09) —
    L'étoile de favori : contour ↔ pleine, dans le même emplacement. Les deux
    icônes restent montées et partagent une cellule de grille. */
@@ -1646,6 +1688,8 @@
   .t-acc-panel,
   .t-acc-panel-inner,
   .t-acc-chevron,
+  .t-repli,
+  .t-repli > .t-repli-inner,
   .t-icon-swap .t-icon,
   .t-nav .t-nav-onglet,
   .t-nav .t-nav-onglet :is(path, rect),

@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **21 août 2026**, version `0.45.0`.
+État au **21 août 2026**, version `0.46.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -311,6 +311,12 @@ Résultat d'un balayage en lecture seule sur `frontend/src`.
 > **La n° 1 est la plus rentable** : c'est le seul moment franchement émotionnel de l'app,
 > sur l'un de ses écrans les plus plats, et le snippet *success check* est **installé
 > depuis longtemps sans avoir jamais servi**.
+
+> **Les n° 2 et 3 n'ont plus rien à écrire.** La version `0.46.0` a empaqueté exactement
+> leur mécanique dans `composants/Repli.jsx` — `grid-template-rows: 0fr → 1fr`, montage
+> différé d'une image, démontage sur `--acc-collapse`. Les brancher est devenu une
+> substitution de balise : `<Repli visible={…}>`. **Ne pas réécrire le mécanisme sur
+> place** ; c'est la règle de la source unique par question.
 
 ### Écartés — et ce qui les a écartés
 
