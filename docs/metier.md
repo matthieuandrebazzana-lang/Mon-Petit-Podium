@@ -7,13 +7,16 @@ l'implémentation est un bug — dans l'un ou dans l'autre.
 
 ## 1. Le système de points — la règle centrale
 
-> **Les points valent la cote Unibet × 100, arrondie à l'entier.**
-> Une cote de 2,80 rapporte **280 points**. Une cote de 9,50 rapporte **950 points**.
+> **Les points valent la cote Unibet × 10, arrondie à l'entier.**
+> Une cote de 2,80 rapporte **28 points**. Une cote de 9,50 rapporte **95 points**.
+>
+> *Le diviseur était 100 jusqu'à la v0.44.0. Seul le multiplicateur a changé : les
+> points restent des entiers, et rien d'autre de cette section n'est affecté.*
 
 **Conséquence sur toute l'interface : on n'affiche JAMAIS une cote brute.** Nulle part on
-n'écrit « ×2,80 » ou « cote 2,80 » — on écrit toujours « 280 pts ». Sans exception :
+n'écrit « ×2,80 » ou « cote 2,80 » — on écrit toujours « 28 pts ». Sans exception :
 tableau des cotes, saisie, récapitulatif, résultats, profils, statistiques, calendrier.
-Y compris pour une statistique comme la cote moyenne tentée, qui s'affiche « 310 » et non
+Y compris pour une statistique comme la cote moyenne tentée, qui s'affiche « 31 » et non
 « ×3,1 ».
 
 **Rien en base ne stocke une cote.** `cotes.valeur` est déjà le nombre de points.

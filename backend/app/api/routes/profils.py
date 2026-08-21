@@ -151,7 +151,7 @@ class StatsProfil(BaseModel):
     """Les quatre chiffres de la grille 2×2 des maquettes 12 et 14.
 
     **Tous entiers, jamais de décimale.** Pour `cote_moy_tentee`, c'est la règle
-    4.1 elle-même : une cote moyenne s'affiche « 310 », jamais « ×3,1 ».
+    4.1 elle-même : une cote moyenne s'affiche « 31 », jamais « ×3,1 ».
     """
 
     paris_gagnes_pct: int

@@ -15,7 +15,7 @@ elles expliquent l'essentiel du code ci-dessous :
    cookie.
 
 2. **`price` est une chaîne à virgule** (« 2,80 »), pas un nombre. Un
-   `float(price)` lève, un `price * 100` concatène. C'est `en_points()` qui
+   `float(price)` lève, un `price * 10` concatène. C'est `en_points()` qui
    traite le cas, et lui seul.
 
 3. **L'API ne rend qu'un seul marché par événement** — le marché vedette, le
@@ -213,7 +213,7 @@ def slug(texte: str) -> str:
 
 
 def en_points(prix: object) -> int | None:
-    """Convertit une cote Unibet en points : 2,80 → 280 (règle 4.1).
+    """Convertit une cote Unibet en points : 2,80 → 28 (règle 4.1).
 
     Le champ `price` arrive en chaîne à la française (« 2,80 »), parfois avec
     une espace d'affichage. Une valeur illisible renvoie `None` plutôt que de
@@ -230,7 +230,10 @@ def en_points(prix: object) -> int | None:
     else:
         return None
 
-    points = round(cote * 100)
+    # Diviseur 10 depuis la v0.45.0 : une cote de 2,80 vaut 28 points, pas 280.
+    # `round` rend un `int` pour un `float` — la règle « les points sont des
+    # entiers » ne dépend donc pas du multiplicateur.
+    points = round(cote * 10)
     # Une cote nulle ou négative n'existe pas : c'est une donnée abîmée, pas une
     # cote à 0 point. La contrainte `check` de la table dit la même chose.
     return points if points > 0 else None

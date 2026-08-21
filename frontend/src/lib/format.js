@@ -6,7 +6,7 @@
  * s'affiche jamais : ni « ×2,80 », ni « cote 2,80 ». Ce qui arrive du backend
  * est déjà un nombre de points entier, et `formaterPoints` est le seul endroit
  * qui l'habille. Les maquettes 08 et 09 écrivent « ×2,80 » dans leurs cases de
- * cote : le CLAUDE.md gagne, elles affichent « 280 pts ».
+ * cote : le CLAUDE.md gagne, elles affichent « 28 pts ».
  */
 
 /** Règle 4.3 : les pronostics ferment cinq minutes avant le départ. */

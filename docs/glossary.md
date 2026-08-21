@@ -47,7 +47,7 @@ privés** : ce sont des brouillons. *Ne pas dire « sélection » ni « panier �
 
 **Cote** — l'issue d'un marché chez Unibet, et ce qu'elle rapporte. **Le mot désigne
 l'objet, jamais le nombre affiché** : on ne montre jamais « ×2,80 », on montre
-« 280 pts ». Voir `metier.md` §1.
+« 28 pts ». Voir `metier.md` §1.
 
 **Marché** — un type de pari sur un GP : « Vainqueur », « Podium », « Ecurie Vainqueur »,
 « Top 6 »… Le **libellé** affiché est toujours celui du bookmaker
@@ -55,7 +55,7 @@ l'objet, jamais le nombre affiché** : on ne montre jamais « ×2,80 », on mont
 
 **Points** — le nombre entier qu'un pronostic rapporte ou peut rapporter. Deux notions
 distinctes, à ne jamais confondre :
-- `points` — ce que le pronostic **peut** rapporter (la cote × 100) ;
+- `points` — ce que le pronostic **peut** rapporter (la cote × 10) ;
 - `points_gagnes` — ce qu'il **a** rapporté (`NULL` / `0` / `> 0`).
 
 Les confondre ferait afficher un score avant la course.

@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **21 août 2026**, version `0.44.0`.
+État au **21 août 2026**, version `0.45.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -19,6 +19,11 @@ développement sont livrées.
 
 Le job du samedi ne la refigera pas — il ne traite que les GP en `a_venir`.
 
+> **Le premier défaut est réglé par la migration 15** (`20260821143000_points_diviseur_10`),
+> qui repasse à `a_venir` TOUS les GP `cotes_figees` — il fallait les rouvrir de toute
+> façon pour que le scraper réécrive les cotes sur la nouvelle échelle. Si elle a été
+> jouée, l'`update` ci-dessous n'a plus rien à faire.
+
 ```sql
 update public.grands_prix set statut = 'a_venir'
  where id = '33b835cc-5c17-40f7-a41f-3e95fc14885a' and statut = 'cotes_figees';
@@ -26,7 +31,8 @@ update public.grands_prix set statut = 'a_venir'
 
 Puis `POST /scraper/declencher?figer=false` — il réécrit `date_course` et
 `date_qualifications` **même pour un GP figé**, donc les deux se remettent d'aplomb en une
-fois.
+fois. **Ce scraping est de toute manière obligatoire après la migration 15**, qui vide
+`public.cotes`.
 
 > **Tout essai de scraper d'ici là doit porter `?figer=false`.**
 

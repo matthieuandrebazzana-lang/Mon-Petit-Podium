@@ -172,7 +172,7 @@ export const cleResultats = (profilId, gpId, championnatId) =>
  * 2. **Le rang est un `rank`, pas un `row_number` :** deux membres à égalité sur
  *    un Grand Prix le sont vraiment. La règle 4.6 départage le classement de la
  *    saison, pas une course isolée, et inventer ici un ordre entre deux joueurs
- *    à 280 points serait une information fausse. C'est la même décision que dans
+ *    à 28 points serait une information fausse. C'est la même décision que dans
  *    `calendrier_du_championnat`.
  */
 export function classerLesMembres(membres) {

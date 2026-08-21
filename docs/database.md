@@ -115,7 +115,7 @@ toute la table sans lui.
 `id`, `gp_id` (cascade), `marche` (slug), `libelle_marche` (libellé du bookmaker),
 `pilote`, `valeur` (**integer > 0**), `id_outcome_unibet` (**not null**), `cree_le`.
 
-> **`valeur` est déjà le nombre de points** — cote × 100 arrondie. **Rien en base ne
+> **`valeur` est déjà le nombre de points** — cote × 10 arrondie. **Rien en base ne
 > stocke « 2,80 »** (voir `metier.md` §1).
 
 > **`id_outcome_unibet` est `not null`, et c'est ce qui fait tenir l'idempotence.** Sous
@@ -353,7 +353,7 @@ applicatif de plus**.
 
 ---
 
-## 6. Les quatorze migrations
+## 6. Les quinze migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -371,6 +371,7 @@ applicatif de plus**.
 | 12 | `20260819124500_livree_ecurie` | `livree_mode`, `livree_ecurie` | 1, 8, 10 |
 | 13 | `20260820120000_calendrier_date_qualifications` | ajoute le champ au calendrier | 10, 11 |
 | 14 | `20260820150000_profil_is_admin` | `is_admin` | 1 |
+| 15 | `20260821143000_points_diviseur_10` | remise à zéro des points (diviseur 10) | 3, 5, 6 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -386,8 +387,18 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **8** ou **10** après **12** | la livrée d'écurie | rejouer 12 |
 | **10** après **13** | `date_qualifications` au calendrier | rejouer 13 |
 
-**Les migrations 11 et 14 ne remplacent aucune fonction** : elles ne peuvent pas entrer
-en conflit d'ordre.
+**Les migrations 11, 14 et 15 ne remplacent aucune fonction** : elles ne peuvent pas
+entrer en conflit d'ordre.
+
+> **La 15 est la seule qui touche aux DONNÉES et non au schéma.** Elle vide
+> `public.cotes`, repasse à `NULL` les deux colonnes `points_gagnes` et rouvre les GP
+> `cotes_figees` — le multiplicateur des points est passé de 100 à 10 (`metier.md` §1),
+> et tout ce qui avait été calculé l'avait été sur l'ancienne échelle. **Elle n'a rien
+> converti** : diviser par dix une seconde fois par mégarde ne se verrait pas. Chacune
+> de ses trois opérations est un retour à un état, donc rejouable telle quelle.
+>
+> **Après l'avoir jouée, déclencher un scraping** : sans cotes, aucun GP n'est
+> pronosticable.
 
 ### Non éprouvées sur un PostgreSQL jetable
 

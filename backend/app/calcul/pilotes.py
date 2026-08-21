@@ -76,7 +76,7 @@ GRILLE: tuple[Pilote, ...] = (
     Pilote(10, "Pierre", "Gasly", "GAS", "Alpine"),
     Pilote(11, "Sergio", "Perez", "PER", "Cadillac"),
     # OpenF1 abrège son prénom en « Kimi », Unibet garde les deux initiales de
-    # « Andrea Kimi ». Sans cet alias, le favori du GP (280 pts) ne serait
+    # « Andrea Kimi ». Sans cet alias, le favori du GP (28 pts) ne serait
     # rapproché d'aucun pilote et tous ses pronostics resteraient à NULL.
     Pilote(12, "Kimi", "Antonelli", "ANT", "Mercedes", ("AK.Antonelli", "A.Antonelli")),
     Pilote(14, "Fernando", "Alonso", "ALO", "Aston Martin"),

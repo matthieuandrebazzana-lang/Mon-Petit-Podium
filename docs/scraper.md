@@ -28,13 +28,14 @@ Le jeton est déposé en clair dans la configuration de n'importe quelle page de
 
 ### 1.2 `price` est une chaîne à la française
 
-« 2,80 », pas un nombre. Un `float(price)` lève, un `price * 100` concatène.
+« 2,80 », pas un nombre. Un `float(price)` lève, un `price * 10` concatène.
 `en_points()` est le **seul** endroit qui traite le cas.
 
 *Cross-contrôle rassurant* : Unibet expose aussi un champ `sort` qui vaut exactement
 `round(price × 100)` — zéro écart sur 44 cotes. Il n'est pas utilisé (rien ne le documente
-comme tel), mais il confirme que la règle des points tombe juste sur leurs propres
-arrondis.
+comme tel), mais il confirme que l'arrondi tombe juste sur le leur. **Il vaut cent fois la
+cote, donc dix fois les points depuis la v0.45.0** : ne jamais le prendre pour un nombre
+de points tout fait.
 
 ### 1.3 L'API ne rend qu'UN marché par événement
 
@@ -359,7 +360,7 @@ nom de famille, acronyme, initiale + nom, prénom + nom.
 **`app/calcul/pilotes.py` complète les cinq clés par des alias**, et ce n'était pas prévu :
 elles échouent sur deux pilotes, relevés sur les **vraies cotes en base** —
 **`AK.Antonelli`** (OpenF1 abrège « Kimi », Unibet garde les deux initiales ; c'était le
-favori du GP à 280 pts, tous ses pronostics seraient restés à `NULL`) et **`C.Sainz Jr`**.
+favori du GP à 28 pts, tous ses pronostics seraient restés à `NULL`) et **`C.Sainz Jr`**.
 
 > ### Le garde-fou de saison
 > `alias_unibet()` exige le **numéro ET le nom de famille**, et ne rend rien s'ils ne

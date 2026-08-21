@@ -7,7 +7,7 @@
  * se compareraient plus.
  *
  * **Règle 4.1 : tous les chiffres sont entiers, aucune décimale nulle part.**
- * `cote_moy_tentee` en particulier s'affiche « 310 », jamais « ×3,1 » — c'est
+ * `cote_moy_tentee` en particulier s'affiche « 31 », jamais « ×3,1 » — c'est
  * le cas que le CLAUDE.md cite nommément. Le backend ne sert d'ailleurs que des
  * entiers : rien ici n'a à arrondir quoi que ce soit.
  *

@@ -86,15 +86,21 @@ donnée qu'aucune politique ne décrit serait un trou.
 
 ---
 
-## 4. Les points sont des entiers — cote × 100
+## 4. Les points sont des entiers — cote × 10
 
-**Décision.** `cotes.valeur` est un `integer` valant `round(cote × 100)`. **Rien en base ne
+**Décision.** `cotes.valeur` est un `integer` valant `round(cote × 10)`. **Rien en base ne
 stocke une cote.**
+
+> **Le multiplicateur était 100 jusqu'à la v0.44.0** ; il vaut 10 depuis la v0.45.0.
+> **Rien d'autre de cette décision ne change** : le raisonnement porte sur le fait que la
+> base stocke un entier de points, jamais sur la valeur du facteur. Les points déjà
+> calculés n'ont pas été convertis mais remis à `NULL`, et les cotes effacées pour être
+> rescrapées — migration 15, voir `database.md` §6.
 
 **Raison.** Trois à la fois.
 
 1. **C'est la règle du jeu, pas un détail d'implémentation.** Une cote de 2,80 rapporte
-   280 points : le nombre affiché **est** la donnée.
+   28 points : le nombre affiché **est** la donnée.
 2. **Aucun flottant, donc aucune somme approximative.** Un total de saison est une somme
    d'entiers exacte.
 3. **Cela rend la règle « ne jamais afficher de cote brute » structurellement tenable** :
@@ -113,7 +119,8 @@ Des tests vérifient qu'aucun « ×N » ne sort des écrans.
 F1 comme un classement de pronostics.
 
 *Cross-contrôle rassurant* : Unibet expose un champ `sort` valant exactement
-`round(price × 100)` — zéro écart sur 44 cotes.
+`round(price × 100)` — zéro écart sur 44 cotes. Il confirme l'arrondi, **pas l'échelle** :
+il vaut dix fois les points depuis la v0.45.0.
 
 ---
 

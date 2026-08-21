@@ -37,10 +37,10 @@ Ce qui doit être su avant de toucher au code, quel que soit le sous-système.
 
 ### 3.1 Les points sont des entiers — jamais une cote
 
-> **Points = cote × 100, arrondie.** Une cote de 2,80 rapporte **280 points**.
+> **Points = cote × 10, arrondie.** Une cote de 2,80 rapporte **28 points**.
 
 **On n'affiche JAMAIS une cote brute.** Nulle part on n'écrit « ×2,80 » — on écrit
-« 280 pts ». Sans exception. `cotes.valeur` est déjà le nombre de points : **rien en base
+« 28 pts ». Sans exception. `cotes.valeur` est déjà le nombre de points : **rien en base
 ne stocke une cote**. `lib/format.js` est le seul endroit qui habille un nombre de points.
 
 Un pronostic raté rapporte `0`. **`NULL` et `0` ne se confondent jamais** : `NULL` veut
@@ -196,29 +196,36 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.44.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+**Version `0.45.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
 les onze étapes de développement sont livrées : fondations, authentification, championnats,
 scraper Unibet, pronostics, résultats OpenF1, classements, profils, finitions, navigation,
 scraping automatique.
 
-**Cette version** ajoute le **mode prévisualisation** : un second interrupteur dans la
-section Administration, subordonné au mode admin, qui fait voir l'application comme si les
-cotes du prochain Grand Prix étaient déjà figées. Il ne lève qu'une condition,
-`cotesArretees` — la seule fonction du projet qui lise le statut `cotes_figees` — et
-**n'écrit rien** : les autres membres ne voient aucune différence, et le job automatique
-continue à l'identique. Une pastille « Prévisualisation » en bas de l'écran empêche de
-confondre cette vue avec la vraie. Il n'y a donc plus de raison d'écrire en base pour
-regarder un écran, ce qui était la cause de l'accident du GP des Pays-Bas. Voir
-`docs/decisions.md` §15 bis.
+**Cette version** fait passer le multiplicateur des points de **100 à 10** : une cote de
+2,80 rapporte désormais **28 points** et non 280. La règle du §3.1 est inchangée par
+ailleurs — les points restent des entiers, une cote brute ne s'affiche jamais. Un seul
+endroit calcule : `en_points()` dans `backend/app/scraper/unibet.py`. **Le frontend ne
+convertit rien** et n'avait donc rien à changer : ce qui lui arrive est déjà un nombre de
+points.
 
-*La version `0.43.0` avait mis en place la mémoire externe : la connaissance détaillée est
-passée de ce fichier vers les douze documents de `docs/`.*
+La **migration 15** (`20260821143000_points_diviseur_10`) efface ce qui avait été calculé
+sur l'ancienne échelle, **sans rien convertir** : les deux colonnes `points_gagnes`
+repassent à `NULL` (jamais à `0`, qui voudrait dire « raté »), `public.cotes` est vidée, et
+les GP `cotes_figees` sont rouverts pour que le scraper puisse les réécrire. **Un scraping
+est obligatoire juste après** — sans cotes, aucun GP n'est pronosticable. Aucun vrai Grand
+Prix n'ayant été joué, il n'y avait pas de score à préserver.
+
+*La version `0.44.0` avait ajouté le **mode prévisualisation** — un interrupteur de la
+section Administration qui fait voir l'application comme si les cotes du prochain GP
+étaient figées, sans rien écrire en base (`docs/decisions.md` §15 bis).*
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :
 
-1. **Corriger la donnée du GP des Pays-Bas** — statut figé prématurément et `date_course`
-   fausse de deux heures (`docs/bugs-connus.md` §4 et §11).
+1. **Appliquer la migration 15, puis déclencher un scraping** — sans cotes en base, aucun
+   GP n'est pronosticable. Elle règle au passage le statut figé prématurément du GP des
+   Pays-Bas ; sa `date_course` fausse de deux heures se remet d'aplomb au scraping
+   (`docs/bugs-connus.md` §4 et §11).
 2. **Vérifier les migrations appliquées** dans le SQL Editor, et définir les variables
    d'environnement de production sur Vercel et Railway.
 3. **Tester sur iPhone réel** — jamais fait.
