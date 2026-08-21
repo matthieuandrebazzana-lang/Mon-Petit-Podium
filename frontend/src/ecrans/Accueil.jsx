@@ -489,15 +489,53 @@ export function CarteChampionnat({ championnat }) {
         {/* Le rang, en très grand et en retrait. Il n'est rendu que s'il est
             connu : un tiret sous le mot « classement » ne dirait rien de plus
             que la colonne absente, et laisserait croire à une donnée manquante
-            là où c'est le réveil de Railway qui n'a pas encore répondu. */}
+            là où c'est le réveil de Railway qui n'a pas encore répondu.
+
+            **Format position/total depuis la version `0.48.0`** — « 1/3 » et
+            non plus « 1 ». Un rang seul ne dit pas s'il est bon : premier sur
+            trois et premier sur douze ne valent pas la même chose, et c'est
+            l'effectif qui fait la différence. Il était déjà sur la carte, dans
+            la sous-ligne « N membres », mais à douze pixels et à l'autre bout
+            de la rangée — trop loin du chiffre pour être lu avec lui.
+
+            **Les deux nombres ne sont pas de la même taille, et c'est la
+            hiérarchie qui le décide** : 48px pour la position, qui est la
+            réponse, 24px pour le total, qui est le contexte. Deux chiffres de
+            même corps se liraient comme une date. C'est aussi ce que prescrit
+            la règle de vibrance du design system — la hiérarchie passe par la
+            taille et la graisse, jamais par l'opacité seule.
+
+            Le total emprunte l'encre secondaire `texteDoux`, mesurée : sur le
+            plus clair des six aplats (terreau), sous le damier et la lueur,
+            elle tient **4,97:1** — au-dessus du plancher AA d'un texte
+            ordinaire, et le total est ici du grand texte (3:1). */}
         {position && (
           <span className="shrink-0 text-right">
             <span
-              className={`block text-[48px] leading-none font-medium ${ton.fantomeLisible}`}
+              aria-hidden="true"
+              className="flex items-baseline justify-end"
             >
-              {position.mon_rang}
+              <span
+                className={`text-[48px] leading-none font-medium ${ton.fantomeLisible}`}
+              >
+                {position.mon_rang}
+              </span>
+              <span
+                className={`text-[24px] leading-none font-medium ${ton.texteDoux}`}
+              >
+                /{membres}
+              </span>
+            </span>
+            {/* Le lecteur d'écran reçoit la phrase, pas la fraction : « 1/3 »
+                s'annonce « un barre oblique trois », qui ne veut rien dire.
+                Même motif que les nombres rendus deux fois ailleurs — la forme
+                visible est `aria-hidden`, la forme lue vit à côté. */}
+            <span className="sr-only">
+              Classement : {position.mon_rang}
+              {position.mon_rang === 1 ? "er" : "e"} sur {membres}
             </span>
             <span
+              aria-hidden="true"
               className={`text-label-sm mt-1 block uppercase ${ton.texteDoux}`}
             >
               classement
@@ -585,10 +623,18 @@ export function CarteAction({ vers, icone, titre, sousTitre }) {
       className="rounded-carte bg-surface shadow-carte pressable-large relative flex min-h-[120px] items-center gap-3.5 overflow-hidden p-4"
     >
       {/* `relative` + `overflow-hidden` sont ajoutes pour le damier : sans le
-          second, le motif deborderait des coins arrondis de la carte. */}
+          second, le motif deborderait des coins arrondis de la carte.
+
+          **`motif-damier-doux` le ramene de 15 a 7,5 %** (version `0.48.0`).
+          Ces deux cartes sont les seules a poser le damier sur du BLANC, ou il
+          ne se lit pas comme une texture mais comme un gris sale : a 15 % le
+          fond tombe a #E7E7E7, assez fonce pour que le motif dispute le regard
+          au logo et au titre. A 7,5 % (#F3F3F3) il est encore la, sans
+          dominer. Les aplats colores gardent les 15 % : sur eux le meme motif
+          ne retire au pire qu'un point de contraste. */}
       <span
         aria-hidden="true"
-        className="motif-damier pointer-events-none absolute inset-0"
+        className="motif-damier motif-damier-doux pointer-events-none absolute inset-0"
       />
 
       <span className="relative flex size-10 shrink-0 items-center justify-center" aria-hidden="true">

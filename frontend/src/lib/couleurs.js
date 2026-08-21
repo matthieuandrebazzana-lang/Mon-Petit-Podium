@@ -1,11 +1,12 @@
 /**
  * Couleurs de bloc — refonte visuelle des quatre écrans principaux.
  *
- * Six aplats, et **un seul endroit qui décide lequel** : une carte de
- * championnat, l'en-tête coloré de son écran, un en-tête de marché, un bloc de
- * pronostic. Écrire la teinte à la main dans chaque écran la ferait diverger au
- * premier ajustement, et un championnat changerait de couleur d'un écran à
- * l'autre — exactement ce que la refonte cherche à éviter.
+ * **Deux listes de six aplats, et un seul endroit qui décide laquelle** :
+ * `COULEURS_BLOC` peint un en-tête de marché et un bloc de pronostic,
+ * `COULEURS_CHAMPIONNAT` (version `0.48.0`) une carte de championnat et
+ * l'en-tête coloré de son écran. Écrire la teinte à la main dans chaque écran
+ * la ferait diverger au premier ajustement, et un championnat changerait de
+ * couleur d'un écran à l'autre — exactement ce que la refonte cherche à éviter.
  *
  * **Périmètre, identique à celui de `lib/palette.js`** : ces couleurs ne
  * peignent que des aplats de bloc et le texte posé dessus. Jamais un fond
@@ -27,6 +28,45 @@ export const COULEURS_BLOC = [
   { cle: "bleu-ardoise", hex: "#2C4A6E", fond: "bg-bleu-ardoise", texte: "text-bleu-ardoise" },
   { cle: "terracotta", hex: "#C4622D", fond: "bg-terracotta", texte: "text-terracotta" },
   { cle: "violet", hex: "#5C3D7A", fond: "bg-violet", texte: "text-violet" },
+];
+
+/**
+ * Les six teintes de **championnat** — palette Pantone sombre, ajoutée en
+ * version `0.48.0`. Elles ne remplacent pas `COULEURS_BLOC` : les deux listes
+ * répondent à deux questions différentes, et les confondre reviendrait à faire
+ * bouger la couleur d'un marché chaque fois qu'on retouche celle des cartes.
+ *
+ * | Question | Liste | Ce qui la contraint |
+ * |---|---|---|
+ * | « de quel marché parle ce bloc ? » | `COULEURS_BLOC` | un repère **fixe** : rouge = vainqueur, bleu = podium, vert = écurie |
+ * | « de quel championnat parle cette carte ? » | `COULEURS_CHAMPIONNAT` | **distinguer** des championnats entre eux |
+ *
+ * **Le blanc les tient toutes, et confortablement.** C'est la propriété
+ * mesurée qui justifie la bascule, pas le goût : sur ces six aplats l'encre
+ * blanche va de **10,35:1** (tomate séchée) à **18,12:1** (minuit), quand les
+ * quatre aplats clairs de `COULEURS_BLOC` plafonnaient à 4,41:1 sous le damier
+ * (terracotta) et que l'amber tombait carrément à l'encre foncée. Toutes les
+ * dérivées de `tonalites` gagnent d'autant : le pire cas de l'encre secondaire
+ * à 70 %, sous le damier et la lueur, est **4,97:1** sur le terreau — au-dessus
+ * du plancher AA d'un texte ordinaire, là où le terracotta n'y valait que
+ * 2,79:1.
+ *
+ * Les classes sont écrites **en toutes lettres**, même règle que
+ * `COULEURS_BLOC` : Tailwind lit les fichiers source et ne verrait pas une
+ * classe assemblée à l'exécution.
+ */
+export const COULEURS_CHAMPIONNAT = [
+  { cle: "azurite", hex: "#1D2941", fond: "bg-azurite", texte: "text-azurite" },
+  { cle: "mure", hex: "#2A1F21", fond: "bg-mure", texte: "text-mure" },
+  { cle: "aubergine", hex: "#301729", fond: "bg-aubergine", texte: "text-aubergine" },
+  { cle: "terreau", hex: "#54392D", fond: "bg-terreau", texte: "text-terreau" },
+  {
+    cle: "tomate-sechee",
+    hex: "#752329",
+    fond: "bg-tomate-sechee",
+    texte: "text-tomate-sechee",
+  },
+  { cle: "minuit", hex: "#16151D", fond: "bg-minuit", texte: "text-minuit" },
 ];
 
 const PAR_CLE = new Map(COULEURS_BLOC.map((couleur) => [couleur.cle, couleur]));
@@ -172,11 +212,15 @@ function empreinte(valeur) {
  * même — là où un modulo sur le rang aurait garanti six cartes distinctes.
  * Reconnaître un championnat à sa couleur d'un écran à l'autre vaut mieux que
  * les distinguer deux à deux sur un seul.
+ *
+ * **La rotation puise dans `COULEURS_CHAMPIONNAT`, pas dans `COULEURS_BLOC`**
+ * (version `0.48.0`). Le modulo est resté le même : six teintes couvrent six
+ * championnats distincts, et au-delà le cycle recommence.
  */
 export function couleurChampionnat(championnat) {
   const graine =
     championnat?.id || championnat?.code_invitation || championnat?.nom || "";
-  return COULEURS_BLOC[empreinte(graine) % COULEURS_BLOC.length];
+  return COULEURS_CHAMPIONNAT[empreinte(graine) % COULEURS_CHAMPIONNAT.length];
 }
 
 /**

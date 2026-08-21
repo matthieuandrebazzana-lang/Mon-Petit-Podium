@@ -535,3 +535,38 @@ c'est-à-dire un repli qui se termine par le saut qu'il existait pour supprimer.
 rend `perso` pour toute ligne qui ne dit pas autre chose. **Aucune migration n'a été
 nécessaire** — un nouveau joueur voit « Ma livrée » sélectionné, Coque et Ailerons
 visibles, sans avoir rien choisi.
+
+---
+
+## 18. Deux listes d'aplats, pas une seule élargie
+
+**Version `0.48.0`.** Les six teintes de championnat sont une **liste séparée**
+(`COULEURS_CHAMPIONNAT`) et non six entrées de plus dans `COULEURS_BLOC`.
+
+**Ce sont deux questions, et elles n'ont pas la même contrainte.** La couleur d'un marché
+est un **repère fixe** — rouge = vainqueur, bleu = podium, vert = écurie — que rien ne
+doit faire bouger. La couleur d'un championnat sert à **distinguer des championnats entre
+eux**, et elle peut changer de palette sans que personne ne perde ses repères. Une liste
+unique aurait lié les deux : retoucher les cartes de l'accueil aurait déplacé la couleur
+des en-têtes de marché, ou obligé à un sous-ensemble nommé, c'est-à-dire à la même
+séparation mais implicite.
+
+**Ce que la palette sombre a réellement acheté, et c'est mesuré.** Les six teintes tiennent
+le blanc de **10,35:1** (tomate séchée) à **18,12:1** (minuit). Les aplats clairs qu'elles
+remplacent étaient le point faible du calcul de contraste depuis l'origine : le terracotta
+`#C4622D` ne valait que 4,41:1 sous le damier, l'encre secondaire à 70 % y tombait à
+2,79:1, et l'amber `#E8A020` basculait carrément sur l'encre foncée. Sur les six nouvelles,
+**le pire cas de l'encre secondaire est 4,97:1** (terreau, sous le damier et sous la lueur)
+et le rang à 80 % ne descend jamais sous 5,92:1. Le commentaire de `tonalites` qui
+défendait le plancher de 80 % **reste vrai et reste utile** : il protège l'aplat clair du
+jour où il reviendrait, et il documente pourquoi 30 % était faux.
+
+**L'attribution n'a pas bougé, et c'est délibéré.** `couleurChampionnat` puise toujours par
+**empreinte de l'identifiant**, pas par rang dans une liste — voir le commentaire de
+`lib/couleurs.js`. Le prix reste le même : avec six teintes, deux championnats d'une même
+liste peuvent tomber sur la même. La demande de la version `0.48.0` parle de « couleurs
+tournantes » couvrant « jusqu'à six championnats distincts », ce qu'un modulo sur le rang
+garantirait. Il **casserait toujours l'écran de détail**, atteint par lien direct, qui ne
+connaît aucune liste et ne saurait pas quelle couleur peindre ; et deux membres du même
+championnat le verraient de deux couleurs différentes. Reconnaître un championnat à sa
+couleur d'un écran à l'autre reste ce qui a le plus de valeur.

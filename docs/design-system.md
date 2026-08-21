@@ -37,9 +37,38 @@ jetons, jamais dans des valeurs en dur.**
 | `#C4622D` | `terracotta` |
 | `#5C3D7A` | `violet` |
 
-> **Elles ne peignent QUE des aplats de bloc** — carte de championnat, en-tête de marché,
-> bloc de pronostic — et le texte posé dessus. Jamais un fond d'écran, jamais un texte
-> sur le beige, jamais une bordure. Les sept couleurs de base gardent tous leurs rôles.
+> **Elles ne peignent QUE des aplats de bloc** — en-tête de marché, bloc de pronostic —
+> et le texte posé dessus. Jamais un fond d'écran, jamais un texte sur le beige, jamais
+> une bordure. Les sept couleurs de base gardent tous leurs rôles.
+
+### Les six teintes de championnat — palette Pantone sombre
+
+| Hex | Jeton | Pantone |
+|---|---|---|
+| `#1D2941` | `azurite` | Azurite |
+| `#2A1F21` | `mure` | Blackberry Syrup |
+| `#301729` | `aubergine` | Aubergine Gleam |
+| `#54392D` | `terreau` | Potting Soil |
+| `#752329` | `tomate-sechee` | Sun-Dried Tomato |
+| `#16151D` | `minuit` | Midnight Sky |
+
+> **Elles ne peignent QUE une carte de championnat et l'en-tête de son écran.** Même
+> périmètre borné que la palette élargie, et **une liste séparée d'elle** : la couleur
+> d'un marché est un repère fixe (rouge = vainqueur), celle d'un championnat sert à
+> distinguer des championnats entre eux. Deux questions, deux listes — `COULEURS_BLOC` et
+> `COULEURS_CHAMPIONNAT`, toutes deux dans `lib/couleurs.js`.
+
+Six teintes couvrent six championnats distincts ; au-delà, le cycle recommence.
+`couleurChampionnat` y puise par **empreinte de l'identifiant**, jamais par le rang dans
+une liste — voir `decisions.md` §18.
+
+> ### Le texte reste blanc sur les six, et c'est mesuré
+> L'encre blanche y tient de **10,35:1** (tomate séchée) à **18,12:1** (minuit) : aucune
+> ne demande l'encre foncée, là où l'amber de la palette élargie l'imposait. Les dérivées
+> de `tonalites` gagnent d'autant. **Pire cas de l'encre secondaire à 70 %, sous le damier
+> et sous la lueur : 4,97:1 sur le terreau** — au-dessus du plancher AA d'un texte
+> ordinaire, quand le terracotta n'y valait que 2,79:1. Le rang à 80 % ne descend jamais
+> sous 5,92:1, contre 3,15:1 auparavant.
 
 **`#E8E0D8` (`squelette`)** ne peint jamais qu'une silhouette de chargement.
 
@@ -218,6 +247,17 @@ quoi la répétition se voit en damier ; le contraste du bruit est **étiré dan
 **`--motif-damier`** — la vague de `assets/06.svg`, à **15 %**, en data-URI. La planche
 répète quatorze fois la même forme : elle est écrite **une fois** dans un `<defs>` et
 reprise par `<use>`, ce qui la ramène de 91 Ko à 7 Ko.
+
+> **Deux opacités, et la seconde passe par une VARIABLE.** `motif-damier-doux` ramène le
+> motif à **7,5 %** sur les deux cartes d'action — les seules à le poser sur du blanc, où
+> 15 % ne se lit plus comme une texture mais comme un gris sale (#E7E7E7 contre #F3F3F3).
+> Les aplats colorés gardent les 15 %.
+>
+> L'opacité est écrite `opacity: var(--damier-opacite, 0.15)`, et l'utilitaire doux ne
+> pose **que la variable**. Un `opacity-[0.075]` de Tailwind écrirait la même propriété
+> que `motif-damier`, dans la même couche : c'est alors leur **ordre dans la feuille
+> compilée** qui les départage, pas l'ordre des classes dans le JSX. Même piège que la
+> place de la barre de navigation. Deux propriétés différentes ne peuvent pas se disputer.
 
 > **Les 15 % du damier ASSOMBRISSENT les deux aplats les plus clairs** (terracotta
 > 4,09 → 4,41, vert sauge 4,86 → 5,06) et retirent au plus un point aux autres. Pire cas

@@ -15,7 +15,6 @@ import {
   IconeCoche,
   IconeCopie,
   IconeSortie,
-  IconeVoiture,
 } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerChampionnat, quitterChampionnat } from "../lib/championnats.js";
@@ -495,11 +494,21 @@ export default function Championnat() {
             </>
           ) : (
             <>
+              {/* **L'icône a quitté ce bouton en version `0.48.0`.** Le
+                  dessin d'`IconeVoiture` est une cabine et une caisse posées
+                  sur deux roues — un camion, pas une monoplace, et un camion
+                  ne dit rien d'une vue piste. Le libellé, lui, nomme sa
+                  destination, ce que le wayfinding demande ; l'icône ne faisait
+                  que décentrer ce libellé pour rien.
+
+                  Le damier reste, à ses 15 % habituels : sur le bordeaux
+                  `primaire` il ramène le fond à #7B0F1D, où le blanc tient
+                  encore **10,89:1**. Le texte redevient centré, seul dans le
+                  bouton. */}
               <Bouton
                 variante="principal"
                 damier
                 onClick={() => naviguer(`/championnats/${id}/piste`)}
-                icone={<IconeVoiture className="size-5" />}
               >
                 Vue piste
               </Bouton>

@@ -196,44 +196,60 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.47.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+**Version `0.48.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
 les onze étapes de développement sont livrées : fondations, authentification, championnats,
 scraper Unibet, pronostics, résultats OpenF1, classements, profils, finitions, navigation,
 scraping automatique.
 
-**Cette version corrige deux dessins, et rien d'autre.**
+**Cette version retouche l'accueil, la liste des championnats et l'écran championnat. Rien
+au backend — sa version reste `0.45.0`.**
 
-**Les vignettes Racing Bulls et Red Bull du sélecteur de skin** sont remplacées par les
-deux voitures de la nouvelle planche `assets/matt.svg`. Leurs cadrages sont **mesurés, pas
-prescrits** : les deux font `255,70 × 255,70`, exactement la taille des neuf pastilles de
-`matti.svg`, donc elles se substituent sans qu'une valeur du sélecteur ne bouge. **L'ordre
-des deux voitures dans la planche a été établi par rendu** — Racing Bulls au-dessus, Red
-Bull en dessous — jamais deviné d'après les couleurs du fichier. **Seules les vignettes de
-sélection changent** : la voiture du profil et celle de la vue piste restent celles de
-`VoituresEcuries.jsx`.
+**Les cartes de championnat affichent « 1/3 » et non plus « 1 ».** Un rang seul ne dit pas
+s'il est bon : premier sur trois et premier sur douze ne valent pas la même chose.
+L'effectif était déjà sur la carte, à douze pixels et à l'autre bout de la rangée — trop
+loin du chiffre pour être lu avec lui. **Les deux nombres ne sont pas de même corps** (48px
+pour la position, 24px pour le total) : la hiérarchie passe par la taille, pas par
+l'opacité. **La fraction est `aria-hidden`** et doublée d'une phrase en `sr-only` — « 1/3 »
+s'annoncerait « un barre oblique trois ». Aucun appel réseau nouveau : le total est
+`nombre_membres`, déjà servi. La carte vit dans `Accueil.jsx` et sert **les deux écrans**.
 
-**Mercedes et Alpine ne sont plus barrées de gris**, et **la cause n'était pas une
-collision de classes CSS** : il ne peut pas y en avoir, puisque le frontend ne contient ni
-une classe `cls-N`, ni une balise `<style>` — la règle 3 d'extraction les a toutes
-converties en attributs `fill` dès l'origine. Le vrai défaut est l'**ordre de peinture**.
-Le fond plat `#3C3C3B` ouvre le document dans la planche, sous la carrosserie ; le
-découpage l'avait recopié au rang 13 et 16, donc **par-dessus**. Mêmes formes, mêmes
-couleurs, même cadrage — un ordre différent suffisait à ruiner les deux dessins
-(`docs/bugs-connus.md` §17).
+**Six teintes Pantone sombres remplacent les aplats des cartes de championnat**, dans une
+**liste séparée** de celle des marchés (`docs/decisions.md` §18) — la couleur d'un marché
+est un repère fixe, celle d'un championnat distingue des championnats. Le gain est
+**mesuré, pas esthétique** : le blanc y tient de **10,35:1** à **18,12:1**, quand le
+terracotta ne valait que 4,41:1 sous le damier et que l'encre secondaire y tombait à
+2,79:1. Pire cas des six, encre secondaire comprise : **4,97:1**. **L'attribution n'a pas
+bougé** — toujours l'empreinte de l'identifiant, jamais le rang dans une liste, faute de
+quoi l'écran de détail ne saurait pas quelle couleur peindre.
 
-**Les deux fragments ont été régénérés par script**, en ordre de document, et le rendu du
-JSX est désormais superposable à celui de la planche cadrée. Les neuf autres livrées
-n'ont pas été touchées : elles étaient déjà dans le bon ordre. **`composants.md` compte
-maintenant QUATRE règles d'extraction** — l'ordre de document en est une, et la règle
-« octet pour octet » ne protège pas d'elle.
+**Le damier passe à 7,5 % sur les deux cartes d'action**, et **l'opacité est une variable**
+(`--damier-opacite`), pas un second `opacity:`. Un `opacity-[0.075]` de Tailwind écrirait
+la même propriété dans la même couche : c'est l'**ordre de la feuille compilée** qui les
+départagerait, pas l'ordre des classes du JSX. Les aplats colorés gardent les 15 % : ces
+deux cartes sont les seules à poser le motif sur du blanc, où 15 % ne se lit plus comme une
+texture mais comme un gris sale.
 
-*La version `0.46.0` avait réordonné la personnalisation du profil selon la portée de
-chaque réglage et fait quitter le DOM à Coque et Ailerons sous un skin d'écurie, par un
-repli (`docs/decisions.md` §17). La `0.45.0` avait fait passer le multiplicateur des points
-de **100 à 10** — une cote de 2,80 rapporte **28 points** — et livré la **migration 15**
-(`20260821143000_points_diviseur_10`), qui efface sans convertir : `points_gagnes` repasse
-à `NULL`, `public.cotes` est vidée, les GP `cotes_figees` sont rouverts. **Un scraping
-reste obligatoire.***
+**L'icône du bouton « Vue piste » est retirée** — `IconeVoiture` dessine une cabine, une
+caisse et deux roues, c'est-à-dire un **camion**, qui ne dit rien d'une vue piste. Le
+libellé nomme déjà sa destination. **Le damier y était déjà**, à ses 15 % (10,89:1 pour le
+blanc sur le bordeaux ainsi assombri) : seul le décentrement du libellé a disparu.
+`IconeVoiture` reste dans `Icones.jsx`, simplement plus importée.
+
+**Aucune animation n'a été ajoutée.** Une carte d'accueil se voit des dizaines de fois par
+jour : le portier des skills de mouvement y ferme la porte, et le changement de format ne
+signale aucun changement d'état. L'entrée échelonnée, l'appui et la jauge existants n'ont
+pas bougé.
+
+*La version `0.47.0` avait corrigé deux dessins : les vignettes Racing Bulls et Red Bull du
+sélecteur de skin, reprises de `assets/matt.svg`, et Mercedes et Alpine barrées de gris —
+un défaut d'**ordre de peinture**, pas de collision de classes (`docs/bugs-connus.md` §17).
+`composants.md` compte depuis QUATRE règles d'extraction. La `0.46.0` avait réordonné la
+personnalisation du profil et fait quitter le DOM à Coque et Ailerons sous un skin
+d'écurie (`docs/decisions.md` §17). La `0.45.0` avait fait passer le multiplicateur des
+points de **100 à 10** — une cote de 2,80 rapporte **28 points** — et livré la **migration
+15** (`20260821143000_points_diviseur_10`), qui efface sans convertir : `points_gagnes`
+repasse à `NULL`, `public.cotes` est vidée, les GP `cotes_figees` sont rouverts. **Un
+scraping reste obligatoire.***
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :

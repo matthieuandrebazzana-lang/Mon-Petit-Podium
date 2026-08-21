@@ -28,6 +28,26 @@
   --color-terracotta: #c4622d;
   --color-violet: #5c3d7a;
 
+  /* Les six teintes de championnat (version `0.48.0`) — palette Pantone
+     sombre, **distincte de la palette élargie ci-dessus**. Les quatre teintes
+     de bloc gardent tous leurs emplois (en-têtes de marché, blocs de
+     pronostic) ; ces six-là ne peignent qu'**une carte de championnat et
+     l'en-tête de son écran**, plus le texte posé dessus. Deux listes séparées
+     parce que ce sont deux questions séparées : la couleur d'un marché est un
+     repère fixe (rouge = vainqueur), la couleur d'un championnat distingue
+     des championnats entre eux.
+
+     Elles sont toutes sombres, et c'est ce qui fait leur intérêt mesuré : le
+     blanc y tient de **10,35:1** (tomate séchée) à **18,12:1** (minuit), là où
+     les aplats clairs de la palette élargie plafonnaient à 4,41:1 sous le
+     damier (terracotta). Aucune ne demande d'encre foncée. */
+  --color-azurite: #1d2941;
+  --color-mure: #2a1f21;
+  --color-aubergine: #301729;
+  --color-terreau: #54392d;
+  --color-tomate-sechee: #752329;
+  --color-minuit: #16151d;
+
   /* Gris des squelettes de chargement (étape 9). Ce n'est pas une couleur
      nouvelle du design system au sens de la section 5 : elle ne peint jamais
      un fond, un bouton ni un texte. C'est le beige `fond` assombri juste ce
@@ -456,7 +476,27 @@
   background-image: var(--motif-damier);
   background-size: cover;
   background-position: center;
-  opacity: 0.15;
+  opacity: var(--damier-opacite, 0.15);
+}
+
+/* Le damier discret des cartes d'action (version `0.48.0`).
+
+   **L'opacite passe par une variable, jamais par un second `opacity:`.** Un
+   utilitaire `opacity-[0.075]` pose exactement la meme propriete que
+   `motif-damier` : les deux vivent dans la couche des utilitaires, et c'est
+   leur ORDRE dans la feuille compilee qui les departage — pas leur
+   specificite, ni l'ordre des classes dans le JSX. C'est le piege deja
+   documente pour la place de la barre de navigation. Deux proprietes
+   differentes (`--damier-opacite` d'un cote, `opacity` de l'autre) ne peuvent
+   pas se disputer.
+
+   0,075 est la valeur demandee (~0,07-0,08). Sur une carte blanche le fond
+   passe de #E7E7E7 (15 %) a #F3F3F3 : la texture existe encore, mais elle ne
+   domine plus le logo ni le titre. Le marron `secondaire` des sous-titres y
+   monte de 8,54:1 a 9,52:1 — il n'a plus a etre defendu, il reste par
+   coherence avec les autres ecrans. */
+@utility motif-damier-doux {
+  --damier-opacite: 0.075;
 }
 
 @media (prefers-contrast: more) {
