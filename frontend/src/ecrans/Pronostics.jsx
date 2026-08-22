@@ -271,8 +271,13 @@ function BlocObligatoire({ titre, couleur, ton, children }) {
       />
       <div className="relative flex flex-col gap-2.5 p-4">
         <div className="flex items-center justify-between gap-2">
+          {/* Deux lignes, même règle qu'au tableau des cotes : le titre est
+              celui d'Unibet, et tronqué il ne nomme plus son marché. Le bloc
+              n'a pas de hauteur fixe — c'est le `flex-col gap-2.5` qui tient
+              l'écart avec les emplacements en dessous, quelle que soit la
+              hauteur prise ici. */}
           <p
-            className={`min-w-0 truncate text-[12px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
+            className={`line-clamp-2 min-w-0 leading-[1.25] break-words text-[12px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
           >
             {titre}
           </p>

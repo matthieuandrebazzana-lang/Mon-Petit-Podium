@@ -84,6 +84,12 @@ partagent toutes le même périmètre : elles ne peignent que l'objet qu'elles d
 | `composants/DrapeauxGP.jsx` | le fond d'un bloc de Grand Prix |
 | `lib/livrees.js` | teintes des livrées, **lues dans `ecuries.js`** |
 
+**`teinteMembre` (`lib/couleurs.js`) est une cinquième liste**, et elle ne sort pas du bloc
+`@theme` : ce sont **quatre des sept couleurs de base**, dans leur rôle d'aplat, réparties
+par empreinte de l'identifiant d'un membre. Elle porte **les deux formes** de chaque teinte
+— la classe Tailwind pour la pastille en HTML, le `#rrggbb` pour le cockpit de la voiture
+en SVG, où un `fill` n'accepte pas `bg-primaire`. Une seule question, un seul propriétaire.
+
 **Aucune ne peint un fond d'écran, un bouton ou un texte d'interface.** Des tests
 vérifient le cloisonnement.
 
@@ -193,6 +199,17 @@ ou un élément graphique est posé sur une surface, le contraste est **mesuré*
 | `encreSurBlanc(couleur)` | la couleur si elle tient **4,5:1** sur blanc, sinon `texte` |
 | `tonalites(hex)` | le jeu complet : encre, encre secondaire, surfaces, fantôme |
 | `encreSur(fond)` | luminance WCAG → `#1A1A1A` ou `#FFFFFF` |
+
+> ### `encreSur` et `encreSurAplat` ne sont PAS interchangeables
+> Les deux rendent une encre, et **l'amber les départage**. `encreSur` compare une
+> **luminance** à 0,45 ; l'amber vaut **0,424**, il passe donc juste sous le seuil et rend
+> du blanc, à 2,22:1. `encreSurAplat` mesure le **contraste** et bascule sur l'encre foncée
+> dès qu'on descend sous 3:1.
+>
+> **Devant « quelle encre sur cet aplat ? », c'est `encreSurAplat`.** `encreSur` reste juste
+> là où il sert — les deux textes peints sur une carrosserie de voiture, qui ne rencontrent
+> jamais l'amber. La pastille d'un membre, elle, l'a rencontré : elle écrivait `text-white`
+> en dur, et une initiale sur quatre y était illisible (`bugs-connus.md` §19).
 
 > ### L'amber est le cas d'école
 > Sur `#E8A020`, le **blanc tombe à 2,2:1** quand `#1A1A1A` monte à **7,9:1**. Toute

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { chargerPseudo } from "./profils.js";
+import { chargerIdentite } from "./profils.js";
 
 /**
- * Le pseudo courant du compte connecté, relu **en base à chaque montage**.
+ * Le pseudo **et la photo** du compte connecté, relus en base à chaque montage.
  *
  * Le défaut qu'il corrige : `useAuth().pseudo` ne lit pas `public.profils`, il
  * lit `user_metadata.pseudo` — une copie figée dans le jeton à l'inscription.
@@ -34,18 +34,31 @@ import { chargerPseudo } from "./profils.js";
  *    du doute, celui déjà appliqué au bloc du prochain Grand Prix depuis la
  *    version `0.5.1` : l'échec d'une lecture de confort ne casse pas l'écran.
  *
+ * > ### La photo voyage avec le pseudo (version `0.52.0`)
+ * >
+ * > La pastille de la barre d'accueil porte désormais la photo du compte
+ * > connecté. Elle vient de **la même ligne, dans la même requête** — voir
+ * > `chargerIdentite` : c'est ce que veut dire « sans requête supplémentaire ».
+ * >
+ * > **Le jeton ne peut pas la servir en repli**, contrairement au pseudo : il
+ * > n'en porte aucune copie, même périmée. Tant que la base n'a rien dit, la
+ * > photo est donc `null` et la pastille montre l'initiale — l'affichage
+ * > d'avant, qui est aussi l'état par défaut de tout compte. Elle ne clignote
+ * > pas pour autant : c'est le fondu de `.t-photo` qui l'amène.
+ *
  * @param {string|null} profilId  l'identifiant du compte connecté
  * @param {string}      replier   le pseudo du jeton, servi tant que la base n'a rien dit
+ * @returns {{pseudo: string, avatarUrl: string|null}}
  */
-export function usePseudoCourant(profilId, replier = "") {
-  const [pseudo, setPseudo] = useState(null);
+export function useIdentiteCourante(profilId, replier = "") {
+  const [identite, setIdentite] = useState(null);
 
   useEffect(() => {
     // Le compte a changé : la valeur de l'ancien ne doit pas survivre une seule
     // image à l'écran. Deux personnes qui se relaient sur le même téléphone ne
     // doivent jamais lire le pseudo de l'autre — c'est la règle posée à
     // l'étape 3 pour les clés de cache, et elle vaut aussi sans cache.
-    setPseudo(null);
+    setIdentite(null);
 
     if (!profilId) return undefined;
 
@@ -54,10 +67,10 @@ export function usePseudoCourant(profilId, replier = "") {
 
     (async () => {
       try {
-        const resultat = await chargerPseudo(profilId, controleur.signal);
+        const resultat = await chargerIdentite(profilId, controleur.signal);
         // Un profil sans ligne rend `donnees: null` sans être une erreur : on
         // reste alors sur le repli plutôt que d'effacer le titre.
-        if (actif && resultat.ok && resultat.donnees) setPseudo(resultat.donnees);
+        if (actif && resultat.ok && resultat.donnees) setIdentite(resultat.donnees);
       } catch {
         /* Abandon au démontage, ou panne réseau : le repli fait le travail. */
       }
@@ -69,5 +82,8 @@ export function usePseudoCourant(profilId, replier = "") {
     };
   }, [profilId]);
 
-  return pseudo ?? replier;
+  return {
+    pseudo: identite?.pseudo ?? replier,
+    avatarUrl: identite?.avatarUrl ?? null,
+  };
 }

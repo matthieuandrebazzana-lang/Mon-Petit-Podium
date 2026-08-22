@@ -371,5 +371,5 @@ active, une inscription sur une adresse déjà prise **réussit en apparence** e
 utilisateur sans identité — Supabase protège ainsi la liste de ses inscrits. Sans le test
 `emailDejaInscrit`, l'utilisateur attendrait indéfiniment un email qui n'arrivera jamais.
 
-Le hook `usePseudoCourant` relit le pseudo en base à chaque montage — voir
-`composants.md` §5.
+Le hook `useIdentiteCourante` relit le pseudo **et la photo** en base à chaque montage,
+dans une seule requête — voir `composants.md` §5.

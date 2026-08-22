@@ -21,18 +21,15 @@
  * compte, et les initiales sur teinte dérivée du pseudo sont une réponse
  * complète : elles distinguent, elles sont stables, elles se lisent en 36px. La
  * photo est un enrichissement, jamais un prérequis.
+ *
+ * **La table des teintes est sortie d'ici** (version `0.52.0`) vers
+ * `lib/couleurs.js` : la vue piste pose désormais la même question en SVG, où
+ * il faut un `#rrggbb` et non une classe. Rien d'autre n'a bougé — c'est la
+ * même répartition, au même endroit du cycle.
  */
 
+import { encreSurAplat, teinteMembre } from "../lib/couleurs.js";
 import { usePhoto } from "../lib/usePhoto.js";
-
-const COULEURS = ["bg-primaire", "bg-accent", "bg-secondaire", "bg-primaire-fonce"];
-
-/** Somme des codes de caractères : suffisant pour répartir, et stable. */
-function couleurPour(graine) {
-  let total = 0;
-  for (let i = 0; i < graine.length; i += 1) total += graine.charCodeAt(i);
-  return COULEURS[total % COULEURS.length];
-}
 
 const DIMENSIONS = {
   // 28px — la rangée d'un membre au résumé d'un Grand Prix, qui porte déjà un
@@ -73,6 +70,7 @@ export default function Pastille({
   taillePx,
 }) {
   const initiale = nom.trim().charAt(0).toUpperCase() || "?";
+  const teinte = teinteMembre(graine || nom);
   // Le diamètre explicite l'emporte, et emporte alors AUSSI la taille de
   // caractère : une initiale de 14px dans un rond de 20 déborde.
   const dimensions = taillePx ? "" : (DIMENSIONS[taille] ?? DIMENSIONS.md);
@@ -98,16 +96,29 @@ export default function Pastille({
   const { chargee, cassee, aLImage, auChargement, aLEchec } = usePhoto(photo);
   const affichable = Boolean(photo) && !cassee;
 
+  // **L'encre de l'initiale est mesurée, jamais écrite en dur.** La pastille
+  // portait `text-white` en toutes lettres : sur l'amber de la palette — une
+  // teinte sur quatre — le blanc ne vaut que **2,22:1**, quand `#1A1A1A` y monte
+  // à 7,86:1. Une initiale sur six y était donc illisible depuis toujours.
+  //
+  // **`encreSurAplat` et non `encreSur`**, et l'écart n'est pas cosmétique : le
+  // second compare une luminance à 0,45, or l'amber vaut 0,424 — il passe donc
+  // juste sous le seuil et rend du blanc. Le premier mesure le CONTRASTE et
+  // garde le blanc tant qu'il tient 3:1. C'est la règle du design system §5,
+  // « le contraste se mesure, il ne se choisit pas ».
+  const encre = encreSurAplat(couleur ?? teinte.hex);
+
   return (
     <span
       aria-hidden="true"
       style={{
         ...(couleur ? { backgroundColor: couleur } : null),
+        color: encre,
         ...mesures,
       }}
       className={`${dimensions} ${
-        couleur || affichable ? "" : couleurPour(graine || nom)
-      } relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium text-white select-none ${
+        couleur || affichable ? "" : teinte.fond
+      } relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium select-none ${
         affichable ? "bg-squelette" : ""
       }`}
     >

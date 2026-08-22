@@ -26,7 +26,7 @@ import { listerMesChampionnats } from "../lib/championnats.js";
 import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
 import { chargerAccueilGp, cleAccueilGp } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
-import { usePseudoCourant } from "../lib/usePseudo.js";
+import { useIdentiteCourante } from "../lib/usePseudo.js";
 import { cotesArretees } from "../lib/calendrier.js";
 import { formaterDepart } from "../lib/format.js";
 import { useFermeture } from "../lib/useFermeture.js";
@@ -744,7 +744,10 @@ export default function Accueil() {
   // `user_metadata`, une copie figée à l'inscription qu'un renommage direct en
   // base ne touche pas. Le jeton reste le repli — pendant la lecture, et si
   // elle échoue. Voir `lib/usePseudo.js` pour les trois décisions.
-  const pseudo = usePseudoCourant(utilisateur?.id ?? null, pseudoJeton);
+  const { pseudo, avatarUrl } = useIdentiteCourante(
+    utilisateur?.id ?? null,
+    pseudoJeton,
+  );
 
   // La clé porte l'identifiant du compte : deux personnes qui se relaient sur
   // le même téléphone ne doivent jamais voir la liste de l'autre, même une
@@ -773,7 +776,17 @@ export default function Accueil() {
       aria-label="Mon profil"
       className="pressable size-tactile -m-0.5 flex shrink-0 items-center justify-center"
     >
-      <Pastille nom={pseudo} graine={utilisateur?.id ?? pseudo} taille="lg" />
+      {/* La photo du compte connecté, quand il en a une — sinon l'initiale sur
+          sa teinte, exactement comme avant. Elle vient de l'état déjà chargé
+          par `useIdentiteCourante`, dans la même requête que le pseudo : la
+          barre d'accueil ne coûte pas un aller-retour de plus. Même diamètre
+          dans les deux cas, `Pastille` ne changeant que ce qu'il y a dedans. */}
+      <Pastille
+        nom={pseudo}
+        graine={utilisateur?.id ?? pseudo}
+        photo={avatarUrl}
+        taille="lg"
+      />
     </Link>
   );
 

@@ -46,10 +46,28 @@ import { LIVREES } from "../lib/livrees.js";
  * l'encre des deux textes. La planche les écrit tous les deux en blanc, ce qui
  * rend le pseudo **illisible** sur les trois ailerons clairs — Haas et Cadillac
  * l'ont blanc sur blanc. Calculer l'encre corrige un défaut du fichier source.
+ *
+ * ### `cockpit` — le disque noir du casque, mesuré et non déduit
+ *
+ * Ajouté en version `0.52.0` : c'est là que se découpe la photo du membre sur
+ * la vue piste (`Voiture.jsx`). Les onze valeurs ont été **extraites par
+ * script** des formes de ce fichier, pas recopiées à l'œil : dix livrées
+ * peignent leur casque avec un `<circle>`, **Audi seule avec un `<path>`**, dont
+ * le rayon se lit dans l'arc de fermeture et le centre à un rayon du point de
+ * départ. Personne ne l'aurait vu à la lecture.
+ *
+ * Les onze tombent sur le **même point relatif** de leur cadrage — 70,68 sur
+ * 141,11 en largeur, 171,13 sur 288,09 en hauteur, rayon 20,41 — et c'est
+ * normal : c'est le même dessin, onze fois repeint. Ils sont malgré tout écrits
+ * **un par un, en coordonnées absolues**, pour la raison qui gouverne déjà les
+ * `viewBox` : une valeur commune posée sur une fraction serait une tranche
+ * arithmétique, et la première livrée dont le casque bougerait la démentirait
+ * en silence.
  */
 const GEOMETRIE = {
   "red-bull": {
     viewBox: "349.53 168.95 141.12 288.09",
+    cockpit: { cx: 420.22, cy: 340.08, r: 20.41 },
     cx: 420.09,
     yNumero: 240.63,
     yNom: 444.66,
@@ -58,6 +76,7 @@ const GEOMETRIE = {
   },
   "ferrari": {
     viewBox: "74.55 459.29 141.11 288.09",
+    cockpit: { cx: 145.23, cy: 630.42, r: 20.41 },
     cx: 145.1,
     yNumero: 530.96,
     yNom: 735.0,
@@ -66,6 +85,7 @@ const GEOMETRIE = {
   },
   "mercedes": {
     viewBox: "39.62 459.01 141.11 288.09",
+    cockpit: { cx: 110.3, cy: 630.14, r: 20.41 },
     cx: 110.17,
     yNumero: 530.69,
     yNom: 734.73,
@@ -74,6 +94,7 @@ const GEOMETRIE = {
   },
   "alpine": {
     viewBox: "39.62 29.39 141.11 288.09",
+    cockpit: { cx: 110.3, cy: 200.52, r: 20.41 },
     cx: 110.17,
     yNumero: 101.07,
     yNom: 305.11,
@@ -82,6 +103,7 @@ const GEOMETRIE = {
   },
   "aston-martin": {
     viewBox: "342.85 978.63 141.11 288.09",
+    cockpit: { cx: 413.53, cy: 1149.76, r: 20.41 },
     cx: 413.4,
     yNumero: 1050.3075,
     yNom: 1254.3446,
@@ -90,6 +112,7 @@ const GEOMETRIE = {
   },
   "audi": {
     viewBox: "74.79 1261.85 141.11 288.09",
+    cockpit: { cx: 145.47, cy: 1432.98, r: 20.42 },
     cx: 145.34,
     yNumero: 1333.5222,
     yNom: 1537.5593,
@@ -98,6 +121,7 @@ const GEOMETRIE = {
   },
   "mclaren": {
     viewBox: "351.87 1418.37 141.12 288.09",
+    cockpit: { cx: 422.56, cy: 1589.5, r: 20.41 },
     cx: 422.43,
     yNumero: 1490.0491,
     yNom: 1694.0862,
@@ -106,6 +130,7 @@ const GEOMETRIE = {
   },
   "racing-bulls": {
     viewBox: "77.66 1647.49 141.12 288.09",
+    cockpit: { cx: 148.35, cy: 1818.62, r: 20.41 },
     cx: 148.22,
     yNumero: 1719.1651,
     yNom: 1923.2022,
@@ -114,6 +139,7 @@ const GEOMETRIE = {
   },
   "williams": {
     viewBox: "337.74 1849.97 141.11 288.09",
+    cockpit: { cx: 408.42, cy: 2021.1, r: 20.41 },
     cx: 408.29,
     yNumero: 1921.6448,
     yNom: 2125.6822,
@@ -122,6 +148,7 @@ const GEOMETRIE = {
   },
   "haas": {
     viewBox: "329.28 2259.66 141.11 288.09",
+    cockpit: { cx: 399.96, cy: 2430.79, r: 20.41 },
     cx: 399.83,
     yNumero: 2331.3398,
     yNom: 2535.3775,
@@ -130,6 +157,7 @@ const GEOMETRIE = {
   },
   "cadillac": {
     viewBox: "72.21 2050.49 141.11 288.09",
+    cockpit: { cx: 142.89, cy: 2221.62, r: 20.41 },
     cx: 142.76,
     yNumero: 2122.1698,
     yNom: 2326.2074,

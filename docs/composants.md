@@ -445,13 +445,25 @@ sans quoi le retour sur l'accueil semblerait avoir perdu le championnat. L'accue
 liste des championnats et le calendrier global **partagent `championnats:{profil}`** :
 passer de l'un à l'autre n'attend rien, et une adhésion les invalide tous les trois.
 
-### `usePseudoCourant` — jamais le jeton, jamais le cache
+### `useIdentiteCourante` — jamais le jeton, jamais le cache
 
 `useAuth().pseudo` lit `user_metadata`, une copie **figée à l'inscription** qui vit dans le
 jeton. Un `update` SQL ne la change pas, et une session se rafraîchit indéfiniment.
 
 Trois décisions : **aucun cache** (il réintroduirait la valeur périmée) ; **à chaque
 montage**, pas une fois par session ; **repli sur le jeton**, jamais sur le vide.
+
+> **Il rend le pseudo ET la photo depuis la version `0.52.0`** — le hook s'appelait
+> `usePseudoCourant`, son chargeur `chargerPseudo`. La pastille de la barre d'accueil porte
+> désormais la photo du compte connecté, et elle la prend dans **la même ligne, la même
+> requête, la même politique RLS** : une colonne ajoutée à un `select` déjà indexé sur clé
+> primaire coûte zéro aller-retour. Un second chargeur — ou un `chargerProfil` complet passé
+> par Railway — aurait fait payer un réveil de serveur au premier écran de l'app pour une
+> vignette de 42 pixels.
+>
+> **Le jeton ne sert de repli qu'au pseudo.** Il ne porte aucune copie de la photo, même
+> périmée : tant que la base n'a rien dit, la pastille montre l'initiale, qui est de toute
+> façon l'état par défaut de tout compte.
 
 `chargerEstAdmin` suit la même règle mais **le sens du doute s'inverse** : tout échec rend
 `false`. Une section d'administration affichée à tort ne vaut rien.
@@ -524,10 +536,12 @@ Version `0.50.0`. Trois fichiers, et chacun répond à **une** question.
 
 > ### La règle « au moins une photo », et pourquoi elle vaut aux trois endroits
 >
-> Le classement d'un championnat, la vue piste et le résumé d'un Grand Prix posent la même
-> question **une fois pour toute la liste** : quelqu'un a-t-il une photo ? Elle décide de
-> la **présence** de la colonne (ou, sur la piste, de la coiffe réservée), jamais de son
-> contenu.
+> Le classement d'un championnat et le résumé d'un Grand Prix posent la même question
+> **une fois pour toute la liste** : quelqu'un a-t-il une photo ? Elle décide de la
+> **présence** de la colonne, jamais de son contenu.
+>
+> **La vue piste ne la pose plus** (version `0.52.0`) : elle n'a pas de colonne à faire
+> apparaître. Son cockpit existe sur chaque voiture, avec ou sans photo — voir ci-dessous.
 >
 > Posée ligne par ligne, elle donnerait une liste ébréchée — certaines rangées avec une
 > pastille, d'autres sans. Jamais posée, un championnat où personne n'a de photo gagnerait
@@ -537,29 +551,49 @@ Version `0.50.0`. Trois fichiers, et chacun répond à **une** question.
 > Avec elle, l'écran d'un championnat sans photo est **exactement** celui d'avant cette
 > version, au pixel près.
 
-### Sur la piste : au-dessus de la voiture, jamais à sa place
+### Sur la piste : DANS le cockpit, jamais posée dessus
 
-Le pseudo est peint **sur l'aileron arrière**, à l'intérieur du SVG — c'est le seul
-identifiant que la piste porte depuis la version `0.39.0`. Le remplacer par une photo
-voudrait dire peindre une image dans la planche, à une taille où un visage n'occuperait
-qu'une douzaine de pixels. La pastille est donc posée **au-dessus**, ronde, isolée du
-dessin, et se lit *avec* le pseudo.
+**Le disque noir du casque porte la photo du membre** (version `0.52.0`). Elle y est
+découpée par un `<clipPath>` circulaire, dans le SVG même, et à défaut c'est l'initiale sur
+la teinte du membre — la même que celle de sa pastille au classement, `teinteMembre` étant
+désormais le seul propriétaire de cette question (`lib/couleurs.js`).
 
-Elle porte la **couleur de la voiture**, pas la teinte tirée du pseudo : sur cet écran
-c'est la voiture qui identifie, et un rond d'une autre couleur posé sur son toit ferait
-deux signaux concurrents pour la même personne.
-
-> **La coiffe est calculée une fois pour toute la piste, jamais voiture par voiture.** Une
-> hauteur réservée qui dépendrait de la présence d'une photo donnerait des voitures à des
-> altitudes différentes pour des scores égaux — exactement ce que la règle « une hauteur,
-> un score » interdit (`decisions.md` §19). `coiffeDesVoitures` rend donc 0 ou 30, pour
-> tout le monde.
+> ### La géométrie est mesurée, et la onzième livrée n'est pas comme les dix autres
 >
-> Elle entre dans **trois** calculs, et en oublier un se voit : la borne haute de
-> `hauteursParScore` (sinon la pastille du premier passe sous le bandeau), le seuil de
-> `regrouperParChevauchement` (sinon la pastille d'un groupe se pose sur le score du groupe
-> du dessus), et la distance d'entrée `--voiture-depart` (sinon la pastille du leader est
-> visible avant que sa voiture ne parte).
+> `geo.cockpit` porte les **coordonnées absolues** du disque, extraites **par script** des
+> formes de `VoituresEcuries.jsx`. Dix livrées peignent leur casque avec un `<circle>` ;
+> **Audi seule avec un `<path>`**, dont le rayon se lit dans l'arc de fermeture et le centre
+> à un rayon du point de départ. Aucune lecture à l'œil ne l'aurait vu.
+>
+> Les douze dessins tombent sur le même point relatif — 70,68 sur 141,11 en largeur, 171,13
+> sur 288,09 en hauteur, rayon 20,41 — et c'est normal, c'est le même dessin douze fois
+> repeint. Ils sont malgré tout écrits **un par un** : une fraction commune serait une
+> tranche arithmétique, et la première livrée dont le casque bougerait la démentirait en
+> silence. Même règle que les `viewBox` (§4).
+
+| Point | Pourquoi |
+|---|---|
+| **Dans le SVG, pas en HTML posé dessus** | La photo occupe une place que le dessin prenait déjà. Elle ne coûte **pas un pixel** de zone de jeu |
+| **Peinte APRÈS le corps** | Un SVG n'a pas d'autre `z-index` que l'ordre de document (§4). Peinte avant, elle passerait sous le casque |
+| **L'identifiant du masque vient de `useId`** | Seize voitures coexistent, chacune avec son propre `clipPath`. Un identifiant en dur les ferait toutes pointer vers le premier |
+| **`usePhotoDetachee`, pas `usePhoto`** | Un `<image>` SVG est un `SVGImageElement` : ni `complete`, ni `naturalWidth`. Voir ci-dessous |
+| **L'initiale prend `encreSurAplat`** | Et non `encreSur`, qui rendrait du blanc sur l'amber. Voir plus bas |
+
+> ### Ce que la version `0.52.0` a retiré, et pourquoi c'est un gain de place
+>
+> La `0.50.0` posait une pastille **au-dessus** de la voiture, la `0.51.0` une photo dedans.
+> Toutes deux réservaient trente pixels de coiffe **à tout le championnat** dès qu'un seul
+> membre avait une photo : l'échelle des scores se tassait d'autant, au bénéfice d'une
+> rangée de ronds. `coiffeDesVoitures`, `HAUTEUR_AVATAR`, `ESPACE_AVATAR` et le paramètre
+> `coiffe` des trois passes sont partis avec — ce n'est pas du code éprouvé mis de côté
+> (§6), c'est une correction dont il ne reste rien à corriger.
+>
+> **La piste dessine donc de nouveau l'échelle d'avant les photos, au pixel près.**
+>
+> Le cockpit fait **15,04px de diamètre** quand la voiture est à sa taille pleine (52px), et
+> moins dans un groupe serré. C'est petit pour un visage, et c'est le prix de l'intégration
+> au dessin : une pastille plus grande n'existe qu'en la posant à côté, ce qui est
+> exactement ce qui coûtait la place.
 
 ### `usePhoto` — le défaut que `onLoad` seul ne voit pas
 
@@ -577,6 +611,20 @@ l'URL (elle porte un horodatage, voir `database.md` §9), et sans cette comparai
 nouvelle image hériterait du `chargee` de l'ancienne. Une réinitialisation dans un effet
 laisserait passer une image d'écart, donc un clignotement.
 
+> ### `usePhotoDetachee` — le même défaut, sous une autre forme
+>
+> Le remède ci-dessus repose sur `complete` et `naturalWidth`, deux propriétés d'un
+> `HTMLImageElement`. Un `<image>` SVG est un `SVGImageElement` : il n'en a **aucune des
+> deux**, donc aucun moyen de lui demander si le pixel est déjà là. On resterait suspendu à
+> un `load` qu'on ne peut pas savoir passé, et la photo du cockpit tiendrait `opacity: 0`
+> indéfiniment — exactement le défaut d'origine.
+>
+> La question est donc posée à un **élément détaché**, jamais rendu : le navigateur sert la
+> même URL depuis le même cache, et l'objet, lui, répond à `complete`. **Aucun second
+> téléchargement.** Le hook rend le même couple `chargee` / `cassee`, et `cassee` couvre le
+> même cas — une URL en base dont l'objet a disparu du stockage, où le cockpit redevient un
+> disque teinté plutôt qu'un trou.
+
 ### Le mouvement : un fondu, aucun jeton nouveau
 
 `.t-photo` transitionne **l'opacité seule**, avec `--duration-fast` et
@@ -591,6 +639,25 @@ ce sont les initiales qui doivent dire que quelque chose se passe.
 
 Sous `prefers-reduced-motion`, **le fondu reste** (une opacité ne déplace rien) et sa durée
 tombe à `--duration-quick` ; le flou d'envoi se pose d'un coup.
+
+### L'encre d'une pastille était fausse sur une teinte de membre sur quatre
+
+`Pastille` écrivait `text-white` **en toutes lettres**. Sur l'amber `#E8A020`, une des
+quatre teintes que la table distribue, le blanc ne vaut que **2,22:1** quand `#1A1A1A` y
+monte à 7,86:1 : une initiale sur quatre était illisible depuis l'origine, et sur la moitié
+d'entre elles personne ne l'avait vu parce que la plupart des comptes tombent sur les trois
+autres teintes.
+
+> **`encreSurAplat` et non `encreSur`, et l'écart n'est pas cosmétique.** Le second compare
+> une **luminance** à 0,45 ; l'amber vaut 0,424, il passe donc juste sous le seuil et rend
+> du blanc. Le premier mesure le **contraste** et garde le blanc tant qu'il tient 3:1. Les
+> deux helpers existent tous les deux dans le design system §5, et c'est le premier qui
+> répond à « quelle encre sur cet aplat ». `encreSur` reste en place pour les deux textes
+> peints sur la carrosserie, où il n'a jamais rencontré l'amber.
+
+Mesuré après correction, pour les quatre teintes : `#800111` 10,88:1 · `#E8A020` 7,86:1 ·
+`#543925` 10,56:1 · `#5A000C` 14,58:1. Le casque noir de la planche, quand aucun membre ne
+l'habite, tient 20,84:1.
 
 ### Écart assumé sur le rayon
 

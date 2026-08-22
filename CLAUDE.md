@@ -196,80 +196,92 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.51.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
-les onze étapes de développement sont livrées.
+**Version `0.52.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+les onze étapes de développement sont livrées. **Le backend ne bouge pas** — cette version
+est entièrement frontend, sa version reste `0.51.0`.
 
-**Cette version répare les photos, qui n'ont JAMAIS fonctionné.** Le backend change aussi :
-sa version passe à `0.51.0`.
+### La photo entre DANS la voiture
 
-### Le défaut : une contrainte `check` incompilable
+**Le disque noir du cockpit porte la photo du membre**, découpée par un `<clipPath>`
+circulaire à l'intérieur du SVG. La pastille que la vue piste posait *au-dessus* de chaque
+voiture depuis la version `0.50.0` disparaît, et avec elle la **coiffe de trente pixels**
+qu'elle réservait à tout le championnat dès qu'un seul membre avait une photo : l'échelle
+des scores retrouve exactement la hauteur qu'elle avait avant les photos, au pixel près.
+C'est le point qui compte — **une identité intégrée au dessin ne coûte pas un pixel**, une
+identité posée à côté coûte la place de tout le monde.
 
-La migration 16 posait `check (colonne ~ '^https://[^[:space:]]{10,505}$')` sur
-`profils.avatar_url` et `championnats.photo_url`. **PostgreSQL plafonne un compteur de
-répétition `{m,n}` à 255** : l'expression n'est pas compilable, et toute écriture d'URL
-retombait en `2201B`. La contrainte avait pourtant été **acceptée** à la création — un
-`check` n'est évalué qu'à l'écriture, et les colonnes étaient vides.
+**La géométrie des douze cockpits a été extraite par script**, pas relevée à l'œil. Dix
+livrées peignent leur casque avec un `<circle>` ; **Audi seule avec un `<path>`**, dont le
+rayon se lit dans l'arc de fermeture et le centre à un rayon du point de départ. Aucune
+lecture du code ne l'aurait montré. Les douze tombent sur le même point relatif — c'est le
+même dessin douze fois repeint — et sont pourtant écrits **un par un** : une fraction
+commune serait une tranche arithmétique, que la première livrée retouchée démentirait en
+silence. Trois vérifications automatiques : le cercle tient dans son cadrage pour les
+douze, les `clipPath` ont des identifiants distincts, et l'`<image>` sort en `href` moderne.
 
-Le diagnostic a été fait **contre la base de production**, segment par segment, et c'est ce
-qui l'a rendu court : colonnes présentes, compartiments présents, politiques de stockage
-correctes, dépôts en `200`, `mes_championnats` servant bien `photo_url`. Quatre segments sur
-cinq étaient justes, et **aucune lecture du code ne pouvait désigner le cinquième** — la
-contrainte est en base, elle n'apparaît que dans une migration déjà jouée.
+**À défaut de photo, c'est l'initiale sur la teinte du membre** — la même que sa pastille
+au classement. `teinteMembre` (`lib/couleurs.js`) est désormais le **seul propriétaire** de
+la question « de quelle couleur est le rond de cette personne ? », et il porte les **deux
+formes** de chaque teinte : la classe Tailwind pour le HTML, le `#rrggbb` pour le SVG, où
+un `fill` n'accepte pas `bg-primaire`.
 
-**La migration 17 la remplace** : la borne de longueur sort de l'expression et devient un
-`char_length`, sémantique inchangée à la lettre, plus aucun compteur. Et **elle s'éprouve
-elle-même** sur une URL jetable en fin de fichier — le seul moyen de savoir, en jouant une
-migration, qu'un `check` posé sur une colonne vide est compilable. C'est ce qui manquait à
-la 16, et c'est désormais la règle pour tout `check` non trivial.
+> **Le cockpit fait 15,04px de diamètre à taille pleine de voiture, et moins dans un groupe
+> serré.** C'est petit pour un visage, et c'est le prix de l'intégration au dessin : la
+> seule façon d'avoir plus grand est de le poser à côté, ce qui est exactement ce qui
+> coûtait la place. À juger **sur iPhone réel**, avec de vraies photos.
 
-**Deux amplificateurs ont fait durer le défaut une version entière, tous deux corrigés.**
-Le contexte de `PATCH /profils/moi` disait « Enregistrement de ta voiture » alors que la
-route sert aussi le numéro, la livrée et la photo — **un contexte qui nomme la mauvaise
-chose est pire qu'un contexte vague** ; il dit maintenant « ton profil ». Et l'échec de la
-photo d'un championnat était **avalé en silence** par l'écran de création : la règle « une
-opération secondaire en panne n'emporte jamais la principale » est bonne, mais **ne pas
-bloquer sur un échec n'autorise pas à le taire**. Le message remonte désormais jusqu'à
-l'écran d'arrivée.
+**Un défaut trouvé au passage, et il datait de l'origine.** `Pastille` écrivait
+`text-white` en toutes lettres, et sa table distribue quatre teintes dont **l'amber**, où
+le blanc ne vaut que **2,22:1**. Une initiale sur quatre était illisible, partout, depuis
+toujours — ce qui passait pour un défaut intermittent était une fonction de hachage.
+`encreSurAplat` corrige, et l'écart entre les deux helpers d'encre est maintenant écrit :
+`encreSur` compare une **luminance** à 0,45, l'amber vaut **0,424** et passe juste dessous ;
+`encreSurAplat` mesure le **contraste**. Devant « quelle encre sur cet aplat », c'est le
+second (`bugs-connus.md` §19).
 
-### Le recadrage, et les deux plafonds
+### Deux lignes pour un titre de marché, un avatar dans la barre
 
-**Choisir un fichier n'envoie plus rien : ça ouvre un recadrage.** `RecadragePhoto` est la
-première surface modale du projet — masque rond pour un avatar, carré arrondi pour un
-championnat, glisser pour placer, pincer pour zoomer. **Un seul composant pour les deux
-formes** : le cadre est carré dans les deux cas, le rond n'est qu'un masque posé dessus.
+**Les en-têtes de marché ne tronquent plus.** Le libellé vient d'Unibet et n'a pas de
+longueur convenue : « VAINQUEUR COURSE, QUALIFICATION … » sortait coupé, et **un titre
+tronqué ne nomme plus son marché**, ce qui est la seule chose que cet en-tête ait à dire.
+Le texte revient à la ligne, `line-clamp-2` borne la casse à deux, `break-words` protège du
+mot plus large que la colonne. **Aucune hauteur fixe** n'est posée : le widget grandit avec
+son titre, et l'espacement du parent tient l'écart. Tableau des cotes et bloc obligatoire
+de la saisie, les deux en-têtes de marché de l'app.
 
-Il est **monté par un portail dans `document.body`** — `Ecran` porte un `transform`, et un
-`position: fixed` posé dedans se positionnerait par rapport à lui. Même piège que
-`NavBarre`. Il **dessine dans un canvas** plutôt que de transformer une `<img>` en CSS :
-c'est plus coûteux, mais l'aperçu et l'export partagent alors **la même géométrie**
-(`carreVisible`), et l'écart entre ce qu'on montre et ce qu'on découpe devient
-structurellement impossible.
+**La pastille de l'accueil porte la photo du compte connecté.** Elle vient de l'état déjà
+chargé, dans **la même requête que le pseudo** : une colonne ajoutée à un `select` indexé
+sur clé primaire coûte zéro aller-retour, quand un second chargeur aurait fait payer un
+réveil de Railway au premier écran de l'app. `usePseudoCourant` devient donc
+`useIdentiteCourante`, `chargerPseudo` devient `chargerIdentite`. Sans photo, le rond rouge
+à initiale est exactement celui d'avant.
 
-**Deux plafonds coexistent, et ils ne mesurent pas la même chose.** `lib/stockage.js` juge
-ce qu'on a le droit de **choisir** — 5 Mo, jpg/png/webp. `lib/image.js` juge ce qu'on
-**dépose** — 800 px de côté, JPEG 0,85, toujours `.jpg`. Rien ne va du premier au second
-sans passer par le canvas : une photo d'iPhone de quatre mégaoctets en pèse alors moins de
-deux cents kilo-octets, et le plafond de 2 Mo du compartiment n'est plus jamais approché.
-C'est ce qui permet au plafond de choix d'être si large.
+### Aucun mouvement nouveau, et c'était le bon verdict
 
-**Un seul jeton nouveau, `--scale-large` (0,96)**, et ce n'est pas un fork : c'est le nom et
-la valeur que la planche Transitions.dev donne à l'ouverture d'une modale. Ouverture
-`--duration-fast`, fermeture `--duration-quick`, courbe `--ease-smooth-out` — l'usage exact
-que la table des jetons leur donne. **La sortie emprunte le chemin de l'entrée**, y compris
-à la confirmation.
+Les cinq skills de design ont été invoqués dans l'ordre. **Le portier a rejeté la seule
+animation candidate** : la hauteur d'un en-tête de marché ne s'anime pas, parce qu'elle ne
+change jamais *à l'écran* — le libellé arrive une fois, avec les données, et animer un
+état qui n'a pas de « avant » est du mouvement sans changement d'état. Les deux photos, elles,
+réemploient `.t-photo`, le fondu d'opacité déjà partagé par la pastille et la carte de
+championnat. **Zéro jeton nouveau, zéro image-clé.**
 
-**La géométrie est sortie du composant** vers `lib/image.js` : trois fonctions pures de
-quelques nombres, éprouvables sans monter de DOM. La propriété qui compte se vérifie alors
-en une ligne — **le carré retenu ne sort jamais de l'image**, quel que soit le couple
-zoom/décalage — et c'est elle qui garantit qu'aucun bord noir n'apparaît dans le masque.
+Un hook nouveau, en revanche, et pour une raison de plateforme : **`usePhotoDetachee`**. Un
+`<image>` SVG est un `SVGImageElement` — ni `complete`, ni `naturalWidth`, donc aucun moyen
+de savoir si une image en cache est déjà décodée. On resterait suspendu à un `load` qui ne
+viendra pas, et la photo tiendrait `opacity: 0` indéfiniment : exactement le défaut que
+`usePhoto` avait été écrit pour corriger, sous une autre forme. La question est donc posée à
+un élément **détaché**, jamais rendu, qui répond à `complete` — et le navigateur sert la
+même URL depuis le même cache, sans second téléchargement.
 
-*La version `0.50.0` avait livré les photos elles-mêmes : deux colonnes portant des URL,
-deux compartiments Storage publics, la photo entrée DANS `Pastille` plutôt qu'un `Avatar`
-posé à côté, et la règle unique des trois listes — la colonne de pastilles n'apparaît que
-si quelqu'un, dans cette liste, a une photo. **Tout cet affichage était correct** ; il n'a
-simplement jamais eu de photo à montrer. La `0.49.0` avait refondu la vue piste, la `0.48.0`
-retouché l'accueil et l'écran championnat, la `0.45.0` fait passer le multiplicateur des
-points de 100 à 10. **Un scraping reste obligatoire.***
+*La version `0.51.0` avait réparé les photos, qui n'avaient jamais fonctionné : une
+contrainte `check` incompilable — **PostgreSQL plafonne un compteur `{m,n}` à 255** — que la
+migration 17 remplace par un `char_length`, et qui **s'éprouve elle-même** sur une URL
+jetable, seul moyen de savoir en jouant une migration qu'un `check` posé sur une colonne
+vide est compilable. Elle avait aussi livré `RecadragePhoto`, la première surface modale du
+projet, et les deux plafonds qui ne mesurent pas la même chose — `stockage.js` juge ce qu'on
+a le droit de **choisir**, `image.js` ce qu'on **dépose**. La `0.50.0` avait livré les
+photos elles-mêmes, la `0.49.0` refondu la vue piste, la `0.45.0` fait passer le
+multiplicateur des points de 100 à 10. **Un scraping reste obligatoire.***
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :
@@ -280,5 +292,8 @@ les plus urgents :
 2. **Vérifier les migrations appliquées** dans le SQL Editor, définir les variables
    d'environnement de production sur Vercel et Railway, et **supprimer le compte de
    diagnostic** laissé par la localisation du défaut (`docs/roadmap.md` §1.5).
-3. **Tester sur iPhone réel** — jamais fait. Le recadrage en particulier : c'est le premier
-   geste multi-touch du projet, et le pincement doit zoomer l'image, pas la page.
+3. **Tester sur iPhone réel** — jamais fait. Trois choses en priorité : le recadrage, qui
+   est le premier geste multi-touch du projet ; **la photo de 15px dans le cockpit**, qui
+   décidera si le cadrage exporté doit se resserrer sur le visage ; et **l'en-tête de marché
+   sur deux lignes**, qui est collant : sa hauteur est prise sur la liste pendant tout le
+   défilement du marché.

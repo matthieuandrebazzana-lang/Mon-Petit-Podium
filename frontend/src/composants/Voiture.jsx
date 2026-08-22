@@ -1,4 +1,7 @@
+import { useId } from "react";
+import { encreSurAplat } from "../lib/couleurs.js";
 import { COULEUR1_DEFAUT, COULEUR2_DEFAUT, encreSur } from "../lib/palette.js";
+import { usePhotoDetachee } from "../lib/usePhoto.js";
 import {
   aUneLivree,
   formesLivree,
@@ -48,18 +51,51 @@ import {
  * planche, elle, écrit les deux textes en blanc, ce qui rend le pseudo
  * illisible sur les ailerons clairs de Haas et de Cadillac : calculer l'encre
  * corrige un défaut du fichier source.
+ *
+ * ### Le cockpit porte l'identité du membre (version `0.52.0`)
+ *
+ * Le disque noir du casque n'est plus seulement un casque : quand l'appelant
+ * transmet `photo` ou `teintePilote`, **la photo du membre y est découpée par un
+ * `<clipPath>` circulaire**, et à défaut son initiale sur sa teinte. La pastille
+ * que la vue piste posait AU-DESSUS de la voiture depuis la version `0.50.0`
+ * disparaît avec.
+ *
+ * | Point | Pourquoi |
+ * |---|---|
+ * | **Dans le SVG, jamais en HTML posé dessus** | Une pastille absolue au-dessus du dessin demandait de réserver sa hauteur dans la disposition de la piste, donc de comprimer la zone de jeu de tout le monde. Découpée dans le cockpit, elle ne coûte pas un pixel : elle occupe une place que la voiture prenait déjà |
+ * | **La géométrie vient de la planche, mesurée** | `geo.cockpit` — voir `VoituresEcuries.jsx`. À l'échelle près, le disque et la photo partagent exactement le cercle que le dessin peint : l'écart entre le masque et le casque est structurellement nul, quelle que soit la taille rendue |
+ * | **Peint APRÈS le corps, avant les deux textes** | Un SVG n'a pas d'autre `z-index` que l'ordre de document (`docs/composants.md` §4). Peinte avant, la photo passerait sous le casque, c'est-à-dire nulle part |
+ * | **L'identifiant du `clipPath` vient de `useId`** | Seize voitures coexistent sur la piste, chacune avec son propre masque. Un identifiant écrit en dur les ferait toutes pointer vers le premier — et rien à l'écran ne dirait laquelle |
+ * | **L'initiale prend `encreSurAplat`, jamais le blanc** | Et non `encreSur`, qui sert aux deux textes de la carrosserie : celui-ci compare une luminance à 0,45, or l'amber des teintes de membre vaut 0,424 — il rendrait du blanc à **2,22:1**. `encreSurAplat` mesure le contraste et bascule sur l'encre foncée, qui y tient 7,86:1 |
+ *
+ * > **La photo ne s'anime pas autrement qu'en fondu.** Elle réemploie `.t-photo`,
+ * > la transition d'opacité que `Pastille` et `PhotoChampionnat` partagent déjà —
+ * > l'URL arrive avec les données, le pixel plus tard, et c'est le seul moment
+ * > où il y a quelque chose à faire tenir. Aucun jeton nouveau, aucune image-clé.
  */
 
 // Le nom doit tenir dans les 98px de l'aileron arrière, quel que soit le pseudo.
 const NOM_MAXIMUM = 10;
 
-/** Cadrage et ancrages de la voiture personnalisable (première de la planche). */
+/** Cadrage et ancrages de la voiture personnalisable (première de la planche).
+ *  `cockpit` est le `<circle fill="#020102">` du casque, relevé dans `CorpsPerso`
+ *  ci-dessous — pas déduit de `cx`, dont il s'écarte de 0,13 unité. */
 const PERSO = {
   viewBox: "55.08 57.74 141.12 288.09",
+  cockpit: { cx: 125.77, cy: 228.87, r: 20.41 },
   cx: 125.64,
   yNumero: 129.41,
   yNom: 333.45,
 };
+
+// La taille de l'initiale, en fraction du DIAMÈTRE du cockpit. C'est le rapport
+// exact que `Pastille` applique déjà à son diamètre explicite (0,44) : une
+// initiale dans un rond est la même question, elle garde la même proportion.
+const INITIALE_SUR_DIAMETRE = 0.44;
+
+/** Le noir du casque, quand l'appelant ne donne pas de teinte : c'est celui de
+ *  la planche, donc le cockpit reste exactement ce qu'il était. */
+const CASQUE = "#020102";
 
 /** La taille du nom suit la longueur du pseudo : à taille fixe, « Alexandre » débordait. */
 function tailleDuNom(nom) {
@@ -110,6 +146,15 @@ function CorpsPerso({ couleur1, couleur2 }) {
   );
 }
 
+/**
+ * @param {string} [photo] URL publique de la photo du membre. Découpée dans le
+ *   cockpit. Absente — ou cassée — ce sont les initiales, qui ne sont pas un cas
+ *   dégradé mais l'état par défaut de tout compte.
+ * @param {string} [teintePilote] la teinte du disque sous l'initiale, en
+ *   `#rrggbb` (`teinteMembre`, `lib/couleurs.js`). **C'est elle qui allume le
+ *   cockpit** : sans elle ni photo, le casque reste le noir de la planche et
+ *   aucun écran n'y voit de différence.
+ */
 export default function Voiture({
   mode = "perso",
   ecurie = null,
@@ -119,6 +164,8 @@ export default function Voiture({
   nom = "",
   className = "",
   titre,
+  photo = null,
+  teintePilote = null,
 }) {
   // Un slug inconnu retombe sur la voiture personnalisable plutôt que de ne
   // rien rendre : une livrée retirée d'une saison à l'autre laisserait sinon
@@ -132,6 +179,26 @@ export default function Voiture({
 
   const numeroAffiche = String(numero ?? "").trim().slice(0, 3);
   const nomAffiche = String(nom ?? "").trim().slice(0, NOM_MAXIMUM);
+
+  // Le cockpit ne s'allume que si on lui a donné de quoi : un écran qui affiche
+  // une voiture sans membre derrière (le sélecteur de couleurs du profil, la
+  // silhouette d'un chargement) garde le casque noir de la planche.
+  const cockpit = geo.cockpit;
+  const identite = Boolean(photo || teintePilote);
+  const fondCockpit = teintePilote ?? CASQUE;
+  const initiale = String(nom ?? "").trim().charAt(0).toUpperCase() || "?";
+
+  // `useId` rend `«r3»` en React 19 et `:r3:` en 18 ; les deux se réfèrent sans
+  // problème dans un `url(#…)`, mais pas dans un sélecteur CSS le jour où l'on
+  // voudrait styler le masque. On les rabote donc dès la source.
+  const masque = `cockpit-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+
+  // Le fondu d'arrivée, et la reprise du disque teinté quand l'URL en base ne
+  // pointe plus sur rien. `usePhotoDetachee` et non `usePhoto` : un `<image>`
+  // SVG n'a ni `complete` ni `naturalWidth`, donc rien à interroger sur une
+  // image déjà en cache — voir la note du module.
+  const { chargee, cassee } = usePhotoDetachee(photo);
+  const photoAffichable = Boolean(photo) && !cassee;
 
   return (
     <svg
@@ -152,6 +219,61 @@ export default function Voiture({
           <CorpsPerso couleur1={couleur1} couleur2={couleur2} />
         )}
       </g>
+
+      {/* Le cockpit, peint APRÈS le corps : dans un SVG, l'ordre de document est
+          le seul ordre de peinture. Le disque teinté est posé sous la photo et
+          reste visible tant qu'elle charge — c'est lui qui tient la place, avec
+          l'initiale dessus, exactement comme une pastille. */}
+      {identite && (
+        <>
+          <defs>
+            <clipPath id={masque}>
+              <circle cx={cockpit.cx} cy={cockpit.cy} r={cockpit.r} />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#${masque})`}>
+            <circle
+              cx={cockpit.cx}
+              cy={cockpit.cy}
+              r={cockpit.r}
+              fill={fondCockpit}
+            />
+            {/* L'initiale tient la place jusqu'à ce que le pixel arrive, et
+                s'efface une fois qu'il est là — exactement la règle de
+                `Pastille`. Elle a la bonne taille et la bonne forme, donc
+                l'arrivée est un fondu et non un saut. */}
+            {!chargee && (
+              <text
+                x={cockpit.cx}
+                y={cockpit.cy}
+                dy="0.35em"
+                textAnchor="middle"
+                fill={encreSurAplat(fondCockpit)}
+                fontFamily="Helvetica Neue, Helvetica, Arial, sans-serif"
+                fontWeight="500"
+                fontSize={cockpit.r * 2 * INITIALE_SUR_DIAMETRE}
+              >
+                {initiale}
+              </text>
+            )}
+            {photoAffichable && (
+              <image
+                href={photo}
+                x={cockpit.cx - cockpit.r}
+                y={cockpit.cy - cockpit.r}
+                width={cockpit.r * 2}
+                height={cockpit.r * 2}
+                /* Le pendant SVG d'`object-fit: cover` : la photo sort déjà
+                   carrée du recadrage, mais une URL posée en base avant la
+                   version `0.51.0` ne l'est pas forcément. */
+                preserveAspectRatio="xMidYMid slice"
+                className="t-photo"
+                data-chargee={chargee ? "true" : "false"}
+              />
+            )}
+          </g>
+        </>
+      )}
 
       {/* Numéro sur le museau. La rotation vient du fichier d'origine : le
           numéro se lit depuis l'avant de la voiture, comme en Formule 1.

@@ -228,7 +228,8 @@ l'inscription** qui vit dans le jeton. Elle n'est réécrite que par `auth.updat
 `update` SQL ou un trigger la laissent intacte. **Et une session Supabase se rafraîchit
 indéfiniment.**
 
-**Correctif.** `chargerPseudo` + `usePseudoCourant`, qui lit la base **à chaque montage**,
+**Correctif.** `chargerIdentite` + `useIdentiteCourante` (nommés `chargerPseudo` et
+`usePseudoCourant` jusqu'à la version `0.52.0`), qui lisent la base **à chaque montage**,
 **sans cache**, avec **repli sur le jeton**.
 
 **Ne pas refaire.** `AuthContexte.jsx` documente désormais que son `pseudo` est une copie
@@ -514,3 +515,38 @@ Tout marchait **sauf** l'écriture de la colonne.
   ici, quatre segments sur cinq étaient corrects, et aucune lecture du code ne pouvait
   désigner le cinquième — la contrainte est en base, elle n'apparaît que dans une migration
   déjà jouée.
+
+---
+
+## 19. L'initiale d'une pastille sur quatre était illisible
+
+**Symptôme.** Sur certains comptes — et sur eux seulement — l'initiale de la pastille se
+lisait mal sur son rond. Aucun écran n'était en cause : la même personne était illisible
+partout, une autre lisible partout.
+
+**Cause réelle.** `Pastille` écrivait `text-white` **en toutes lettres**, et sa table
+distribue quatre teintes. L'une d'elles est l'amber `#E8A020` du design system, où le blanc
+ne vaut que **2,22:1** quand `#1A1A1A` y monte à 7,86:1. Une graine sur quatre tombait
+dessus, ce qui explique que le défaut ait paru aléatoire : il dépendait de l'identifiant du
+compte, pas de l'écran.
+
+C'est exactement le cas d'école que `docs/design-system.md` §5 décrit — « toute surface
+amber prend l'encre foncée, sans exception » — et la pastille était le seul aplat de l'app
+à ne pas passer par un helper.
+
+**Correctif (version `0.52.0`).** `encreSurAplat(couleur ?? teinte.hex)`, calculé une fois
+et posé en style en ligne. Mesuré après correction : 10,88 · **7,86** · 10,56 · 14,58:1.
+
+**Ne pas refaire.**
+
+- **Les deux helpers d'encre ne sont pas interchangeables, et l'amber les départage.**
+  `encreSur` (`lib/palette.js`) compare une **luminance** à 0,45 ; l'amber vaut **0,424**,
+  il passe donc juste sous le seuil et rend du blanc. `encreSurAplat` (`lib/couleurs.js`)
+  mesure le **contraste** et bascule à 3:1. Devant la question « quelle encre sur cet
+  aplat », c'est le second. Le premier reste juste là où il est employé — les deux textes
+  peints sur une carrosserie, qui ne rencontrent jamais l'amber.
+- **Un `text-white` écrit en dur sur un fond calculé est toujours un défaut en attente.**
+  La couleur du fond vient d'une table ; l'encre doit venir du même endroit.
+- **Un défaut qui « touche certains comptes » n'est pas intermittent** : c'est une fonction
+  de hachage quelque part. Le chercher dans les écrans a coûté du temps ; il était dans la
+  table.

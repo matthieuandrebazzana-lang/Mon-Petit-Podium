@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **22 août 2026**, version `0.51.0`.
+État au **22 août 2026**, version `0.52.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -130,6 +130,8 @@ navigateur. Points à regarder en priorité :
 | **Le recadrage d'une photo** | le premier geste multi-touch du projet, et la première surface modale. Le pincement zoome-t-il l'image ou la PAGE ? Le refus de `gesturestart` tient-il ? Le suivi reste-t-il à 1:1 pendant un glissement, canvas compris ? |
 | **Le sélecteur de fichier** | premier `<input type="file">` du projet — il n'a jamais rencontré Safari iOS. La photothèque s'ouvre-t-elle bien avant le sélecteur de fichiers du système ? |
 | **Une photo de 5 Mo** | le décodage, pas l'envoi, est ce qui coûte : une image de 8000 × 6000 occupe près de 200 Mo décompressée. Safari abandonne-t-il l'onglet ? |
+| **La photo dans le cockpit** | seize `<clipPath>` sur un même écran, chacun avec son `<image>` : Safari les compose-t-il sans coût au moment de l'entrée des voitures, qui anime déjà `transform` sur les seize ? Et le disque de 15px reste-t-il lisible comme un visage, ou faut-il resserrer le recadrage ? |
+| **Un en-tête de marché sur deux lignes** | il est **collant**, donc sa hauteur est prise sur la liste pendant tout le défilement du marché. Vérifier sur un petit écran qu'un titre long ne laisse pas moins d'une rangée et demie de widgets visibles — c'est le seul cas où deux lignes coûteraient plus qu'elles ne rapportent |
 
 ---
 
@@ -189,11 +191,14 @@ base au moment du figeage).
 
 Livrées en version `0.50.0` (dépôt, affichage, retrait). Trois manques assumés :
 
-- **Aucun recadrage ni redimensionnement.** L'image est envoyée telle quelle et cadrée par
-  `object-fit: cover` : une photo en 4:3 perd ses bords sur un rond de 56px, et un fichier
-  de 2 Mo est retéléchargé en entier pour une vignette de 28px. Un redimensionnement en
-  `<canvas>` avant l'envoi réglerait les deux d'un coup — c'est le seul endroit où le
-  gain vaudrait le code ajouté.
+- ~~**Aucun recadrage ni redimensionnement.**~~ **Réglé en version `0.51.0`** :
+  `RecadragePhoto` + `lib/image.js`, 800px de côté et JPEG 0,85.
+- **La photo n'a jamais été vue à sa taille réelle dans le cockpit.** Depuis la version
+  `0.52.0` elle y est découpée, et le disque fait **15,04px de diamètre** quand la voiture
+  est à sa taille pleine — moins encore dans un groupe serré. Une photo de visage ramenée à
+  800px puis rendue à 15 y perd tout sauf sa dominante de couleur : à vérifier **sur
+  iPhone**, avec de vraies photos, avant de décider si le cadrage exporté doit se resserrer
+  sur le visage. Levier : rien à changer côté géométrie, tout se joue au recadrage.
 - **La photo d'un championnat ne se change plus après sa création.** `PATCH
   /championnats/{id}` existe et accepte le créateur ; il manque l'écran qui l'appelle.
 - **Rien ne nettoie le stockage à la suppression d'un compte ou d'un championnat.** La
@@ -240,6 +245,13 @@ identique dans tous les championnats de son propriétaire.
 **Réglé en version `0.49.0`.** La ligne d'arrivée avait été retirée en laissant le haut de
 la piste sans rien pour l'ancrer ; le **bandeau du championnat** joue désormais ce rôle, et
 il nomme en plus l'écran.
+
+### 3.5 bis La coiffe des pastilles est partie, l'échelle est rendue
+
+**Réglé en version `0.52.0`.** La version `0.50.0` réservait trente pixels au-dessus de
+chaque voiture pour une pastille d'identité, dès qu'un seul membre du championnat avait une
+photo. La photo étant désormais découpée dans le cockpit du dessin, la zone de jeu retrouve
+exactement la hauteur d'avant les photos — donc l'échelle des scores aussi.
 
 ### 3.6 Un groupe de plus de seize voitures se recouvre
 

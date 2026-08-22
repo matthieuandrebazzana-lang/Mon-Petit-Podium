@@ -307,7 +307,7 @@ export function AuthProvider({ children }) {
       // `public.profils` — à la main, ou par tout chemin qui ne repasse pas par
       // `auth.updateUser` — ne la met pas à jour, et elle reste périmée aussi
       // longtemps que la session vit. Tout écran qui **affiche** le pseudo doit
-      // donc passer par `usePseudoCourant` (`lib/usePseudo.js`), qui relit la
+      // donc passer par `useIdentiteCourante` (`lib/usePseudo.js`), qui relit la
       // table ; celui-ci ne sert plus que de repli le temps de cette lecture.
       pseudo:
         utilisateur?.user_metadata?.pseudo ||

@@ -327,11 +327,11 @@ function etiquetteDuType(type) {
 }
 
 // --------------------------------------------------------------------------
-//  Le pseudo courant — lu en base, jamais dans le jeton
+//  L'identité courante — lue en base, jamais dans le jeton
 // --------------------------------------------------------------------------
 
 /**
- * Le pseudo tel qu'il est **en base**, pour ce profil.
+ * Le pseudo **et la photo** tels qu'ils sont en base, pour ce profil.
  *
  * **Pourquoi cette lecture existe.** `useAuth().pseudo` ne lit pas la table
  * `public.profils` : il lit `user_metadata.pseudo`, c'est-à-dire une copie
@@ -347,17 +347,31 @@ function etiquetteDuType(type) {
  * écran de l'app — lui faire attendre le réveil de Railway pour écrire « Salut
  * X » serait le pire endroit où payer ce délai.
  *
- * La lecture ne porte que la colonne utile : le reste du profil (couleurs,
+ * La lecture ne porte que les colonnes utiles : le reste du profil (couleurs,
  * numéro) a ses propres écrans, qui le chargent quand ils en ont besoin.
+ *
+ * > ### `avatar_url` voyage avec le pseudo, et n'ajoute AUCUNE requête
+ * >
+ * > La pastille de la barre d'accueil mène au profil et porte désormais la
+ * > photo du compte connecté (version `0.52.0`). Elle avait besoin d'une seule
+ * > chose de plus, dans la même ligne, sous la même politique RLS : une colonne
+ * > ajoutée à un `select` déjà indexé sur clé primaire coûte exactement zéro
+ * > aller-retour. Un second chargeur — ou pire, un `chargerProfil` complet passé
+ * > par Railway — aurait fait payer un réveil de serveur au premier écran de
+ * > l'app pour une vignette de 42 pixels.
+ * >
+ * > **Le champ est facultatif, et son absence n'est pas une panne.** Un backend
+ * > ou une base d'avant la migration `20260821180000` rendent `undefined` : la
+ * > pastille retombe alors sur l'initiale, ce qui est son état par défaut.
  */
-export async function chargerPseudo(profilId, signal) {
+export async function chargerIdentite(profilId, signal) {
   if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
   if (!profilId) return { ok: true, message: null, donnees: null };
 
   try {
     const requete = supabase
       .from("profils")
-      .select("pseudo")
+      .select("pseudo, avatar_url")
       .eq("id", profilId)
       .maybeSingle();
 
@@ -368,7 +382,13 @@ export async function chargerPseudo(profilId, signal) {
     // pas : un profil absent n'est pas une panne, c'est un compte dont le
     // trigger d'inscription n'a rien écrit. L'appelant retombera alors sur le
     // pseudo du jeton, qui vaut mieux que rien.
-    return { ok: true, message: null, donnees: data?.pseudo ?? null };
+    if (!data) return { ok: true, message: null, donnees: null };
+
+    return {
+      ok: true,
+      message: null,
+      donnees: { pseudo: data.pseudo ?? null, avatarUrl: data.avatar_url ?? null },
+    };
   } catch (erreur) {
     if (erreur.name === "AbortError") throw erreur;
     return { ok: false, message: LECTURE_IMPOSSIBLE, genre: GENRE_SUPABASE };
@@ -383,7 +403,7 @@ export async function chargerPseudo(profilId, signal) {
  * championnats — il fait tenir l'accueil pendant le réveil de Railway — et le
  * mauvais pour un droit : une valeur écrite dans `localStorage` survit à la
  * révocation du droit, et se modifie depuis les outils de développement. Ce
- * chargeur ne passe donc pas par lui, exactement comme `chargerPseudo`.
+ * chargeur ne passe donc pas par lui, exactement comme `chargerIdentite`.
  *
  * **Directement dans Supabase, et non par l'API**, pour la raison qui gouverne
  * ce partage depuis l'étape 3 : la politique « Profils lisibles par les membres

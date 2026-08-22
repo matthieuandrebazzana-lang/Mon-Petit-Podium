@@ -318,8 +318,19 @@ function SectionMarche({ marche, rang, epingles, ferme, onBasculer }) {
           aria-hidden="true"
           className="lueur-haute pointer-events-none absolute inset-0"
         />
+        {/* **Deux lignes, jamais une coupure.** Le libellé vient du bookmaker et
+            n'a pas de longueur convenue : « VAINQUEUR COURSE, QUALIFICATION … »
+            sortait tronqué, et un titre tronqué ne dit pas de quel marché on
+            parle — c'est pourtant la seule chose que cet en-tête ait à dire. Le
+            texte revient donc à la ligne, `line-clamp-2` borne la casse à deux,
+            et `break-words` protège du mot unique plus large que la colonne.
+
+            **L'en-tête n'a pas de hauteur fixe et ne doit pas en prendre** : il
+            grandit avec son titre, et le `gap-3` de la section garde l'écart
+            avec la première rangée de widgets. `leading-[1.25]` resserre deux
+            lignes de capitales, où l'interlignage de corps serait trop aéré. */}
         <h2
-          className={`relative min-w-0 truncate text-[13px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
+          className={`relative line-clamp-2 min-w-0 leading-[1.25] break-words text-[13px] font-medium tracking-[0.5px] uppercase ${ton.texte}`}
         >
           {marche.libelle}
         </h2>

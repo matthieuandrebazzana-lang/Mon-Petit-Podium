@@ -246,3 +246,49 @@ export function couleurMarche(marche, rang = 0) {
   if (nommee) return couleurBloc(nommee);
   return couleurBloc(MARCHES_DECOUVERTS[rang % MARCHES_DECOUVERTS.length]);
 }
+
+/**
+ * La teinte qui identifie un **membre** quand aucune photo ne le fait.
+ *
+ * > ### Une question, un propriétaire — et elle est désormais posée deux fois
+ * >
+ * > « De quelle couleur est le rond de cette personne ? » se posait jusqu'ici
+ * > dans `Pastille`, en HTML, sous forme de classes Tailwind. La vue piste la
+ * > pose maintenant **en SVG**, où il faut un `#rrggbb` : un `fill` n'accepte
+ * > pas `bg-primaire`. Deux tables écrites séparément auraient divergé au
+ * > premier ajustement, et la même personne aurait changé de couleur entre le
+ * > classement et sa voiture. La table est donc ici, et porte **les deux
+ * > formes** de chaque teinte ; chaque appelant prend celle de son medium.
+ *
+ * **Aucune teinte nouvelle n'entre par cette porte** : ce sont quatre des sept
+ * couleurs de base du design system, dans leur rôle d'aplat. Le choix est
+ * déterministe — la même graine rend toujours la même teinte, d'un écran à
+ * l'autre et d'une session à l'autre, sans quoi on ne reconnaîtrait plus
+ * personne du coin de l'œil.
+ *
+ * Les classes sont écrites **en toutes lettres**, même règle que
+ * `COULEURS_BLOC` : Tailwind lit les fichiers source et ne verrait pas une
+ * classe assemblée à l'exécution.
+ */
+export const TEINTES_MEMBRE = [
+  { hex: "#800111", fond: "bg-primaire" },
+  { hex: "#E8A020", fond: "bg-accent" },
+  { hex: "#543925", fond: "bg-secondaire" },
+  { hex: "#5A000C", fond: "bg-primaire-fonce" },
+];
+
+/**
+ * Somme des codes de caractères : suffisant pour répartir, et stable.
+ *
+ * **Ce n'est pas `empreinte`**, qui sert aux championnats, et les deux ne
+ * doivent pas fusionner : une seule fonction voudrait dire qu'un membre et un
+ * championnat portant le même identifiant reçoivent des teintes corrélées, dans
+ * deux listes qui n'ont ni la même longueur ni le même rôle. C'est la répartition
+ * d'origine de `Pastille`, déplacée telle quelle.
+ */
+export function teinteMembre(graine) {
+  const texte = String(graine ?? "");
+  let total = 0;
+  for (let i = 0; i < texte.length; i += 1) total += texte.charCodeAt(i);
+  return TEINTES_MEMBRE[total % TEINTES_MEMBRE.length];
+}
