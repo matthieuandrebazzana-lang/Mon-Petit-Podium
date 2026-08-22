@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js";
 import { GENRE_DONNEES, GENRE_SESSION, GENRE_SUPABASE } from "./erreurs.js";
+import { EXTENSION_DEPOSEE, TYPE_DEPOSE } from "./image.js";
 
 /**
  * Dépôt des photos dans Supabase Storage — avatars et photos de championnat.
@@ -20,9 +21,24 @@ import { GENRE_DONNEES, GENRE_SESSION, GENRE_SUPABASE } from "./erreurs.js";
  *
  * **Toutes les vérifications faites ici sont faites deux fois.** Le compartiment
  * porte son propre plafond de taille et sa propre liste de types : c'est LUI qui
- * garde. Ce qui suit ne sert qu'à dire non tout de suite — deux mégaoctets
- * montés sur un réseau mobile avant d'être refusés seraient deux mégaoctets
+ * garde. Ce qui suit ne sert qu'à dire non tout de suite — cinq mégaoctets
+ * montés sur un réseau mobile avant d'être refusés seraient cinq mégaoctets
  * perdus.
+ *
+ * > ### Les deux plafonds ne mesurent pas la même chose (version `0.51.0`)
+ * >
+ * > `refusDuFichier` juge **ce que le joueur a le droit de CHOISIR** : 5 Mo, et
+ * > les trois formats que sait ouvrir un navigateur. Le compartiment, lui, juge
+ * > **ce qu'on dépose** : 2 Mo, jpeg / png / webp (migration 16).
+ * >
+ * > Les deux ne se contredisent pas, parce que rien ne va plus du premier au
+ * > second sans passer par `lib/image.js` : toute photo est recadrée, ramenée à
+ * > 800 px de côté et réencodée en JPEG 0,85 avant d'arriver ici. Une photo
+ * > d'iPhone de quatre mégaoctets en pèse alors moins de deux cents kilo-octets,
+ * > et le plafond du compartiment n'est plus jamais approché. C'est précisément
+ * > ce qui permet au plafond de CHOIX d'être si large : refuser une photo de
+ * > trois mégaoctets qu'on allait de toute façon réduire à deux cents kilo-octets
+ * > n'aurait protégé personne.
  */
 
 const NON_CONFIGURE = "L'application n'est pas reliée à sa base de données.";
@@ -33,8 +49,19 @@ const DEPOT_IMPOSSIBLE =
 export const COMPARTIMENT_AVATARS = "avatars";
 export const COMPARTIMENT_CHAMPIONNATS = "championnats";
 
-/** 2 Mo, la valeur exacte du plafond posé sur les deux compartiments. */
-export const TAILLE_MAXIMALE = 2 * 1024 * 1024;
+/**
+ * 5 Mo — le plafond de ce qu'on accepte de RECEVOIR d'une photothèque.
+ *
+ * Ce n'est plus le plafond du compartiment (2 Mo, migration 16) : depuis la
+ * version `0.51.0` le fichier choisi n'est jamais celui qu'on dépose. Voir le
+ * bloc en tête de fichier.
+ *
+ * La borne existe malgré tout, et elle n'est pas décorative : c'est le décodage
+ * qui coûte, pas l'envoi. Une image de 8000 × 6000 occupe près de deux cents
+ * mégaoctets une fois décompressée dans un canvas, et Safari iOS abandonne
+ * l'onglet plutôt que de la rendre.
+ */
+export const TAILLE_MAXIMALE = 5 * 1024 * 1024;
 
 /**
  * Les trois types acceptés, et l'extension sous laquelle chacun se range.
@@ -62,8 +89,16 @@ const TYPES_ACCEPTES = {
  */
 export const TYPES_ACCEPTES_ATTRIBUT = Object.keys(TYPES_ACCEPTES).join(",");
 
-/** Les extensions possibles d'une même photo — voir `nettoyerAutresFormats`. */
-const EXTENSIONS = Object.values(TYPES_ACCEPTES);
+/**
+ * Les extensions sous lesquelles une photo a pu être rangée.
+ *
+ * Elle ne se dépose plus qu'en `jpg` (`lib/image.js`), mais les deux autres
+ * restent listées : une photo posée avant la version `0.51.0` porte encore son
+ * extension d'origine, et c'est cette liste qui permet de l'effacer.
+ */
+const EXTENSIONS = [
+  ...new Set([...Object.values(TYPES_ACCEPTES), EXTENSION_DEPOSEE]),
+];
 
 /** Taille lisible d'un plafond exprimé en octets : « 2 Mo ». */
 function enMegaoctets(octets) {
@@ -136,7 +171,12 @@ export async function deposerPhoto({ compartiment, dossier, base, fichier }) {
   const refus = refusDuFichier(fichier);
   if (refus) return { ok: false, message: refus, genre: GENRE_DONNEES };
 
-  const extension = TYPES_ACCEPTES[fichier.type];
+  // **L'extension et le type sont ceux de l'ENCODAGE, pas ceux du fichier
+  // d'origine.** Tout ce qui arrive ici est déjà sorti d'un canvas en JPEG
+  // (`lib/image.js`) ; lire `fichier.type` marcherait, mais ferait dépendre le
+  // chemin de stockage d'une donnée que l'appelant pourrait un jour oublier de
+  // convertir. Le format de dépôt a un propriétaire, et ce n'est pas ce module.
+  const extension = EXTENSION_DEPOSEE;
   const chemin = `${dossier}/${base}.${extension}`;
 
   try {
@@ -144,7 +184,7 @@ export async function deposerPhoto({ compartiment, dossier, base, fichier }) {
       .from(compartiment)
       .upload(chemin, fichier, {
         upsert: true,
-        contentType: fichier.type,
+        contentType: TYPE_DEPOSE,
         // Une année de cache côté navigateur, sans risque : l'URL enregistrée
         // change à chaque dépôt (voir ci-dessus), donc l'image mise en cache
         // n'est jamais celle qu'on cherche à remplacer.

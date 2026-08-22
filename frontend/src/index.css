@@ -793,6 +793,14 @@
   /* Flou */
   --blur-small: 2px;
   --blur-medium: 3px;
+  /* Échelle — le seul jeton d'échelle du projet, introduit à la version
+     `0.51.0` avec sa première surface modale (le recadrage d'une photo). Ce
+     n'est pas un fork : c'est le nom et la valeur que la planche du skill
+     Transitions.dev donne à l'ouverture et à la fermeture d'une modale. Les
+     retours d'appui, eux, gardent les leurs (`pressable`, `pressable-large`) —
+     ils décrivent une autre chose, un doigt posé et non une surface qui
+     arrive. */
+  --scale-large: 0.96;
 
   /* Texts reveal — apparition échelonnée des blocs d'un écran */
   --stagger-dur: 500ms;
@@ -1892,5 +1900,91 @@
      arriver, il est là pour dire un état. */
   .t-photo-envoi {
     transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Recadrage d'une photo — la surface plein écran (version 0.51.0)
+
+   **Aucun jeton nouveau.** L'ouverture emprunte `--duration-fast` et
+   `--ease-smooth-out`, la fermeture `--duration-quick` : c'est exactement
+   l'usage que la table des jetons du design system leur donne (« modal/dropdown
+   open » et « modal close »). La fermeture est plus rapide que l'ouverture, et
+   c'est la règle générale — lente là où l'on décide, vive là où le système
+   répond.
+
+   **`transform-origin` reste au centre.** La surface n'est pas ancrée à un
+   déclencheur : elle prend l'écran entier. C'est la seule exception à la règle
+   d'origine des popovers, et elle est explicite dans les deux skills.
+
+   L'échelle part de `--scale-large` (0,96) et jamais de zéro : une chose doit
+   avoir une silhouette avant d'être remplie.
+   --------------------------------------------------------------- */
+.t-recadrage {
+  /* Les zones sûres sont portées ici et non par l'utilitaire `ecran` : cette
+     surface veut ses marges VERTICALES sûres, mais une scène qui court d'un
+     bord à l'autre. `ecran` poserait aussi les marges latérales, et le canvas
+     perdrait trente-deux pixels de largeur pour rien. */
+  padding-top: var(--spacing-safe-top);
+  padding-bottom: var(--spacing-safe-bottom);
+  padding-left: var(--spacing-safe-left);
+  padding-right: var(--spacing-safe-right);
+  opacity: 0;
+  transform: scale(var(--scale-large));
+  transition:
+    opacity var(--duration-quick) var(--ease-smooth-out),
+    transform var(--duration-quick) var(--ease-smooth-out);
+}
+
+.t-recadrage[data-ouvert="true"] {
+  opacity: 1;
+  transform: scale(1);
+  transition-duration: var(--duration-fast);
+}
+
+/* Le voile est un calque à part, sous le contenu. Il porte le noir : posé sur
+   `.t-recadrage` lui-même, il aurait fait varier l'opacité de la scène ET du
+   fond ensemble, et la photo serait entrée en même temps que son propre
+   arrière-plan. */
+.t-recadrage-voile {
+  background: rgb(10 8 8 / 0.94);
+}
+
+/* La scène ne défile pas et ne zoome pas : `touch-action: none` rend chaque
+   geste au composant, y compris le pincement, que Safari iOS transformerait
+   sinon en zoom de la page. `overscroll-behavior` empêche le rebond de se
+   propager à l'écran resté monté dessous. */
+.t-recadrage-scene {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+/* Le liseré de la découpe. Il ne cerne pas un bloc — c'est la coupe elle-même
+   qu'il rend lisible, ce que la règle des traits fins protège au lieu de
+   l'interdire (`docs/design-system.md` §3).
+
+   **Deux anneaux, et il en faut deux.** Le blanc seul disparaîtrait sur une
+   photo de ciel ou de neige ; l'ombre extérieure sombre garantit la séparation
+   quelle que soit l'image, sur le fond éclairci comme sur le fond assombri. Le
+   côté vient de `--recadrage-cote`, écrite par le composant à la mesure. */
+.t-recadrage-cadre {
+  top: 50%;
+  left: 50%;
+  width: var(--recadrage-cote, 0px);
+  height: var(--recadrage-cote, 0px);
+  translate: -50% -50%;
+  box-shadow:
+    inset 0 0 0 2px rgb(255 255 255 / 0.92),
+    0 0 0 1px rgb(0 0 0 / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Le fondu reste, l'échelle part. Mouvement réduit veut dire moins de
+     mouvement, pas une surface plein écran qui apparaît sans prévenir — et une
+     opacité ne déplace rien. Même arbitrage que `.t-photo` ci-dessus. */
+  .t-recadrage,
+  .t-recadrage[data-ouvert="true"] {
+    transform: none;
+    transition-property: opacity;
   }
 }

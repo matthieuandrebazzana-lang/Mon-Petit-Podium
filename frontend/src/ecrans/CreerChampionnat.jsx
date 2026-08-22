@@ -6,6 +6,8 @@ import Champ from "../composants/Champ.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import { IconeAppareilPhoto } from "../composants/Icones.jsx";
+import RecadragePhoto from "../composants/RecadragePhoto.jsx";
+import { enFichier } from "../lib/image.js";
 import {
   creerChampionnat,
   enregistrerPhotoChampionnat,
@@ -67,6 +69,10 @@ export default function CreerChampionnat() {
   const champFichier = useRef(null);
   const [photo, setPhoto] = useState(null);
   const [apercu, setApercu] = useState(null);
+  // Le fichier choisi attend son recadrage. Il n'entre dans `photo` qu'une fois
+  // recadré : ce qui est en `photo` est toujours ce qui partira, jamais ce qui
+  // a été pointé dans la photothèque.
+  const [aRecadrer, setARecadrer] = useState(null);
 
   function choisirPhoto(evenement) {
     const fichier = evenement.target.files?.[0];
@@ -82,13 +88,24 @@ export default function CreerChampionnat() {
       return;
     }
 
+    setAlerte(null);
+    setARecadrer(fichier);
+  }
+
+  /** Le recadrage est confirmé : le JPEG obtenu devient LA photo et l'aperçu. */
+  function adopterPhoto(blob) {
+    setARecadrer(null);
+
     // L'URL précédente est révoquée : chaque `createObjectURL` retient son
     // fichier en mémoire jusqu'à ce qu'on le relâche, et changer trois fois
-    // d'avis retiendrait trois images de deux mégaoctets.
+    // d'avis en retiendrait trois.
     if (apercu) URL.revokeObjectURL(apercu);
 
-    setAlerte(null);
+    const fichier = enFichier(blob, "photo");
     setPhoto(fichier);
+    // L'aperçu montre le fichier RECADRÉ, et c'est tout l'intérêt : le cadre de
+    // 72px de l'écran affiche désormais exactement ce que la carte d'accueil
+    // affichera, au recadrage près qui vient d'être choisi.
     setApercu(URL.createObjectURL(fichier));
   }
 
@@ -101,10 +118,20 @@ export default function CreerChampionnat() {
   /**
    * Dépose la photo et l'attache au championnat tout juste créé.
    *
-   * Ne rend rien et ne lève rien : son échec est journalisé par les couches du
-   * dessous et **n'interrompt pas la navigation**. C'est le même arbitrage que
-   * pour le rang d'une carte d'accueil — une lecture secondaire en panne ne fait
-   * jamais perdre la principale.
+   * **Rend le message d'échec, ou `null`.** Elle ne lève pas et n'interrompt pas
+   * la navigation : c'est le même arbitrage que pour le rang d'une carte
+   * d'accueil — une opération secondaire en panne ne fait jamais perdre la
+   * principale, et le championnat est ce que le joueur venait chercher.
+   *
+   * > ### Mais l'échec ne se tait plus (version `0.51.0`)
+   * >
+   * > Jusqu'ici cette fonction rendait `undefined` dans tous les cas et son échec
+   * > n'atteignait personne. C'est ce silence qui a laissé la version `0.50.0`
+   * > entière convaincue que les photos de championnat marchaient, alors
+   * > qu'**aucune** ne s'enregistrait : la contrainte `check` de la migration 16
+   * > était incompilable et refusait toute écriture (`docs/bugs-connus.md` §18).
+   * > Le message remonte donc maintenant jusqu'à l'écran d'arrivée, qui l'annonce
+   * > une fois. Un échec qu'on choisit de ne pas bloquer doit quand même se dire.
    */
   async function attacherPhoto(championnatId) {
     const depot = await deposerPhoto({
@@ -113,12 +140,16 @@ export default function CreerChampionnat() {
       base: "photo",
       fichier: photo,
     });
-    if (!depot.ok) return;
+    if (!depot.ok) return depot.message;
 
     // L'URL n'est enregistrée qu'après un dépôt réussi : l'inverse laisserait en
     // base l'adresse d'un objet inexistant, donc une image cassée sur la carte
     // d'accueil de chaque membre.
-    await enregistrerPhotoChampionnat(championnatId, depot.donnees);
+    const enregistrement = await enregistrerPhotoChampionnat(
+      championnatId,
+      depot.donnees,
+    );
+    return enregistrement.ok ? null : enregistrement.message;
   }
 
   async function soumettre(evenement) {
@@ -143,7 +174,7 @@ export default function CreerChampionnat() {
       return;
     }
 
-    if (photo) await attacherPhoto(resultat.donnees.id);
+    const echecPhoto = photo ? await attacherPhoto(resultat.donnees.id) : null;
 
     setEnvoi(false);
 
@@ -159,12 +190,22 @@ export default function CreerChampionnat() {
     // sur l'accueil, pas sur un formulaire déjà validé.
     naviguer(`/championnats/${resultat.donnees.id}`, {
       replace: true,
-      state: { nouveau: true },
+      state: { nouveau: true, echecPhoto },
     });
   }
 
   return (
     <Ecran direction="avant">
+      {aRecadrer && (
+        <RecadragePhoto
+          fichier={aRecadrer}
+          forme="carre"
+          titre="La photo du championnat"
+          onConfirmer={adopterPhoto}
+          onAnnuler={() => setARecadrer(null)}
+        />
+      )}
+
       <Bloc rang={1}>
         <EnTete titre="Créer un championnat" retourVers="/accueil" />
       </Bloc>

@@ -281,12 +281,27 @@ def livree_valide(valeur: str) -> str:
 
 
 @router.patch("/moi", response_model=ProfilServi)
-@journaliser_echecs(DOMAINE, "Enregistrement de ta voiture")
+@journaliser_echecs(DOMAINE, "Enregistrement de ton profil")
 async def modifier_mon_profil(
     corps: ModificationProfil,
     utilisateur: str = Depends(utilisateur_courant),
 ) -> ProfilServi:
-    """Modifie la voiture de l'appelant : ses deux couleurs et son numéro.
+    """Modifie le profil de l'appelant : sa voiture, son numéro, sa photo.
+
+    > ### Le contexte dit « ton profil » et non « ta voiture », depuis la v0.51.0
+    >
+    > Cette route sert **quatre** choses : les deux couleurs, le numéro, la
+    > livrée et la photo. Le contexte du décorateur part tel quel dans le message
+    > rendu à l'appelant (`api/journal.py`), et il disait « Enregistrement de ta
+    > voiture » quelle que soit celle qui avait échoué.
+    >
+    > **Ce n'est pas une imprécision de rédaction, c'est ce qui a fait manquer un
+    > défaut pendant toute une version.** Une photo de profil refusée par la base
+    > s'annonçait « Enregistrement de ta voiture : impossible pour le moment » —
+    > un message qui envoyait chercher la cause du côté des couleurs, alors que la
+    > contrainte `check` de la migration 16 était incompilable et refusait toute
+    > écriture d'URL (`docs/bugs-connus.md` §18). Un contexte qui nomme la mauvaise
+    > chose est pire qu'un contexte vague.
 
     Déclarée **avant** `/{profil_id}` : les deux chemins n'entrent pas en
     conflit — les méthodes diffèrent — mais l'ordre rend la lecture du fichier
@@ -374,7 +389,7 @@ async def modifier_mon_profil(
             "profils", {"id": f"eq.{utilisateur}"}, valeurs
         )
     except ErreurSupabase as erreur:
-        raise echec_lisible("Enregistrement de ta voiture", erreur) from erreur
+        raise echec_lisible("Enregistrement de ton profil", erreur) from erreur
 
     if not modifiees:
         raise HTTPException(

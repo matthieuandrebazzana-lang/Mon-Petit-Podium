@@ -427,3 +427,90 @@ et celui de la planche cadrée sont désormais superposables.
 - **Le contrôle qui attrape ce défaut est le rendu comparé** — fragment extrait contre
   planche cadrée, côte à côte. Un décompte des formes ou des `fill` ne le voit pas :
   ils sont identiques.
+
+---
+
+## 18. Les photos ne s'enregistraient PAS — une contrainte `check` incompilable
+
+**Symptôme.** Deux symptômes en apparence sans rapport, livrés ensemble par la version
+`0.50.0` :
+
+- au profil, choisir une photo affichait **« Enregistrement de ta voiture : impossible
+  pour le moment »** — un message qui parle de la voiture alors qu'on vient de toucher à
+  une photo ;
+- au championnat, la photo choisie à la création **n'apparaissait nulle part** : ni sur la
+  carte d'accueil, ni dans la liste des championnats, ni dans l'en-tête de l'écran du
+  championnat. Et **sans le moindre message**.
+
+**Cause réelle — une seule, en base, pour les deux.** La migration 16 posait sur
+`profils.avatar_url` et `championnats.photo_url` la même contrainte :
+
+```sql
+check (colonne is null or colonne ~ '^https://[^[:space:]]{10,505}$')
+```
+
+**Le moteur d'expressions régulières de PostgreSQL plafonne un compteur de répétition
+`{m,n}` à 255** (`RE_DUP_MAX`). `{10,505}` dépasse ce plafond : l'expression n'est pas
+compilable. Toute écriture d'une URL de photo retombait donc en
+
+```
+ERROR 2201B: invalid regular expression: invalid repetition count(s)
+```
+
+et **aucune photo n'a jamais pu être enregistrée depuis l'origine de la fonctionnalité.**
+Vérifié sur la base de production le 22/08/2026, sur les deux colonnes.
+
+**Ce qui n'était PAS en cause, et qu'on a écarté un par un.** Le diagnostic a été fait
+contre la base réelle, pas par lecture — c'est ce qui l'a rendu court :
+
+| Soupçon | Verdict |
+|---|---|
+| Migration 16 non appliquée | **Non.** Les deux colonnes existent (`select=photo_url` rend `[]` et non `42703`) |
+| Compartiments Storage absents | **Non.** `avatars` et `championnats` rendent `NoSuchKey`, un compartiment inconnu rend `NoSuchBucket` |
+| Politiques `storage.objects` trop strictes | **Non.** Les deux dépôts réussissent en `200` |
+| `mes_championnats` en retard sur la migration | **Non.** `GET /championnats/moi` sert bien `photo_url` |
+| La route `PATCH` ou son autorisation | **Non.** `url_de_photo_valide` passe, et le `403` créateur ne se déclenche pas |
+
+Tout marchait **sauf** l'écriture de la colonne.
+
+**Deux amplificateurs, et ce sont eux qui ont fait durer le défaut une version entière.**
+
+1. **Le contexte du décorateur nommait la mauvaise chose.** `PATCH /profils/moi` sert la
+   voiture, le numéro, la livrée **et** la photo, mais `journaliser_echecs` portait
+   « Enregistrement de ta voiture ». Un échec de photo s'annonçait donc comme un échec de
+   voiture, et envoyait chercher la cause du côté des couleurs. **Un contexte qui nomme la
+   mauvaise chose est pire qu'un contexte vague.**
+2. **L'échec de la photo d'un championnat était avalé en silence.** `attacherPhoto`
+   rendait `undefined` dans tous les cas, par application de la règle « l'échec d'une
+   opération secondaire n'emporte jamais la principale ». La règle est bonne ; sa mise en
+   œuvre ne l'était pas. **Ne pas bloquer sur un échec n'autorise pas à le taire.**
+
+**Correctif (version `0.51.0`).**
+
+- **Migration 17** — la borne de longueur sort de l'expression régulière et devient un
+  `char_length` : `~ '^https://[^[:space:]]+$' and char_length(...) between 18 and 513`.
+  Sémantique identique à la lettre, plus aucun compteur, donc plus aucun plafond.
+- La migration **s'éprouve elle-même** en fin de fichier, sur une URL jetable : une
+  contrainte `check` n'étant évaluée qu'à l'écriture, c'est le seul moyen de savoir en la
+  jouant qu'elle est compilable. C'est exactement ce qui manquait à la 16.
+- Le contexte de `PATCH /profils/moi` devient **« Enregistrement de ton profil »**.
+- `attacherPhoto` **rend son message d'échec**, que l'écran du championnat annonce à
+  l'arrivée. La création n'est toujours pas bloquée.
+
+**Ne pas refaire.**
+
+- **Un compteur de répétition d'une expression régulière PostgreSQL ne dépasse jamais
+  255.** Une borne de longueur se dit `char_length`, jamais dans le quantificateur d'une
+  classe de caractères — mélanger les deux questions dans une seule expression est
+  précisément ce qui a fait franchir le plafond sans que personne ne le voie.
+- **Une contrainte `check` ajoutée sur une colonne vide n'est jamais éprouvée par sa propre
+  migration.** Elle est acceptée à la création et n'échoue qu'à la première écriture, qui
+  peut arriver des semaines plus tard. Toute migration qui pose un `check` non trivial doit
+  l'exercer sur une valeur d'exemple dans un bloc `do $$`.
+- **Le contexte d'un `journaliser_echecs` doit nommer la ROUTE, pas l'un de ses usages.**
+  Une route de modification partielle en sert plusieurs par construction.
+- **Devant un défaut de bout en bout, éprouver la chaîne segment par segment contre le
+  service réel**, et non la relire. Colonne, compartiment, politique, fonction SQL, route :
+  ici, quatre segments sur cinq étaient corrects, et aucune lecture du code ne pouvait
+  désigner le cinquième — la contrainte est en base, elle n'apparaît que dans une migration
+  déjà jouée.

@@ -10,7 +10,7 @@ Comment le projet est construit, ce qui tourne où, et pourquoi.
 MonPetitPodium/
 ├── frontend/          React + Vite + Tailwind 4 (PWA)  → Vercel
 ├── backend/           FastAPI (Python)                 → Railway
-├── supabase/migrations/   16 fichiers SQL, appliqués à la main
+├── supabase/migrations/   17 fichiers SQL, appliqués à la main
 ├── assets/            planches SVG source (logo, drapeaux, tracés, voitures)
 ├── maquettes/         16 écrans HTML autonomes de la v1
 └── docs/              cette documentation
@@ -60,7 +60,8 @@ est portée par la route, qui vérifie l'appartenance **avant** l'appel.
 prochain GP, pronostics du joueur, pseudo, drapeau `is_admin`, numéros déjà pris.
 
 **Le dépôt d'une photo emprunte les DEUX chemins, et c'est le critère appliqué tel quel.**
-Le **fichier** va directement à Supabase Storage : les politiques de `storage.objects`
+Le **fichier** — recadré, réduit et réencodé dans le navigateur depuis la version `0.51.0`
+(`lib/image.js`) — va directement à Supabase Storage : les politiques de `storage.objects`
 décrivent exactement le cas — le premier segment du chemin est l'identifiant du
 propriétaire, comparé à `auth.uid()` — et faire transiter deux mégaoctets par le plan
 gratuit de Railway n'ajouterait qu'un cold start. L'**URL**, elle, passe par FastAPI :
@@ -174,6 +175,14 @@ chaque handler :
 
 > **`echec_lisible` s'appelle depuis un bloc `except`** — `logger.exception` n'a de trace à
 > joindre que là.
+
+> **Le contexte doit nommer la ROUTE, jamais l'un de ses usages.** Il part tel quel dans le
+> message rendu à l'appelant. `PATCH /profils/moi` a porté « Enregistrement de ta voiture »
+> jusqu'à la version `0.51.0` alors qu'il sert aussi le numéro, la livrée **et** la photo :
+> une photo refusée par la base s'annonçait donc comme un échec de voiture, et envoyait
+> chercher la cause du côté des couleurs. **Un contexte qui nomme la mauvaise chose est pire
+> qu'un contexte vague** — c'est ce qui a fait manquer le défaut de `bugs-connus.md` §18
+> pendant toute une version. Il vaut désormais « Enregistrement de ton profil ».
 
 `lib/api.js` garde un garde-fou par-dessus, et **ce n'est pas un doublon** : il protège
 contre ce qui ne vient **pas** de notre backend — page d'erreur Railway, proxy qui

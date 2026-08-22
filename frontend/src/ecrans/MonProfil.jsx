@@ -14,6 +14,7 @@ import { Barre, Carte, Pave } from "../composants/Squelette.jsx";
 import SelecteurSkin from "../composants/SelecteurSkin.jsx";
 import Repli from "../composants/Repli.jsx";
 import SectionAdmin from "../composants/SectionAdmin.jsx";
+import RecadragePhoto from "../composants/RecadragePhoto.jsx";
 import { IconeAppareilPhoto } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import {
@@ -31,6 +32,7 @@ import {
   supprimerPhoto,
   TYPES_ACCEPTES_ATTRIBUT,
 } from "../lib/stockage.js";
+import { enFichier } from "../lib/image.js";
 import { livreeDuMembre } from "../lib/palette.js";
 import { oublierCachePrefixe, useDonnees } from "../lib/useDonnees.js";
 import { APP_VERSION } from "../config.js";
@@ -352,7 +354,18 @@ export default function MonProfil() {
     [donnees, oublierMesApparitions, remplacer],
   );
 
-  async function choisirPhoto(evenement) {
+  /**
+   * Le fichier choisi attend son recadrage — il n'est PAS encore parti.
+   *
+   * Depuis la version `0.51.0`, choisir un fichier n'envoie plus rien : ça ouvre
+   * le recadrage. C'est le seul changement de sens du geste, et il est
+   * volontaire — une photo de profil est carrée et découpée en rond, donc une
+   * photo prise en portrait perdait auparavant son sujet sans que personne ne
+   * puisse rien y faire (`object-fit: cover` centre, il ne compose pas).
+   */
+  const [aRecadrer, setARecadrer] = useState(null);
+
+  function choisirPhoto(evenement) {
     const fichier = evenement.target.files?.[0];
     // Le champ est vidé tout de suite : sans cela, rechoisir LE MÊME fichier
     // après un refus ne déclencherait aucun `change`, et l'écran resterait muet
@@ -362,14 +375,30 @@ export default function MonProfil() {
 
     setTentativePhoto((n) => n + 1);
 
-    // Le refus local d'abord : deux mégaoctets montés sur un réseau mobile avant
-    // d'être refusés par le compartiment seraient deux mégaoctets perdus.
+    // Le refus local d'abord : cinq mégaoctets montés sur un réseau mobile avant
+    // d'être refusés par le compartiment seraient cinq mégaoctets perdus — et
+    // surtout, une image que le navigateur ne saura pas décoder n'a rien à faire
+    // dans un recadrage qui n'aurait alors rien à montrer.
     const refus = refusDuFichier(fichier);
     if (refus) {
       setEchecPhoto(refus);
       return;
     }
 
+    setEchecPhoto(null);
+    setARecadrer(fichier);
+  }
+
+  /**
+   * Dépose la photo recadrée, puis attache son URL au profil.
+   *
+   * Elle reçoit un `Blob` sorti du canvas, jamais le fichier de la photothèque :
+   * la taille, le format et la qualité ont un propriétaire (`lib/image.js`), et
+   * ce n'est pas cet écran.
+   */
+  async function envoyerPhoto(blob) {
+    setARecadrer(null);
+    setTentativePhoto((n) => n + 1);
     setEnvoiPhoto(true);
     setEchecPhoto(null);
 
@@ -377,7 +406,7 @@ export default function MonProfil() {
       compartiment: COMPARTIMENT_AVATARS,
       dossier: profilId,
       base: "avatar",
-      fichier,
+      fichier: enFichier(blob, "avatar"),
     });
 
     if (!depot.ok) {
@@ -553,6 +582,20 @@ export default function MonProfil() {
 
   return (
     <Ecran direction="avant">
+      {/* Le recadrage est un portail vers `document.body` : monté ici dans le
+          JSX pour que sa place dans le code dise à quel geste il appartient,
+          rendu ailleurs pour échapper au `transform` d'`Ecran`. */}
+      {aRecadrer && (
+        <RecadragePhoto
+          fichier={aRecadrer}
+          forme="cercle"
+          titre="Ta photo de profil"
+          occupe={envoiPhoto}
+          onConfirmer={envoyerPhoto}
+          onAnnuler={() => setARecadrer(null)}
+        />
+      )}
+
       <Bloc rang={1}>
         <EnTete titre="Mon profil" retourVers="/accueil" />
       </Bloc>

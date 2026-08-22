@@ -11,10 +11,10 @@ Les composants importants, leurs responsabilités, et où vivent les SVG.
 src/
 ├── App.jsx              routeur + les trois groupes de routes
 ├── auth/AuthContexte.jsx
-├── composants/          réutilisables (38 fichiers)
+├── composants/          réutilisables (39 fichiers)
 │   └── icones/          6 icônes extraites de planches SVG
 ├── ecrans/              un fichier par écran (20)
-└── lib/                 accès aux données, formatage, hooks (22)
+└── lib/                 accès aux données, formatage, hooks (23)
 ```
 
 ---
@@ -252,7 +252,8 @@ le mode personnalisé — ce qui se voit à l'écran au lieu de planter.
 | `calendrier2026.js` | **la liste des GP** — voir `calendrier.md` |
 | `navigation.js` | barre, onglets, `origineRetour` |
 | `pronostics.js` | marchés, favoris, exclusion croisée |
-| `stockage.js` | **seul juge d'un fichier photo** : dépôt, formats, plafond, ménage |
+| `stockage.js` | **seul juge d'un fichier CHOISI** : formats, plafond de 5 Mo, dépôt, ménage |
+| `image.js` | **seul juge de ce qu'on DÉPOSE** : décodage, recadrage, 800 px, JPEG 0,85 |
 | `usePhoto.js` | l'état de chargement d'une image, cache du navigateur compris |
 
 Trois règles ont été **sorties des écrans** vers `lib/pronostics.js` — `optionsDisponibles`
@@ -261,6 +262,72 @@ Trois règles ont été **sorties des écrans** vers `lib/pronostics.js` — `op
 seraient vérifiables qu'en montant un DOM que le projet n'outille pas. Sorties de là, elles
 s'éprouvent directement. Même motif pour `VueAdmin`, fonction pure de ses props, séparée de
 `SectionAdmin` qui porte l'état.
+
+### `image.js` et `stockage.js` — deux plafonds qui ne mesurent pas la même chose
+
+Introduits séparément à la version `0.51.0`, et il faut les deux :
+
+| Module | Question | Réponse |
+|---|---|---|
+| `stockage.js` | ce que le joueur a le droit de **choisir** | 5 Mo, jpg / png / webp |
+| `image.js` | ce qu'on **dépose** | 800 px de côté, JPEG 0,85, toujours `.jpg` |
+
+Rien ne va du premier au second sans passer par le recadrage : toute photo sort d'un canvas
+avant d'atteindre `deposerPhoto`. C'est ce qui permet au plafond de choix d'être si large —
+refuser une photo de trois mégaoctets qu'on allait de toute façon ramener à deux cents
+kilo-octets n'aurait protégé personne — **et** au plafond de 2 Mo du compartiment de ne
+plus jamais être approché.
+
+> **`compresserImage` n'est pas sur le chemin ordinaire, et elle reste écrite.** Depuis la
+> `0.51.0` toute photo passe par le recadrage, qui produit déjà un carré. Mais « à quelle
+> taille et dans quel format une photo part-elle ? » doit avoir une réponse **indépendante
+> du geste de recadrage** : sans elle, la règle des 800 px et de la qualité 0,85 n'existerait
+> que comme effet de bord d'un composant d'interface.
+
+> **Le fond est peint en blanc avant tout dessin de compression.** Une image d'origine
+> transparente rendue en JPEG donnerait un fond **noir** : le format n'a pas de canal alpha,
+> et le canvas rend `rgba(0,0,0,0)` sur un aplat noir.
+
+### `RecadragePhoto` — la première surface modale du projet
+
+Un cadre carré, glisser pour placer, pincer pour zoomer, deux boutons. **Un seul composant
+pour les deux formes** : le profil découpe un rond, le championnat un carré arrondi, mais
+c'est la même question posée deux fois et **le cadre est carré dans les deux cas** — le
+rond n'est qu'un masque posé dessus, il ne change rien au calcul.
+
+| Point | Pourquoi |
+|---|---|
+| **Monté par un portail dans `document.body`** | `Ecran` porte un `transform` : un `position: fixed` posé dedans se positionnerait par rapport à LUI et défilerait avec la page. Même piège que `NavBarre` et `BandeauPrevisualisation` (§2), et il vaut même pour un `translateX(0)` |
+| **Le canvas dessine, le CSS ne transforme rien** | Une `<img>` transformée en CSS serait plus économe, mais demanderait **deux** géométries — celle qui affiche et celle qui découpe — tenues d'accord à la main. Le canvas dessine exactement ce que l'export découpera : `carreVisible` sert les deux, et l'écart devient structurellement impossible |
+| **Le dessin passe par `requestAnimationFrame`** | Safari émet plusieurs `pointermove` par image sur un écran à 120 Hz ; dessiner à chacun ferait deux à trois copies pour un seul affichage |
+| **La vue vit dans une `ref`, jamais dans un état** | Elle change à chaque `pointermove`. Un rendu React par image de geste ferait retomber le déplacement sous les 60 im/s sur un iPhone |
+| **`clientWidth`, jamais `getBoundingClientRect`** | La surface monte sous un `scale(0.96)` le temps de son ouverture, et une boîte mesurée à travers un `transform` rend la taille RENDUE. Le canvas aurait une réserve de pixels 4 % trop petite, et le côté du cadre serait faux d'autant — donc la découpe exportée aussi |
+| **`gesturestart` / `gesturechange` refusés à la main** | `touch-action: none` ne couvre pas les gestes propriétaires de Safari iOS : sans ce refus, deux doigts feraient zoomer la page ENTIÈRE sous le recadrage. React ne connaît pas ces trois noms d'événements, d'où l'écouteur natif |
+| **Le zoom est ancré sur le milieu des doigts** | Ancré au centre du cadre, l'image glisserait sous les doigts dès que le milieu de la pince n'y est pas. C'est le défaut qui fait qu'un zoom « ne suit pas » |
+| **Deuxième doigt ignoré au-delà de deux** | Sans cette protection, changer de doigt en cours de geste ferait bondir l'image à la nouvelle position |
+| **Les bornes sont appliquées EN CONTINU** | Une image qu'on laisserait sortir puis qu'on ramènerait d'un coup ferait apparaître un trou dans le masque — exactement ce que le recadrage promet de ne jamais montrer. Pas de caoutchouc : le rebond d'iOS a sa place sur un défilement, pas sur une découpe dont le résultat serait faux |
+
+> **La géométrie est sortie du composant.** `echelleMinimale`, `bornerDecalage` et
+> `carreVisible` vivent dans `lib/image.js` : ce sont des fonctions pures de quelques
+> nombres, là où les vérifier dans le composant demanderait de monter un DOM et de rejouer
+> des appuis, ce que le projet n'outille pas. Même motif que `lib/pronostics.js` (§5).
+>
+> La propriété qui compte se vérifie ainsi en une ligne : **le carré retenu ne sort jamais
+> de l'image**, quel que soit le couple zoom/décalage. C'est elle qui garantit qu'aucun
+> bord noir n'apparaît dans le masque.
+
+> ### `--scale-large` — le seul jeton d'échelle du projet
+> Introduit ici, avec la première surface modale. **Ce n'est pas un fork** : c'est le nom et
+> la valeur (0,96) que la planche du skill Transitions.dev donne à l'ouverture et à la
+> fermeture d'une modale. Les retours d'appui gardent les leurs (`pressable`,
+> `pressable-large`) — ils décrivent un doigt posé, pas une surface qui arrive.
+>
+> Ouverture `--duration-fast`, fermeture `--duration-quick`, courbe `--ease-smooth-out` :
+> l'usage exact que la table des jetons leur donne. **La sortie emprunte le chemin de
+> l'entrée** — la surface se referme avant de rendre la main, y compris à la confirmation,
+> ce que le composant obtient en différant l'appel de `dureeCss("--duration-quick")`.
+> `transform-origin` reste au centre : c'est la seule exception à la règle d'ancrage des
+> popovers, et elle vaut pour toute modale.
 
 ### `SectionAdmin` — deux interrupteurs, une seule rangée
 

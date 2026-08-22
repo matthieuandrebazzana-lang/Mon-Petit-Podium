@@ -258,6 +258,20 @@ export default function Championnat() {
   const { utilisateur } = useAuth();
 
   const nouveau = Boolean(emplacement.state?.nouveau);
+  /**
+   * L'échec de la photo, transmis par l'écran de création.
+   *
+   * **Il arrive ici parce que la création n'attend pas la photo** : le joueur est
+   * envoyé sur son championnat quoi qu'il arrive (`CreerChampionnat`), et cet
+   * écran est donc le premier endroit où le lui dire. L'annoncer sur le
+   * formulaire aurait voulu dire l'y retenir pour un ornement.
+   *
+   * Il est effacé au premier appui : c'est un message d'arrivée, pas un état du
+   * championnat, et il ne doit pas revenir à chaque retour sur l'écran.
+   */
+  const [echecPhoto, setEchecPhoto] = useState(
+    emplacement.state?.echecPhoto ?? null,
+  );
 
   // Comme pour l'accueil, la clé de cache porte le compte : un championnat lu
   // par quelqu'un d'autre sur le même appareil ne doit pas ressortir ici.
@@ -371,6 +385,25 @@ export default function Championnat() {
       />
 
       <div className="mt-3 flex flex-1 flex-col gap-3">
+        {/* Le message d'échec de la photo, annoncé une fois à l'arrivée.
+            Il se masque d'un appui — c'est un message d'arrivée, pas un état du
+            championnat. Le bouton porte son propre libellé accessible : le
+            `role="alert"` du bloc annonce déjà le texte, le répéter en nom de
+            bouton le ferait entendre deux fois. La cible fait toute la largeur
+            du bloc, donc bien au-delà des 44 px de la règle iOS. */}
+        {echecPhoto && (
+          <Bloc rang={1}>
+            <button
+              type="button"
+              onClick={() => setEchecPhoto(null)}
+              aria-label="Masquer ce message"
+              className="pressable-large block w-full text-left"
+            >
+              <Alerte ton="erreur">{echecPhoto}</Alerte>
+            </button>
+          </Bloc>
+        )}
+
         <Bloc rang={1}>
           <ZoneChargement
             chargement={chargement && !donnees}

@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **22 août 2026**, version `0.50.0`.
+État au **22 août 2026**, version `0.51.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -42,7 +42,22 @@ fois. **Ce scraping est de toute manière obligatoire après la migration 15**, 
 > correctif ci-dessus reste nécessaire — il répare une donnée réellement fausse — mais la
 > vérification qui avait causé l'accident se fait maintenant sans écrire.
 
-### 1.2 Appliquer la migration 16, et créer les deux compartiments avec elle
+### 1.2 Appliquer la migration 17 — **sans elle, aucune photo ne s'enregistre**
+
+`20260822120000_photos_contrainte_regex` remplace les deux contraintes `check` de la 16,
+qui étaient **incompilables** : `{10,505}` dépasse le plafond de 255 d'un compteur de
+répétition PostgreSQL, et toute écriture d'URL de photo retombait en `2201B`
+(`bugs-connus.md` §18). Vérifié sur la base de production.
+
+**C'est la migration la plus urgente du lot** : la 16 peut être appliquée sans elle sans
+rien casser — l'app se comporte comme avant les photos — mais **la fonctionnalité entière
+reste inerte** tant que la 17 n'est pas jouée, et elle échoue en annonçant « Enregistrement
+de ton profil : impossible pour le moment », ce qui ne désigne pas la cause.
+
+Si la 16 est rejouée un jour, **rejouer la 17 derrière** : la 16 repose les contraintes
+fautives.
+
+### 1.3 Appliquer la migration 16, et créer les deux compartiments avec elle
 
 `20260821180000_photos_profil_championnat` ajoute `profils.avatar_url` et
 `championnats.photo_url`, **et crée les compartiments `avatars` et `championnats` dans
@@ -58,7 +73,7 @@ resterait exécutable par `anon`. Voir `database.md` §6.
 
 **Rien à convertir, rien à reprendre** : aucun compte n'a de photo avant elle.
 
-### 1.3 Vérifier les migrations appliquées
+### 1.4 Vérifier les migrations appliquées
 
 **La liste des migrations appliquées est à revérifier dans le SQL Editor.** Une lecture
 partie par erreur vers le vrai projet a rendu une ligne réelle de `public.grands_prix` :
@@ -72,7 +87,7 @@ conflits dans `database.md` §6).
 Docker indisponible), contrairement aux onze premières. La 13 a été comparée ligne à ligne
 à la 10 : trois lignes de différence, toutes attendues. **À surveiller au premier passage.**
 
-### 1.4 Variables d'environnement de production
+### 1.5 Variables d'environnement de production
 
 | Où | Variable | État |
 |---|---|---|
@@ -81,7 +96,15 @@ Docker indisponible), contrairement aux onze premières. La 13 a été comparée
 | Railway | `ENVIRONMENT=production` | **à ajouter** — sinon `/docs` reste public |
 | Railway | `FRONTEND_URL` | non bloquante, mais préférable |
 
-### 1.5 Rebrancher le décompte de l'accueil
+> **Un compte de diagnostic subsiste en base.** Le défaut des photos a été localisé le
+> 22/08/2026 en éprouvant la chaîne réelle bout en bout, ce qui a demandé un compte jetable
+> (`diag-1787408037@example.com`, pseudo `pilote-e88f002b25`). Son championnat et ses objets
+> de stockage ont été effacés ; **le compte et son profil ne peuvent pas l'être avec la clé
+> publique** et restent à supprimer depuis le tableau de bord Supabase (Authentication puis
+> Users). Sans conséquence fonctionnelle : il n'est membre d'aucun championnat. Il décale
+> d'un cran l'indice de livrée du prochain inscrit (migration 9), ce qui ne se voit pas.
+
+### 1.6 Rebrancher le décompte de l'accueil
 
 `GP_RESTANTS = 12` dans `ecrans/Accueil.jsx`. La réponse existe : compter `GP_2026` filtré
 par `etatDuGpSaison`, comme le fait déjà `CalendrierGlobal`.
@@ -89,7 +112,7 @@ par `etatDuGpSaison`, comme le fait déjà `CalendrierGlobal`.
 > **Sans cela, les deux écrans se contrediront dès la première course courue** — l'accueil
 > dira « 12 restants » quand le calendrier en montrera 11. Voir `calendrier.md` §10.
 
-### 1.6 Tester sur iPhone réel
+### 1.7 Tester sur iPhone réel
 
 **Jamais fait.** Le rendu n'a été validé qu'en navigateur de bureau et par rendu hors
 navigateur. Points à regarder en priorité :
@@ -104,6 +127,9 @@ navigateur. Points à regarder en priorité :
 | **`prefers-reduced-transparency`** | activer « Réduire la transparence » : les matériaux doivent devenir opaques |
 | **`prefers-contrast: more`** | activer « Augmenter le contraste » : le grain disparaît, le voile s'approfondit |
 | **Aplats pleine largeur** | en **paysage** sur un iPhone à encoche, où la zone sûre latérale n'est plus nulle |
+| **Le recadrage d'une photo** | le premier geste multi-touch du projet, et la première surface modale. Le pincement zoome-t-il l'image ou la PAGE ? Le refus de `gesturestart` tient-il ? Le suivi reste-t-il à 1:1 pendant un glissement, canvas compris ? |
+| **Le sélecteur de fichier** | premier `<input type="file">` du projet — il n'a jamais rencontré Safari iOS. La photothèque s'ouvre-t-elle bien avant le sélecteur de fichiers du système ? |
+| **Une photo de 5 Mo** | le décodage, pas l'envoi, est ce qui coûte : une image de 8000 × 6000 occupe près de 200 Mo décompressée. Safari abandonne-t-il l'onglet ? |
 
 ---
 

@@ -613,3 +613,39 @@ Il s'efface quand la voiture a touché son plancher de taille : les cellules son
 étroites qu'un nombre à trois chiffres, et vingt scores côte à côte ne feraient pas vingt
 nombres mais une bavure. La liste `sr-only` de l'écran, elle, les donne tous.
 
+
+---
+
+## 20. Le recadrage est obligatoire, et il précède l'envoi
+
+**Décision (version `0.51.0`).** Choisir un fichier n'envoie plus rien : ça ouvre un
+recadrage plein écran. La photo ne part qu'après confirmation, et ce qui part n'est jamais
+le fichier choisi — c'est un carré de 800 px encodé en JPEG 0,85, sorti d'un canvas.
+
+**Pourquoi obligatoire et non facultatif.** Les deux emplacements sont carrés par
+construction : une pastille ronde et une vignette de carte. Une photo prise en portrait y
+était jusqu'ici centrée par `object-fit: cover`, qui **centre mais ne compose pas** — le
+sujet d'une photo n'est presque jamais au centre géométrique du cadre. Offrir le recadrage
+en option aurait voulu dire que le cas ordinaire reste le mauvais cadrage.
+
+**Alternatives écartées.**
+
+| Écartée | Pourquoi |
+|---|---|
+| Une bibliothèque de recadrage | Le projet n'a que quatre dépendances de production. Le besoin tient en deux gestes et une géométrie de quatre nombres ; une dépendance aurait pesé plus que le code qu'elle remplace |
+| Recadrer côté serveur | Le fichier ne passe pas par Railway, et c'est la décision d'architecture §3. L'y faire passer pour redimensionner ajouterait un cold start à chaque photo |
+| Une `<img>` transformée en CSS | Moins coûteux à l'affichage, mais **deux géométries à tenir d'accord** : celle qui montre et celle qui découpe. Le canvas dessine exactement ce que l'export découpera |
+| Laisser le plafond de choix à 2 Mo | Il n'a plus de sens : le compartiment ne reçoit plus que des fichiers de deux cents kilo-octets. Refuser une photo de trois mégaoctets qu'on allait de toute façon réduire n'aurait protégé personne |
+
+**Conséquences assumées.**
+
+- **Le geste a changé de sens.** « Choisir une photo » ouvrait un envoi, il ouvre
+  maintenant un écran. C'est une étape de plus, sur un geste rare et délibéré.
+- **La qualité est plafonnée à 800 px.** Suffisant pour une pastille de 56 px sur un écran
+  à trois pixels par point, et pour la vignette d'une carte. Une photo affichée en grand un
+  jour demanderait de revoir cette constante — elle a un propriétaire, `lib/image.js`.
+- **Le format déposé est toujours JPEG.** Une photo posée avant cette version garde son
+  extension d'origine ; `nettoyerAutresFormats` continue de balayer les trois.
+- **Le plafond de 5 Mo borne le DÉCODAGE, pas l'envoi.** C'est le point qui reste à
+  éprouver sur un iPhone réel : une image de 8000 × 6000 occupe près de deux cents
+  mégaoctets une fois décompressée, et Safari abandonne l'onglet plutôt que de la rendre.

@@ -364,7 +364,7 @@ applicatif de plus**.
 
 ---
 
-## 6. Les seize migrations
+## 6. Les dix-sept migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -384,6 +384,7 @@ applicatif de plus**.
 | 14 | `20260820150000_profil_is_admin` | `is_admin` | 1 |
 | 15 | `20260821143000_points_diviseur_10` | remise à zéro des points (diviseur 10) | 3, 5, 6 |
 | 16 | `20260821180000_photos_profil_championnat` | `avatar_url`, `photo_url`, 2 compartiments Storage | 1, 2, 12 |
+| 17 | `20260822120000_photos_contrainte_regex` | **corrige les deux `check` de la 16, incompilables** | 16 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -399,9 +400,26 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **8** ou **10** après **12** | la livrée d'écurie | rejouer 12 |
 | **10** après **13** | `date_qualifications` au calendrier | rejouer 13 |
 | **2**, **8**, **10** ou **12** après **16** | les photos aux cartes, classements et résultats | rejouer 16 |
+| **16** après **17** | l'enregistrement de toute photo, de nouveau refusé en `2201B` | rejouer 17 |
 
-**Les migrations 11, 14 et 15 ne remplacent aucune fonction** : elles ne peuvent pas
-entrer en conflit d'ordre.
+**Les migrations 11, 14, 15 et 17 ne remplacent aucune fonction** : elles ne peuvent pas
+entrer en conflit d'ordre. La 17 ne remplace que deux contraintes `check`, et il faut donc
+la rejouer si l'on rejoue la 16 — qui reposerait les contraintes fautives.
+
+> ### La 17 répare un défaut que la 16 ne pouvait pas voir
+>
+> La 16 écrivait `check (colonne ~ '^https://[^[:space:]]{10,505}$')`. **PostgreSQL
+> plafonne un compteur `{m,n}` à 255** (`RE_DUP_MAX`) : l'expression n'est pas compilable,
+> et toute écriture d'URL de photo retombait en `2201B`. La contrainte avait pourtant été
+> ACCEPTÉE à la création — un `check` n'est évalué qu'à l'écriture, et les colonnes étaient
+> vides. Résultat : **aucune photo n'a jamais pu être enregistrée** entre la 16 et la 17
+> (`bugs-connus.md` §18).
+>
+> La 17 sort la borne de longueur de l'expression (`char_length(...) between 18 and 513`),
+> ce qui rend la sémantique inchangée à la lettre, et **s'éprouve elle-même** sur une URL
+> jetable dans un bloc `do $$` final. Toute migration qui pose un `check` non trivial doit
+> désormais faire de même : c'est le seul moment où l'on peut savoir, en la jouant, qu'elle
+> est compilable.
 
 > **La 16 est la seule qui SUPPRIME une fonction avant de la recréer.** `mes_championnats`
 > déclare un `returns table (…)`, et PostgreSQL refuse de remplacer une fonction dont le
@@ -509,6 +527,15 @@ Migration 16. Les images ne sont **jamais** en base : `profils.avatar_url` et
 
 Les deux sont **publics**, plafonnés à **2 Mo**, et n'acceptent que `image/jpeg`,
 `image/png` et `image/webp`.
+
+> **Depuis la version `0.51.0`, l'extension déposée est toujours `jpg`.** Le fichier choisi
+> dans la photothèque n'est plus celui qui part : il est recadré, ramené à 800 px de côté
+> et réencodé en JPEG 0,85 par `frontend/src/lib/image.js`. Les trois types restent
+> déclarés sur le compartiment — c'est lui qui garde, et une photo posée avant cette
+> version porte encore son extension d'origine — mais le plafond de 2 Mo n'est plus jamais
+> approché : une photo d'iPhone de quatre mégaoctets en pèse moins de deux cents kilo-octets
+> une fois traitée. Le frontend, lui, plafonne le **choix** à 5 Mo, ce qui ne mesure pas la
+> même chose (`docs/composants.md` §5).
 
 > **Le premier segment du chemin EST l'autorisation.** La politique compare
 > `(storage.foldername(name))[1]` à `auth.uid()` pour un avatar, et remonte à
