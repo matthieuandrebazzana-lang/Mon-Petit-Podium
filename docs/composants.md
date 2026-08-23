@@ -507,6 +507,36 @@ la bonne réponse.**
 > **Le retour anticipé de `BoutonsOAuth` est placé APRÈS les hooks**, jamais avant : React
 > interdit un `return` qui court-circuiterait `useState`.
 
+### `Verdict` et `PastillePoints` — deux moitiés d'une même phrase
+
+Les deux vivent dans `ecrans/ResultatsGp.jsx` et sont **exportées**, parce que les deux
+accordéons de pronostics du projet — celui des résultats d'un Grand Prix et celui des
+résultats par Grand Prix — affichent la même donnée sur la même ligne.
+
+`Verdict` a été partagée en `0.53.0`, `PastillePoints` en `0.54.0` : jusque-là son bloc
+était **recopié à l'identique** dans les deux écrans, et il disait le contraire de ce qu'il
+montrait.
+
+| État | `PastillePoints` | `Verdict` | Contraste |
+|---|---|---|---|
+| réussi (`> 0`) | vert sauge, encre blanche | coche vert sauge sur vert sauge 15 % | 4,86:1 · 4,01:1 |
+| raté (`0`) | bordeaux, encre blanche | croix bordeaux sur bordeaux 10 % | 10,88:1 · 8,94:1 |
+| en attente (`null`) | beige, encre marron | horloge grise sur beige | 9,32:1 |
+
+> **Le succès était le seul des trois à ne pas se voir.** L'aplat plein bordeaux marquait
+> le pronostic **réussi**, et le raté comme le non-jugé prenaient tous deux le même
+> bordeaux sur beige : toute la colonne était rouge, le succès y était l'état le plus
+> sombre, et **`null` était indistinguable de `0`** — la seule distinction que la règle 4.1
+> interdit de perdre. `Verdict`, à côté, la tenait seule.
+
+> **Le beige de l'attente n'est pas un troisième verdict, c'est l'absence de verdict.** Il
+> porte le nombre de points **potentiels** ; le peindre en rouge annoncerait un échec qui
+> n'a pas eu lieu. Même arbitrage que le « en jeu / gagnés » de la ligne au-dessus.
+
+**Aucune teinte nouvelle n'entre** : le vert sauge est celui que le design system emploie
+déjà pour dire « c'est acquis » — le bloc « pronostics enregistrés » du récapitulatif et la
+pastille « Terminé » du calendrier.
+
 Le bundler élimine le JSX devenu inatteignable : les chaînes concernées sont **absentes du
 bundle de production**.
 

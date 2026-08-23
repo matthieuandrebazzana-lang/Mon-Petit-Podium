@@ -29,6 +29,7 @@ tranchée au hasard.
 """
 
 import logging
+import math
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -83,6 +84,11 @@ class Ligne:
     abandon: bool
     non_partant: bool
     disqualifie: bool
+    # Écart au leader, en secondes. `None` pour le leader lui-même (OpenF1 y met
+    # `null`) et pour tout ce qui n'est pas lisible ; `math.inf` pour un pilote
+    # doublé, dont l'écart est plus grand que n'importe quel intervalle proposé.
+    # Le champ est de type mixte chez OpenF1 : tout est absorbé par `_secondes`.
+    ecart_leader: float | None = None
 
     @property
     def classe(self) -> bool:
@@ -117,6 +123,23 @@ class Course:
             if ligne.position == position:
                 return ligne
         return None
+
+    def ecart_du_vainqueur(self) -> float | None:
+        """L'écart entre le vainqueur et son dauphin, en secondes.
+
+        **Il se lit sur la ligne du DEUXIÈME, pas sur celle du premier.**
+        `gap_to_leader` dit « de combien ce pilote est derrière le leader » : sur
+        la ligne du leader il vaut `null`, ce qui est correct et n'est pas une
+        donnée manquante. C'est le seul champ dont dépend le marché « écart du
+        gagnant », et c'est la raison pour laquelle il entre enfin dans `Ligne`.
+
+        `None` quand il n'y a pas de deuxième, ou quand son écart n'est pas
+        lisible : le marché reste alors non jugé, jamais perdu.
+        """
+        second = self.par_position(2)
+        if second is None:
+            return None
+        return second.ecart_leader
 
     def pilote_du_libelle(self, libelle: str) -> int | None:
         """Retrouve le numéro de voiture derrière un libellé Unibet.
@@ -172,6 +195,48 @@ def _entier(valeur: object) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def _secondes(valeur: object) -> float | None:
+    """Lit un `gap_to_leader` OpenF1, dont le type change d'une ligne à l'autre.
+
+    Quatre formes, toutes rencontrées :
+
+    | Forme | Exemple | Lecture |
+    |---|---|---|
+    | nombre | `11.536` | l'écart en secondes |
+    | chaîne « tour » | `"+1 LAP"` | `math.inf` — doublé, donc au-delà de tout intervalle |
+    | chaîne numérique | `"+11.536"` | l'écart en secondes |
+    | `null` / liste | `null`, `[0.0, 0.0, 0.0]` | `None` |
+
+    **`math.inf` plutôt que `None` pour un pilote doublé**, et c'est la seule
+    décision de cette fonction : un dauphin à un tour n'est pas un écart
+    illisible, c'est un écart plus grand que la borne haute de n'importe quel
+    intervalle proposé. Rendre `None` laisserait le pari non jugé alors qu'il est
+    parfaitement décidable. Le cas est théorique sur un P2 — il ne l'est pas sur
+    le reste du classement, et ce champ resservira.
+
+    La liste (`[0.0, 0.0, 0.0]`, un temps par segment de qualification) ne peut
+    apparaître que si le classement vient d'une session qui n'est pas la course :
+    `session_de_course()` l'écarte en amont, mais le calcul rejoue des données
+    conservées et ne suppose jamais leur provenance.
+    """
+    if isinstance(valeur, bool) or valeur is None:
+        return None
+    if isinstance(valeur, (int, float)):
+        return float(valeur)
+    if not isinstance(valeur, str):
+        return None
+
+    texte = valeur.strip()
+    if not texte:
+        return None
+    if "LAP" in texte.upper():
+        return math.inf
+    try:
+        return float(texte.replace(",", ".").lstrip("+"))
+    except ValueError:
+        return None
 
 
 def _indexer_pilotes(course: Course) -> None:
@@ -276,8 +341,12 @@ def analyser(donnees: dict) -> Course:
 
     Tous les pièges de typage de la section 3.2 sont absorbés ici, et nulle part
     ailleurs : `position` nulle, `points` flottant, `gap_to_leader` de type
-    mixte (jamais lu — aucun marché validé aujourd'hui n'en dépend, et c'est le
-    champ le plus instable de l'API).
+    mixte.
+
+    > **`gap_to_leader` était le seul champ du classement à n'être jamais lu**,
+    > et le commentaire de cette docstring le disait — c'est ce qui a fait passer
+    > l'oubli pour une intention pendant six versions. Il est lu depuis la
+    > version `0.54.0` : le marché « écart du gagnant » ne dépend que de lui.
     """
     course = Course()
 
@@ -293,6 +362,7 @@ def analyser(donnees: dict) -> Course:
             abandon=bool(brut.get("dnf")),
             non_partant=bool(brut.get("dns")),
             disqualifie=bool(brut.get("dsq")),
+            ecart_leader=_secondes(brut.get("gap_to_leader")),
         )
 
     for cle, pilote in (donnees.get("pilotes") or {}).items():
@@ -389,6 +459,87 @@ def _meilleur_tour(course: Course, libelle: str) -> bool | None:
     return numero == course.meilleur_tour
 
 
+# Un nombre à la française ou à l'anglaise : « 5 », « 5,50 », « 5.50 ».
+_NOMBRE = r"(\d+(?:[.,]\d+)?)"
+
+# Une plage — « 5 - 10 », « 5 à 10 », « entre 5 et 10 », « 5/10 ». Testée EN
+# PREMIER : le tiret d'un intervalle est aussi le signe de « - de 5 secondes »,
+# et l'ordre est ce qui les départage.
+_PLAGE = re.compile(_NOMBRE + r"\s*(?:-|a|et|/)\s*" + _NOMBRE)
+# Une borne basse — « plus de 10 », « + de 10 », « au-delà de 10 », « > 10 ».
+_BORNE_BASSE = re.compile(r"(?:plus|au ?dela|superieur|>|\+)\D{0,12}?" + _NOMBRE)
+# Une borne haute — « moins de 5 », « - de 5 », « jusqu'à 5 », « < 5 ».
+_BORNE_HAUTE = re.compile(r"(?:moins|jusqu|inferieur|<|-)\D{0,12}?" + _NOMBRE)
+
+
+def _intervalle_secondes(libelle: str) -> tuple[float, float] | None:
+    """Lit l'intervalle de secondes que désigne une issue « écart du gagnant ».
+
+    Rend `[bas, haut[` — **borne basse incluse, borne haute exclue**. Ce n'est
+    pas une coquetterie : les issues d'Unibet forment une partition (« moins de
+    5 », « 5 - 10 », « plus de 10 »), et deux bornes inclusives feraient gagner
+    *deux* paris à un écart de très exactement 5,000 s, deux exclusives n'en
+    feraient gagner aucun. Un écart se mesure au millième, donc le cas ne se
+    produira jamais — raison de plus pour que la règle soit décidée ici une fois,
+    plutôt que découverte le jour où il se produit.
+
+    `None` dès que le libellé ne décrit pas un intervalle. C'est la porte de
+    sortie qui protège tout le reste : le marché « écart du gagnant » n'a jamais
+    été confronté à de vrais libellés Unibet (`scraper.md` §10), et une issue que
+    ces formes ne reconnaissent pas laisse le pronostic à `NULL` — donc
+    rattrapable — au lieu d'être notée sur un intervalle inventé.
+    """
+    texte = "".join(
+        caractere
+        for caractere in unicodedata.normalize("NFD", (libelle or "").lower())
+        if unicodedata.category(caractere) != "Mn"
+    ).strip()
+    if not texte:
+        return None
+
+    def nombre(brut: str) -> float:
+        return float(brut.replace(",", "."))
+
+    plage = _PLAGE.search(texte)
+    if plage:
+        bornes = sorted((nombre(plage.group(1)), nombre(plage.group(2))))
+        return (bornes[0], bornes[1])
+
+    basse = _BORNE_BASSE.search(texte)
+    if basse:
+        return (nombre(basse.group(1)), math.inf)
+
+    haute = _BORNE_HAUTE.search(texte)
+    if haute:
+        return (0.0, nombre(haute.group(1)))
+
+    return None
+
+
+def _ecart_du_gagnant(course: Course, libelle: str) -> bool | None:
+    """L'écart entre le vainqueur et son dauphin tombe-t-il dans l'intervalle ?
+
+    Deux inconnues, et **chacune rend `None` pour son propre compte** : l'écart
+    peut manquer (pas de deuxième, champ illisible) et le libellé peut ne pas
+    décrire un intervalle. Les distinguer dans les logs est ce qui dira, au
+    premier vrai Grand Prix, s'il faut corriger la lecture de la donnée ou
+    l'écriture des formes reconnues.
+    """
+    ecart = course.ecart_du_vainqueur()
+    if ecart is None:
+        return None
+    intervalle = _intervalle_secondes(libelle)
+    if intervalle is None:
+        logger.warning(
+            "[points] Écart du gagnant : l'issue « %s » ne décrit aucun "
+            "intervalle reconnu. Pronostic laissé non jugé.",
+            libelle,
+        )
+        return None
+    bas, haut = intervalle
+    return bas <= ecart < haut
+
+
 def _safety_car(course: Course, libelle: str) -> bool | None:
     reponse = _reponse_binaire(libelle)
     if reponse is None:
@@ -435,6 +586,12 @@ def validateur(marche: str):
     annoncés en section 4.4 et **restent à confronter aux vrais marchés**. C'est
     exactement pour cela qu'un marché non reconnu laisse le pronostic à NULL au
     lieu de le déclarer perdu.
+
+    « écart du gagnant » entre dans la liste en version `0.54.0`. Il n'y était
+    **pas** : ses pronostics ne tombaient pas d'une comparaison ratée, ils
+    n'étaient jamais comparés du tout — le marché sortait d'ici en `None` et
+    restait à NULL (`bugs-connus.md` §20). C'est aussi le premier marché dont
+    l'issue n'est ni un pilote ni un oui/non, mais **un intervalle de secondes**.
     """
     slug = (marche or "").strip().lower()
     if not slug:
@@ -450,6 +607,15 @@ def validateur(marche: str):
     top = re.fullmatch(r"(?:dans-le-)?top-?(\d+)", slug)
     if top:
         return _top(int(top.group(1)))
+
+    # « écart du gagnant », « écart du vainqueur », « marge de victoire » — le
+    # même marché sous trois noms possibles, et c'est bien un seul : l'écart
+    # entre P1 et P2. Il est testé AVANT « vainqueur » n'apparaisse ailleurs et
+    # avant le préfixe « ecurie » : « ecart-du-vainqueur » contient « vainqueur »
+    # et commence par « eca », deux voisinages assez proches pour qu'un jour
+    # quelqu'un les confonde.
+    if "ecart" in slug or ("marge" in slug and "victoire" in slug):
+        return _ecart_du_gagnant
 
     if "virtual" in slug and "safety" in slug:
         return _safety_car_virtuel
@@ -492,14 +658,28 @@ def _cote(cotes: dict[str, dict], outcome: str) -> dict | None:
 def points_du_podium(pronostic: dict, cotes: dict[str, dict], course: Course):
     """Le pronostic de podium : deux pilotes, sans ordre entre eux (règle 4.2).
 
-    Les deux doivent être sur le podium. Un seul des deux ne rapporte rien : ce
-    n'est pas un demi-pronostic, c'est un pronostic raté.
+    > ### Chaque pilote est jugé pour son propre compte (version `0.54.0`)
+    >
+    > Le podium n'est pas un pari en deux jambes solidaires : ce sont **deux
+    > paris** saisis dans le même bloc. Un pilote qui monte sur le podium rapporte
+    > sa cote, que l'autre y monte ou non. Les deux, un seul, ou aucun.
+    >
+    > Jusqu'ici une seule sélection fausse invalidait les deux, et la conséquence
+    > était sévère : le podium est **le pari le mieux doté de la grille** — c'est
+    > le seul qui puisse rapporter la somme de deux cotes — et il était aussi le
+    > seul à ne jamais rien rapporter à moitié. Un joueur qui plaçait le bon
+    > pilote finissait à égalité avec celui qui s'était trompé sur les deux.
+    >
+    > **Ce que la règle NE change pas** : le total potentiel affiché avant la
+    > course reste la somme des deux cotes (§9 de `metier.md`), parce que c'est
+    > toujours le maximum atteignable ; et la somme reste ordre-indépendante,
+    > puisque chaque cote est payée à son propre pilote et non au rang de saisie.
 
-    **Ce que rapporte un podium réussi : la somme des deux cotes.** Le schéma de
-    l'étape 5 pose qu'il n'y a aucun ordre entre `pilote_1` et `pilote_2` ;
-    payer la seule cote de `pilote_1` ferait donc rapporter deux montants
-    différents au même pari selon l'ordre de saisie. La somme est
-    ordre-indépendante, et c'est la règle retenue.
+    **Une jambe non jugeable laisse le pronostic ENTIER à `NULL`**, même si
+    l'autre est décidée. La ligne ne porte qu'un seul `points_gagnes`, et
+    `attribuer_points` n'écrit que les `NULL` (`scraper.md` §11) : payer la seule
+    jambe connue figerait un total partiel que le rattrapage ne corrigerait
+    **plus jamais**. Attendre est réversible, écrire ne l'est pas.
     """
     detail = pronostic.get("pronostic_podium") or {}
     # PostgREST rend une relation « un vers un » tantôt en objet, tantôt en
@@ -530,27 +710,32 @@ def points_du_podium(pronostic: dict, cotes: dict[str, dict], course: Course):
     if any(resultat is None for resultat in resultats):
         return None, "pilote du podium non rapproché d'OpenF1"
 
-    if all(resultats):
-        total = int(cote_1["valeur"]) + int(cote_2["valeur"])
-        return (
-            Attribution(
-                pronostic_id=str(pronostic["id"]),
-                points=total,
-                reussi=True,
-                detail=(
-                    f"podium réussi : {cote_1.get('pilote')} + {cote_2.get('pilote')} "
-                    f"= {cote_1['valeur']} + {cote_2['valeur']} pts"
-                ),
-            ),
-            "",
-        )
+    # Chaque pilote paie sa propre cote, ou zéro. La somme suit — elle n'est plus
+    # une règle à part, seulement le cas où les deux termes sont non nuls.
+    gains = [
+        int(cote["valeur"] or 0) if reussi else 0
+        for cote, reussi in zip((cote_1, cote_2), resultats)
+    ]
+    total = sum(gains)
+
+    # Le détail nomme les deux pilotes et ce que chacun a rapporté : c'est la
+    # seule trace qui dira, en relisant les logs, si un demi-podium vient d'un
+    # pilote absent du top 3 ou d'un rapprochement de nom qui a mal tourné.
+    detail = " · ".join(
+        f"{cote.get('pilote')} {'✓ ' + str(gain) + ' pts' if reussi else '✗'}"
+        for cote, reussi, gain in zip((cote_1, cote_2), resultats, gains)
+    )
 
     return (
         Attribution(
             pronostic_id=str(pronostic["id"]),
-            points=0,
-            reussi=False,
-            detail=f"podium manqué : {cote_1.get('pilote')} + {cote_2.get('pilote')}",
+            points=total,
+            # `reussi` suit les points, comme partout ailleurs : un demi-podium
+            # a rapporté, donc il compte dans `paris_gagnes_pct` et peut être un
+            # `meilleur_coup` (§9 de `metier.md`). C'est aussi ce que la pastille
+            # de verdict lit à l'écran — `points_gagnes > 0`.
+            reussi=total > 0,
+            detail=f"podium — {detail}",
         ),
         "",
     )

@@ -197,6 +197,57 @@ qui est opaque — un circuit passant dessous se lirait comme un trait coupé ne
 **`HAUTEUR_BANDE` est retranchée de la carte, jamais ajoutée dessous** : les douze cartes
 gardent la même hauteur, qu'elles portent un bouton ou non.
 
+### Une carte terminée pâlit — `opacity: 0,4` (v`0.54.0`)
+
+Douze drapeaux pleins de la même intensité ne laissent aucun repère à l'œil, et le
+calendrier ne sert à rien d'autre qu'à trouver le prochain Grand Prix. L'archive recule
+donc derrière ce qui reste à jouer.
+
+L'opacité est posée sur l'`<article>`, **jamais calque par calque** : les six couches de la
+pile doivent pâlir ensemble. Appliquée séparément, chacune se composerait sur celle du
+dessous au lieu du fond de l'app, et le voile — qui est justement ce qui tient le contraste
+du texte — perdrait plus que le drapeau qu'il couvre.
+
+> #### Écart mesuré, et assumé (CLAUDE.md §6)
+> L'opacité compose l'encre **et** son fond sur le beige de l'app, donc elle les rapproche.
+> Relevé sur le pire substrat (le noir de Las Vegas) et sur la pastille la plus serrée :
+>
+> | Opacité | Pastille « Terminé » | Blanc sur drapeau bordeaux |
+> |---|---|---|
+> | `1` | 4,86:1 | 10,88:1 |
+> | `0,75` | 3,07:1 | 6,36:1 |
+> | **`0,4`** | **1,74:1** | **2,49:1** |
+>
+> **Sous les 3:1 d'un grand texte porteur de sens.** La valeur est celle qui a été
+> demandée, et l'arbitrage se défend : ces cartes sont une archive, la seule information
+> qu'on y cherche est « c'est passé », et elle se lit à la pâleur avant de se lire au mot.
+> **`0,75` est le point où la pastille repasse le plancher**, si la lisibilité doit primer.
+
+Le bouton « Voir les résultats » pâlit avec le reste mais **garde sa hauteur** : une zone
+tactile ne se réduit jamais.
+
+### L'écran s'ouvre sur le prochain Grand Prix
+
+Au montage, `CalendrierGlobal` défile jusqu'à la première carte non terminée. Les Grands
+Prix passés restent accessibles **en remontant** ; ils ne sont simplement plus la première
+chose qu'on voit.
+
+- **Ce n'est pas une animation, c'est une position de départ.** Le défilement est
+  instantané. L'onglet Calendrier est ouvert plusieurs fois par jour : faire défiler la
+  saison sous les yeux à chaque fois coûterait le temps du geste sans rien apprendre.
+- **Une seule fois par montage**, jamais à la revalidation — sans quoi une réponse Railway
+  lente arracherait l'écran des mains de quelqu'un en train de lire plus bas.
+- **La position se calcule sur la chaîne des `offsetTop`, pas sur
+  `getBoundingClientRect()`.** L'écran entre en scène sous un `translateX` et ses blocs sous
+  un `translateY` : le rectangle rendu est décalé pendant toute l'animation d'entrée,
+  c'est-à-dire exactement au moment du calcul. Les `offsetTop` ignorent les `transform`.
+- **`estGpPasse` est le seul propriétaire de la question**, partagé avec la carte. Deux
+  prédicats écrits séparément auraient donné un calendrier ouvert sur une carte pâle, ou
+  une carte vive hors de l'écran.
+- **C'est le statut qui tranche, pas la date.** Un Grand Prix couru mais jamais scrapé
+  n'est pas `en_base`, donc reste « à venir » et reste vif. On ne pâlit que ce dont on sait
+  qu'il est joué — conséquence directe du §6, et elle vaut aussi pour le défilement.
+
 ---
 
 ## 9. Le calendrier d'un championnat

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import CarteGpSaison from "../composants/CarteGpSaison.jsx";
@@ -8,6 +8,7 @@ import {
   chargerCotesEnBase,
   enrichir,
   etatDuGpSaison,
+  indexProchainGpSaison,
 } from "../lib/calendrier2026.js";
 import { chargerMesGpPronostiques, cleSaison } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
@@ -35,6 +36,32 @@ import { useDonnees } from "../lib/useDonnees.js";
  * Le calendrier d'**un championnat** (maquette 15), avec ses scores et son
  * mini-classement, reste un autre écran, atteint depuis le championnat.
  */
+
+/* -------------------------------------------------------------------------- */
+/*  Le défilement d'ouverture                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** Ce qu'on laisse respirer au-dessus de la carte visée, en pixels. Assez pour
+ *  que le bord supérieur de la carte précédente affleure : sans ce liseré, rien
+ *  ne dirait qu'il y a quelque chose au-dessus, et le défilement vers le haut
+ *  n'aurait pas d'affordance. */
+const MARGE_DEFILEMENT = 14;
+
+/**
+ * La position d'un élément dans la page, **en coordonnées de mise en page**.
+ *
+ * `getBoundingClientRect()` aurait été plus court et aurait été faux ici :
+ * l'écran entre en scène sous `.t-ecran` (un `translateX`) et ses blocs sous
+ * `.t-stagger-line` (un `translateY`), donc le rectangle rendu est décalé
+ * pendant toute l'animation d'entrée — c'est-à-dire exactement au moment où ce
+ * calcul est fait. La chaîne des `offsetTop` ignore les `transform` : elle donne
+ * la position que l'élément occupera une fois posé.
+ */
+function positionDansLaPage(element) {
+  let y = 0;
+  for (let noeud = element; noeud; noeud = noeud.offsetParent) y += noeud.offsetTop;
+  return y;
+}
 
 /* -------------------------------------------------------------------------- */
 /*  L'écran                                                                   */
@@ -91,6 +118,49 @@ export default function CalendrierGlobal() {
     (gp) => etatDuGpSaison(gp).cle !== "termine",
   ).length;
 
+  // ---- L'écran s'ouvre sur le prochain Grand Prix -------------------------
+  //
+  // **Ce n'est pas une animation, c'est une position de départ**, et les cinq
+  // skills de design l'ont écarté d'une même voix : l'onglet Calendrier est en
+  // bas de l'écran de tout le monde, donc ouvert plusieurs fois par jour, et
+  // faire défiler la saison sous les yeux à chaque ouverture coûterait le temps
+  // du geste sans rien apprendre. Le défilement est donc **instantané**, posé
+  // avant la première peinture. Rien de nouveau n'entre dans le vocabulaire de
+  // mouvement.
+  //
+  // **Il ne se produit qu'une fois par montage**, jamais à la revalidation : le
+  // cache *stale-while-revalidate* rejoue le chargeur en arrière-plan, et sans
+  // ce garde-fou l'arrivée d'une réponse Railway lente arracherait l'écran des
+  // mains de quelqu'un en train de lire une carte plus bas.
+  //
+  // Il attend les données, et c'est la seule dépendance qui compte : tant que la
+  // base n'a pas répondu, aucun Grand Prix n'est `en_base`, donc aucun n'est
+  // terminé (voir `estGpPasse`) et la cible serait toujours la première carte.
+  const cartes = useRef([]);
+  const deja = useRef(false);
+  useEffect(() => {
+    if (deja.current || !donnees) return;
+    const rang = indexProchainGpSaison(grandsPrix);
+    // `-1` : la saison est finie, il n'y a rien devant. `0` : le prochain Grand
+    // Prix est déjà la première carte, et le haut de page est sa place.
+    if (rang <= 0) {
+      deja.current = true;
+      return;
+    }
+    const carte = cartes.current[rang];
+    if (!carte) return;
+    deja.current = true;
+    // `useLayoutEffect` aurait posé le défilement avant la peinture, mais il
+    // n'aurait rien mesuré de plus : la hauteur des cartes est fixée en dur
+    // (`HAUTEUR_CARTE`), donc la mise en page est connue sans que le drapeau,
+    // le tracé ni la police soient arrivés. Un `useEffect` suffit et n'a pas
+    // besoin de bloquer la peinture.
+    window.scrollTo({
+      top: Math.max(0, positionDansLaPage(carte) - MARGE_DEFILEMENT),
+      behavior: "auto",
+    });
+  }, [donnees, grandsPrix]);
+
   return (
     <Ecran direction="avant">
       <div className="flex flex-1 flex-col gap-3">
@@ -126,15 +196,26 @@ export default function CalendrierGlobal() {
               championnats ; le calendrier était le seul à mapper ses cartes
               directement dans le bloc. */}
           <div className="flex flex-col gap-3">
-            {grandsPrix.map((gp) => (
-              <CarteGpSaison
+            {grandsPrix.map((gp, rang) => (
+              /* L'enveloppe porte la référence plutôt que la carte : celle-ci
+                 est une fonction de ses props et n'a aucune raison d'exposer
+                 son nœud. Un `div` sans classe ne change rien à la mise en
+                 page — le `gap` du conteneur flex compte les enfants, et il en
+                 comptait déjà douze. */
+              <div
                 key={gp.slug}
-                gp={gp}
-                chargement={chargement && !donnees}
-                retour="/calendrier"
-                previsualisation={modePrevisualisation}
-                aPronostique={joues.has(gp.gp_id)}
-              />
+                ref={(noeud) => {
+                  cartes.current[rang] = noeud;
+                }}
+              >
+                <CarteGpSaison
+                  gp={gp}
+                  chargement={chargement && !donnees}
+                  retour="/calendrier"
+                  previsualisation={modePrevisualisation}
+                  aPronostique={joues.has(gp.gp_id)}
+                />
+              </div>
             ))}
           </div>
         </Bloc>

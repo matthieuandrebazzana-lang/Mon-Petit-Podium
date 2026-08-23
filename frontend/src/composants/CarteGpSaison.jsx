@@ -6,7 +6,12 @@ import {
   VoileDrapeau,
   drapeauDuGp,
 } from "./DrapeauxGP.jsx";
-import { actionDuGp, etatDuGpSaison, jourDe } from "../lib/calendrier2026.js";
+import {
+  actionDuGp,
+  estGpPasse,
+  etatDuGpSaison,
+  jourDe,
+} from "../lib/calendrier2026.js";
 
 /**
  * La carte d'un Grand Prix de la saison — l'unité de l'onglet Calendrier.
@@ -65,6 +70,36 @@ const HAUTEUR_BANDE = 46;
  *  — même valeur, pour que les deux écrans ne divergent pas. */
 const OMBRE_TEXTE = "[text-shadow:0_1px_3px_rgba(0,0,0,0.45)]";
 
+/** Opacité d'une carte de Grand Prix **déjà couru**.
+ *
+ *  Elle recule l'archive derrière ce qui reste à jouer : douze drapeaux pleins
+ *  de la même intensité ne laissent aucun repère à l'œil, et le calendrier ne
+ *  sert à rien d'autre qu'à trouver le prochain. C'est la même hiérarchie par le
+ *  contraste que l'accueil pose avec son unique aplat rouge.
+ *
+ *  > ### Écart mesuré, et assumé (CLAUDE.md §6)
+ *  >
+ *  > L'opacité est posée sur **toute la carte**, texte compris : elle compose
+ *  > donc l'encre ET son fond sur le beige de l'app, et rapproche les deux. Les
+ *  > valeurs, relevées sur le pire substrat de la planche (le noir de Las Vegas)
+ *  > et sur la pastille la plus serrée (« Terminé », vert sauge sur blanc) :
+ *  >
+ *  > | Opacité | Pastille « Terminé » | Blanc sur drapeau bordeaux |
+ *  > |---|---|---|
+ *  > | `1` | 4,86:1 | 10,88:1 |
+ *  > | `0,75` | 3,07:1 | 6,36:1 |
+ *  > | **`0,4`** | **1,74:1** | **2,49:1** |
+ *  >
+ *  > Sous les 3:1 d'un grand texte porteur de sens, donc. **La valeur est celle
+ *  > qui a été demandée**, et l'arbitrage se défend : ces cartes sont une
+ *  > archive, la seule information qu'on y cherche est « c'est passé », et elle
+ *  > se lit à la pâleur avant de se lire au mot. `0,75` est le point où la
+ *  > pastille repasse le plancher, si la lisibilité doit primer.
+ *
+ *  Le bouton « Voir les résultats » pâlit avec le reste mais garde sa hauteur :
+ *  une zone tactile ne se réduit jamais (CLAUDE.md §3.5). */
+const OPACITE_PASSE = 0.4;
+
 export default function CarteGpSaison({
   gp,
   chargement = false,
@@ -94,6 +129,13 @@ export default function CarteGpSaison({
       style={{
         height: `${HAUTEUR_CARTE}px`,
         ...(drapeau.fond ? { background: drapeau.fond } : {}),
+        // Posée sur l'`<article>` et non sur chaque calque : les six couches de
+        // la pile (drapeau, lueur, voile, surcouche, tracé, contenu) doivent
+        // pâlir **ensemble**. Appliquée calque par calque, chacune se
+        // composerait sur celle du dessous au lieu du fond de l'app, et le voile
+        // — qui est justement ce qui tient le contraste du texte — perdrait plus
+        // que le drapeau qu'il couvre.
+        ...(estGpPasse(gp) ? { opacity: OPACITE_PASSE } : {}),
       }}
     >
       {/* --- Les calques, dans l'ordre du bloc de l'accueil ----------------

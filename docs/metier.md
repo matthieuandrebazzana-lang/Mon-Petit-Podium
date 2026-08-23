@@ -45,13 +45,28 @@ Pour chaque Grand Prix :
 > **Les deux pilotes du podium n'ont AUCUN ordre entre eux.** La validation demande
 > « ces deux pilotes sont-ils sur le podium ? ».
 >
-> **D'où : un podium réussi rapporte la SOMME des deux cotes.** Payer la seule cote de
-> `pilote_1` ferait rapporter deux montants différents au même pari selon l'ordre de
-> saisie. Les deux pilotes doivent être sur le podium — un seul des deux ne rapporte
-> rien, ce n'est pas un demi-pronostic mais un pronostic raté.
+> ### Chaque pilote est jugé pour son propre compte (v`0.54.0`)
 >
-> La même règle vaut partout où un podium est chiffré : total potentiel, cote moyenne
-> tentée, récapitulatif.
+> **Le podium n'est pas un pari en deux jambes solidaires : ce sont deux paris saisis
+> dans le même bloc.** Un pilote qui monte sur le podium rapporte sa cote, que l'autre
+> y monte ou non. Les deux, un seul, ou aucun. Un podium **entièrement** réussi rapporte
+> donc la **somme** des deux cotes, qui n'est plus une règle à part mais le cas où les
+> deux termes sont non nuls.
+>
+> *Jusqu'à la v`0.53.0`, une seule sélection fausse invalidait les deux.* Le raisonnement
+> tenait — payer la seule cote de `pilote_1` ferait rapporter deux montants différents au
+> même pari selon l'ordre de saisie — mais la conclusion tirée était la mauvaise sortie.
+> **La bonne est de payer chaque cote à SON pilote** : c'est tout aussi
+> ordre-indépendant, et cela n'aligne plus le joueur qui a vu juste à moitié sur celui
+> qui s'est trompé sur les deux. Voir `bugs-connus.md` §22.
+>
+> **Une jambe non jugeable laisse le pronostic ENTIER à `NULL`.** La ligne ne porte qu'un
+> seul `points_gagnes` et `attribuer_points` n'écrit que les `NULL` : payer la seule
+> jambe connue figerait un total partiel que le rattrapage ne corrigerait plus jamais.
+>
+> **Le total POTENTIEL ne change pas** — il reste la somme des deux cotes, parce que
+> c'est toujours le maximum atteignable. La même règle vaut partout où un podium est
+> chiffré *avant* la course : total potentiel, cote moyenne tentée, récapitulatif.
 
 **Le vainqueur est déjà sur le podium**, donc le bloc de saisie s'intitule
 « 2e et 3e du podium » et un pilote choisi comme vainqueur **disparaît** des deux
@@ -81,6 +96,21 @@ découvrirait qu'après la course. Constantes `MARCHE_VAINQUEUR` / `MARCHE_PODIU
 | Samedi soir → dimanche | Les joueurs pronostiquent librement. **Les pronostics sont visibles par les autres membres dès leur saisie.** |
 | **Dimanche, départ − 5 min** | Fermeture. Plus aucune modification. |
 | **Dimanche, départ + 1h30** | Job de résultats : `/session_result` toutes les 5 min, puis calcul et attribution. |
+| **Dimanche soir → minuit local** | Le widget de l'accueil **reste** sur le Grand Prix couru. Il ne bascule sur le suivant que le lendemain. |
+
+> ### Le dimanche soir appartient encore au Grand Prix du jour
+> Le passage à `termine` faisait basculer l'accueil sur le Grand Prix suivant — deux
+> semaines plus loin, avec un compte à rebours de treize jours — **au moment précis où
+> tout le monde ouvre l'application**. Le Grand Prix couru garde donc la place jusqu'à
+> **minuit, heure du téléphone**.
+>
+> **La frontière est le jour civil, pas une durée.** « Six heures après » basculerait en
+> pleine soirée pour un départ à 15h et en pleine nuit pour Las Vegas ; minuit est la
+> seule limite qu'un joueur puisse prévoir sans la calculer.
+>
+> **Il n'y a rien à coudre entre les deux règles** : entre l'arrivée et le passage à
+> `termine`, le Grand Prix est encore `cotes_figees` et la lecture ordinaire le sert déjà
+> comme le plus proche à venir. `chargerProchainGp` porte les deux, et lui seul.
 
 Figer les cotes après les qualifications garantit que **tous les joueurs pronostiquent
 avec exactement les mêmes cotes, sur une grille déjà définitive.**
@@ -118,8 +148,21 @@ Tous les marchés se valident **automatiquement**, sans intervention humaine.
 
 **Via `session_result`** : vainqueur (`position == 1`), podium (`position <= 3`), top 6 et
 top 10, duels, écurie gagnante, double podium d'écurie, les deux pilotes dans les points,
-abandon (`dnf == true`), nombre de classés, dernier, marge de victoire, classement exact,
-trio gagnant, mieux classé d'un groupe.
+abandon (`dnf == true`), nombre de classés, dernier, **écart du gagnant**, classement
+exact, trio gagnant, mieux classé d'un groupe.
+
+> ### L'écart du gagnant — le seul marché dont l'issue est un intervalle
+> Tous les autres marchés proposent un pilote, une écurie, ou un oui/non. Celui-ci propose
+> **une plage de secondes** (« moins de 5 », « 5 - 10 », « plus de 10 »), et se juge sur
+> `gap_to_leader` **de la ligne du DEUXIÈME** — le champ dit « de combien ce pilote est
+> derrière le leader », donc il vaut `null` sur la ligne du leader, ce qui est correct.
+>
+> Les bornes sont **`[bas, haut[`** : les issues forment une partition, et deux bornes
+> inclusives feraient gagner *deux* paris à un écart de très exactement 5,000 s.
+>
+> Implémenté en v`0.54.0`. Il ne l'était pas, et ce n'était pas une comparaison qui
+> échouait : le champ n'était lu nulle part et le marché n'était pas reconnu — voir
+> `bugs-connus.md` §23.
 **Via `race_control`** : safety car, drapeau rouge.
 **Via `laps`** : meilleur tour (minimum de `lap_duration`).
 
@@ -141,7 +184,13 @@ abandonnent, celui qui a parcouru le plus de tours l'emporte.
 > ### Un marché non reconnu laisse `NULL`, jamais `0`
 > Les marchés Unibet varient d'un GP à l'autre : ce cas n'est pas une hypothèse d'école.
 > Seuls **vainqueur, podium et ecurie-vainqueur** ont été confrontés à de vrais libellés ;
-> les six autres familles sont écrites d'après cette section et **restent à vérifier**.
+> les sept autres familles — **écart du gagnant** compris — sont écrites d'après cette
+> section et **restent à vérifier**.
+>
+> **C'est ce filet qui a caché l'écart du gagnant pendant six versions** : le marché
+> n'était pas reconnu, donc il laissait `NULL`, donc il ne criait pas. Le filet a fait
+> exactement son travail — la leçon n'est pas de le retirer, c'est de **relire les
+> avertissements `[points] … laissé(s) sans points` après chaque Grand Prix**.
 
 ## 5. Championnats
 

@@ -317,7 +317,12 @@ enchaîne six : `_appeler` espace les appels de 0,4 s et réessaie avec attente 
 ### Autres pièges de parsing
 
 - **`gap_to_leader` est de type mixte** : nombre pour les pilotes dans le tour, **chaîne**
-  (`"+1 LAP"`) pour les doublés, `null` pour le leader. Les trois cas doivent être gérés.
+  (`"+1 LAP"`) pour les doublés, `null` pour le leader — et **chaîne numérique**
+  (`"+11.536"`) selon les courses, soit quatre formes avec la liste des qualifications.
+  `points._secondes()` les absorbe toutes, et **un pilote doublé vaut `math.inf`, jamais
+  `None`** : son écart n'est pas illisible, il est plus grand que n'importe quel
+  intervalle. Le champ est lu depuis la version `0.54.0` — il ne l'était **pas**, et c'est
+  ce qui laissait « écart du gagnant » éternellement non jugé (`bugs-connus.md` §23).
 - **`points`** contient les points FIA officiels (25, 18, 15…) — pratique pour détecter
   si un pilote a marqué, et réutilisable pour le vrai classement pilotes.
 - **`country_code` de `/drivers` est déprécié** et disparaît fin 2026. Pour les marchés de
@@ -381,11 +386,24 @@ importe ce module, l'importer en retour ferait un cycle.
 ### Marchés reconnus
 
 vainqueur, podium, top N (rang lu dans le nom), écurie gagnante, abandon, safety car,
-safety car virtuel, drapeau rouge, meilleur tour.
+safety car virtuel, drapeau rouge, meilleur tour, **écart du gagnant**.
 
 > **Seuls « vainqueur », « podium » et « ecurie-vainqueur » ont été observés en vrai.**
 > Les autres sont écrits d'après le cahier des charges et **restent à confronter**.
 > C'est exactement pour cela qu'un marché non reconnu laisse `NULL`.
+
+**Le podium paie pilote par pilote** (v`0.54.0`) : chaque sélection est jugée pour son
+propre compte, et le pronostic rapporte la somme des cotes gagnées — deux, une, ou zéro.
+Une jambe non jugeable laisse le **pronostic entier** à `NULL`, jamais un total partiel que
+l'idempotence de `attribuer_points` figerait pour toujours (`bugs-connus.md` §22).
+
+**« Écart du gagnant » est le premier marché dont l'issue n'est ni un pilote ni un
+oui/non**, mais un intervalle de secondes. Slug reconnu sur « ecart », ou sur « marge » +
+« victoire ». Il se juge sur le `gap_to_leader` **du deuxième**, avec des bornes
+`[bas, haut[`. Formes d'issue reconnues : « moins de N », « - de N », « jusqu'à N »,
+« N - M », « entre N et M », « plus de N », « + de N ». **Aucune n'a été confrontée à un
+vrai libellé** : une issue non reconnue est journalisée et laisse `NULL`. Passer par
+`POST /jobs/resultats/{gp_id}/test` avant le premier vrai Grand Prix.
 
 « premier-abandon » est volontairement **non reconnu** tant que la règle d'égalité n'est
 pas écrite : il demande de savoir *qui* a abandonné le premier, pas *si*.

@@ -625,3 +625,100 @@ saison charge la liste de ses propres `gp_id` en une lecture RLS, en parallèle 
 - **La clé du calendrier de la saison porte `:v2:`.** Son entrée ne contient plus la même
   chose ; servie telle quelle, un cache d'une version antérieure aurait rendu douze cartes
   sans état ni bouton le temps d'un aller-retour.
+
+---
+
+## 22. Un demi-podium ne rapportait rien — sur le pari le mieux doté de la grille
+
+**Symptôme.** Un joueur plaçait Norris sur le podium, se trompait sur le second nom, et
+finissait avec **zéro point** — à égalité exacte avec celui qui s'était trompé sur les
+deux. Sur le marché qui peut rapporter le plus.
+
+**Cause réelle.** Ce n'était **pas un bug de calcul** : le code faisait exactement ce que
+la règle métier prescrivait, et la règle était mauvaise. `points_du_podium` testait
+`all(resultats)` — les deux pilotes ou rien — et `metier.md` §2 l'écrivait noir sur blanc :
+« un seul des deux ne rapporte rien, ce n'est pas un demi-pronostic mais un pronostic
+raté ». Trois surfaces la répétaient, le code, le document, et le commentaire de la
+fonction. **Un défaut défendu par sa documentation ne se voit pas en relisant le code.**
+
+Le raisonnement d'origine tenait pourtant : payer la seule cote de `pilote_1` ferait
+rapporter deux montants différents au même pari selon l'ordre de saisie, puisque les deux
+emplacements n'ont aucun ordre entre eux (règle 4.2). La conclusion tirée — tout ou rien —
+était la mauvaise sortie. **La bonne est de payer chaque cote à SON pilote** : la somme
+reste ordre-indépendante, et un demi-podium rapporte la même chose quel que soit
+l'emplacement où le bon nom a été saisi.
+
+**Correctif (version `0.54.0`).** Chaque sélection est jugée pour son propre compte, et
+`points` est la somme des cotes gagnées — deux, une, ou zéro. `reussi` suit les points,
+comme partout ailleurs.
+
+**Ne pas refaire.**
+
+- **Une jambe non jugeable laisse le pronostic ENTIER à `NULL`**, même si l'autre est
+  décidée. La ligne ne porte qu'un seul `points_gagnes`, et `attribuer_points` n'écrit que
+  les `NULL` (`scraper.md` §11) : payer la seule jambe connue figerait un total partiel que
+  le rattrapage **ne corrigerait plus jamais**. Attendre est réversible, écrire ne l'est
+  pas — c'est la même asymétrie que « un marché non reconnu vaut `NULL`, jamais `0` ».
+- **Le total POTENTIEL ne change pas** : il reste la somme des deux cotes (`metier.md` §9),
+  parce que c'est toujours le maximum atteignable. Seule la validation a changé. Toucher au
+  potentiel aurait déplacé la cote moyenne tentée de toute la base.
+- **`metier.md` §2 a été réécrit dans le même commit que le code.** La laisser dire le
+  contraire aurait rendu le correctif indiscernable d'une régression à la relecture
+  suivante — et c'est cette divergence-là qui a fait vivre le défaut.
+
+---
+
+## 23. « Écart du gagnant » : le champ n'était pas mal lu, il n'était pas lu
+
+**Symptôme.** Le marché « écart du gagnant » restait « en attente » indéfiniment, y compris
+quand le bon intervalle avait été pronostiqué. Un déclenchement manuel de
+`POST /jobs/resultats/{gp_id}` ne le rattrapait pas non plus.
+
+**Cause réelle — et ce n'est pas celle qu'on cherche.** On cherche naturellement une
+comparaison qui échoue : un intervalle mal lu, une virgule française, un écart en
+millisecondes. **Il n'y avait aucune comparaison.** Deux maillons manquaient, tous les deux
+dans `app/calcul/points.py` :
+
+1. **`gap_to_leader` n'entrait jamais dans `Ligne`.** `analyser()` lisait `position`,
+   `number_of_laps`, `points`, `dnf`, `dns`, `dsq` — et pas lui. Sa propre docstring le
+   disait, en le présentant comme une décision : « `gap_to_leader` de type mixte (jamais lu
+   — aucun marché validé aujourd'hui n'en dépend) ». C'était vrai à l'écriture, et c'est ce
+   qui a fait passer l'oubli pour une intention pendant six versions.
+2. **`validateur()` ne reconnaissait pas le slug.** Le marché tombait donc dans le filet
+   « marché non reconnu », qui rend `None` — et `None` veut dire `NULL`, pas `0`. **Le
+   pronostic n'était pas jugé perdant : il n'était pas jugé.** C'est exactement ce que ce
+   filet existe pour faire, et c'est pour cela que le défaut est resté silencieux.
+
+**`app/scraper/openf1.py` n'était pas en cause et n'a pas été touché.** Il conserve les
+lignes de `session_result` **telles quelles** dans `donnees_brutes` : `gap_to_leader` était
+donc déjà en base, sur tous les Grands Prix déjà courus. C'est le contrat du module —
+« tout ce dont le calcul a besoin » — et c'est ce qui rend le rattrapage possible **sans
+rappeler OpenF1** sur les courses passées.
+
+**Correctif (version `0.54.0`).** `Ligne.ecart_leader`, alimenté par `_secondes()` ;
+`Course.ecart_du_vainqueur()` ; `_intervalle_secondes()` ; `_ecart_du_gagnant()` ; le slug
+reconnu sur « ecart » ou « marge » + « victoire ».
+
+**Ne pas refaire.**
+
+- **L'écart se lit sur la ligne du DEUXIÈME, pas du premier.** `gap_to_leader` dit « de
+  combien ce pilote est derrière le leader » : sur la ligne du leader il vaut `null`, ce
+  qui est correct et n'est pas une donnée manquante. Le lire là aurait donné un marché
+  éternellement non jugé — le symptôme exact qu'on venait de corriger.
+- **Le champ a quatre types, pas trois.** Nombre (`11.536`), chaîne numérique
+  (`"+11.536"`), chaîne de tour (`"+1 LAP"`), `null` — et la liste (`[0.0, 0.0, 0.0]`) sur
+  une ligne de qualification. `_secondes()` les absorbe tous. **Un pilote doublé vaut
+  `math.inf`, jamais `None`** : ce n'est pas un écart illisible, c'est un écart plus grand
+  que la borne haute de n'importe quel intervalle.
+- **Les bornes sont `[bas, haut[`.** Les issues d'Unibet forment une partition (« moins de
+  5 », « 5 - 10 », « plus de 10 ») : deux bornes inclusives feraient gagner *deux* paris à
+  un écart de 5,000 s exactement, deux exclusives n'en feraient gagner aucun. Le cas ne se
+  produira jamais au millième près — raison de plus pour que la règle soit décidée une fois
+  ici plutôt que découverte le jour où il se produit.
+- **Aucun vrai libellé Unibet n'a encore été vu pour ce marché.** Les formes reconnues sont
+  écrites d'après les tournures usuelles ; une issue non reconnue est **journalisée** et
+  laisse le pronostic à `NULL`. `POST /jobs/resultats/{gp_id}/test` les confronte sans rien
+  écrire (`scraper.md` §12) — c'est par là qu'il faut passer avant le premier vrai Grand
+  Prix, pas par la vraie route.
+- **Le commentaire qui défendait l'absence a été réécrit.** Même leçon qu'au §20 et au §22 :
+  un manque qui s'explique dans une docstring cesse d'être cherché.

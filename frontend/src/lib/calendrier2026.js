@@ -153,6 +153,40 @@ export function etatDuGpSaison(gp, maintenant = Date.now()) {
 }
 
 /**
+ * Un Grand Prix appartient-il au passé ?
+ *
+ * **Une seule question, un seul propriétaire.** Deux surfaces en dépendent et
+ * elles doivent répondre pareil : la carte, qui pâlit ce qui est derrière nous,
+ * et l'écran, qui fait démarrer le défilement sur la première carte qui ne l'est
+ * pas. Écrites séparément, elles auraient divergé au premier ajustement — et le
+ * symptôme aurait été discret : un calendrier ouvert sur une carte pâle, ou une
+ * carte vive hors de l'écran.
+ *
+ * C'est **le statut qui tranche, pas la date**, et c'est la conséquence directe
+ * d'`etatDuGpSaison` : un Grand Prix absent de la base est « à venir » même si
+ * sa date est passée. `public.grands_prix` ne contient que ce que le scraper a
+ * rencontré, et Unibet n'expose jamais que le Grand Prix suivant (CLAUDE.md
+ * §3.1) — un Grand Prix couru mais jamais scrapé reste donc vif. On ne pâlit
+ * que ce dont on sait qu'il est joué.
+ */
+export function estGpPasse(gp, maintenant = Date.now()) {
+  return etatDuGpSaison(gp, maintenant).cle === "termine";
+}
+
+/**
+ * Le rang du premier Grand Prix qui n'est pas derrière nous, `-1` s'il n'y en a
+ * plus.
+ *
+ * La liste arrive dans l'ordre de la saison (`GP_2026`), donc « le premier non
+ * terminé » est bien le prochain à courir. `-1` en fin de saison, et l'écran
+ * n'a alors rien à faire : le défilement reste en haut, sur le premier Grand
+ * Prix de l'année, ce qui est le seul repère qui reste.
+ */
+export function indexProchainGpSaison(grandsPrix, maintenant = Date.now()) {
+  return grandsPrix.findIndex((gp) => !estGpPasse(gp, maintenant));
+}
+
+/**
  * Ce que le bouton de la carte doit faire, ou `null` s'il n'y a rien à faire.
  *
  * Un Grand Prix à venir n'a pas encore de cotes, un Grand Prix fermé n'accepte

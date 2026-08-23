@@ -196,119 +196,138 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.53.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
-les onze étapes de développement sont livrées. **Le backend bouge** — une colonne servie par
-trois modèles Pydantic — il passe donc à `0.52.0`.
+**Version `0.54.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+les onze étapes de développement sont livrées. **Le calcul des points bouge** — deux marchés
+sur dix ne rendaient pas ce qu'ils devaient — le backend passe donc à `0.53.0`.
 
-### Le numéro était à l'envers depuis l'origine, et le commentaire le défendait
+### Un demi-podium ne rapportait rien, et la documentation le défendait
 
-La planche écrit le numéro du museau sous `rotate(180)`. **C'est la convention réelle d'une
-monoplace** — le numéro se lit depuis la voiture qu'on double — et le code le disait en
-toutes lettres, ce qui l'a fait passer pour une intention pendant douze versions. Le défaut
-n'était pas dans le dessin mais dans le contexte : **toutes les vues de l'app sont des vues
-de dessus.**
+Le podium est **le pari le mieux doté de la grille** — le seul qui puisse rapporter la somme
+de deux cotes — et il était le seul à ne jamais rien rapporter à moitié : `all(resultats)`,
+les deux pilotes ou rien. Un joueur qui plaçait le bon nom finissait **à égalité exacte**
+avec celui qui s'était trompé sur les deux.
 
-**Retirer la rotation ne suffisait pas.** Elle ne renversait pas seulement les glyphes, elle
-renversait leur position autour de la ligne de base : sous rotation les chiffres occupent
-`[yNumero, yNumero + 0,717 em]`, à l'endroit `[y − 0,717 em, y]`. La ligne de base descend
-donc d'exactement une **hauteur de capitale**, et le numéro retrouve **le pixel qu'il
-occupait** — sur les douze livrées à la fois, parce que le décalage est calculé et non relevé
-à l'œil. Vérifié par rendu comparé, ancien et nouveau côte à côte : le calcul seul aurait
-laissé passer une erreur de signe.
+**Ce n'était pas un bug de calcul.** Le code faisait exactement ce que `metier.md` §2
+prescrivait, en toutes lettres, et le raisonnement d'origine tenait : payer la seule cote de
+`pilote_1` ferait rapporter deux montants différents au même pari selon l'ordre de saisie,
+puisque les deux emplacements n'ont aucun ordre entre eux. **La conclusion tirée était la
+mauvaise sortie.** La bonne est de payer chaque cote à *son* pilote : c'est tout aussi
+ordre-indépendant, et le demi-podium rapporte la même chose quel que soit l'emplacement où
+le bon nom a été saisi. Le total **potentiel** ne bouge pas d'un point — il reste le maximum
+atteignable, donc la somme.
 
-### La couleur du texte se choisit, et `NULL` veut dire « pas de choix »
+**Une jambe non jugeable laisse le pronostic ENTIER à `NULL`.** La ligne ne porte qu'un seul
+`points_gagnes` et `attribuer_points` n'écrit que les `NULL` : payer la seule jambe connue
+figerait un total partiel que le rattrapage **ne corrigerait plus jamais**. Attendre est
+réversible, écrire ne l'est pas — la même asymétrie que « un marché non reconnu vaut `NULL`,
+jamais `0` ».
 
-Le numéro et le pseudo prennent désormais une couleur du membre. **La migration 18 ne
-remplit pas rétroactivement la colonne**, et c'est tout son sujet : `NULL` ne veut pas dire
-« pas de couleur » mais « pas de choix », auquel cas chaque texte garde l'encre **calculée**
-qui contraste avec l'aplat sous lui. Un `#FFFFFF` posé d'office aurait rendu le numéro
-invisible pour tout membre à coque blanche, argent, beige ou jaune. D'où **deux instructions
-séparées** — `add column` sans défaut, puis `set default` — parce qu'écrites en une seule,
-les deux effets seraient venus ensemble et toute la base aurait basculé au blanc.
+### « Écart du gagnant » : le champ n'était pas mal lu, il n'était pas lu
 
-La couleur entre dans **`livreeDuMembre`**, qui reste le seul propriétaire de « ce que porte
-cette voiture » : les quatre surfaces qui en dessinent une la répandent déjà par un `spread`,
-et un second chemin aurait laissé le réglage visible sur son propre profil et nulle part où
-quelqu'un d'autre le voit. Le contraste, lui, **se mesure et se signale sans se refuser** :
-l'écran compare la couleur choisie à l'aplat du museau de la livrée en cours et le dit sous
-les 3:1 d'un grand texte.
+On cherche une comparaison qui échoue — un intervalle mal parsé, une virgule française, des
+millisecondes. **Il n'y avait aucune comparaison.** `gap_to_leader` n'entrait jamais dans
+`Ligne`, et le slug n'était pas reconnu : le marché tombait dans le filet « marché non
+reconnu », qui rend `NULL`. **Le pronostic n'était pas jugé perdant, il n'était pas jugé** —
+et c'est pour cela que le défaut est resté muet six versions.
 
-**L'aperçu du profil porte enfin son pilote** — photo dans le cockpit, initiale à défaut,
-même `clipPath` et même graine que la vue piste. C'était le seul écran où l'on règle sa
-voiture, et le seul à la montrer vide.
+La docstring d'`analyser()` le **présentait comme une décision** : « `gap_to_leader` de type
+mixte (jamais lu — aucun marché validé aujourd'hui n'en dépend) ». C'était vrai à
+l'écriture. Troisième fois qu'un commentaire exact fait passer un manque pour une intention,
+après le numéro sous `rotate(180)` et le tout-ou-rien du podium.
 
-### « Résultats par Grand Prix » — et une convention qui a payé
+**`openf1.py` n'était pas en cause et n'a pas été touché** : il conserve les lignes de
+`session_result` telles quelles, donc `gap_to_leader` était déjà en base sur toutes les
+courses passées. Le rattrapage se fait **sans rappeler OpenF1**. L'écart se lit sur la ligne
+du **deuxième** — le champ dit « de combien ce pilote est derrière le leader », donc `null`
+sur celle du premier — et les bornes sont **`[bas, haut[`**, parce que les issues forment une
+partition et que deux bornes inclusives feraient gagner *deux* paris à 5,000 s exactement.
 
-Le nouvel écran remplace l'entrée « Calendrier » d'un championnat et répond à la seule
-question que rien ne montrait : **qu'est-ce que les autres ont joué ?** La saison Grand Prix
-par Grand Prix est déjà l'onglet Calendrier de la barre basse. L'écran `Calendrier` reste en
-place, non monté (§6) — son mini-classement par course n'existe nulle part ailleurs.
+### Le succès était le seul des trois états à ne pas se voir
 
-**Le sélecteur du haut n'est pas un choix d'interface, c'est la forme de la donnée** :
-`pronostics_du_championnat` sert **un** Grand Prix à la fois, et une saison entière
-demanderait vingt-quatre allers-retours Railway en série. Il réemploie **`Onglets`**, écrit
-pour les marchés de la maquette 08 et gardé « pour le jour où il redevient la bonne
-réponse » : ce jour est arrivé, zéro ligne de CSS ajoutée. La convention du §6 vient de
-payer pour la première fois.
+La pastille de points disait le contraire de ce qu'elle montrait : l'aplat **bordeaux plein**
+marquait le pronostic **réussi**, et le raté comme le non-jugé prenaient tous deux le même
+bordeaux sur beige. Toute la colonne était rouge, le succès y était l'état le plus sombre, et
+**`null` était indistinguable de `0`** — la seule distinction qu'aucun écran n'a le droit de
+perdre. `Verdict`, juste à côté, la tenait seule.
 
-Un membre sans pronostic **n'est pas dépliable** et le dit sur sa ligne — un chevron qui
-ouvre sur rien est une promesse fausse — mais la place du chevron reste **tenue**, sans quoi
-la colonne cesserait d'être une colonne.
+Réussi passe au **vert sauge**, raté au bordeaux plein, en attente au beige — 4,86:1, 10,88:1
+et 9,32:1, mesurés. **Aucune teinte nouvelle** : c'est le vert que le design system emploie
+déjà pour dire « c'est acquis ». Le bloc était **recopié à l'identique** dans les deux écrans
+de résultats ; il devient `PastillePoints`, exportée à côté de `Verdict`, qui avait été
+partagée une version plus tôt pour exactement la même raison.
 
-### « Pronostiquer » sur un Grand Prix déjà joué
+### Le dimanche soir appartient encore au Grand Prix du jour
 
-Les deux calendriers proposaient encore de saisir des favoris là où le widget de l'accueil
-menait au récapitulatif depuis la version `0.5.1`. **La règle avait un propriétaire pour la
-condition d'existence du bouton — `cotesArretees` — et aucun pour le choix de sa
-destination.** Ce sont deux questions distinctes, et les fondre aurait fait porter au mode
-prévisualisation une décision qui ne le concerne pas.
+Le passage à `termine`, une heure et demie après le départ, faisait basculer l'accueil sur le
+Grand Prix suivant — deux semaines plus loin, compte à rebours de treize jours —
+**au moment précis où tout le monde ouvre l'application**. Le Grand Prix couru garde la place
+jusqu'à **minuit, heure du téléphone**.
 
-Le cache pouvait réintroduire le défaut à lui seul : quatre surfaces en dépendent, une seule
-était balayée après un enregistrement. **`oublierMesPronostics` les balaie ensemble** — même
-motif qu'`oublierMesApparitions`, et pour la même raison : quatre effacements écrits
-séparément auraient fini par en oublier un.
+**La frontière est le jour civil, pas une durée** : « six heures après » basculerait en pleine
+soirée pour un départ à 15h et en pleine nuit pour Las Vegas. Et **il n'y a rien à coudre
+entre les deux règles** — entre l'arrivée et le passage à `termine`, le Grand Prix est encore
+`cotes_figees`, donc déjà servi comme le plus proche à venir. `chargerProchainGp` les porte
+toutes les deux, et lui seul. Conséquence : **`couru` se lit désormais sur le statut**, il ne
+se déduit plus du chemin pris — le figer à `false` aurait proposé de pronostiquer sur une
+course déjà courue, le défaut même que la `0.53.0` venait de corriger sur les calendriers.
 
-### Rien de nouveau côté mouvement, une fois de plus
+### Le calendrier s'ouvre là où il sert, et l'archive recule
 
-Le portier a rejeté le seul candidat : **le changement de Grand Prix ne fait aucun fondu.**
-La liste des membres ne se transforme pas, elle est remplacée par une donnée qui arrive du
-réseau — il n'y a pas d'« avant » à faire tenir, et c'est le squelette qui occupe
-l'intervalle. Restent la pastille glissante d'`Onglets` et l'accordéon `.t-acc`, déjà dans
-le vocabulaire.
+Une carte terminée passe à `opacity: 0,4` et l'écran défile jusqu'au premier Grand Prix qui
+ne l'est pas. Une seule question, un seul propriétaire — `estGpPasse` — parce que deux
+prédicats écrits séparément auraient donné un calendrier ouvert sur une carte pâle, ou une
+carte vive hors de l'écran. **C'est le statut qui tranche, pas la date** : un Grand Prix couru
+mais jamais scrapé n'est pas en base, reste « à venir », et reste vif.
 
-Un seul sélecteur a été **étendu**, jamais forké : `.t-voiture-teinte` couvre maintenant
-`text`, dans la règle normale comme sous mouvement réduit. Parcourir la palette repeint le
-numéro et le pseudo comme elle repeint déjà la coque, à la même durée et sur la même courbe.
+Le défilement se calcule sur la chaîne des **`offsetTop`** et non sur
+`getBoundingClientRect()` : l'écran entre en scène sous un `translateX` et ses blocs sous un
+`translateY`, donc le rectangle rendu est décalé pendant toute l'entrée — exactement au
+moment du calcul.
 
-> **Deux points à trancher restent ouverts**, écrits dans `docs/roadmap.md` §3.12 et §3.13 :
-> la demande d'icône se contredisait (« la troisième icône » désigne le calendrier, le
-> cadrage `322 0 161,64 133,85` désigne la silhouette de pilote — **c'est le cadrage qui a
-> été suivi**, et ce glyphe est aussi celui de l'onglet Profil), et la couleur de texte
-> **ne revient pas à « automatique »** une fois choisie.
+> **Écart signalé (§6).** L'opacité compose l'encre **et** son fond sur le beige : la
+> pastille « Terminé » tombe de **4,86:1 à 1,74:1**, sous les 3:1 d'un grand texte porteur de
+> sens. La valeur demandée a été appliquée et l'arbitrage se défend — l'archive se lit à la
+> pâleur avant de se lire au mot — mais **`0,75` est le point où la pastille repasse le
+> plancher**, une constante et une ligne. Tableau dans `calendrier.md` §8, arbitrage dans
+> `roadmap.md` §3.14.
 
-*La version `0.52.0` avait fait entrer la photo DANS le cockpit — une identité intégrée au
-dessin ne coûte pas un pixel, là où une pastille posée à côté coûtait trente pixels de coiffe
-à tout le championnat — et corrigé `Pastille`, dont l'initiale était illisible sur une teinte
-sur quatre depuis l'origine (`bugs-connus.md` §19). La `0.51.0` avait réparé les photos, qui
-n'avaient jamais fonctionné : une contrainte `check` incompilable — **PostgreSQL plafonne un
-compteur `{m,n}` à 255** — que la migration 17 remplace par un `char_length`. La `0.50.0`
-avait livré les photos, la `0.49.0` refondu la vue piste, la `0.45.0` fait passer le
-multiplicateur des points de 100 à 10. **Un scraping reste obligatoire.***
+### Rien de nouveau côté mouvement, une troisième fois
+
+Le portier a rejeté les trois candidats. L'opacité d'archive est un **état permanent**, pas
+un changement d'état. Le réordonnancement de la liste s'applique **avant** le premier rendu
+d'une donnée qui arrive du réseau : il n'y a pas d'« avant » à faire tenir, et c'est le
+squelette qui occupe l'intervalle. Le défilement d'ouverture est une **position de départ**,
+pas une transition — et l'onglet Calendrier est ouvert plusieurs fois par jour, ce qui le
+place dans la bande où l'on retire du mouvement au lieu d'en ajouter. Il est instantané.
+
+**Zéro jeton, zéro ligne de CSS.** Les seuls tris sont ceux de `Onglets` et de `.t-acc`, déjà
+dans le vocabulaire.
+
+*La version `0.53.0` avait remis le numéro du museau à l'endroit — la planche l'écrivait sous
+`rotate(180)`, convention d'une vraie monoplace, alors que toutes les vues de l'app sont des
+vues de dessus — livré « Résultats par Grand Prix » et la couleur de texte du membre, dont le
+`NULL` veut dire « pas de choix » et non « pas de couleur ». La `0.52.0` avait fait entrer la
+photo DANS le cockpit. La `0.51.0` avait réparé les photos (`{m,n}` plafonné à 255 par
+PostgreSQL). La `0.45.0` avait fait passer le multiplicateur des points de 100 à 10.
+**Un scraping reste obligatoire.***
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :
 
 1. **Appliquer les migrations 15, 16, 17 puis 18, dans cet ordre, puis déclencher un
    scraping.** La 17 est celle sans laquelle **aucune photo ne s'enregistre**. La 18 est
-   celle sans laquelle **la couleur du texte ne s'enregistre pas** — le sélecteur s'affiche,
-   et « Enregistrer ma voiture » retombe en `42703`. Si la 2, la 8, la 10, la 12 ou la 16
-   est rejouée un jour, rejouer la 18 derrière.
-2. **Vérifier les migrations appliquées** dans le SQL Editor, définir les variables
-   d'environnement de production sur Vercel et Railway, et **supprimer le compte de
-   diagnostic** laissé par la localisation du défaut (`docs/roadmap.md` §1.5).
-3. **Tester sur iPhone réel** — jamais fait. Quatre choses en priorité : le recadrage, qui
-   est le premier geste multi-touch du projet ; **la photo de 15px dans le cockpit**, qui
-   décidera si le cadrage exporté doit se resserrer sur le visage ; **le sélecteur de
-   vingt-quatre Grands Prix**, dont la pastille glissante se positionne sur des `offsetLeft`
-   mesurés dans un conteneur qui défile en même temps ; et **le numéro remis à l'endroit**,
-   dont la compensation de ligne de base suppose la métrique d'Helvetica.
+   celle sans laquelle **la couleur du texte ne s'enregistre pas**. Si la 2, la 8, la 10, la
+   12 ou la 16 est rejouée un jour, rejouer la 18 derrière. **Aucune migration n'est requise
+   par la version `0.54.0`** — les deux correctifs de calcul sont entièrement dans
+   `app/calcul/points.py`, et le tri des membres est fait côté écran.
+2. **Confronter « écart du gagnant » à de vrais libellés Unibet, sans attendre la course** :
+   `POST /jobs/resultats/{gp_id}/test` n'écrit rien. Les formes d'issue reconnues (« moins de
+   N », « N - M », « plus de N ») n'ont **jamais été vues** ; une issue non reconnue est
+   journalisée en toutes lettres, c'est cette ligne-là qu'il faut chercher. Puis rejouer
+   `POST /jobs/resultats/{gp_id}` sur les Grands Prix déjà courus — **les données sont déjà
+   en base**, `gap_to_leader` compris, et les podiums restés à `NULL` se rattraperont avec.
+3. **Tester sur iPhone réel** — jamais fait. En priorité : **l'opacité `0,4`** des cartes
+   passées, qui est un jugement de lisibilité en plein soleil autant qu'un rapport de
+   contraste ; **le défilement d'ouverture du calendrier**, qui se pose sur des `offsetTop`
+   mesurés pendant l'animation d'entrée ; **le sélecteur de vingt-quatre Grands Prix** ; et
+   **la photo de 15px dans le cockpit**.

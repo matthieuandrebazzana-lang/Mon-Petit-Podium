@@ -103,8 +103,75 @@ export function chargerFavoris(gpId, signal) {
 }
 
 /**
+ * Le début de la journée en cours, **à l'heure du téléphone**, en ISO.
+ *
+ * `setHours(0, 0, 0, 0)` travaille dans le fuseau local et `toISOString()` rend
+ * l'instant correspondant en UTC : c'est bien minuit *ici* qu'on envoie à
+ * PostgREST, pas minuit UTC. La différence n'est pas théorique — à Paris en
+ * août, minuit local est 22h00 UTC la veille, et comparer à minuit UTC ferait
+ * disparaître de l'accueil un Grand Prix couru l'après-midi dès 2h du matin.
+ */
+function debutDuJourLocal() {
+  const minuit = new Date();
+  minuit.setHours(0, 0, 0, 0);
+  return minuit.toISOString();
+}
+
+/**
+ * Le Grand Prix couru **aujourd'hui**, ou `null`.
+ *
+ * Il n'y en a jamais deux : la Formule 1 ne court pas deux courses le même jour.
+ * La lecture porte donc sur `termine` et sur la seule journée en cours, et rend
+ * au plus une ligne.
+ *
+ * **`termine` implique que les résultats existent** — le job de résultats écrit
+ * `resultats_gp` et passe le statut dans le même mouvement (`scraper.md` §11) —
+ * donc le bouton « Voir les résultats » que l'accueil pose dessus ne mène jamais
+ * à un écran vide. C'est ce qui permet de se passer ici de la jointure
+ * `resultats_gp!inner` dont `chargerDernierGpCouru` a besoin, elle qui remonte
+ * une saison entière.
+ */
+async function chargerGpDuJour(signal) {
+  const requete = supabase
+    .from("grands_prix")
+    .select("id, nom, date_course, date_qualifications, statut")
+    .eq("statut", "termine")
+    .gte("date_course", debutDuJourLocal())
+    .lte("date_course", new Date().toISOString())
+    .order("date_course", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data, error } = await (signal ? requete.abortSignal(signal) : requete);
+  if (error) return null;
+  return data ?? null;
+}
+
+/**
  * Le prochain Grand Prix : celui qui n'a pas encore couru, à la date la plus
  * proche.
+ *
+ * > ### Le dimanche soir appartient encore au Grand Prix du jour
+ * >
+ * > Un Grand Prix passe à `termine` environ une heure et demie après le départ,
+ * > et l'accueil basculait aussitôt sur le suivant — deux semaines plus loin,
+ * > avec un compte à rebours de treize jours. C'est **le moment précis où tout
+ * > le monde ouvre l'application**, et le seul où l'écran d'entrée n'avait rien
+ * > à dire de ce qui venait de se passer.
+ * >
+ * > La règle : le Grand Prix couru garde la place **jusqu'à minuit, heure du
+ * > téléphone**. Le lendemain, le suivant la prend.
+ * >
+ * > **La frontière est le jour civil, pas une durée.** « Six heures après la
+ * > course » aurait fait basculer l'accueil en pleine soirée pour un départ à
+ * > 15h, et en pleine nuit pour Las Vegas ; minuit est la seule limite que le
+ * > joueur puisse prévoir sans la calculer, et c'est la même pour tout le monde
+ * > dans un fuseau donné.
+ * >
+ * > **Rien ne change entre l'arrivée et le passage à `termine`** : le Grand Prix
+ * > est encore `cotes_figees`, donc la lecture ci-dessous le sert déjà comme le
+ * > plus proche à venir. Les deux règles se rejoignent sans laisser d'intervalle
+ * > — c'est ce qui fait qu'il n'y a rien à coudre entre elles.
  *
  * **Les deux statuts non courus sont retenus, `a_venir` et `cotes_figees`.**
  * Le second manquait, et son absence rendait le bloc de l'accueil aveugle
@@ -135,6 +202,13 @@ export async function chargerProchainGp(signal) {
   if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
 
   try {
+    // Le Grand Prix du jour passe devant, et **son échec ne compte pas** :
+    // `chargerGpDuJour` rend `null` plutôt qu'une erreur, et la lecture
+    // ordinaire reprend la main. Le sens du doute va vers le Grand Prix à venir,
+    // qui reste vrai — jamais vers un écran d'accueil vide un dimanche soir.
+    const duJour = await chargerGpDuJour(signal);
+    if (duJour) return { ok: true, message: null, donnees: duJour };
+
     const requete = supabase
       .from("grands_prix")
       .select("id, nom, date_course, date_qualifications, statut")
@@ -415,6 +489,18 @@ export async function chargerAccueilGp(profilId, signal) {
       message: null,
       donnees: { gp: null, aPronostique: false, couru: false },
     };
+  }
+
+  // **`couru` se lit sur le statut, il ne se déduit plus du chemin pris.**
+  // `chargerProchainGp` peut désormais rendre un Grand Prix `termine` — celui du
+  // jour, qui garde la place jusqu'à minuit — et ce bloc était le seul endroit
+  // qui savait ce que « couru » voulait dire. Le figer à `false` ici aurait
+  // envoyé le widget proposer des pronostics sur une course déjà courue, avec un
+  // compte à rebours à zéro : le défaut exact que la version `0.53.0` vient de
+  // corriger sur les deux calendriers.
+  const couru = gp.statut === "termine";
+  if (couru) {
+    return { ok: true, message: null, donnees: { gp, aPronostique: false, couru: true } };
   }
 
   const miens = await chargerMesPronostics(gp.id, profilId, signal);

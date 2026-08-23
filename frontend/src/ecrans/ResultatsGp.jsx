@@ -185,7 +185,21 @@ function BlocCourse({ classement }) {
  *  affiche les mêmes trois états sur les mêmes pronostics. Deux pastilles
  *  écrites séparément auraient fini par dire « raté » d'un côté et « en
  *  attente » de l'autre sur la même ligne — la distinction entre `null` et `0`
- *  est justement celle qu'aucun écran n'a le droit de perdre (règle 4.1). */
+ *  est justement celle qu'aucun écran n'a le droit de perdre (règle 4.1).
+ *
+ *  > ### Le succès passe à l'ambre au vert sauge (version `0.54.0`)
+ *  >
+ *  > La coche vivait sur un aplat ambre à 20 %, en encre marron — la palette de
+ *  > la maquette. Ce n'était pas *rouge*, mais ce n'était pas non plus
+ *  > distinguable au premier coup d'œil du bordeaux de l'échec : deux chauds
+ *  > côte à côte dans une colonne de vingt lignes. La couleur du succès est
+ *  > maintenant celle que le design system emploie déjà pour dire « c'est
+ *  > acquis » — le vert sauge du bloc « pronostics enregistrés » et de la
+ *  > pastille « Terminé » du calendrier. **Aucune teinte nouvelle n'entre.**
+ *  >
+ *  > Mesuré sur carte blanche : coche vert sauge sur vert sauge à 15 % →
+ *  > **4,01:1**, au-dessus des 3:1 d'un élément graphique porteur de sens. La
+ *  > croix bordeaux sur bordeaux à 10 % tient 8,94:1 et ne bouge pas. */
 export function Verdict({ pointsGagnes }) {
   if (pointsGagnes === null || pointsGagnes === undefined) {
     return (
@@ -203,16 +217,65 @@ export function Verdict({ pointsGagnes }) {
     <span
       aria-label={reussi ? "Pronostic réussi" : "Pronostic raté"}
       className={`flex size-[22px] shrink-0 items-center justify-center rounded-full ${
-        reussi ? "bg-accent/20" : "bg-primaire/10"
+        reussi ? "bg-vert-sauge/15" : "bg-primaire/10"
       }`}
     >
       {reussi ? (
-        <IconeCoche className="text-secondaire size-2.5 [stroke-width:3]" />
+        <IconeCoche className="text-vert-sauge size-2.5 [stroke-width:3]" />
       ) : (
         <span aria-hidden="true" className="text-primaire text-[12px] font-medium">
           ×
         </span>
       )}
+    </span>
+  );
+}
+
+/**
+ * Ce qu'un pronostic rapporte, et la couleur qui dit s'il l'a rapporté.
+ *
+ * **Trois états, jamais deux.** La pastille disait le contraire de ce qu'elle
+ * montrait : un pronostic réussi prenait l'aplat bordeaux plein, un pronostic
+ * raté **et** un pronostic pas encore jugé prenaient tous deux le même bordeaux
+ * sur beige. Toute la colonne était donc rouge, le succès y était l'état le plus
+ * sombre, et `null` était indistinguable de `0` — la seule distinction que la
+ * règle 4.1 interdit de perdre. La `Verdict` voisine la tenait, seule.
+ *
+ * | État | Aplat | Encre | Contraste |
+ * |---|---|---|---|
+ * | réussi (`> 0`) | vert sauge | blanc | **4,86:1** |
+ * | raté (`0`) | bordeaux | blanc | **10,88:1** |
+ * | en attente (`null`) | beige | marron | **9,32:1** |
+ *
+ * Le beige de l'attente n'est pas un troisième verdict : c'est l'absence de
+ * verdict. Il porte le nombre de points **potentiels**, et le peindre en rouge
+ * annoncerait un échec qui n'a pas eu lieu — c'est le même arbitrage que le
+ * « en jeu / gagnés » de la ligne au-dessus.
+ *
+ * > **Un seul propriétaire pour les deux écrans.** Les deux accordéons de
+ * > pronostics — celui des résultats d'un Grand Prix et celui des résultats par
+ * > Grand Prix — portaient ce bloc **recopié à l'identique**. C'est exactement
+ * > ce qui est arrivé à `Verdict` une version plus tôt, et pour la même raison :
+ * > les deux listes affichent la même donnée et doivent la dire pareil.
+ */
+export function PastillePoints({ pointsGagnes, points }) {
+  const juge = pointsGagnes !== null && pointsGagnes !== undefined;
+  const reussi = juge && pointsGagnes > 0;
+
+  return (
+    <span
+      className={`rounded-[10px] px-2 py-1 text-[12px] font-medium ${
+        !juge
+          ? "bg-fond text-secondaire"
+          : reussi
+            ? "bg-vert-sauge text-white"
+            : "bg-primaire text-white"
+      }`}
+    >
+      {/* Après la course, ce que le pari a rapporté ; avant, ce qu'il peut
+          rapporter. Jamais une cote brute — la valeur en base EST un nombre de
+          points (règle 4.1), et `formaterPoints` en reste le seul habilleur. */}
+      {formaterPoints(juge ? pointsGagnes : points)}
     </span>
   );
 }
@@ -312,20 +375,10 @@ function LigneMembre({ ligne, estMoi, avecPhotos = false }) {
                   </span>
 
                   <span className="flex shrink-0 items-center gap-2">
-                    <span
-                      className={`rounded-[10px] px-2 py-1 text-[12px] font-medium ${
-                        pronostic.points_gagnes > 0
-                          ? "bg-primaire text-white"
-                          : "bg-fond text-primaire"
-                      }`}
-                    >
-                      {/* Après la course, ce qu'il a rapporté ; tant qu'il n'est
-                          pas jugé, ce qu'il pouvait rapporter. Les deux ne
-                          s'affichent jamais ensemble. */}
-                      {formaterPoints(
-                        pronostic.points_gagnes ?? pronostic.points,
-                      )}
-                    </span>
+                    <PastillePoints
+                      pointsGagnes={pronostic.points_gagnes}
+                      points={pronostic.points}
+                    />
                     <Verdict pointsGagnes={pronostic.points_gagnes} />
                   </span>
                 </li>

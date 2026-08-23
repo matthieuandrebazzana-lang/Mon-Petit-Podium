@@ -9,7 +9,7 @@ import Pastille from "../composants/Pastille.jsx";
 import Voiture from "../composants/Voiture.jsx";
 import { Barre, Pave } from "../composants/Squelette.jsx";
 import { IconeChevronAccordeon } from "../composants/Icones.jsx";
-import { Verdict } from "./ResultatsGp.jsx";
+import { PastillePoints, Verdict } from "./ResultatsGp.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerCalendrier, cleCalendrier } from "../lib/calendrier.js";
 import { chargerChampionnat } from "../lib/championnats.js";
@@ -47,6 +47,15 @@ import { formaterPoints } from "../lib/format.js";
  * Une saison entière demanderait vingt-quatre allers-retours Railway en série ;
  * le sélecteur du haut est donc la conséquence directe de la forme de la donnée,
  * pas un choix d'interface posé par-dessus.
+ *
+ * ## L'ordre de la liste est celui du Grand Prix regardé
+ *
+ * `classerParPointsDuGp` la retrie par `total_points` décroissant à chaque
+ * changement d'option. La fonction SQL, elle, sert l'ordre d'inscription : juste
+ * pour une liste de membres, muet sur un écran de résultats. **Le tri est fait
+ * ici et pas en base** — la fonction est partagée avec d'autres appelants
+ * (`resultats.py`), et lui imposer l'ordre d'un seul écran serait précisément la
+ * source unique qu'on cherche à ne pas casser.
  *
  * ## Ce que le sélecteur réemploie
  *
@@ -109,6 +118,41 @@ export function gpParDefaut(grandsPrix) {
   if (avecCotes) return avecCotes.gp_id;
 
   return grandsPrix[0]?.gp_id ?? null;
+}
+
+/**
+ * Les membres, du meilleur au moins bon **sur ce Grand Prix-là**.
+ *
+ * La fonction SQL sert la liste par `rejoint_le`, l'ordre d'inscription — le
+ * troisième critère de départage de la règle 4.6, et le seul ordre stable dont
+ * elle dispose. C'est l'ordre juste pour une liste de membres ; ce n'est pas
+ * celui d'un écran de résultats, où la première question est « qui a fait le
+ * meilleur coup ce dimanche ? » et où la réponse se trouvait au hasard de la
+ * colonne.
+ *
+ * > **Le tri porte sur les points du Grand Prix, jamais sur le classement
+ * > général.** Les deux divergent — c'est même tout l'intérêt : un joueur dernier
+ * > de la saison peut avoir signé le meilleur Grand Prix, et c'est précisément ce
+ * > que cet écran existe pour montrer.
+ *
+ * **`null` n'est pas zéro, et il va derrière les deux.** Un membre dont rien
+ * n'est encore jugé n'a pas marqué `0` : il n'a pas de score. Le placer parmi
+ * les zéros dirait qu'il a raté ; le placer en tête dirait qu'il a gagné. Il
+ * passe donc après, avec ceux qui n'ont rien joué — la même règle que la ligne
+ * « Rien joué », qui est le cas extrême du même état.
+ *
+ * **À égalité, l'ordre du serveur est conservé** : le tri est stable (garanti par
+ * la spécification depuis ES2019) et ne réordonne donc pas ce qu'il ne départage
+ * pas. Avant la course, tout le monde est à `null` et la liste garde exactement
+ * l'ordre d'inscription qu'elle avait — un `row_number` déguisé aurait inventé un
+ * premier et un dernier là où personne n'a encore marqué (règle 4.7).
+ */
+export function classerParPointsDuGp(lignes) {
+  const score = (ligne) =>
+    ligne.total_points === null || ligne.total_points === undefined
+      ? -1
+      : ligne.total_points;
+  return [...lignes].sort((a, b) => score(b) - score(a));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -250,18 +294,10 @@ export function LigneMembrePronostics({ ligne, estMoi, avecPhotos = false }) {
                 </span>
 
                 <span className="flex shrink-0 items-center gap-2">
-                  <span
-                    className={`rounded-[10px] px-2 py-1 text-[12px] font-medium ${
-                      pronostic.points_gagnes > 0
-                        ? "bg-primaire text-white"
-                        : "bg-fond text-primaire"
-                    }`}
-                  >
-                    {/* Après la course, ce que le pari a rapporté ; avant, ce
-                        qu'il peut rapporter. Jamais une cote brute — la valeur
-                        en base EST un nombre de points (règle 4.1). */}
-                    {formaterPoints(pronostic.points_gagnes ?? pronostic.points)}
-                  </span>
+                  <PastillePoints
+                    pointsGagnes={pronostic.points_gagnes}
+                    points={pronostic.points}
+                  />
                   <Verdict pointsGagnes={pronostic.points_gagnes} />
                 </span>
               </li>
@@ -401,7 +437,7 @@ export default function ResultatsChampionnat() {
   }));
   const gpRegarde = grandsPrix.find((gp) => gp.gp_id === gpChoisi) ?? null;
 
-  const lignes = membres ?? [];
+  const lignes = classerParPointsDuGp(membres ?? []);
   // Une seule question pour toute la liste (`docs/composants.md` §8) : elle
   // décide de la PRÉSENCE de la colonne de pastilles, jamais de son contenu.
   const avecPhotos = lignes.some((ligne) => Boolean(ligne.avatar_url));

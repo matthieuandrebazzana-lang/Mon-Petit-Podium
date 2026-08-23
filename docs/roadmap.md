@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **23 août 2026**, version `0.53.0`.
+État au **23 août 2026**, version `0.54.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -167,10 +167,15 @@ Demi-pas en place : OpenF1 expose `is_cancelled`, et `session_de_course()` le **
 
 Reste : le statut, l'effacement, et la reprise après report.
 
-### 2.2 Quatre marchés annoncés, non implémentés
+### 2.2 Trois marchés annoncés, non implémentés
 
-**Duels entre pilotes**, **premier abandon**, **marge de victoire**, **classement exact**.
-En l'état ils tombent dans le filet « marché non reconnu » et laissent `NULL`.
+**Duels entre pilotes**, **premier abandon**, **classement exact**. En l'état ils tombent
+dans le filet « marché non reconnu » et laissent `NULL`.
+
+> ~~**Marge de victoire**~~ — **livrée en `0.54.0`** sous son vrai nom, « écart du
+> gagnant ». Elle n'était pas « à écrire » : elle était **écrite nulle part**, et le filet
+> la faisait passer pour un marché en attente au lieu d'un marché manquant
+> (`bugs-connus.md` §23).
 
 > **Le premier abandon est à trancher en premier** : `session_result` ne donne pas l'heure
 > mais `number_of_laps`, et **la règle d'égalité n'est pas écrite**. C'est pour cela qu'il
@@ -178,8 +183,14 @@ En l'état ils tombent dans le filet « marché non reconnu » et laissent `NULL
 
 ### 2.3 Confronter le calcul aux vrais marchés
 
-`app/calcul/points.py` reconnaît neuf familles ; **trois seulement ont été confrontées à de
-vrais libellés Unibet**. Les six autres sont écrites d'après le cahier des charges.
+`app/calcul/points.py` reconnaît dix familles ; **trois seulement ont été confrontées à de
+vrais libellés Unibet**. Les sept autres sont écrites d'après le cahier des charges.
+
+> **« Écart du gagnant » est le plus urgent des sept**, et c'est le seul dont l'issue n'est
+> ni un pilote ni un oui/non : `_intervalle_secondes()` doit reconnaître les vraies
+> tournures d'Unibet (« moins de 5 secondes », « 5 - 10 », « plus de 10 »), qu'on n'a
+> **jamais vues**. Une issue non reconnue est journalisée en toutes lettres — c'est cette
+> ligne-là qu'il faut chercher après l'essai.
 
 **L'attente n'est pas obligatoire** : `POST /jobs/resultats/{gp_id}/test` confronte le
 calcul aux vrais pronostics en base sur un classement fictif, **sans rien écrire**. Dès que
@@ -364,6 +375,20 @@ explicite doit faire.
 `retirer_avatar` — et une case « Automatique » dans `SelecteurCouleur`, qui n'en connaît
 aujourd'hui que vingt. **Écarté volontairement** : un chemin de code que rien n'envoie n'est
 éprouvé par rien, et l'avertissement de contraste couvre le cas qui comptait.
+
+### 3.14 L'opacité des Grands Prix passés est sous le plancher de contraste
+
+`OPACITE_PASSE = 0,4` (`CarteGpSaison`) compose l'encre **et** son fond sur le beige de
+l'app. Mesuré : la pastille « Terminé » tombe de **4,86:1 à 1,74:1**, le blanc sur drapeau
+bordeaux de **10,88:1 à 2,49:1** — sous les 3:1 d'un grand texte porteur de sens.
+
+**La valeur est celle qui a été demandée**, et l'arbitrage se défend : ces cartes sont une
+archive, et « c'est passé » se lit à la pâleur avant de se lire au mot. **`0,75` est le
+point où la pastille repasse le plancher** — une constante, une ligne, si la lisibilité
+doit primer. Tableau complet dans `calendrier.md` §8.
+
+**À trancher sur iPhone réel**, pas sur simulateur : c'est un jugement de lisibilité en
+plein soleil autant qu'un rapport de contraste.
 
 ---
 
