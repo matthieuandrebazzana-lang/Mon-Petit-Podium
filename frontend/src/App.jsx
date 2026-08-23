@@ -21,6 +21,7 @@ import MonProfil from "./ecrans/MonProfil.jsx";
 import ProfilMembre from "./ecrans/ProfilMembre.jsx";
 import GrandsPrixDuMembre from "./ecrans/GrandsPrixDuMembre.jsx";
 import Calendrier from "./ecrans/Calendrier.jsx";
+import ResultatsChampionnat from "./ecrans/ResultatsChampionnat.jsx";
 import CalendrierGlobal from "./ecrans/CalendrierGlobal.jsx";
 import ListeChampionnats from "./ecrans/ListeChampionnats.jsx";
 import ResultatsGp from "./ecrans/ResultatsGp.jsx";
@@ -85,8 +86,20 @@ export default function App() {
           <Route path="/championnats/:id" element={<Championnat />} />
           {/* Vue piste : le même championnat, vu de la route (maquette 07b). */}
           <Route path="/championnats/:id/piste" element={<Piste />} />
+          {/* Résultats par Grand Prix : ce que chaque membre a joué, GP par GP.
+              C'est l'entrée que porte désormais l'écran d'un championnat. */}
+          <Route
+            path="/championnats/:id/resultats"
+            element={<ResultatsChampionnat />}
+          />
           {/* Calendrier du championnat (maquette 15). Le mot « historique » de la
-              maquette est écarté par le vocabulaire imposé de la section 1. */}
+              maquette est écarté par le vocabulaire imposé de la section 1.
+
+              **Plus d'entrée depuis le championnat depuis la version `0.53.0`**,
+              et la route reste : c'est du code éprouvé qu'on ne supprime pas
+              (CLAUDE.md §6). Son mini-classement par Grand Prix n'existe nulle
+              part ailleurs, et l'écran redevient la bonne réponse le jour où on
+              le redemande. */}
           <Route path="/championnats/:id/calendrier" element={<Calendrier />} />
 
           {/* Parcours de pronostics, maquettes 08 → 09 → 10. Les trois écrans

@@ -550,3 +550,78 @@ et posé en style en ligne. Mesuré après correction : 10,88 · **7,86** · 10,
 - **Un défaut qui « touche certains comptes » n'est pas intermittent** : c'est une fonction
   de hachage quelque part. Le chercher dans les écrans a coûté du temps ; il était dans la
   table.
+
+---
+
+## 20. Le numéro peint sur le museau était tête-bêche — depuis l'origine
+
+**Symptôme.** Sur les quatre écrans qui dessinent une voiture, le numéro du museau se lit à
+l'envers. Toutes les livrées, toutes les tailles, depuis la première version qui affiche une
+voiture.
+
+**Cause réelle.** Le fichier source. `assets/voitures_perso.svg` écrit le numéro sous
+`transform="… rotate(180)"`, et l'extraction l'a repris tel quel — comme elle doit reprendre
+tout le reste. **Ce n'est pas une faute de la planche** : sur une vraie monoplace, le numéro
+du museau se lit depuis l'avant, c'est-à-dire depuis la voiture qu'on double. La planche
+dessine la convention réelle.
+
+Le défaut est dans le **contexte** : toutes les vues de l'app sont des vues **de dessus**.
+Le commentaire du code disait d'ailleurs la chose exacte — « le numéro se lit depuis l'avant
+de la voiture, comme en Formule 1 » — et l'a fait passer pour une intention pendant douze
+versions.
+
+**Correctif (version `0.53.0`).** La rotation part, et la ligne de base descend d'une
+**hauteur de capitale** (`0,717 em`, métrique d'Helvetica).
+
+**Ne pas refaire.**
+
+- **Retirer la rotation seule aurait déplacé le numéro.** `rotate(180)` ne renverse pas
+  seulement les glyphes : il renverse leur position autour de la ligne de base. Sous
+  rotation, les chiffres occupent `[yNumero, yNumero + 0,717 em]` ; à l'endroit,
+  `[y − 0,717 em, y]`. Sans la compensation, le numéro remontait de quinze unités sur le
+  museau — un déplacement assez petit pour passer inaperçu à la relecture du diff, et assez
+  grand pour se voir à l'écran.
+- **Le décalage est calculé, pas relevé.** Les douze `yNumero` sont mesurés séparément
+  (`VoituresEcuries.jsx`) ; douze corrections posées à l'œil auraient été démenties par la
+  première livrée retouchée.
+- **Un commentaire qui explique un comportement ne prouve pas qu'il est voulu ICI.** Celui-là
+  était vrai — de la Formule 1 — et faux de l'application.
+- **Vérifié par rendu comparé**, ancien et nouveau côte à côte : le numéro occupe le même
+  rectangle, à l'endroit. Le calcul seul aurait laissé passer une erreur de signe.
+
+---
+
+## 21. « Pronostiquer » proposé sur un Grand Prix déjà joué
+
+**Symptôme.** Dans les deux calendriers, un Grand Prix aux cotes arrêtées porte toujours
+« Pronostiquer », et le bouton ouvre le **tableau des cotes** — l'écran de saisie des
+favoris — même quand la saisie est enregistrée depuis longtemps. Le joueur qui veut relire
+ce qu'il a joué se retrouve au début du parcours.
+
+**Cause réelle.** Le widget de l'accueil arbitre sur **trois** destinations depuis la
+version `0.5.1` (`couru` → résultats, `aPronostique` ou fermé → récap, sinon → cotes). Les
+deux calendriers, eux, n'en connaissaient que deux. La règle avait un propriétaire pour la
+condition d'**existence** du bouton — `cotesArretees`, partagée par les trois surfaces — et
+aucun pour le choix de la **destination**.
+
+**Correctif (version `0.53.0`).** Les deux calendriers testent à leur tour « ai-je déjà
+joué ce Grand Prix ? ». Le calendrier d'un championnat lit `mes_pronostics`, **déjà servi**
+par sa route et déjà lu par la même carte quelques lignes plus bas ; le calendrier de la
+saison charge la liste de ses propres `gp_id` en une lecture RLS, en parallèle des cotes.
+
+**Ne pas refaire.**
+
+- **Deux questions, pas une.** « Y a-t-il quelque chose à ouvrir ? » (`cotesArretees`, règle
+  4.3, inchangée) et « quoi ouvrir ? » sont distinctes. Les fondre aurait fait porter au
+  mode prévisualisation une décision qui ne le concerne pas.
+- **L'échec de la lecture ne se propage pas.** `chargerMesGpPronostiques` rend toujours `ok`
+  avec un ensemble vide : le calendrier retombe alors sur « Pronostiquer », qui reste vrai —
+  on peut rouvrir sa saisie jusqu'à la fermeture. **Le sens du doute va vers le libellé qui
+  ne ment jamais.**
+- **Le cache pouvait réintroduire le défaut à lui seul.** Quatre surfaces décident de leur
+  libellé sur cette donnée et lisent toutes un cache *stale-while-revalidate*.
+  `oublierMesPronostics` les balaie ensemble après un enregistrement ; l'accueil, seul
+  balayé jusqu'ici, aurait laissé les trois autres en arrière.
+- **La clé du calendrier de la saison porte `:v2:`.** Son entrée ne contient plus la même
+  chose ; servie telle quelle, un cache d'une version antérieure aurait rendu douze cartes
+  sans état ni bouton le temps d'un aller-retour.

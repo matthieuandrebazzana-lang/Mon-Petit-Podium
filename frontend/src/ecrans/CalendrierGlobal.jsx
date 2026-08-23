@@ -9,6 +9,7 @@ import {
   enrichir,
   etatDuGpSaison,
 } from "../lib/calendrier2026.js";
+import { chargerMesGpPronostiques, cleSaison } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
 
 /**
@@ -45,8 +46,33 @@ export default function CalendrierGlobal() {
   // La clé porte l'identifiant du compte, comme partout ailleurs : la réponse
   // est la même pour tout le monde, mais deux personnes qui se relaient sur le
   // même téléphone ne doivent jamais hériter du cache de l'autre.
-  const cle = utilisateur ? `saison:${utilisateur.id}` : null;
-  const chargeur = useCallback((signal) => chargerCotesEnBase(signal), []);
+  const cle = utilisateur ? cleSaison(utilisateur.id) : null;
+  // **Deux lectures dans un seul chargeur, et elles partent ensemble.** Les
+  // cotes en base disent quels Grands Prix sont ouverts ; mes pronostics disent
+  // ce que le bouton doit proposer sur ceux-là. Enchaînées, elles auraient
+  // additionné un aller-retour Supabase au réveil de Railway sur l'onglet le
+  // plus consulté après l'accueil.
+  //
+  // La seconde ne peut pas faire échouer la première : `chargerMesGpPronostiques`
+  // rend toujours `ok` (voir sa note). Le calendrier s'affiche donc entier même
+  // si elle échoue, et ses boutons retombent sur « Pronostiquer », qui reste
+  // vrai — on peut toujours rouvrir sa saisie jusqu'à la fermeture.
+  const profilId = utilisateur?.id ?? null;
+  const chargeur = useCallback(
+    async (signal) => {
+      const [cotes, joues] = await Promise.all([
+        chargerCotesEnBase(signal),
+        chargerMesGpPronostiques(profilId, signal),
+      ]);
+      if (!cotes.ok) return cotes;
+      return {
+        ok: true,
+        message: null,
+        donnees: { cotes: cotes.donnees, joues: [...joues.donnees] },
+      };
+    },
+    [profilId],
+  );
   const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
 
   const [tentative, setTentative] = useState(0);
@@ -56,7 +82,11 @@ export default function CalendrierGlobal() {
     recharger();
   }
 
-  const grandsPrix = enrichir(GP_2026, donnees);
+  // `joues` est sérialisé en tableau dans le cache — un `Set` ne survit pas à un
+  // aller-retour JSON, et `localStorage` en est un. Il redevient un `Set` ici,
+  // là où on l'interroge douze fois.
+  const grandsPrix = enrichir(GP_2026, donnees?.cotes);
+  const joues = new Set(donnees?.joues ?? []);
   const restants = grandsPrix.filter(
     (gp) => etatDuGpSaison(gp).cle !== "termine",
   ).length;
@@ -103,6 +133,7 @@ export default function CalendrierGlobal() {
                 chargement={chargement && !donnees}
                 retour="/calendrier"
                 previsualisation={modePrevisualisation}
+                aPronostique={joues.has(gp.gp_id)}
               />
             ))}
           </div>

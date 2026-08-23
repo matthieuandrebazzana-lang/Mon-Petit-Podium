@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **22 août 2026**, version `0.52.0`.
+État au **23 août 2026**, version `0.53.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -73,6 +73,23 @@ resterait exécutable par `anon`. Voir `database.md` §6.
 
 **Rien à convertir, rien à reprendre** : aucun compte n'a de photo avant elle.
 
+### 1.3 bis Appliquer la migration 18 — la couleur du texte de la voiture
+
+`20260823120000_couleur_texte_voiture` ajoute `profils.couleur_texte` et **remplace**
+`classement_du_championnat` et `pronostics_du_championnat`. Tant qu'elle n'est pas jouée :
+
+- la colonne n'existe pas → le backend sert `null` (valeurs par défaut des modèles Pydantic,
+  règle 3.3), donc **l'encre calculée partout, comme avant** ;
+- l'enregistrement d'une couleur de texte échoue en `42703` — le sélecteur du profil est
+  visible mais le bouton « Enregistrer ma voiture » retombe en erreur.
+
+**À jouer après la 16 et la 17.** Si la 2, la 8, la 10, la 12 ou la 16 est rejouée un jour,
+**rejouer la 18 derrière** : elles restaureraient des fonctions qui ne servent pas
+`couleur_texte`.
+
+**Rien à convertir** : la colonne reste `NULL` sur toutes les lignes existantes, et c'est
+volontaire (`database.md`, `public.profils`).
+
 ### 1.4 Vérifier les migrations appliquées
 
 **La liste des migrations appliquées est à revérifier dans le SQL Editor.** Une lecture
@@ -131,6 +148,8 @@ navigateur. Points à regarder en priorité :
 | **Le sélecteur de fichier** | premier `<input type="file">` du projet — il n'a jamais rencontré Safari iOS. La photothèque s'ouvre-t-elle bien avant le sélecteur de fichiers du système ? |
 | **Une photo de 5 Mo** | le décodage, pas l'envoi, est ce qui coûte : une image de 8000 × 6000 occupe près de 200 Mo décompressée. Safari abandonne-t-il l'onglet ? |
 | **La photo dans le cockpit** | seize `<clipPath>` sur un même écran, chacun avec son `<image>` : Safari les compose-t-il sans coût au moment de l'entrée des voitures, qui anime déjà `transform` sur les seize ? Et le disque de 15px reste-t-il lisible comme un visage, ou faut-il resserrer le recadrage ? |
+| **Le sélecteur de Grand Prix** | vingt-quatre pastilles dans une piste qui déborde très largement l'écran. `scrollIntoView({inline: "center"})` ramène-t-il l'option choisie sans à-coup sur Safari iOS ? Et la pastille glissante suit-elle, alors qu'elle se positionne sur des `offsetLeft` mesurés dans un conteneur qui défile en même temps ? |
+| **Le numéro remis à l'endroit** | la compensation de ligne de base est calculée sur la métrique d'Helvetica. Safari iOS peut retomber sur une autre fonte système si « Helvetica Neue » n'est pas résolue : vérifier que le numéro reste centré sur le museau, pas seulement lisible |
 | **Un en-tête de marché sur deux lignes** | il est **collant**, donc sa hauteur est prise sur la liste pendant tout le défilement du marché. Vérifier sur un petit écran qu'un titre long ne laisse pas moins d'une rangée et demie de widgets visibles — c'est le seul cas où deux lignes coûteraient plus qu'elles ne rapportent |
 
 ---
@@ -215,11 +234,13 @@ Livrées en version `0.50.0` (dépôt, affichage, retrait). Trois manques assum�
 
 ## 3. Points à arbitrer
 
-### 3.1 Le numéro tête-bêche sur la voiture
+### 3.1 ~~Le numéro tête-bêche sur la voiture~~ — **TRANCHÉ (`0.53.0`)**
 
-Rendu `rotate(180)` sur les onze livrées **et** sur la voiture personnalisable. C'est le
-calage de la planche d'origine, **uniforme**. À trancher si le numéro doit se lire dans le
-sens de l'écran.
+Le numéro se lit **dans le sens de l'écran**. La planche dessinait la convention réelle
+d'un museau de Formule 1 — lisible depuis la voiture qu'on double — mais toutes les vues de
+l'app sont des vues de dessus. La ligne de base descend d'une hauteur de capitale pour que
+le numéro retrouve exactement le pixel qu'il occupait, sur les douze livrées à la fois
+(`bugs-connus.md` §20).
 
 ### 3.2 La barre de navigation sur deux écrans de détail
 
@@ -306,8 +327,43 @@ un quatrième annulerait la fonction de la teinte.
 ### 3.11 Le tableau des cotes quand les marchés se multiplient
 
 Les marchés sont **empilés** en sections colorées. Après les qualifications, le noyau
-complet donnera un écran très long. `composants/Onglets.jsx` est **resté en place, non
-monté** : c'est la réponse déjà écrite et vérifiée.
+complet donnera un écran très long. `composants/Onglets.jsx` est **la réponse déjà écrite et
+vérifiée** — et il est désormais **monté** sur l'écran « Résultats par Grand Prix » (version
+`0.53.0`), donc éprouvé en conditions réelles avant de revenir ici.
+
+### 3.12 L'icône de « Résultats par Grand Prix » — la demande se contredisait
+
+La demande nommait « la **troisième** icône de `logo-02.svg` » **et** donnait le cadrage
+`viewBox 322 0 161.64 133.85`. Les deux ne désignent pas le même dessin :
+
+| Lecture | Ce qu'elle donne |
+|---|---|
+| Troisième de gauche à droite | le **calendrier** (x 273,84 → 334,52) |
+| Troisième groupe `<g>` du fichier | le **calendrier**, encore |
+| La région `x ∈ [322 ; 483,64]` | la **silhouette de pilote** (x 396,2 → 456,88), seule forme de cette bande |
+
+**Le cadrage a été suivi**, parce qu'il est la seule indication non ambiguë et parce que
+garder l'icône calendrier n'aurait rien changé — l'entrée la portait déjà, ce qui rendrait
+l'instruction sans objet. La silhouette est donc réemployée (`IconePilote`, qui délègue à
+`icones/IconeProfil.jsx`).
+
+> **Conséquence à arbitrer** : ce glyphe est **aussi celui de l'onglet Profil** de la barre
+> basse. Deux contextes différents, mais le même dessin. Si la collision gêne,
+> `Icones.jsx` porte déjà `IconeMembres` — deux silhouettes en trait, dans le style des
+> autres icônes de cet écran — et le remplacement est **une ligne**.
+
+### 3.13 La couleur du texte ne revient pas à « automatique »
+
+Le sélecteur du profil affiche toujours une couleur : celle de la base, ou à défaut l'encre
+calculée déjà à l'écran. Une fois enregistrée, elle ne suit plus la coque — repeindre sa
+voiture en blanc laisse le numéro dans la couleur choisie, et c'est bien ce qu'un réglage
+explicite doit faire.
+
+**Il n'y a en revanche aucun retour à `NULL`.** L'ajouter demanderait un drapeau
+`retirer_couleur_texte` dans `PATCH /profils/moi` — même motif que `retirer_numero` et
+`retirer_avatar` — et une case « Automatique » dans `SelecteurCouleur`, qui n'en connaît
+aujourd'hui que vingt. **Écarté volontairement** : un chemin de code que rien n'envoie n'est
+éprouvé par rien, et l'avertissement de contraste couvre le cas qui comptait.
 
 ---
 

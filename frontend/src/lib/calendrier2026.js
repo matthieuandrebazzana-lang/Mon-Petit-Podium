@@ -171,7 +171,7 @@ export function etatDuGpSaison(gp, maintenant = Date.now()) {
  * pastille (voir `ETATS_GP`) : sur le noir de Las Vegas, une bande blanche à
  * 85 % poserait le vert sauge à 3,45:1. Il faut 97 % pour tenir 4,5:1.
  */
-export function actionDuGp(gp, etat, previsualisation = false) {
+export function actionDuGp(gp, etat, previsualisation = false, aPronostique = false) {
   if (!gp.gp_id) return null;
 
   if (etat.cle === "termine") {
@@ -200,6 +200,27 @@ export function actionDuGp(gp, etat, previsualisation = false) {
   // dans les données, pas dans le statut — ouvrir un tableau de cotes vide ne
   // montrerait rien de ce que le mode existe pour montrer.
   if (etat.cle === "ouvert" && (cotesArretees(gp) || previsualisation)) {
+    // **Le libellé suit la destination, toujours.** Un bouton « Pronostiquer »
+    // qui rouvre le tableau des cotes alors que la saisie est déjà enregistrée
+    // promet une chose et en fait une autre : le joueur cherche à relire ce
+    // qu'il a joué, pas à recommencer. C'est l'arbitrage que le widget de
+    // l'accueil applique depuis la version `0.5.1`, et les trois surfaces qui
+    // portent un bouton de pronostics disent maintenant la même chose.
+    //
+    // La condition d'EXISTENCE du bouton ne bouge pas : elle reste
+    // `cotesArretees`. Ce sont deux questions distinctes — « y a-t-il quelque
+    // chose à ouvrir ? » puis « quoi ouvrir ? ».
+    if (aPronostique) {
+      return {
+        vers: `/grands-prix/${gp.gp_id}/recap`,
+        libelle: "Voir mes pronos",
+        // Même aplat, même contraste : c'est le libellé qui distingue les deux
+        // gestes, pas la couleur. Douze cartes de la saison portent déjà quatre
+        // pastilles d'état ; une cinquième teinte de bouton ferait du bruit là
+        // où le mot suffit.
+        style: "bg-white text-primaire",
+      };
+    }
     return {
       vers: `/grands-prix/${gp.gp_id}/cotes`,
       libelle: "Pronostiquer",

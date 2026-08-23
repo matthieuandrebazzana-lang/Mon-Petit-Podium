@@ -238,7 +238,44 @@ Un GP sans horaire n'appartient à **aucune** saison et n'entre dans aucune stat
 ## 10. La voiture
 
 Chaque utilisateur possède **une seule voiture, identique dans tous ses championnats** :
-deux couleurs, un numéro libre, son nom sur l'aileron arrière. Modifiable depuis le profil.
+deux couleurs, une **couleur de texte**, un numéro libre, son nom sur l'aileron arrière.
+Modifiable depuis le profil.
+
+> ### Le numéro se lit du DESSUS, pas de l'avant (version `0.53.0`)
+>
+> La planche l'écrivait sous `rotate(180)` — la convention d'un vrai museau de Formule 1,
+> qui se lit depuis la voiture qu'on double. **Toutes les vues de l'app sont des vues de
+> dessus** : le numéro y sortait tête-bêche, sur les douze livrées.
+>
+> Retirer la rotation ne suffisait pas : elle renversait aussi la position des glyphes
+> autour de leur ligne de base. Celle-ci descend donc d'exactement une **hauteur de
+> capitale** (0,717 em), ce qui fait retrouver au numéro le pixel qu'il occupait. Calculé,
+> jamais relevé à l'œil : douze `yNumero` mesurés séparément auraient demandé douze
+> corrections, et la première retouchée aurait démenti les onze autres.
+
+> ### `couleur_texte` — `NULL` veut dire « pas de choix », jamais « pas de couleur »
+>
+> Elle peint **le numéro du museau et le pseudo de l'aileron**, les deux ensemble : c'est
+> une seule décision du membre. Sans choix, chaque texte reprend l'**encre calculée** qui
+> contraste avec l'aplat qui lui est propre — et les deux aplats diffèrent sur neuf des
+> onze livrées d'écurie.
+>
+> C'est pourquoi la migration 18 ne remplit pas rétroactivement la colonne : un `#FFFFFF`
+> posé d'office aurait rendu le numéro invisible pour tout membre à coque blanche, argent,
+> beige ou jaune. **Le défaut de colonne ne vaut que pour les profils créés après elle**,
+> qui naissent avec la coque bordeaux, où le blanc tient 10,88:1.
+>
+> **La couleur ne part au serveur que si elle a été CHOISIE.** La saisie du profil porte
+> toujours une couleur — à défaut l'encre calculée — donc l'envoyer inconditionnellement
+> figerait cette encre en base au premier enregistrement, y compris quand le membre n'a fait
+> que repeindre sa coque : il repartirait avec un numéro blanc sur une coque devenue
+> blanche, sans avoir rien demandé. Tant qu'aucun choix n'est fait, la colonne reste `NULL`
+> et l'encre continue de suivre l'aplat.
+>
+> **Le contraste se mesure et se signale, il ne se refuse pas.** L'écran de profil compare
+> la couleur choisie à l'aplat du museau de la livrée en cours et le dit sous les 3:1 d'un
+> grand texte porteur de sens. Il ne bloque pas l'enregistrement : la voiture appartient au
+> membre, et la base ne peut pas trancher la question sans connaître la livrée active.
 
 > **`retirer_numero` est un drapeau EXPLICITE dans `PATCH /profils/moi`, et il n'est pas
 > décoratif.** Les trois champs du corps étant facultatifs, `numero: null` serait

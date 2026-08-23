@@ -22,13 +22,13 @@ import {
   MARCHE_PODIUM,
   MARCHE_VAINQUEUR,
   chargerSaisie,
-  cleAccueilGp,
   enregistrerPronostics,
   enConflit,
   indexerCotes,
   marcheDe,
   optionsDisponibles,
   organiserPronostics,
+  oublierMesPronostics,
 } from "../lib/pronostics.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 import {
@@ -472,11 +472,15 @@ export default function Pronostics() {
     if (cle) oublierCache(cle);
     if (utilisateur) {
       oublierCache(`recap:${utilisateur.id}:${gpId}`);
-      // Le bloc « Prochain GP » de l'accueil décide de sa destination sur
-      // l'existence de ces pronostics : sans cet oubli, un retour immédiat sur
-      // l'accueil proposerait encore « Pronostiquer » le temps du
-      // rafraîchissement, juste après une validation.
-      oublierCache(cleAccueilGp(utilisateur.id));
+      // **Les quatre surfaces qui décident de leur libellé sur l'existence de
+      // ces pronostics**, oubliées ensemble : l'accueil, les deux calendriers et
+      // l'écran des paris de chacun. Sans cet oubli, un retour immédiat y
+      // trouverait encore « Pronostiquer » le temps du rafraîchissement, juste
+      // après une validation — le défaut que la version `0.53.0` vient de
+      // corriger, réintroduit par le cache. Une seule fonction pour les quatre
+      // (`lib/pronostics.js`) : écrits séparément, l'un d'eux aurait fini par
+      // être oublié.
+      oublierMesPronostics(utilisateur.id);
     }
     naviguer(`/grands-prix/${gpId}/recap`, { state: { enregistre: true } });
   }

@@ -77,6 +77,32 @@ import {
 // Le nom doit tenir dans les 98px de l'aileron arrière, quel que soit le pseudo.
 const NOM_MAXIMUM = 10;
 
+/** Corps du numéro peint sur le museau. Valeur de la planche, inchangée. */
+const TAILLE_NUMERO = 20.54;
+
+/**
+ * Hauteur de capitale d'Helvetica, en fraction du corps — 717/1000 dans les
+ * métriques de la fonte.
+ *
+ * **Elle sert à REMETTRE LE NUMÉRO À L'ENDROIT sans déplacer le dessin.** La
+ * planche écrivait le numéro sous `rotate(180)` : les chiffres étaient donc
+ * lisibles depuis l'avant de la voiture, tête-bêche pour qui la regarde du
+ * dessus — c'est-à-dire dans toutes les vues de l'app, qui sont toutes des vues
+ * de dessus.
+ *
+ * Retirer la rotation ne suffit pas : elle ne renversait pas seulement les
+ * glyphes, elle renversait aussi leur position autour de la ligne de base. Sous
+ * `rotate(180)`, les chiffres occupent `[yNumero, yNumero + 0,717 em]` ; à
+ * l'endroit, ils occupent `[y - 0,717 em, y]`. La ligne de base descend donc
+ * d'exactement une hauteur de capitale pour que le numéro retrouve **le pixel
+ * qu'il occupait**, sur les douze livrées à la fois.
+ *
+ * C'est pour cela que le décalage est calculé et non relevé à l'œil : douze
+ * `yNumero` mesurés séparément (`VoituresEcuries.jsx`) auraient demandé douze
+ * corrections, et la première retouchée aurait démenti les onze autres.
+ */
+const HAUTEUR_CAPITALE = 0.717;
+
 /** Cadrage et ancrages de la voiture personnalisable (première de la planche).
  *  `cockpit` est le `<circle fill="#020102">` du casque, relevé dans `CorpsPerso`
  *  ci-dessous — pas déduit de `cx`, dont il s'écarte de 0,13 unité. */
@@ -96,6 +122,36 @@ const INITIALE_SUR_DIAMETRE = 0.44;
 /** Le noir du casque, quand l'appelant ne donne pas de teinte : c'est celui de
  *  la planche, donc le cockpit reste exactement ce qu'il était. */
 const CASQUE = "#020102";
+
+/**
+ * L'encre que le numéro prendrait sans choix du membre.
+ *
+ * **Le sélecteur « Couleur du texte » du profil en a besoin, et lui seul.** Il
+ * doit afficher une couleur dès le premier montage, y compris pour un profil
+ * dont `couleur_texte` vaut `null` — c'est-à-dire tous ceux d'avant la migration
+ * 18. Afficher `#FFFFFF` par défaut ferait mentir la rangée : la voiture, elle,
+ * dessine encore l'encre calculée. Le sélecteur montre donc ce qui est à
+ * l'écran, et le premier enregistrement ne change rien de visible.
+ *
+ * Elle est lue **sur l'aplat du museau**, jamais sur celui de l'aileron : les
+ * deux diffèrent sur neuf livrées, et le numéro est ce qui identifie une voiture
+ * à la taille où on la regarde sur la piste.
+ *
+ * Exportée d'ici et non recalculée dans l'écran : c'est la même question que
+ * celle des deux `encreSur` du rendu ci-dessous, et deux réponses écrites
+ * séparément auraient divergé au premier ajustement.
+ */
+export function aplatDuNumero({ mode, ecurie, couleur1 = COULEUR1_DEFAUT }) {
+  const enEcurie = mode === "ecurie" && aUneLivree(ecurie);
+  return enEcurie ? geometrieLivree(ecurie).fondNumero : couleur1;
+}
+
+/** L'encre qui en découle. Deux fonctions et non une : l'écran de profil mesure
+ *  le contraste de la couleur CHOISIE contre l'aplat, ce qui demande l'aplat
+ *  lui-même ; le rendu, lui, ne veut que l'encre. */
+export function encreParDefaut(livree) {
+  return encreSur(aplatDuNumero(livree));
+}
 
 /** La taille du nom suit la longueur du pseudo : à taille fixe, « Alexandre » débordait. */
 function tailleDuNom(nom) {
@@ -154,6 +210,12 @@ function CorpsPerso({ couleur1, couleur2 }) {
  *   `#rrggbb` (`teinteMembre`, `lib/couleurs.js`). **C'est elle qui allume le
  *   cockpit** : sans elle ni photo, le casque reste le noir de la planche et
  *   aucun écran n'y voit de différence.
+ * @param {string} [couleurTexte] la couleur choisie par le membre pour son
+ *   numéro et son pseudo (`profils.couleur_texte`, migration 18). **`null` n'est
+ *   pas « pas de couleur » mais « pas de choix »** : les deux textes reprennent
+ *   alors l'encre calculée qui contraste avec l'aplat sous chacun d'eux, ce qui
+ *   est le comportement d'origine et reste celui de tout profil qui n'a rien
+ *   choisi.
  */
 export default function Voiture({
   mode = "perso",
@@ -166,6 +228,7 @@ export default function Voiture({
   titre,
   photo = null,
   teintePilote = null,
+  couleurTexte = null,
 }) {
   // Un slug inconnu retombe sur la voiture personnalisable plutôt que de ne
   // rien rendre : une livrée retirée d'une saison à l'autre laisserait sinon
@@ -174,8 +237,13 @@ export default function Voiture({
   const enEcurie = mode === "ecurie" && aUneLivree(ecurie);
   const geo = enEcurie ? geometrieLivree(ecurie) : PERSO;
 
-  const encreNumero = encreSur(enEcurie ? geo.fondNumero : couleur1);
-  const encreNom = encreSur(enEcurie ? geo.fondAile : couleur1);
+  // La couleur choisie l'emporte sur l'encre calculée, et elle vaut pour les
+  // DEUX textes : c'est une seule décision du membre, « de quelle couleur est
+  // écrit mon nom sur ma voiture ». Sans choix, chaque texte reprend l'encre qui
+  // contraste avec l'aplat qui lui est propre — le museau et l'aileron n'ont pas
+  // la même couleur sur neuf des onze livrées.
+  const encreNumero = couleurTexte ?? encreSur(enEcurie ? geo.fondNumero : couleur1);
+  const encreNom = couleurTexte ?? encreSur(enEcurie ? geo.fondAile : couleur1);
 
   const numeroAffiche = String(numero ?? "").trim().slice(0, 3);
   const nomAffiche = String(nom ?? "").trim().slice(0, NOM_MAXIMUM);
@@ -275,40 +343,54 @@ export default function Voiture({
         </>
       )}
 
-      {/* Numéro sur le museau. La rotation vient du fichier d'origine : le
-          numéro se lit depuis l'avant de la voiture, comme en Formule 1.
-          `textAnchor` remplace le calage manuel de la planche, qui décentrait
-          un numéro à deux chiffres. La graisse 700 est la seule autorisée par
-          la section 5, et uniquement ici. */}
-      {numeroAffiche && (
-        <text
-          x="0"
-          y="0"
-          transform={`translate(${geo.cx} ${geo.yNumero}) rotate(180)`}
-          textAnchor="middle"
-          fill={encreNumero}
-          fontFamily="Helvetica Neue, Helvetica, Arial, sans-serif"
-          fontWeight="700"
-          fontSize="20.54"
-        >
-          {numeroAffiche}
-        </text>
-      )}
+      {/* Les deux textes de la carrosserie, dans un groupe qui porte la
+          transition de couleur — la même que les aplats du corps, `.t-voiture-teinte`
+          (dont le sélecteur couvre `text` depuis cette version). Parcourir la
+          palette du profil repeint donc le numéro et le pseudo en 200ms, comme
+          elle repeint déjà la coque : un seul réglage, un seul mouvement.
 
-      {/* Nom sur l'aileron arrière. */}
-      {nomAffiche && (
-        <text
-          x={geo.cx}
-          y={geo.yNom}
-          textAnchor="middle"
-          fill={encreNom}
-          fontFamily="Helvetica Neue, Helvetica, Arial, sans-serif"
-          fontWeight="700"
-          fontSize={tailleDuNom(nomAffiche)}
-        >
-          {nomAffiche}
-        </text>
-      )}
+          Le groupe est posé APRÈS le cockpit : dans un SVG, l'ordre de document
+          est le seul ordre de peinture (`docs/composants.md` §4). */}
+      <g className="t-voiture-teinte">
+        {/* Numéro sur le museau, **à l'endroit depuis la version `0.53.0`**.
+            La planche l'écrivait sous `rotate(180)` — lisible depuis l'avant de
+            la voiture, donc tête-bêche dans toutes les vues de l'app, qui sont
+            toutes des vues de dessus. La ligne de base descend d'une hauteur de
+            capitale pour que le numéro retrouve exactement le pixel qu'il
+            occupait ; voir `HAUTEUR_CAPITALE`.
+
+            `textAnchor` remplace le calage manuel de la planche, qui décentrait
+            un numéro à deux chiffres. La graisse 700 est la seule autorisée par
+            la section 5, et uniquement ici. */}
+        {numeroAffiche && (
+          <text
+            x={geo.cx}
+            y={geo.yNumero + TAILLE_NUMERO * HAUTEUR_CAPITALE}
+            textAnchor="middle"
+            fill={encreNumero}
+            fontFamily="Helvetica Neue, Helvetica, Arial, sans-serif"
+            fontWeight="700"
+            fontSize={TAILLE_NUMERO}
+          >
+            {numeroAffiche}
+          </text>
+        )}
+
+        {/* Nom sur l'aileron arrière. */}
+        {nomAffiche && (
+          <text
+            x={geo.cx}
+            y={geo.yNom}
+            textAnchor="middle"
+            fill={encreNom}
+            fontFamily="Helvetica Neue, Helvetica, Arial, sans-serif"
+            fontWeight="700"
+            fontSize={tailleDuNom(nomAffiche)}
+          >
+            {nomAffiche}
+          </text>
+        )}
+      </g>
     </svg>
   );
 }

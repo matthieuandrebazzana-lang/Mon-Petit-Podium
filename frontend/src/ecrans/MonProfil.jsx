@@ -4,7 +4,10 @@ import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTete from "../composants/EnTete.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
-import Voiture from "../composants/Voiture.jsx";
+import Voiture, {
+  aplatDuNumero,
+  encreParDefaut,
+} from "../composants/Voiture.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import GrilleStats from "../composants/GrilleStats.jsx";
 import SelecteurCouleur from "../composants/SelecteurCouleur.jsx";
@@ -33,7 +36,8 @@ import {
   TYPES_ACCEPTES_ATTRIBUT,
 } from "../lib/stockage.js";
 import { enFichier } from "../lib/image.js";
-import { livreeDuMembre } from "../lib/palette.js";
+import { contraste, teinteMembre } from "../lib/couleurs.js";
+import { livreeDuMembre, nomDeLaCouleur } from "../lib/palette.js";
 import { oublierCachePrefixe, useDonnees } from "../lib/useDonnees.js";
 import { APP_VERSION } from "../config.js";
 
@@ -91,6 +95,18 @@ import { APP_VERSION } from "../config.js";
 
 const NUMERO_MAXIMUM = 99;
 
+/**
+ * Le plancher de contraste du numéro sur le museau.
+ *
+ * **3:1, et il est mesuré, pas choisi** (CLAUDE.md §6). Le numéro est un grand
+ * texte porteur de sens : c'est le seuil AA qui le régit, le même que celui
+ * d'`encreSurAplat`. En dessous, l'écran le dit — il ne refuse pas, parce que le
+ * membre a le droit de peindre sa voiture comme il l'entend et que rien en base
+ * ne peut trancher la question sans connaître la livrée active (voir le §2 de la
+ * migration 18).
+ */
+const CONTRASTE_MINIMUM = 3;
+
 /** Ne garde que des chiffres, et jamais plus de deux (numéro de 1 à 99). */
 function nettoyerNumero(saisi) {
   return String(saisi ?? "").replace(/\D/g, "").slice(0, 2);
@@ -113,6 +129,14 @@ function saisieDepuis(profil) {
     // colonne garde en base, et c'est ce que le membre retrouve s'il rebascule.
     ecurie: profil?.livree_ecurie ?? null,
     numero: profil?.numero == null ? "" : String(profil.numero),
+    // **Sans choix en base, la saisie part de l'encre CALCULÉE**, celle que la
+    // voiture dessine déjà. Poser `#FFFFFF` par défaut ferait mentir la rangée
+    // pour tout profil antérieur à la migration 18 — elle annoncerait « Blanc »
+    // pendant que le numéro s'affiche en presque-noir sur une coque claire — et
+    // le premier enregistrement aurait alors rendu ce numéro invisible sans que
+    // personne n'ait rien demandé.
+    couleurTexte:
+      profil?.couleur_texte ?? encreParDefaut(livree),
   };
 }
 
@@ -506,12 +530,36 @@ export default function MonProfil() {
 
   const porteur = useMemo(() => porteurDuNumero(pris, numero), [pris, numero]);
 
+  // **Le contraste du numéro se mesure, il ne se choisit pas** (CLAUDE.md §6).
+  // L'aplat est celui du museau de la livrée EN COURS DE SAISIE — la coque sous
+  // « Ma livrée », la couleur du museau de l'écurie sous un skin — et il vient
+  // de `Voiture`, seul propriétaire de cette question. Le couple se recalcule
+  // donc quand la couleur du texte change, mais aussi quand la coque ou le skin
+  // changent sous elle.
+  const contrasteTexte = contraste(voiture.couleurTexte, aplatDuNumero(voiture));
+
+  /**
+   * La couleur de texte **telle qu'elle est à l'écran avant toute retouche**.
+   *
+   * Ce n'est pas `profil.couleur_texte` : celui-ci vaut `null` pour tout compte
+   * qui n'a jamais choisi, et la voiture dessine alors l'encre calculée. Comparer
+   * la saisie au `null` de la base aurait rendu `modifie` vrai **dès l'arrivée
+   * sur l'écran** — le bouton « Enregistrer ma voiture » se serait allumé sans
+   * que personne n'ait rien touché.
+   *
+   * C'est aussi ce qui décide si la couleur part au serveur (voir `enregistrer`).
+   */
+  const couleurTexteEnBase =
+    profil?.couleur_texte ?? encreParDefaut(livreeDuMembre(profil));
+  const couleurTexteChoisie = voiture.couleurTexte !== couleurTexteEnBase;
+
   const modifie =
     Boolean(profil) &&
     (voiture.couleur1 !== profil.couleur1 ||
       voiture.couleur2 !== profil.couleur2 ||
       voiture.mode !== livreeDuMembre(profil).mode ||
       voiture.ecurie !== (profil.livree_ecurie ?? null) ||
+      couleurTexteChoisie ||
       (numeroSaisi ?? null) !== (profil.numero ?? null));
 
   async function enregistrer() {
@@ -523,6 +571,18 @@ export default function MonProfil() {
     const resultat = await enregistrerVoiture({
       couleur1: voiture.couleur1,
       couleur2: voiture.couleur2,
+      // **Transmise seulement si elle a été CHOISIE**, et c'est ce qui protège
+      // la règle de la migration 18. La saisie porte toujours une couleur — à
+      // défaut l'encre calculée — donc l'envoyer inconditionnellement figerait
+      // cette encre en base au premier enregistrement, y compris quand le membre
+      // n'a fait que repeindre sa coque. Il partirait alors avec un numéro blanc
+      // sur une coque devenue blanche, sans avoir rien demandé.
+      //
+      // Tant qu'elle n'est pas choisie, la colonne reste `NULL` et l'encre
+      // continue de suivre l'aplat. C'est aussi ce qui permet à
+      // `PATCH /profils/moi` de se passer d'un drapeau de retrait, là où le
+      // numéro et la photo en ont besoin.
+      ...(couleurTexteChoisie ? { couleur_texte: voiture.couleurTexte } : {}),
       livree_mode: voiture.mode,
       // Le slug n'est transmis que s'il existe : `null` serait refusé par le
       // format en base, et il n'y a rien à écrire tant qu'aucune livrée n'a
@@ -688,8 +748,21 @@ export default function MonProfil() {
                     ecurie={voiture.ecurie}
                     couleur1={voiture.couleur1}
                     couleur2={voiture.couleur2}
+                    couleurTexte={voiture.couleurTexte}
                     numero={numeroSaisi ?? ""}
                     nom={profil.pseudo}
+                    /* Le cockpit porte la photo du membre, comme sur la vue
+                       piste — même mécanique, même `clipPath`, même repli sur
+                       l'initiale posée sur la teinte de sa pastille. C'est le
+                       seul écran où l'on règle sa voiture : il n'y avait aucune
+                       raison qu'il soit le seul à la montrer sans son pilote.
+                       La teinte vient de la même graine qu'ailleurs (`profilId`,
+                       à défaut le pseudo), donc le rond est exactement celui du
+                       classement. */
+                    photo={profil.avatar_url}
+                    teintePilote={
+                      teinteMembre(profilId || profil.pseudo).hex
+                    }
                     titre="Aperçu de ta voiture"
                     className="mx-auto h-[140px] w-auto"
                   />
@@ -797,6 +870,53 @@ export default function MonProfil() {
                       }}
                     />
                   </Repli>
+
+                  {/* **La couleur du texte est HORS du repli, et c'est la même
+                      règle d'ordre que le numéro.** Elle peint le numéro et le
+                      pseudo, qui s'écrivent sur la voiture quelle que soit la
+                      livrée : un réglage qui survit au skin n'a rien à faire
+                      dans la région que le skin escamote. Elle est posée sous
+                      Coque et Ailerons parce qu'elle est la seule des trois qui
+                      concerne l'encre et non la carrosserie, et parce qu'elle
+                      dépend d'elles — c'est sur leur aplat que son contraste se
+                      mesure.
+
+                      Aucune couleur interdite : `interdite` sert à empêcher une
+                      voiture monochrome, or le texte est POSÉ SUR la coque, il
+                      n'est pas une seconde surface. Un texte de la couleur des
+                      ailerons sur une coque foncée est parfaitement lisible. */}
+                  <SelecteurCouleur
+                    libelle="Couleur du texte"
+                    valeur={voiture.couleurTexte}
+                    ouvert={ouvert === 4}
+                    onOuvrir={() => setOuvert(ouvert === 4 ? null : 4)}
+                    onChange={(hex) => {
+                      modifier({ couleurTexte: hex });
+                      setOuvert(null);
+                    }}
+                  />
+
+                  {/* **On mesure, on signale, on ne bloque pas.** Le plancher
+                      est celui d'un grand texte porteur de sens (3:1), le même
+                      qui décide déjà des encres d'aplat. En dessous, le numéro
+                      cesse d'identifier la voiture — ce qui est la seule chose
+                      qu'il ait à faire sur une piste où seize voitures tiennent
+                      dans un écran.
+
+                      L'avertissement ne grise ni ne refuse rien : la voiture
+                      appartient au membre, et l'écran de profil est le seul
+                      endroit où il la voit en grand avant de l'enregistrer. Même
+                      arbitrage que l'avertissement de numéro déjà porté. */}
+                  {contrasteTexte < CONTRASTE_MINIMUM && (
+                    <p className="text-corps-sm text-secondaire mt-3">
+                      {nomDeLaCouleur(voiture.couleurTexte)} ne se détache pas
+                      assez de l'aplat sous le numéro
+                      {" ("}
+                      {contrasteTexte.toFixed(1).replace(".", ",")}:1 pour un
+                      minimum de {CONTRASTE_MINIMUM}:1). Ton numéro sera
+                      difficile à lire sur la piste.
+                    </p>
+                  )}
 
                   {/* La phrase prend la place que les deux rangées viennent de
                       libérer, et c'est elle qui dit où elles sont parties. Le

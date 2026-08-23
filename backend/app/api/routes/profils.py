@@ -48,8 +48,8 @@ DOMAINE = "profils"
 # listes séparées finiraient par diverger, et le profil d'un autre membre
 # afficherait une voiture différente de la sienne au classement.
 COLONNES_PROFIL = (
-    "id,pseudo,couleur1,couleur2,numero,livree_mode,livree_ecurie,is_admin,"
-    "avatar_url,cree_le"
+    "id,pseudo,couleur1,couleur2,couleur_texte,numero,livree_mode,livree_ecurie,"
+    "is_admin,avatar_url,cree_le"
 )
 
 # Bornes du numéro (1 à 99), doublées par la contrainte `profils_numero_valide`.
@@ -137,6 +137,17 @@ class ProfilServi(BaseModel):
     # disparaître silencieusement les photos du jour où l'URL du projet
     # changerait, au lieu de le signaler.
     avatar_url: str | None = None
+    # Couleur du numéro et du pseudo peints sur la voiture (migration
+    # `20260823120000`). **`None` n'est pas « pas de couleur » mais « pas de
+    # choix »** : le frontend calcule alors l'encre qui contraste avec l'aplat
+    # sous le texte (`encreSur`), ce qu'il a toujours fait. Les deux ne se
+    # confondent pas, et c'est pour cela que la colonne n'a pas été remplie
+    # rétroactivement — voir le §1 de la migration.
+    #
+    # Valeur par défaut pour la raison des champs ci-dessus : un backend déployé
+    # avant sa migration perd un champ au lieu de rendre `500` sur toute la
+    # réponse (piège de `cree_par`, version `0.4.1`).
+    couleur_texte: str | None = None
     cree_le: datetime
 
 
@@ -165,6 +176,12 @@ class ModificationProfil(BaseModel):
     # photo » de l'écran de profil envoie `retirer_avatar`.
     avatar_url: str | None = Field(default=None, max_length=512)
     retirer_avatar: bool = False
+    # La couleur du texte de la voiture. **Aucun drapeau de retrait, et ce n'est
+    # pas un oubli** : le sélecteur du profil affiche toujours une couleur —
+    # celle qui est en base, ou à défaut l'encre calculée qui est déjà à l'écran.
+    # Il n'a donc jamais rien à transmettre qui vaudrait « aucune couleur », et
+    # un drapeau que rien n'envoie est un chemin de code que rien n'éprouve.
+    couleur_texte: str | None = Field(default=None, max_length=16)
 
 
 class StatsProfil(BaseModel):
@@ -324,6 +341,17 @@ async def modifier_mon_profil(
         valeurs["couleur1"] = couleur_valide(corps.couleur1, "couleur de la coque")
     if corps.couleur2 is not None:
         valeurs["couleur2"] = couleur_valide(corps.couleur2, "couleur des ailerons")
+    # Elle n'entre PAS dans le contrôle « deux couleurs différentes » ci-dessous :
+    # ce contrôle empêche une voiture monochrome, or le texte est posé SUR la
+    # carrosserie et non à côté d'elle. Un numéro blanc sur une coque blanche est
+    # un défaut de contraste, que l'écran de profil mesure et signale ; ce n'est
+    # pas une voiture sans forme, et le refuser en base interdirait au passage
+    # des combinaisons parfaitement lisibles (un texte identique aux ailerons sur
+    # une coque foncée, par exemple).
+    if corps.couleur_texte is not None:
+        valeurs["couleur_texte"] = couleur_valide(
+            corps.couleur_texte, "couleur du texte"
+        )
 
     if corps.retirer_numero:
         valeurs["numero"] = None

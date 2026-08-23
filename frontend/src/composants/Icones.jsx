@@ -1,3 +1,5 @@
+import IconeProfilPlanche from "./icones/IconeProfil.jsx";
+
 /**
  * Icônes extraites telles quelles des maquettes 01 à 03.
  *
@@ -29,6 +31,27 @@ export function IconeMembres(props) {
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
+}
+
+/**
+ * La silhouette de pilote de `assets/logo-02.svg` — l'entrée « Résultats par
+ * Grand Prix » d'un championnat.
+ *
+ * **C'est le dessin de la région x ∈ [322 ; 483,64] de la planche**, la seule
+ * forme qu'elle contienne : une tête et des épaules. Elle est déjà extraite dans
+ * `icones/IconeProfil.jsx` pour l'onglet Profil de la barre basse, et **ce
+ * composant la délègue plutôt que de la recopier**. Deux jeux de `d` identiques
+ * dans deux fichiers, c'est exactement ce que la règle d'extraction interdit
+ * (`docs/composants.md` §4) : la planche a un extracteur, et un seul.
+ *
+ * Le seul écart est la couleur. La barre de navigation passe la sienne
+ * explicitement — elle en a deux, l'active et les autres ; partout ailleurs dans
+ * `Icones.jsx` la couleur suit le contexte, et l'appelant la pose sur le
+ * conteneur. `currentColor` est donc transmis à l'extracteur, qui n'a jamais
+ * supposé autre chose qu'une chaîne.
+ */
+export function IconePilote(props) {
+  return <IconeProfilPlanche couleur="currentColor" {...props} />;
 }
 
 export function IconeVoiture(props) {

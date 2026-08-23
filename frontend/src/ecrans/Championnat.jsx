@@ -10,10 +10,10 @@ import TexteEchange from "../composants/TexteEchange.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { Pave } from "../composants/Squelette.jsx";
 import {
-  IconeCalendrier,
   IconeChevronDroit,
   IconeCoche,
   IconeCopie,
+  IconePilote,
   IconeSortie,
 } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
@@ -497,9 +497,19 @@ export default function Championnat() {
                   )}
                 </div>
 
-                {/* Le calendrier du championnat (maquette 15). */}
+                {/* **Les résultats par Grand Prix remplacent le calendrier.**
+                    La saison Grand Prix par Grand Prix est déjà l'onglet
+                    Calendrier de la barre basse, à deux touches d'ici ; ce que
+                    personne ne montrait, c'est ce que les autres ont joué. Le
+                    libellé nomme sa destination, ce que le wayfinding demande
+                    (/apple-design §16), et l'icône change avec lui : un
+                    calendrier annoncerait encore des dates.
+
+                    L'écran `Calendrier` reste atteignable par son URL — c'est du
+                    code éprouvé, gardé pour le jour où il redevient la bonne
+                    réponse (CLAUDE.md §6). */}
                 <Link
-                  to={`/championnats/${id}/calendrier`}
+                  to={`/championnats/${id}/resultats`}
                   className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3 p-4"
                 >
                   <span
@@ -507,14 +517,14 @@ export default function Championnat() {
                     className="bg-fond rounded-champ flex size-10 shrink-0 items-center justify-center"
                     style={{ color: couleur.hex }}
                   >
-                    <IconeCalendrier className="size-[18px]" />
+                    <IconePilote className="size-[18px]" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="text-corps text-texte block font-medium">
-                      Calendrier
+                      Résultats par Grand Prix
                     </span>
                     <span className="text-texte-doux mt-0.5 block text-[12px]">
-                      Les Grands Prix de la saison, un par un
+                      Les paris de chaque membre, course par course
                     </span>
                   </span>
                   <IconeChevronDroit className="text-texte-doux size-4 shrink-0" />
@@ -584,11 +594,23 @@ export default function Championnat() {
               >
                 Vue piste
               </Bouton>
+              {/* **Quarante-deux pixels séparent les deux boutons**, contre dix
+                  auparavant — le `gap-2.5` du conteneur plus ces `mt-8`.
+
+                  Ce n'est pas de la respiration, c'est une garde. Quitter un
+                  championnat est **irréversible pour le classement** : les
+                  pronostics du membre sont effacés dès qu'il ne lui reste aucune
+                  adhésion (règle 4.6), et il ne peut revenir qu'avec le code
+                  d'invitation, que lui seul ne possède plus. Le pouce qui vise
+                  « Vue piste » ne doit pas pouvoir manquer sa cible et tomber
+                  sur celle-là. C'est la « forgiveness » d'/apple-design §16 :
+                  l'action destructrice garde sa confirmation en deux temps, et
+                  elle gagne la distance qui empêche d'y arriver par accident. */}
               <button
                 type="button"
                 onClick={() => setConfirmation(true)}
                 disabled={!donnees}
-                className="text-texte-doux min-h-tactile pressable py-2 text-center text-[13px] font-medium disabled:opacity-50"
+                className="text-texte-doux min-h-tactile pressable mt-8 py-2 text-center text-[13px] font-medium disabled:opacity-50"
               >
                 Quitter le championnat
               </button>

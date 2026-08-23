@@ -127,6 +127,19 @@ export function livreeDuMembre(ligne) {
     ecurie,
     couleur1,
     couleur2,
+    // **La couleur du texte entre ici, et pas ailleurs.** Le numéro et le pseudo
+    // font partie de « ce que porte cette voiture » au même titre que les deux
+    // aplats : les quatre surfaces qui dessinent une voiture passent déjà par ce
+    // helper et le répandent par `{...livreeDuMembre(ligne)}`. Un second chemin
+    // aurait laissé la couleur choisie visible sur l'écran de profil et nulle
+    // part où quelqu'un d'autre la voit.
+    //
+    // **`null` n'est pas une couleur manquante, c'est une couleur non choisie**
+    // — `Voiture` retombe alors sur l'encre calculée qui contraste avec l'aplat.
+    // Aucun repli sur `#FFFFFF` ici : il rendrait le numéro invisible sur les
+    // quatre teintes claires de la palette (blanc, argent, beige, jaune) pour
+    // tous les profils antérieurs à la migration 18.
+    couleurTexte: ligne?.couleur_texte ?? null,
   };
 }
 

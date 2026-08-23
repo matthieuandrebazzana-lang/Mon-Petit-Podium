@@ -120,6 +120,23 @@ export function CarteGrandPrix({ gp, previsualisation = false }) {
   // court-circuite. Un Grand Prix sans une cote en base garde son absence de
   // bouton, en prévisualisation comme ailleurs, parce que le tableau qu'il
   // ouvrirait serait vide.
+  //
+  // **Un bouton nommé « Pronostiquer » qui ouvre le tableau des cotes alors que
+  // les pronostics sont déjà enregistrés est une promesse fausse**, et c'est le
+  // défaut corrigé ici. Le widget de l'accueil arbitre depuis la version `0.5.1`
+  // sur exactement cette règle : le libellé suit toujours la destination.
+  //
+  // `mes_pronostics` est **déjà servi** par `GET /championnats/{id}/calendrier`
+  // (modèle `GrandPrixCalendrier`) et déjà lu par cette carte, quelques lignes
+  // plus bas, pour dire « Aucun prono » sur un Grand Prix couru. Aucune lecture
+  // supplémentaire, et surtout aucune seconde source qui pourrait diverger.
+  //
+  // La condition d'existence du bouton, elle, ne bouge pas : des cotes arrêtées
+  // restent exigées (`cotesArretees` — statut `cotes_figees` ET qualifications
+  // passées, règle 4.3). Ce n'est pas la même question — « y a-t-il quelque
+  // chose à ouvrir ? » d'un côté, « quoi ouvrir ? » de l'autre.
+  const aPronostique = (gp.mes_pronostics ?? 0) > 0;
+
   const action =
     etat.cle === "termine"
       ? {
@@ -131,11 +148,20 @@ export function CarteGrandPrix({ gp, previsualisation = false }) {
           style: "bg-fond text-primaire",
         }
       : etat.cle === "ouvert" && (cotesArretees(gp) || previsualisation)
-        ? {
-            vers: `/grands-prix/${gp.gp_id}/cotes`,
-            libelle: "Pronostiquer",
-            style: "bg-primaire text-white",
-          }
+        ? aPronostique
+          ? {
+              vers: `/grands-prix/${gp.gp_id}/recap`,
+              libelle: "Voir mes pronos",
+              // Consultation, donc le même traitement discret que les résultats :
+              // c'est un aplat plein qui dit « il reste quelque chose à faire »,
+              // et il ne reste rien à faire sur un Grand Prix déjà joué.
+              style: "bg-fond text-primaire",
+            }
+          : {
+              vers: `/grands-prix/${gp.gp_id}/cotes`,
+              libelle: "Pronostiquer",
+              style: "bg-primaire text-white",
+            }
         : null;
 
   return (

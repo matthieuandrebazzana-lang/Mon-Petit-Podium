@@ -122,7 +122,7 @@ Sans cette règle, cette structure ne sert à rien.
 | Document | Contenu |
 |---|---|
 | [`architecture.md`](docs/architecture.md) | Monorepo, deux chemins de données, variables d'environnement, CORS, journalisation, schedulers |
-| [`database.md`](docs/database.md) | Tables, RLS, fonctions, triggers, les 14 migrations et leurs conflits d'ordre |
+| [`database.md`](docs/database.md) | Tables, RLS, fonctions, triggers, les 18 migrations et leurs conflits d'ordre |
 | [`metier.md`](docs/metier.md) | Points, structure d'un pronostic, calendrier d'un week-end, validation, départage |
 | [`glossary.md`](docs/glossary.md) | Vocabulaire canonique et termes à ne jamais renommer |
 | [`design-system.md`](docs/design-system.md) | Palette, typographie, formes, élévation, contraste, matériaux, mouvement |
@@ -196,104 +196,119 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.52.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
-les onze étapes de développement sont livrées. **Le backend ne bouge pas** — cette version
-est entièrement frontend, sa version reste `0.51.0`.
+**Version `0.53.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+les onze étapes de développement sont livrées. **Le backend bouge** — une colonne servie par
+trois modèles Pydantic — il passe donc à `0.52.0`.
 
-### La photo entre DANS la voiture
+### Le numéro était à l'envers depuis l'origine, et le commentaire le défendait
 
-**Le disque noir du cockpit porte la photo du membre**, découpée par un `<clipPath>`
-circulaire à l'intérieur du SVG. La pastille que la vue piste posait *au-dessus* de chaque
-voiture depuis la version `0.50.0` disparaît, et avec elle la **coiffe de trente pixels**
-qu'elle réservait à tout le championnat dès qu'un seul membre avait une photo : l'échelle
-des scores retrouve exactement la hauteur qu'elle avait avant les photos, au pixel près.
-C'est le point qui compte — **une identité intégrée au dessin ne coûte pas un pixel**, une
-identité posée à côté coûte la place de tout le monde.
+La planche écrit le numéro du museau sous `rotate(180)`. **C'est la convention réelle d'une
+monoplace** — le numéro se lit depuis la voiture qu'on double — et le code le disait en
+toutes lettres, ce qui l'a fait passer pour une intention pendant douze versions. Le défaut
+n'était pas dans le dessin mais dans le contexte : **toutes les vues de l'app sont des vues
+de dessus.**
 
-**La géométrie des douze cockpits a été extraite par script**, pas relevée à l'œil. Dix
-livrées peignent leur casque avec un `<circle>` ; **Audi seule avec un `<path>`**, dont le
-rayon se lit dans l'arc de fermeture et le centre à un rayon du point de départ. Aucune
-lecture du code ne l'aurait montré. Les douze tombent sur le même point relatif — c'est le
-même dessin douze fois repeint — et sont pourtant écrits **un par un** : une fraction
-commune serait une tranche arithmétique, que la première livrée retouchée démentirait en
-silence. Trois vérifications automatiques : le cercle tient dans son cadrage pour les
-douze, les `clipPath` ont des identifiants distincts, et l'`<image>` sort en `href` moderne.
+**Retirer la rotation ne suffisait pas.** Elle ne renversait pas seulement les glyphes, elle
+renversait leur position autour de la ligne de base : sous rotation les chiffres occupent
+`[yNumero, yNumero + 0,717 em]`, à l'endroit `[y − 0,717 em, y]`. La ligne de base descend
+donc d'exactement une **hauteur de capitale**, et le numéro retrouve **le pixel qu'il
+occupait** — sur les douze livrées à la fois, parce que le décalage est calculé et non relevé
+à l'œil. Vérifié par rendu comparé, ancien et nouveau côte à côte : le calcul seul aurait
+laissé passer une erreur de signe.
 
-**À défaut de photo, c'est l'initiale sur la teinte du membre** — la même que sa pastille
-au classement. `teinteMembre` (`lib/couleurs.js`) est désormais le **seul propriétaire** de
-la question « de quelle couleur est le rond de cette personne ? », et il porte les **deux
-formes** de chaque teinte : la classe Tailwind pour le HTML, le `#rrggbb` pour le SVG, où
-un `fill` n'accepte pas `bg-primaire`.
+### La couleur du texte se choisit, et `NULL` veut dire « pas de choix »
 
-> **Le cockpit fait 15,04px de diamètre à taille pleine de voiture, et moins dans un groupe
-> serré.** C'est petit pour un visage, et c'est le prix de l'intégration au dessin : la
-> seule façon d'avoir plus grand est de le poser à côté, ce qui est exactement ce qui
-> coûtait la place. À juger **sur iPhone réel**, avec de vraies photos.
+Le numéro et le pseudo prennent désormais une couleur du membre. **La migration 18 ne
+remplit pas rétroactivement la colonne**, et c'est tout son sujet : `NULL` ne veut pas dire
+« pas de couleur » mais « pas de choix », auquel cas chaque texte garde l'encre **calculée**
+qui contraste avec l'aplat sous lui. Un `#FFFFFF` posé d'office aurait rendu le numéro
+invisible pour tout membre à coque blanche, argent, beige ou jaune. D'où **deux instructions
+séparées** — `add column` sans défaut, puis `set default` — parce qu'écrites en une seule,
+les deux effets seraient venus ensemble et toute la base aurait basculé au blanc.
 
-**Un défaut trouvé au passage, et il datait de l'origine.** `Pastille` écrivait
-`text-white` en toutes lettres, et sa table distribue quatre teintes dont **l'amber**, où
-le blanc ne vaut que **2,22:1**. Une initiale sur quatre était illisible, partout, depuis
-toujours — ce qui passait pour un défaut intermittent était une fonction de hachage.
-`encreSurAplat` corrige, et l'écart entre les deux helpers d'encre est maintenant écrit :
-`encreSur` compare une **luminance** à 0,45, l'amber vaut **0,424** et passe juste dessous ;
-`encreSurAplat` mesure le **contraste**. Devant « quelle encre sur cet aplat », c'est le
-second (`bugs-connus.md` §19).
+La couleur entre dans **`livreeDuMembre`**, qui reste le seul propriétaire de « ce que porte
+cette voiture » : les quatre surfaces qui en dessinent une la répandent déjà par un `spread`,
+et un second chemin aurait laissé le réglage visible sur son propre profil et nulle part où
+quelqu'un d'autre le voit. Le contraste, lui, **se mesure et se signale sans se refuser** :
+l'écran compare la couleur choisie à l'aplat du museau de la livrée en cours et le dit sous
+les 3:1 d'un grand texte.
 
-### Deux lignes pour un titre de marché, un avatar dans la barre
+**L'aperçu du profil porte enfin son pilote** — photo dans le cockpit, initiale à défaut,
+même `clipPath` et même graine que la vue piste. C'était le seul écran où l'on règle sa
+voiture, et le seul à la montrer vide.
 
-**Les en-têtes de marché ne tronquent plus.** Le libellé vient d'Unibet et n'a pas de
-longueur convenue : « VAINQUEUR COURSE, QUALIFICATION … » sortait coupé, et **un titre
-tronqué ne nomme plus son marché**, ce qui est la seule chose que cet en-tête ait à dire.
-Le texte revient à la ligne, `line-clamp-2` borne la casse à deux, `break-words` protège du
-mot plus large que la colonne. **Aucune hauteur fixe** n'est posée : le widget grandit avec
-son titre, et l'espacement du parent tient l'écart. Tableau des cotes et bloc obligatoire
-de la saisie, les deux en-têtes de marché de l'app.
+### « Résultats par Grand Prix » — et une convention qui a payé
 
-**La pastille de l'accueil porte la photo du compte connecté.** Elle vient de l'état déjà
-chargé, dans **la même requête que le pseudo** : une colonne ajoutée à un `select` indexé
-sur clé primaire coûte zéro aller-retour, quand un second chargeur aurait fait payer un
-réveil de Railway au premier écran de l'app. `usePseudoCourant` devient donc
-`useIdentiteCourante`, `chargerPseudo` devient `chargerIdentite`. Sans photo, le rond rouge
-à initiale est exactement celui d'avant.
+Le nouvel écran remplace l'entrée « Calendrier » d'un championnat et répond à la seule
+question que rien ne montrait : **qu'est-ce que les autres ont joué ?** La saison Grand Prix
+par Grand Prix est déjà l'onglet Calendrier de la barre basse. L'écran `Calendrier` reste en
+place, non monté (§6) — son mini-classement par course n'existe nulle part ailleurs.
 
-### Aucun mouvement nouveau, et c'était le bon verdict
+**Le sélecteur du haut n'est pas un choix d'interface, c'est la forme de la donnée** :
+`pronostics_du_championnat` sert **un** Grand Prix à la fois, et une saison entière
+demanderait vingt-quatre allers-retours Railway en série. Il réemploie **`Onglets`**, écrit
+pour les marchés de la maquette 08 et gardé « pour le jour où il redevient la bonne
+réponse » : ce jour est arrivé, zéro ligne de CSS ajoutée. La convention du §6 vient de
+payer pour la première fois.
 
-Les cinq skills de design ont été invoqués dans l'ordre. **Le portier a rejeté la seule
-animation candidate** : la hauteur d'un en-tête de marché ne s'anime pas, parce qu'elle ne
-change jamais *à l'écran* — le libellé arrive une fois, avec les données, et animer un
-état qui n'a pas de « avant » est du mouvement sans changement d'état. Les deux photos, elles,
-réemploient `.t-photo`, le fondu d'opacité déjà partagé par la pastille et la carte de
-championnat. **Zéro jeton nouveau, zéro image-clé.**
+Un membre sans pronostic **n'est pas dépliable** et le dit sur sa ligne — un chevron qui
+ouvre sur rien est une promesse fausse — mais la place du chevron reste **tenue**, sans quoi
+la colonne cesserait d'être une colonne.
 
-Un hook nouveau, en revanche, et pour une raison de plateforme : **`usePhotoDetachee`**. Un
-`<image>` SVG est un `SVGImageElement` — ni `complete`, ni `naturalWidth`, donc aucun moyen
-de savoir si une image en cache est déjà décodée. On resterait suspendu à un `load` qui ne
-viendra pas, et la photo tiendrait `opacity: 0` indéfiniment : exactement le défaut que
-`usePhoto` avait été écrit pour corriger, sous une autre forme. La question est donc posée à
-un élément **détaché**, jamais rendu, qui répond à `complete` — et le navigateur sert la
-même URL depuis le même cache, sans second téléchargement.
+### « Pronostiquer » sur un Grand Prix déjà joué
 
-*La version `0.51.0` avait réparé les photos, qui n'avaient jamais fonctionné : une
-contrainte `check` incompilable — **PostgreSQL plafonne un compteur `{m,n}` à 255** — que la
-migration 17 remplace par un `char_length`, et qui **s'éprouve elle-même** sur une URL
-jetable, seul moyen de savoir en jouant une migration qu'un `check` posé sur une colonne
-vide est compilable. Elle avait aussi livré `RecadragePhoto`, la première surface modale du
-projet, et les deux plafonds qui ne mesurent pas la même chose — `stockage.js` juge ce qu'on
-a le droit de **choisir**, `image.js` ce qu'on **dépose**. La `0.50.0` avait livré les
-photos elles-mêmes, la `0.49.0` refondu la vue piste, la `0.45.0` fait passer le
+Les deux calendriers proposaient encore de saisir des favoris là où le widget de l'accueil
+menait au récapitulatif depuis la version `0.5.1`. **La règle avait un propriétaire pour la
+condition d'existence du bouton — `cotesArretees` — et aucun pour le choix de sa
+destination.** Ce sont deux questions distinctes, et les fondre aurait fait porter au mode
+prévisualisation une décision qui ne le concerne pas.
+
+Le cache pouvait réintroduire le défaut à lui seul : quatre surfaces en dépendent, une seule
+était balayée après un enregistrement. **`oublierMesPronostics` les balaie ensemble** — même
+motif qu'`oublierMesApparitions`, et pour la même raison : quatre effacements écrits
+séparément auraient fini par en oublier un.
+
+### Rien de nouveau côté mouvement, une fois de plus
+
+Le portier a rejeté le seul candidat : **le changement de Grand Prix ne fait aucun fondu.**
+La liste des membres ne se transforme pas, elle est remplacée par une donnée qui arrive du
+réseau — il n'y a pas d'« avant » à faire tenir, et c'est le squelette qui occupe
+l'intervalle. Restent la pastille glissante d'`Onglets` et l'accordéon `.t-acc`, déjà dans
+le vocabulaire.
+
+Un seul sélecteur a été **étendu**, jamais forké : `.t-voiture-teinte` couvre maintenant
+`text`, dans la règle normale comme sous mouvement réduit. Parcourir la palette repeint le
+numéro et le pseudo comme elle repeint déjà la coque, à la même durée et sur la même courbe.
+
+> **Deux points à trancher restent ouverts**, écrits dans `docs/roadmap.md` §3.12 et §3.13 :
+> la demande d'icône se contredisait (« la troisième icône » désigne le calendrier, le
+> cadrage `322 0 161,64 133,85` désigne la silhouette de pilote — **c'est le cadrage qui a
+> été suivi**, et ce glyphe est aussi celui de l'onglet Profil), et la couleur de texte
+> **ne revient pas à « automatique »** une fois choisie.
+
+*La version `0.52.0` avait fait entrer la photo DANS le cockpit — une identité intégrée au
+dessin ne coûte pas un pixel, là où une pastille posée à côté coûtait trente pixels de coiffe
+à tout le championnat — et corrigé `Pastille`, dont l'initiale était illisible sur une teinte
+sur quatre depuis l'origine (`bugs-connus.md` §19). La `0.51.0` avait réparé les photos, qui
+n'avaient jamais fonctionné : une contrainte `check` incompilable — **PostgreSQL plafonne un
+compteur `{m,n}` à 255** — que la migration 17 remplace par un `char_length`. La `0.50.0`
+avait livré les photos, la `0.49.0` refondu la vue piste, la `0.45.0` fait passer le
 multiplicateur des points de 100 à 10. **Un scraping reste obligatoire.***
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :
 
-1. **Appliquer les migrations 15, 16 puis 17, dans cet ordre, puis déclencher un scraping.**
-   La 17 est celle sans laquelle **aucune photo ne s'enregistre** — la 16 seule laisse la
-   fonctionnalité entière inerte. Si la 16 est rejouée un jour, rejouer la 17 derrière.
+1. **Appliquer les migrations 15, 16, 17 puis 18, dans cet ordre, puis déclencher un
+   scraping.** La 17 est celle sans laquelle **aucune photo ne s'enregistre**. La 18 est
+   celle sans laquelle **la couleur du texte ne s'enregistre pas** — le sélecteur s'affiche,
+   et « Enregistrer ma voiture » retombe en `42703`. Si la 2, la 8, la 10, la 12 ou la 16
+   est rejouée un jour, rejouer la 18 derrière.
 2. **Vérifier les migrations appliquées** dans le SQL Editor, définir les variables
    d'environnement de production sur Vercel et Railway, et **supprimer le compte de
    diagnostic** laissé par la localisation du défaut (`docs/roadmap.md` §1.5).
-3. **Tester sur iPhone réel** — jamais fait. Trois choses en priorité : le recadrage, qui
+3. **Tester sur iPhone réel** — jamais fait. Quatre choses en priorité : le recadrage, qui
    est le premier geste multi-touch du projet ; **la photo de 15px dans le cockpit**, qui
-   décidera si le cadrage exporté doit se resserrer sur le visage ; et **l'en-tête de marché
-   sur deux lignes**, qui est collant : sa hauteur est prise sur la liste pendant tout le
-   défilement du marché.
+   décidera si le cadrage exporté doit se resserrer sur le visage ; **le sélecteur de
+   vingt-quatre Grands Prix**, dont la pastille glissante se positionne sur des `offsetLeft`
+   mesurés dans un conteneur qui défile en même temps ; et **le numéro remis à l'endroit**,
+   dont la compensation de ligne de base suppose la métrique d'Helvetica.

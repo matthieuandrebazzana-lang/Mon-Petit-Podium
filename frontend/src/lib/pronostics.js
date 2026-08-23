@@ -1,6 +1,7 @@
 import { appelApi } from "./api.js";
+import { oublierCache, oublierCachePrefixe } from "./useDonnees.js";
 import { supabase } from "./supabase.js";
-import { clePilote } from "./format.js";
+import { clePilote, formaterPilote } from "./format.js";
 import {
   GENRE_DONNEES,
   GENRE_SESSION,
@@ -38,6 +39,28 @@ const LECTURE_IMPOSSIBLE =
 // sont les slugs que le scraper fabrique depuis les libellés Unibet
 // « Vainqueur » et « Podium ». Le backend applique exactement les mêmes ; s'ils
 // changent chez Unibet, les deux refusent de leur côté et l'écran le dit.
+/**
+ * Le pilote — ou les deux pilotes — sur lesquels porte un pronostic.
+ *
+ * **Sortie de l'écran de résultats en version `0.53.0`**, parce qu'un second
+ * écran pose exactement la même question (« Résultats par Grand Prix »). Écrite
+ * deux fois, elle aurait divergé sur le cas qui compte : un **podium** nomme
+ * DEUX pilotes, sans ordre entre eux (règle 4.2), et l'écran qui l'aurait oublié
+ * n'en aurait affiché qu'un sans que rien ne le signale.
+ *
+ * Une cote retirée par Unibet depuis la saisie laisse `pilote` à `null` : le
+ * pronostic reste affiché et le dit, plutôt que de disparaître de la liste.
+ */
+export function choixDuPronostic(pronostic) {
+  if (pronostic.podium) {
+    const deux = [pronostic.podium.nom_1, pronostic.podium.nom_2]
+      .filter(Boolean)
+      .map(formaterPilote);
+    if (deux.length > 0) return deux.join(" + ");
+  }
+  return formaterPilote(pronostic.pilote) ?? "Cote retirée par le bookmaker";
+}
+
 export const MARCHE_VAINQUEUR = "vainqueur";
 export const MARCHE_PODIUM = "podium";
 export const BONUS_MAXIMUM = 3;
@@ -133,6 +156,48 @@ export async function chargerProchainGp(signal) {
 }
 
 /**
+ * Les Grands Prix sur lesquels l'appelant a déjà enregistré des pronostics.
+ *
+ * Une lecture, une colonne, et un `Set` en retour. C'est tout ce qu'il faut pour
+ * qu'un bouton dise « Voir mes pronos » au lieu de « Pronostiquer » — la
+ * question est booléenne par Grand Prix, elle n'a pas besoin du détail.
+ *
+ * **Lue directement sous RLS**, comme les Grands Prix pariés d'un membre : la
+ * politique de l'étape 5 autorise un joueur à lire ses propres pronostics sans
+ * réserve, et passer par Railway pour une colonne d'identifiants ferait payer un
+ * réveil de serveur sur l'onglet Calendrier, qui est en bas de l'écran de tout
+ * le monde.
+ *
+ * **Son échec ne se propage pas, et c'est voulu** : `ok: true` avec un ensemble
+ * vide. Le calendrier retomberait alors sur « Pronostiquer », qui reste vrai —
+ * un joueur peut toujours rouvrir le tableau des cotes et modifier sa saisie
+ * jusqu'à la fermeture. Le sens du doute va vers le libellé qui ne ment jamais.
+ */
+export async function chargerMesGpPronostiques(profilId, signal) {
+  if (!supabase) return { ok: true, message: null, donnees: new Set() };
+  if (!profilId) return { ok: true, message: null, donnees: new Set() };
+
+  try {
+    const requete = supabase
+      .from("pronostics")
+      .select("gp_id")
+      .eq("profil_id", profilId);
+
+    const { data, error } = await (signal ? requete.abortSignal(signal) : requete);
+    if (error) return { ok: true, message: null, donnees: new Set() };
+
+    return {
+      ok: true,
+      message: null,
+      donnees: new Set((data ?? []).map((ligne) => ligne.gp_id)),
+    };
+  } catch (erreur) {
+    if (erreur.name === "AbortError") throw erreur;
+    return { ok: true, message: null, donnees: new Set() };
+  }
+}
+
+/**
  * Les pronostics du joueur pour un GP, lus sous RLS.
  *
  * `pronostic_podium` est ramené par jointure imbriquée : la clé étrangère
@@ -212,6 +277,43 @@ export async function chargerTableauCotes(gpId, signal) {
  * encore « Pronostiquer » juste après avoir enregistré.
  */
 export const cleAccueilGp = (profilId) => `accueil-gp:${profilId}`;
+
+/**
+ * Le calendrier de la saison, onglet Calendrier.
+ *
+ * **Le marqueur de version n'est pas décoratif** : depuis la version `0.53.0`
+ * cette entrée porte deux choses — les cotes en base ET les Grands Prix que
+ * l'appelant a déjà joués — là où elle ne portait qu'un tableau de cotes. Servi
+ * tel quel, un cache d'une version antérieure aurait rendu douze cartes sans
+ * état ni bouton le temps d'un aller-retour. Il est placé APRÈS l'identifiant,
+ * comme celui du classement, pour qu'un balayage par préfixe de compte continue
+ * de tout emporter.
+ */
+export const cleSaison = (profilId) => `saison:${profilId}:v2`;
+
+/**
+ * Oublie tout ce qui décide du libellé d'un bouton de pronostics.
+ *
+ * **Trois surfaces portent ce bouton** — l'accueil, le calendrier de la saison,
+ * le calendrier d'un championnat — et une quatrième montre les pronostics de
+ * tout le monde. Toutes lisent un cache *stale-while-revalidate* : sans cet
+ * oubli, revenir sur l'une d'elles juste après une validation y trouve encore
+ * « Pronostiquer », c'est-à-dire le défaut exact que cette version corrige,
+ * réintroduit par le cache.
+ *
+ * **Une seule fonction pour les quatre**, même motif qu'`oublierMesApparitions`
+ * dans l'écran de profil : quatre effacements écrits séparément auraient fini
+ * par en oublier un, et le symptôme — un seul écran resté en arrière — serait
+ * passé inaperçu longtemps. Les deux calendriers sont balayés par préfixe :
+ * l'écran de saisie ne connaît pas les championnats de l'appelant.
+ */
+export function oublierMesPronostics(profilId) {
+  if (!profilId) return;
+  oublierCache(cleAccueilGp(profilId));
+  oublierCache(cleSaison(profilId));
+  oublierCachePrefixe(`calendrier:${profilId}:`);
+  oublierCachePrefixe(`pronos-gp:${profilId}:`);
+}
 
 /**
  * Le dernier Grand Prix **couru**, résultats compris.

@@ -21,11 +21,8 @@ import {
   podiumDeLaCourse,
 } from "../lib/calendrier.js";
 import { useDonnees } from "../lib/useDonnees.js";
-import {
-  formaterDepart,
-  formaterPilote,
-  formaterPoints,
-} from "../lib/format.js";
+import { choixDuPronostic } from "../lib/pronostics.js";
+import { formaterDepart, formaterPoints } from "../lib/format.js";
 
 /**
  * Maquette 11 — les résultats d'un Grand Prix couru.
@@ -182,8 +179,14 @@ function BlocCourse({ classement }) {
 /*  Le classement du championnat                                              */
 /* -------------------------------------------------------------------------- */
 
-/** Verdict d'un pronostic. Repris de la maquette 13, mêmes trois états. */
-function Verdict({ pointsGagnes }) {
+/** Verdict d'un pronostic. Repris de la maquette 13, mêmes trois états.
+ *
+ *  Exporté depuis la version `0.53.0` : l'écran « Résultats par Grand Prix »
+ *  affiche les mêmes trois états sur les mêmes pronostics. Deux pastilles
+ *  écrites séparément auraient fini par dire « raté » d'un côté et « en
+ *  attente » de l'autre sur la même ligne — la distinction entre `null` et `0`
+ *  est justement celle qu'aucun écran n'a le droit de perdre (règle 4.1). */
+export function Verdict({ pointsGagnes }) {
   if (pointsGagnes === null || pointsGagnes === undefined) {
     return (
       <span
@@ -212,17 +215,6 @@ function Verdict({ pointsGagnes }) {
       )}
     </span>
   );
-}
-
-/** Le pilote (ou les deux pilotes) sur lesquels porte un pronostic. */
-function choixDuPronostic(pronostic) {
-  if (pronostic.podium) {
-    const deux = [pronostic.podium.nom_1, pronostic.podium.nom_2]
-      .filter(Boolean)
-      .map(formaterPilote);
-    if (deux.length > 0) return deux.join(" + ");
-  }
-  return formaterPilote(pronostic.pilote) ?? "Cote retirée par le bookmaker";
 }
 
 /**

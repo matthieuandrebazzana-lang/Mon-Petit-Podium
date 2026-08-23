@@ -251,10 +251,23 @@ le mode personnalisé — ce qui se voit à l'écran au lieu de planter.
 | `calendrier.js` | `ETATS_GP`, `cotesArretees` — **seule lectrice du statut `cotes_figees`** |
 | `calendrier2026.js` | **la liste des GP** — voir `calendrier.md` |
 | `navigation.js` | barre, onglets, `origineRetour` |
-| `pronostics.js` | marchés, favoris, exclusion croisée |
+| `pronostics.js` | marchés, favoris, exclusion croisée, `choixDuPronostic`, `oublierMesPronostics` |
 | `stockage.js` | **seul juge d'un fichier CHOISI** : formats, plafond de 5 Mo, dépôt, ménage |
 | `image.js` | **seul juge de ce qu'on DÉPOSE** : décodage, recadrage, 800 px, JPEG 0,85 |
 | `usePhoto.js` | l'état de chargement d'une image, cache du navigateur compris |
+
+**Deux ajouts en version `0.53.0`, et tous deux pour la même raison : un second consommateur.**
+`choixDuPronostic` — « quel pilote, ou quels deux pilotes, ce pronostic nomme-t-il ? » —
+vivait dans l'écran de résultats ; l'écran « Résultats par Grand Prix » pose la même
+question. Écrite deux fois, elle aurait divergé sur le cas qui compte : un **podium** nomme
+deux pilotes sans ordre entre eux (règle 4.2), et l'écran qui l'aurait oublié n'en aurait
+affiché qu'un sans que rien ne le signale.
+
+`oublierMesPronostics` balaie d'un coup les **quatre** caches dont le contenu dépend de
+« ai-je déjà joué ce Grand Prix ? » : l'accueil, les deux calendriers, l'écran des paris de
+chacun. Même motif qu'`oublierMesApparitions` (§5, plus bas) — quatre effacements écrits
+séparément auraient fini par en oublier un, et le symptôme aurait été le défaut même que
+la version corrige : « Pronostiquer » proposé juste après une validation.
 
 Trois règles ont été **sorties des écrans** vers `lib/pronostics.js` — `optionsDisponibles`
 (exclusion croisée), `enConflit` et `bonusEpingles` (les bonus encore épinglés). Raison :
@@ -478,9 +491,18 @@ la bonne réponse.**
 | Composant | Pourquoi gardé |
 |---|---|
 | `BoutonsOAuth` (`OAUTH_ACTIF = false`) | repasser à `true` suffit à tout réafficher |
-| `Onglets` | redevient utile quand Unibet ouvre dix marchés |
 | `ApercusApp` | poser `image` sur chaque entrée et remonter le composant |
 | `TraceCircuit` | vignettes de 20 × 32 px |
+| `Calendrier` (l'écran d'un championnat) | plus d'entrée depuis le championnat (`0.53.0`), route conservée : son mini-classement par Grand Prix n'existe nulle part ailleurs |
+
+> ### La convention a payé : `Onglets` est monté (version `0.53.0`)
+>
+> Il a été écrit pour les marchés de la maquette 08, retiré à la refonte de la saisie, et
+> gardé « pour le jour où il redevient la bonne réponse ». Ce jour est arrivé sans qu'Unibet
+> ouvre dix marchés : l'écran **Résultats par Grand Prix** doit choisir parmi vingt-quatre
+> Grands Prix, ce qui est exactement la question qu'il résout — un jeu d'options qui déborde
+> la largeur d'un iPhone, une seule active, et celle qu'on vient de choisir ramenée sous les
+> yeux. **Zéro ligne de CSS ajoutée, zéro jeton de mouvement nouveau.**
 
 > **Le retour anticipé de `BoutonsOAuth` est placé APRÈS les hooks**, jamais avant : React
 > interdit un `return` qui court-circuiterait `useState`.
@@ -668,3 +690,129 @@ La carte prend donc **`rounded-champ`**, à deux pixels de la valeur demandée ;
 championnat prend `rounded-widget`, qui vaut exactement les 16 demandés. Un
 `rounded-[12px]` aurait ouvert une sixième valeur de rayon dans un projet qui en compte
 cinq, pour un écart invisible à cette taille.
+
+---
+
+## 9. Résultats par Grand Prix — les paris de chacun (version `0.53.0`)
+
+`ecrans/ResultatsChampionnat.jsx`, atteint depuis l'écran d'un championnat, à la place où
+vivait l'entrée « Calendrier ». Il répond à la seule question que rien ne montrait :
+**qu'est-ce que les autres ont joué ?** La saison Grand Prix par Grand Prix, elle, est déjà
+l'onglet Calendrier de la barre basse.
+
+| Ce qui est lu | Par où | Pourquoi |
+|---|---|---|
+| La liste des Grands Prix | `GET /championnats/{id}/calendrier` | **La clé de cache de l'écran `Calendrier`, à l'identique** : passer de l'un à l'autre n'attend rien |
+| Les pronostics d'UN Grand Prix | `GET /grands-prix/{gp}/pronostics/championnat/{id}` | Existe depuis l'étape 5 et sert exactement cette liste, membres sans pronostic compris |
+
+> **Le sélecteur du haut n'est pas un choix d'interface, c'est la forme de la donnée.** La
+> route sert **un** Grand Prix à la fois ; une saison entière demanderait vingt-quatre
+> allers-retours Railway en série, sur un écran atteint depuis un championnat. Le sélecteur
+> est la conséquence, pas la cause.
+
+**La clé du second chargement porte le Grand Prix** (`pronos-gp:{profil}:{championnat}:{gp}`).
+Changer d'option change donc de clé, et `useDonnees` ressert instantanément un Grand Prix
+déjà consulté au lieu de le redemander — c'est ce qui rend le sélecteur agréable à parcourir
+sur un réseau mobile.
+
+**Le Grand Prix choisi se pose une fois et ne bouge plus** (`précédent ?? gpParDefaut(…)`).
+Ce n'est pas défensif : le cache *stale-while-revalidate* rejoue le chargeur en arrière-plan,
+et sans cette garde un aller-retour lent ramènerait le sélecteur sur le Grand Prix par défaut
+pendant que le joueur en lit un autre.
+
+### Un membre sans pronostic n'est pas dépliable
+
+Sa rangée n'est pas un `<button>` mais un `<li>` inerte, et elle dit « Rien joué » **sur la
+ligne**. Un chevron qui ouvrirait sur rien est une promesse fausse ; et l'information est
+précisément celle qu'on vient chercher avant la fermeture des pronostics, donc elle n'a pas
+à se mériter d'un appui. La place du chevron est en revanche **tenue** par une boîte vide :
+sans elle, le pseudo de ces rangées s'étendrait de seize pixels de plus que les autres et la
+colonne cesserait d'être une colonne.
+
+### Le total porte le mot qui dit lequel des deux c'est
+
+Avant la course, c'est ce que la saisie **peut** rapporter ; après, ce qu'elle **a**
+rapporté. Deux nombres du même ordre de grandeur que rien ne distinguerait : d'où
+« gagnés » ou « en jeu » sous le chiffre. Le chiffre, lui, reste habillé par
+`formaterPoints` — seul propriétaire du « N pts » (règle 4.1) ; seul le qualificatif est
+écrit dans l'écran.
+
+### Ce qui ne s'anime pas, et c'est le bon verdict
+
+**Le changement de Grand Prix ne fait aucun fondu.** La liste des membres ne se transforme
+pas : elle est remplacée par une donnée qui arrive du réseau, donc il n'y a pas d'« avant »
+à faire tenir — c'est le squelette qui occupe l'intervalle. Animer une substitution de
+contenu asynchrone serait du mouvement sans changement d'état, exactement le verdict rendu
+sur la hauteur d'un en-tête de marché à la version `0.52.0`.
+
+Restent deux mouvements, **tous deux déjà dans le vocabulaire** : la pastille glissante
+d'`Onglets` (transitions-dev 16) et l'accordéon `.t-acc` d'une rangée de membre.
+
+---
+
+## 10. La voiture porte la couleur de son membre jusque dans son texte (`0.53.0`)
+
+Trois changements sur `Voiture.jsx`, et le premier est un défaut d'origine.
+
+### Le numéro était tête-bêche depuis toujours
+
+La planche l'écrivait sous `rotate(180)` : c'est la convention d'un vrai museau de Formule 1,
+qui se lit depuis la voiture qu'on double. **Toutes les vues de l'app sont des vues de
+dessus** — profil, classement, piste, résultats — et le numéro y sortait à l'envers, sur les
+douze livrées.
+
+> **Retirer la rotation ne suffisait pas.** Elle ne renversait pas seulement les glyphes,
+> elle renversait leur position autour de la ligne de base : sous `rotate(180)` les chiffres
+> occupent `[yNumero, yNumero + 0,717 em]`, à l'endroit `[y − 0,717 em, y]`. La ligne de
+> base descend donc d'exactement une **hauteur de capitale** (0,717, métrique d'Helvetica),
+> et le numéro retrouve **le pixel qu'il occupait**. Vérifié par rendu comparé des deux
+> versions, pas seulement par le calcul.
+>
+> C'est pour cela que le décalage est calculé et non relevé à l'œil : les douze `yNumero`
+> sont mesurés séparément (`VoituresEcuries.jsx`), et douze corrections manuelles auraient
+> été démenties par la première livrée retouchée.
+
+### `couleurTexte` — et `livreeDuMembre` reste le seul propriétaire
+
+La couleur choisie entre dans **`livreeDuMembre` (`lib/palette.js`)**, pas dans une prop de
+plus passée écran par écran : « de quelle couleur est le nom sur cette voiture ? » est la
+même question que « quelle est sa coque ? ». Les quatre surfaces qui dessinent une voiture y
+passent déjà et la répandent par `{...livreeDuMembre(ligne)}` — un second chemin aurait
+laissé le réglage visible sur l'écran de profil et nulle part où quelqu'un d'autre le voit.
+
+**`null` n'est pas une couleur manquante, c'est une couleur non choisie** : les deux textes
+reprennent alors l'encre calculée qui contraste avec l'aplat qui leur est propre, et les deux
+aplats diffèrent sur neuf des onze livrées. Aucun repli sur `#FFFFFF` nulle part — il rendrait
+le numéro invisible sur les quatre teintes claires de la palette.
+
+`aplatDuNumero` et `encreParDefaut` sont exportés d'ici, et ce sont **deux** fonctions :
+l'écran de profil mesure le contraste de la couleur choisie contre l'aplat, ce qui demande
+l'aplat lui-même ; le rendu ne veut que l'encre.
+
+### Les deux textes s'animent, et `.t-voiture-teinte` est ÉTENDU, jamais forké
+
+Ils vivent désormais dans un `<g className="t-voiture-teinte">`, et le sélecteur de la règle
+passe de `:is(path, polygon, rect, circle)` à `:is(path, polygon, rect, circle, text)` — dans
+la règle normale **et** dans le bloc `prefers-reduced-motion`. Parcourir la palette repeint
+donc le numéro et le pseudo en 200ms, comme elle repeint déjà la coque. Aucun jeton nouveau.
+
+Le groupe est posé **après** le cockpit : dans un SVG, l'ordre de document est le seul ordre
+de peinture (§4).
+
+### Le cockpit de l'écran de personnalisation
+
+L'aperçu du profil reçoit `photo` et `teintePilote`, exactement comme la vue piste : même
+`clipPath`, même repli sur l'initiale posée sur la teinte de la pastille, même graine
+(`profilId`, à défaut le pseudo). C'était le seul écran où l'on règle sa voiture, et le seul
+à la montrer sans son pilote.
+
+Le `HeroProfil`, lui, ne le reçoit pas : sa voiture fait 58px de haut, donc un cockpit d'à
+peine trois pixels. Une photo qu'on ne peut pas voir n'est pas une photo.
+
+### `IconePilote` délègue, elle ne recopie pas
+
+L'entrée « Résultats par Grand Prix » porte la silhouette de la région x ∈ [322 ; 483,64] de
+`assets/logo-02.svg`. Cette forme est **déjà extraite** dans `icones/IconeProfil.jsx` pour
+l'onglet Profil : `IconePilote` (`Icones.jsx`) la délègue en lui passant `currentColor`.
+Deux jeux de `d` identiques dans deux fichiers, c'est exactement ce que la règle
+d'extraction interdit (§4) — la planche a un extracteur, et un seul.

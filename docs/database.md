@@ -44,10 +44,28 @@ public.grands_prix
 | `livree_ecurie` | text, nullable | slug (`^[a-z0-9-]{2,32}$`) |
 | `is_admin` | boolean, **not null** défaut `false` | affichage seul, voir §5 |
 | `avatar_url` | text, **nullable** | URL publique Storage, jamais de base64 |
+| `couleur_texte` | text, **nullable**, défaut `#FFFFFF` | numéro et pseudo peints sur la voiture |
 
 Contraintes : `pseudo` 2–20 caractères ; `numero` entre 1 et 99 ; couleurs au format
 `#RRGGBB` ; **couleurs distinctes à la casse près** ; `livree_ecurie` obligatoire si
-`livree_mode = 'ecurie'`.
+`livree_mode = 'ecurie'` ; `couleur_texte` au format `#RRGGBB` ou `NULL`.
+
+> ### `couleur_texte` a un défaut, et les lignes existantes valent quand même `NULL`
+>
+> Ce n'est pas une incohérence, c'est le point de la migration 18. **`NULL` ne veut pas
+> dire « pas de couleur » mais « pas de choix »** : le frontend calcule alors l'encre qui
+> contraste avec l'aplat sous le texte (`encreSur`), ce qu'il a toujours fait. Un
+> `#FFFFFF` posé rétroactivement aurait rendu le numéro invisible sur les quatre teintes
+> claires de la palette — blanc, argent, beige, jaune.
+>
+> D'où **deux instructions séparées** : `add column` sans `default` (PostgreSQL ne remplit
+> alors rien), puis `alter column … set default`, qui ne vaut que pour les lignes à venir.
+> Écrites en une seule, les deux effets seraient venus ensemble.
+>
+> `couleur_texte` **n'entre pas** dans la contrainte « deux couleurs distinctes » : celle-ci
+> empêche une voiture monochrome, or le texte est posé SUR la carrosserie. Un numéro blanc
+> sur une coque blanche est un défaut de contraste, mesuré et signalé par l'écran de
+> profil, pas une voiture sans forme.
 
 > **L'unicité du pseudo est un index sur `lower(pseudo)`, pas un `unique` nu.** Un UNIQUE
 > ordinaire laisserait coexister « MaxV33 » et « maxv33 », que tout le monde lirait comme
@@ -364,7 +382,7 @@ applicatif de plus**.
 
 ---
 
-## 6. Les dix-sept migrations
+## 6. Les dix-huit migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -385,6 +403,7 @@ applicatif de plus**.
 | 15 | `20260821143000_points_diviseur_10` | remise à zéro des points (diviseur 10) | 3, 5, 6 |
 | 16 | `20260821180000_photos_profil_championnat` | `avatar_url`, `photo_url`, 2 compartiments Storage | 1, 2, 12 |
 | 17 | `20260822120000_photos_contrainte_regex` | **corrige les deux `check` de la 16, incompilables** | 16 |
+| 18 | `20260823120000_couleur_texte_voiture` | `couleur_texte` sur `profils`, servie au classement et aux pronostics | 1, 16 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -401,6 +420,12 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **10** après **13** | `date_qualifications` au calendrier | rejouer 13 |
 | **2**, **8**, **10** ou **12** après **16** | les photos aux cartes, classements et résultats | rejouer 16 |
 | **16** après **17** | l'enregistrement de toute photo, de nouveau refusé en `2201B` | rejouer 17 |
+| **2**, **8**, **10**, **12** ou **16** après **18** | la couleur de texte au classement et aux résultats | rejouer 18 |
+
+**La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12
+et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre les écrans
+où *quelqu'un d'autre* voit la voiture. La perdre ne casse rien — le frontend retombe sur
+l'encre calculée — mais le réglage cesse d'être visible ailleurs que sur son propre profil.
 
 **Les migrations 11, 14, 15 et 17 ne remplacent aucune fonction** : elles ne peuvent pas
 entrer en conflit d'ordre. La 17 ne remplace que deux contraintes `check`, et il faut donc

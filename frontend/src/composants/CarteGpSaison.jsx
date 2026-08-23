@@ -70,11 +70,14 @@ export default function CarteGpSaison({
   chargement = false,
   retour = null,
   previsualisation = false,
+  aPronostique = false,
 }) {
   const etat = etatDuGpSaison(gp);
   // Le drapeau descend de l'écran, qui le lit dans le contexte : la carte reste
   // une fonction de ses props, comme les autres composants de cette planche.
-  const action = actionDuGp(gp, etat, previsualisation);
+  // `aPronostique` en fait partie : « ai-je déjà joué ce Grand Prix ? » est une
+  // lecture, et une carte ne lit rien.
+  const action = actionDuGp(gp, etat, previsualisation, aPronostique);
   const jour = jourDe(gp.date);
 
   // Le pays hôte donne à la fois les couleurs de la carte et le tracé du

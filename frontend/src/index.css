@@ -1714,7 +1714,12 @@
    `/find-animation-opportunities` de la version 0.32.0. Elle n'est posée que
    sur la voiture personnalisable : une livrée d'écurie ne change jamais de
    couleur, elle se remplace en entier. */
-.t-voiture-teinte :is(path, polygon, rect, circle) {
+/* `text` rejoint la liste en version `0.53.0` : le numéro et le pseudo prennent
+   désormais une couleur choisie par le membre, et elle se parcourt dans la même
+   palette que la coque. Le sélecteur est ÉTENDU, jamais dupliqué — un second
+   jeton pour la même durée et la même courbe aurait divergé au premier
+   ajustement. */
+.t-voiture-teinte :is(path, polygon, rect, circle, text) {
   transition: fill 200ms ease;
 }
 
@@ -1787,7 +1792,7 @@
   .t-icon-swap .t-icon,
   .t-nav .t-nav-onglet,
   .t-nav .t-nav-onglet :is(path, rect),
-  .t-voiture-teinte :is(path, polygon, rect, circle),
+  .t-voiture-teinte :is(path, polygon, rect, circle, text),
   .entete-collante::before,
   .entete-collante::after,
   .entete-titre-compact {

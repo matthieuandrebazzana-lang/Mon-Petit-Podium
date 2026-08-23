@@ -134,6 +134,11 @@ class LigneClassement(BaseModel):
     # s'affiche sur la voiture, comme à l'étape 7.
     couleur1: str = "#800111"
     couleur2: str = "#FFFFFF"
+    # Couleur du numéro et du pseudo peints sur la voiture (migration
+    # `20260823120000`). `None` veut dire « pas de choix », pas « pas de
+    # couleur » : le frontend calcule alors l'encre qui contraste avec l'aplat.
+    # Valeur par défaut pour la même raison que les champs voisins.
+    couleur_texte: str | None = None
     numero: int | None = None
     # **Le skin, et il doit être déclaré ici pour exister.** `response_model`
     # de FastAPI ne laisse passer que les champs du modèle : la fonction SQL
