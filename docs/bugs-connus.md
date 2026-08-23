@@ -782,3 +782,77 @@ job automatique reste strictement idempotent.
   demande toujours un rattrapage explicite, et un rattrapage **forcé** dès que l'ancien
   code a écrit autre chose que `NULL`. À se rappeler pour les huit familles de marchés
   encore jamais confrontées à de vrais libellés.
+
+---
+
+## 25. « Autres » n'est pas une nationalité — c'est le complémentaire des autres issues
+
+**Symptôme.** Au GP des Pays-Bas, les pronostics « nationalité du vainqueur » posés sur
+l'issue **« Autres »** restent **en attente**, indéfiniment. Les autres issues du même
+marché, elles, sont notées normalement. Dans les logs, une ligne par pronostic :
+
+```
+[points] Nationalité du vainqueur : l'issue « Autres » ne correspond à
+aucune nationalité connue. Pronostic laissé non jugé.
+```
+
+**Fausse piste immédiate.** Le message invite à ajouter « Autres » à `NATIONALITES`, et la
+table est justement écrite à l'aveugle (`roadmap.md` §3.15) : le réflexe est d'y voir une
+quinzième forme manquante. **Il n'y a aucune entrée à ajouter.** Sous quel code l'aurait-on
+rangée ? « Autres » ne nomme aucun peuple ni aucun pays.
+
+**Cause réelle.** Toutes les issues du système se jugent **seules**. « Néerlandais » est
+vrai ou faux sans qu'on ait besoin de savoir ce que le marché proposait à côté ; « Entre 5
+et 10 secondes » aussi ; « Oui » aussi. **« Autres » est la première issue qui n'est pas une
+valeur mais un complémentaire** : elle veut dire « une nationalité qu'Unibet n'a pas listée
+ce jour-là ». Sa vérité dépend donc d'une chose que le validateur n'avait pas — **la liste
+des issues sœurs du même marché** — et cette liste change d'un Grand Prix à l'autre, Unibet
+n'ouvrant jamais deux fois le même jeu d'options.
+
+Le validateur recevait `(course, libelle)`. Avec ces deux seuls arguments, « Autres » est
+**indécidable** — et le filet a fait exactement son travail : `None`, jamais `0`.
+
+**Correctif (version `0.56.0`).** `validateur(marche, options)` reçoit désormais les
+libellés de **toutes** les issues du marché pour ce Grand Prix, et le validateur de la
+nationalité devient une fabrique qui les capture — même idiome que `_top(rang)`, déjà en
+place. `points_du_pronostic` les tire de `issues_du_marche(cotes, marche)`, c'est-à-dire du
+dictionnaire de cotes **déjà chargé** : aucune lecture de plus, et la liste est celle que le
+scraper a réellement enregistrée ce jour-là.
+
+Le verdict se lit alors en trois tests, et **leur ordre porte tout le raisonnement** :
+
+| Situation | Verdict | Pourquoi |
+|---|---|---|
+| La nationalité du vainqueur est parmi les options **lues** | **raté**, `0` | définitif : aucun libellé restant ne peut la faire disparaître de la liste |
+| Sinon, une option sœur est **illisible** | **non jugé**, `NULL` | elle pouvait être précisément celle du vainqueur |
+| Sinon | **réussi**, la cote | la nationalité du vainqueur n'était listée nulle part |
+
+Le paramètre est facultatif et vide par défaut : un appelant qui l'ignore retrouve
+exactement le comportement d'avant — « Autres » non jugé, plutôt que mal jugé.
+
+**Ne pas refaire.**
+
+- **Ne pas ranger « Autres » dans `NATIONALITES`.** Le message d'erreur y pousse, et sous
+  n'importe quel code la table rendrait alors ce code pour « Autres » : le pronostic serait
+  jugé sur la nationalité d'un pays choisi au hasard. Un `0` ou une cote inventés, tous deux
+  définitifs.
+- **Ne pas écrire la liste des options en dur.** Elle vient des cotes du Grand Prix
+  **traité**, jamais d'une liste de pays écrite à l'avance : c'est ce qui fait tenir la règle
+  pour tous les Grands Prix futurs, dont les options seront autres.
+- **Une option illisible ne fait pas gagner « Autres ».** « Je ne trouve pas la nationalité
+  du vainqueur dans une liste que je ne sais pas lire en entier » n'est pas « elle n'y est
+  pas ». Elle ne l'empêche pas de **perdre**, en revanche : c'est la même asymétrie que
+  partout ailleurs dans le module — on refuse d'inventer un gain, pas de constater un fait.
+- **Le rattrapage suffit, sans `?forcer=true`.** Ces pronostics sont restés à `NULL` : ils
+  n'ont jamais été jugés, donc rien n'est figé (§24). Le GP des Pays-Bas est tout de même
+  rejoué en forçant, parce que la commande couvre au passage tout ce qu'un ancien code
+  aurait pu écrire en dur :
+
+  ```
+  curl -X POST "https://<railway>/jobs/resultats/33b835cc-5c17-40f7-a41f-3e95fc14885a?forcer=true" \
+       -H "X-Admin-Secret: <valeur>"
+  ```
+
+  **À relancer une fois la `0.56.0` déployée sur Railway**, pas avant : un rejeu sur
+  l'ancien backend reproduirait le même `NULL`. Lire `en_attente` dans la réponse — c'est
+  elle qui dira si « Autres » est enfin jugé, ou si une option sœur reste illisible.

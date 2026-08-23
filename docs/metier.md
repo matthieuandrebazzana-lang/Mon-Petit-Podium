@@ -174,6 +174,23 @@ exact, trio gagnant, mieux classé d'un groupe.
 > Les deux formes sont acceptées (« Néerlandais » et « Pays-Bas »), rien ne disant laquelle
 > Unibet écrit. **Aucune n'a été confrontée à un vrai marché** : une issue inconnue est
 > journalisée en toutes lettres et laisse `NULL`. Implémenté en v`0.55.0`.
+>
+> ### « Autres » se juge contre les issues sœurs, jamais seule (v`0.56.0`)
+>
+> Toutes les autres issues du système se jugent **seules** : « Néerlandais » est vrai ou
+> faux sans qu'on sache ce que le marché proposait à côté. **« Autres » n'est pas une
+> valeur, c'est un complémentaire** — « une nationalité qu'Unibet n'a pas listée ce
+> jour-là » — et la liste change à chaque Grand Prix.
+>
+> Elle se juge donc contre **les libellés des autres issues du même marché et du même GP**,
+> lus dans les cotes déjà en base. Réussie si la nationalité du vainqueur n'est dans aucune,
+> ratée si elle est dans l'une. Rien n'est écrit en dur : la règle vaut pour tous les Grands
+> Prix à venir.
+>
+> **Une option sœur illisible ne fait pas gagner « Autres »** — elle pourrait être celle du
+> vainqueur, et conclure « pas listée » sur une liste à moitié lue inventerait un gain. Elle
+> ne l'empêche pas de **perdre** : si la nationalité du vainqueur figure parmi les options
+> comprises, le verdict est acquis. Détail dans `bugs-connus.md` §25.
 
 **Via `race_control`** : safety car, drapeau rouge.
 **Via `laps`** : meilleur tour (minimum de `lap_duration`).

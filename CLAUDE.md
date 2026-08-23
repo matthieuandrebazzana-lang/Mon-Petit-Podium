@@ -196,9 +196,35 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.55.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
-les onze étapes de développement sont livrées. **Le backend passe à `0.54.0`** — un marché
-de plus, et la première route qui défait une écriture.
+**Version `0.56.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+les onze étapes de développement sont livrées. **Le backend passe à `0.56.0`** — la première
+issue qui ne se juge pas toute seule.
+
+### « Autres » n'est pas une nationalité, c'est le complémentaire des autres issues
+
+Au GP des Pays-Bas, les pronostics « nationalité du vainqueur » posés sur l'issue **« Autres »**
+restaient en attente, avec en journal « ne correspond à aucune nationalité connue ». Le message
+invite à ajouter une quinzième forme à `NATIONALITES` — **il n'y a rien à y ajouter.** Sous quel
+code aurait-on rangé « Autres » ? Elle ne nomme aucun peuple, aucun pays.
+
+**Toutes les autres issues du système se jugent seules.** « Néerlandais » est vrai ou faux sans
+qu'on sache ce que le marché proposait à côté ; « Entre 5 et 10 secondes » aussi ; « Oui »
+aussi. « Autres » est la **première** qui n'est pas une valeur mais un **complémentaire** : elle
+veut dire « une nationalité qu'Unibet n'a pas listée ce jour-là », et cette liste change à
+chaque Grand Prix. Avec `(course, libelle)` pour tout contexte, elle était **indécidable** — et
+le filet a fait son travail : `NULL`, jamais `0`.
+
+`validateur(marche, options)` reçoit donc les libellés de **toutes** les issues du marché pour
+ce Grand Prix, tirés par `issues_du_marche` du dictionnaire de cotes **déjà chargé** : aucune
+lecture de plus, et la liste est celle que le scraper a réellement enregistrée. Rien n'est écrit
+en dur, donc la règle vaut pour tous les Grands Prix à venir. Le validateur devient une fabrique
+qui capture ses options — l'idiome de `_top(rang)`, déjà en place.
+
+**L'ordre des trois tests porte tout le raisonnement.** La nationalité du vainqueur figure parmi
+les options **lues** → raté, et c'est définitif, même s'il reste des libellés illisibles à côté.
+Sinon une option est illisible → **non jugé**, elle pouvait être précisément la sienne. Sinon →
+réussi. **Une option illisible ne fait pas gagner « Autres », mais ne l'empêche pas de perdre** :
+on refuse d'inventer un gain, pas de constater un fait. Détail dans `bugs-connus.md` §25.
 
 ### Le calcul était déjà juste : c'est l'idempotence qui gardait le mauvais verdict
 
@@ -251,7 +277,8 @@ une chronologie de déploiement — serait resté entier. Quatrième fois qu'une
 n'était pas la vraie, après le numéro sous `rotate(180)`, le tout-ou-rien du podium et le
 `gap_to_leader` jamais lu.
 
-*La version `0.54.0` avait fait payer le podium pilote par pilote, fait entrer
+*La version `0.55.0` avait sorti la nationalité du vainqueur d'une table statique et ouvert le
+recalcul forcé. La `0.54.0` avait fait payer le podium pilote par pilote, fait entrer
 `gap_to_leader` dans `Ligne`, sorti le succès du bordeaux, gardé le dimanche soir sur le
 Grand Prix couru et ouvert le calendrier là où il sert. La `0.53.0` avait remis le numéro du
 museau à l'endroit. La `0.52.0` avait fait entrer la photo DANS le cockpit. La `0.51.0` avait
@@ -260,17 +287,21 @@ réparé les photos. La `0.45.0` avait fait passer le multiplicateur des points 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :
 
-1. **Rejouer le GP des Pays-Bas en forçant**, une fois la `0.54.0` du backend déployée sur
-   Railway :
+1. **Rejouer le GP des Pays-Bas en forçant**, une fois la `0.56.0` du backend déployée sur
+   Railway — **pas avant** : sur l'ancien backend, le rejeu reproduirait les mêmes `NULL`.
    `curl -X POST "https://<railway>/jobs/resultats/33b835cc-5c17-40f7-a41f-3e95fc14885a?forcer=true" -H "X-Admin-Secret: <valeur>"`.
    **Sans `?forcer=true`, les demi-podiums notés `0` ne bougeront pas** — seuls les `NULL`
-   se rattrapent. La réponse porte `reinitialises` (points effacés) et `en_attente` (ce que
-   le calcul n'a toujours pas su juger) : **c'est cette seconde liste qu'il faut lire.**
+   se rattrapent. Les pronostics « Autres », eux, sont restés à `NULL` : ils se rattraperaient
+   sans forcer, la commande les couvre au passage. La réponse porte `reinitialises` (points
+   effacés) et `en_attente` (ce que le calcul n'a toujours pas su juger) : **c'est cette
+   seconde liste qu'il faut lire** — elle dira si « Autres » est enfin jugé, ou si une option
+   sœur du marché reste illisible.
 2. **Appliquer les migrations 15, 16, 17 puis 18, dans cet ordre.** La 17 est celle sans
    laquelle **aucune photo ne s'enregistre**. La 18 est celle sans laquelle **la couleur du
    texte ne s'enregistre pas**. Si la 2, la 8, la 10, la 12 ou la 16 est rejouée un jour,
-   rejouer la 18 derrière. **Aucune migration n'est requise par la version `0.55.0`** — le
-   recalcul forcé n'écrit que des colonnes existantes, et la nationalité vit dans le code.
+   rejouer la 18 derrière. **Aucune migration n'est requise par la version `0.56.0`** — le
+   recalcul forcé n'écrit que des colonnes existantes, et la nationalité comme le vocabulaire
+   d'« Autres » vivent dans le code.
 3. **Tester sur iPhone réel** — jamais fait. En priorité : **l'opacité `0,4`** des cartes
    passées, qui est un jugement de lisibilité en plein soleil autant qu'un rapport de
    contraste ; **le défilement d'ouverture du calendrier**, qui se pose sur des `offsetTop`

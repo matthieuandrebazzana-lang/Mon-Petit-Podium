@@ -230,6 +230,42 @@ def code_nationalite(libelle: str) -> str | None:
     return _PAR_LIBELLE.get(_cle_nationalite(libelle))
 
 
+# Les libellés sous lesquels Unibet écrit l'issue « **aucune de celles-ci** ».
+#
+# Ce n'est pas une nationalité : c'est le **complémentaire** de toutes les autres
+# issues du marché. Elle ne peut donc pas se juger seule — il faut connaître la
+# liste des options que le marché proposait ce jour-là, et c'est pourquoi son
+# validateur reçoit ses issues sœurs (`points._nationalite_du_vainqueur`).
+#
+# Comme pour `NATIONALITES`, **rien n'est dérivé par règle** : chaque forme est
+# écrite parce qu'elle est plausible sous la plume d'Unibet. Une forme non
+# reconnue n'est pas un drame — l'issue est alors traitée comme une nationalité
+# ordinaire, ne se rapproche d'aucune, et le pronostic reste à `NULL` avec le
+# libellé en clair dans les logs.
+AUTRES: tuple[str, ...] = (
+    "Autre", "Autres", "Les autres", "Autre pays", "Autres pays",
+    "Autre nationalité", "Autres nationalités",
+    "Tout autre", "Toute autre", "Toutes autres",
+    "Other", "Others", "Any other",
+)
+
+
+_AUTRES: frozenset[str] = frozenset(
+    _cle_nationalite(libelle) for libelle in AUTRES
+)
+
+
+def est_autres(libelle: str) -> bool:
+    """L'issue désigne-t-elle « toutes les nationalités non listées » ?
+
+    Le seul endroit qui répond à cette question. La faire deviner deux fois —
+    une au calcul, une à l'affichage — laisserait les deux réponses diverger au
+    premier libellé ajouté, et la divergence se lirait comme un pronostic mal
+    jugé.
+    """
+    return _cle_nationalite(libelle) in _AUTRES
+
+
 def nationalite_du_pilote(numero: int, nom_famille: str) -> str | None:
     """La nationalité d'un pilote, sous le même garde-fou que `alias_unibet`.
 

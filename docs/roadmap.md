@@ -405,6 +405,11 @@ mettre à jour à chaque saison**, au même titre que la grille des pilotes : le
 numéro + nom de famille fait qu'une table périmée ne rend rien plutôt que de prêter au
 nouveau titulaire du 12 la nationalité d'Antonelli.
 
+**Une forme a été vue en vrai, et ce n'était pas une nationalité** : l'issue « Autres », au
+GP des Pays-Bas. Elle ne se range dans aucun code et se juge contre les issues sœurs du
+marché — traitée en v`0.56.0` (`bugs-connus.md` §25). Les quinze pays, eux, restent à
+confronter.
+
 ### 3.16 Le recalcul forcé n'a pas de trace en base
 
 `?forcer=true` efface des points acquis, et **rien n'en garde le souvenir** hors des logs

@@ -416,6 +416,13 @@ journalisées **séparément** : c'est ce qui dira s'il faut mettre la grille à
 une forme à `NATIONALITES`. Le garde-fou de saison est celui d'`alias_unibet` : numéro **et**
 nom de famille.
 
+**Son issue « Autres » est la seule du système qui ne se juge pas seule** (v`0.56.0`) :
+c'est un complémentaire, pas une valeur. `validateur(marche, options)` reçoit donc les
+libellés de **toutes** les issues du marché pour ce Grand Prix — tirés du dictionnaire de
+cotes déjà chargé par `issues_du_marche`, sans lecture supplémentaire. « Autres » est réussi
+si la nationalité du vainqueur n'est dans **aucune** option listée, raté si elle est dans
+l'une, et **non jugé** si une option sœur est illisible et pouvait donc être la sienne.
+
 « premier-abandon » est volontairement **non reconnu** tant que la règle d'égalité n'est
 pas écrite : il demande de savoir *qui* a abandonné le premier, pas *si*.
 

@@ -32,6 +32,7 @@ import logging
 import math
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from app.calcul import pilotes as grille
@@ -540,8 +541,8 @@ def _ecart_du_gagnant(course: Course, libelle: str) -> bool | None:
     return bas <= ecart < haut
 
 
-def _nationalite_du_vainqueur(course: Course, libelle: str) -> bool | None:
-    """Le vainqueur a-t-il la nationalité proposée par l'issue ?
+def _nationalite_du_vainqueur(options: Sequence[str] = ()):
+    """Rend le validateur du marché « nationalité du vainqueur ».
 
     **La nationalité ne se lit pas dans les données de course.** `country_code`
     de `/drivers` est déprécié et disparaît fin 2026 (`scraper.md` §9) : elle
@@ -550,41 +551,117 @@ def _nationalite_du_vainqueur(course: Course, libelle: str) -> bool | None:
     concorder, sans quoi rien n'est rendu.
 
     Comme « écart du gagnant », c'est un marché dont l'issue n'est pas un
-    pilote, et **chacune des deux inconnues rend `None` pour son propre
-    compte** : la nationalité du vainqueur peut manquer (table périmée, pilote
-    hors grille) et le libellé peut n'être aucune nationalité connue. Les
-    distinguer dans les logs est ce qui dira, au premier vrai marché, s'il faut
-    mettre la grille à jour ou ajouter une forme à `NATIONALITES`.
+    pilote, et **chacune des inconnues rend `None` pour son propre compte** : la
+    nationalité du vainqueur peut manquer (table périmée, pilote hors grille) et
+    le libellé peut n'être aucune nationalité connue. Les distinguer dans les
+    logs est ce qui dira, au premier vrai marché, s'il faut mettre la grille à
+    jour ou ajouter une forme à `NATIONALITES`.
+
+    > ### « Autres » ne se juge pas sans ses issues sœurs (version `0.56.0`)
+    >
+    > Toutes les autres issues du système se jugent seules : « Néerlandais » est
+    > vrai ou faux sans qu'on ait besoin de savoir ce que le marché proposait à
+    > côté. **« Autres » est la première qui n'est pas une valeur mais un
+    > complémentaire** — elle veut dire « une nationalité qu'Unibet n'a pas
+    > listée ce jour-là », et cette liste change d'un Grand Prix à l'autre.
+    >
+    > D'où le paramètre `options` : les libellés des **autres issues du même
+    > marché et du même Grand Prix**, lus dans les cotes déjà chargées. « Autres »
+    > est réussi si la nationalité du vainqueur n'est **dans aucune** d'elles, raté
+    > si elle est dans l'une. C'est vrai de tout Grand Prix futur : rien ici ne
+    > connaît un pays en particulier.
+    >
+    > **Une option sœur illisible ne fait pas gagner « Autres ».** Elle pourrait
+    > être précisément la nationalité du vainqueur : conclure « pas listée » à
+    > partir d'une liste qu'on ne sait pas lire en entier inventerait un gain.
+    > Elle ne l'empêche pas de perdre pour autant — si la nationalité du vainqueur
+    > figure déjà parmi les options **lues**, « Autres » est faux et aucun libellé
+    > restant ne peut le rendre vrai.
     """
-    tete = course.par_position(1)
-    if tete is None:
-        return None
-
-    identite = course.pilotes.get(tete.numero) or {}
-    du_vainqueur = grille.nationalite_du_pilote(
-        tete.numero, str(identite.get("nom_famille") or "")
+    # Les issues sœurs, débarrassées des formes « Autres » : une issue ne se
+    # compare pas à elle-même, et un marché peut en porter plusieurs variantes.
+    listees = tuple(
+        libelle
+        for libelle in options
+        if libelle and not grille.est_autres(libelle)
     )
-    if du_vainqueur is None:
+
+    def valider(course: Course, libelle: str) -> bool | None:
+        tete = course.par_position(1)
+        if tete is None:
+            return None
+
+        identite = course.pilotes.get(tete.numero) or {}
+        du_vainqueur = grille.nationalite_du_pilote(
+            tete.numero, str(identite.get("nom_famille") or "")
+        )
+        if du_vainqueur is None:
+            logger.warning(
+                "[points] Nationalité du vainqueur : le numéro %s (%s) n'est pas "
+                "dans la grille %s, ou son nom n'y concorde pas. Pronostic laissé "
+                "non jugé.",
+                tete.numero,
+                identite.get("nom") or "?",
+                grille.SAISON,
+            )
+            return None
+
+        if grille.est_autres(libelle):
+            return _autres_nationalites(du_vainqueur, listees)
+
+        proposee = grille.code_nationalite(libelle)
+        if proposee is None:
+            logger.warning(
+                "[points] Nationalité du vainqueur : l'issue « %s » ne correspond à "
+                "aucune nationalité connue. Pronostic laissé non jugé.",
+                libelle,
+            )
+            return None
+
+        return du_vainqueur == proposee
+
+    return valider
+
+
+def _autres_nationalites(du_vainqueur: str, listees: Sequence[str]) -> bool | None:
+    """« Autres » : la nationalité du vainqueur échappe-t-elle aux options listées ?
+
+    Trois issues possibles, et l'ordre des tests porte tout le raisonnement :
+
+    1. la nationalité du vainqueur est parmi les options **lues** → **raté**, et
+       c'est définitif, même si d'autres options restent illisibles ;
+    2. une option n'a pas été comprise → **non jugé**, elle pouvait être celle du
+       vainqueur ;
+    3. sinon → **réussi**.
+
+    Un marché qui ne proposerait **que** « Autres » n'est pas un marché : sans
+    aucune option à quoi s'opposer, l'issue n'a pas de sens et rien n'est jugé.
+    """
+    if not listees:
         logger.warning(
-            "[points] Nationalité du vainqueur : le numéro %s (%s) n'est pas "
-            "dans la grille %s, ou son nom n'y concorde pas. Pronostic laissé "
-            "non jugé.",
-            tete.numero,
-            identite.get("nom") or "?",
-            grille.SAISON,
+            "[points] Nationalité du vainqueur : l'issue « Autres » est la seule "
+            "du marché, il n'y a aucune option à laquelle l'opposer. Pronostic "
+            "laissé non jugé.",
         )
         return None
 
-    proposee = grille.code_nationalite(libelle)
-    if proposee is None:
+    codes = {libelle: grille.code_nationalite(libelle) for libelle in listees}
+
+    if du_vainqueur in set(codes.values()):
+        return False
+
+    illisibles = [libelle for libelle, code in codes.items() if code is None]
+    if illisibles:
         logger.warning(
-            "[points] Nationalité du vainqueur : l'issue « %s » ne correspond à "
-            "aucune nationalité connue. Pronostic laissé non jugé.",
-            libelle,
+            "[points] Nationalité du vainqueur : l'issue « Autres » ne peut pas "
+            "être jugée, %d option(s) du marché ne correspondent à aucune "
+            "nationalité connue : %s. Pronostic laissé non jugé.",
+            len(illisibles),
+            " ; ".join(illisibles),
         )
         return None
 
-    return du_vainqueur == proposee
+    return True
 
 
 def _safety_car(course: Course, libelle: str) -> bool | None:
@@ -615,7 +692,7 @@ def _top(rang: int):
     return valider
 
 
-def validateur(marche: str):
+def validateur(marche: str, options: Sequence[str] = ()):
     """Rend le validateur d'un marché, ou `None` si le marché n'est pas reconnu.
 
     `None` n'est pas un échec : c'est la réponse honnête pour un marché que le
@@ -639,6 +716,13 @@ def validateur(marche: str):
     n'étaient jamais comparés du tout — le marché sortait d'ici en `None` et
     restait à NULL (`bugs-connus.md` §20). C'est aussi le premier marché dont
     l'issue n'est ni un pilote ni un oui/non, mais **un intervalle de secondes**.
+
+    `options` porte **les libellés de toutes les issues du marché pour ce Grand
+    Prix**. Un seul validateur s'en sert — celui de la nationalité, dont l'issue
+    « Autres » n'a de sens que par rapport aux nationalités listées à côté d'elle
+    (version `0.56.0`). Il est facultatif et vide par défaut : un appelant qui
+    l'ignore obtient exactement le comportement d'avant, « Autres » restant alors
+    non jugé plutôt que mal jugé.
     """
     slug = (marche or "").strip().lower()
     if not slug:
@@ -672,7 +756,7 @@ def validateur(marche: str):
     if "nationalite" in slug or (
         "pays" in slug and ("vainqueur" in slug or "gagnant" in slug)
     ):
-        return _nationalite_du_vainqueur
+        return _nationalite_du_vainqueur(options)
 
     if "virtual" in slug and "safety" in slug:
         return _safety_car_virtuel
@@ -706,6 +790,25 @@ class Attribution:
     points: int
     reussi: bool
     detail: str
+
+
+def issues_du_marche(cotes: dict[str, dict], marche: str) -> tuple[str, ...]:
+    """Les libellés de toutes les issues d'un marché, pour ce Grand Prix.
+
+    Rien n'est relu en base : `cotes` **est** déjà la table `cotes` du Grand
+    Prix, indexée par issue (`cotes_du_gp`). Le marché proposé un jour donné se
+    déduit donc de ce que le scraper a enregistré ce jour-là, et jamais d'une
+    liste écrite en dur — c'est ce qui fait tenir la règle pour tous les Grands
+    Prix à venir, dont les options changeront.
+
+    Un seul validateur en a besoin : celui de la nationalité, pour son issue
+    « Autres » (§4 de `metier.md`).
+    """
+    return tuple(
+        str(cote.get("pilote") or "")
+        for cote in cotes.values()
+        if str(cote.get("marche") or "") == marche
+    )
 
 
 def _cote(cotes: dict[str, dict], outcome: str) -> dict | None:
@@ -813,7 +916,7 @@ def points_du_pronostic(pronostic: dict, cotes: dict[str, dict], course: Course)
         return None, "cote absente du Grand Prix"
 
     marche = str(cote.get("marche") or "")
-    juger = validateur(marche)
+    juger = validateur(marche, issues_du_marche(cotes, marche))
     if juger is None:
         return None, f"marché « {marche} » non reconnu"
 
