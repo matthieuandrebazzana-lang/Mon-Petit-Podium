@@ -163,6 +163,18 @@ exact, trio gagnant, mieux classé d'un groupe.
 > Implémenté en v`0.54.0`. Il ne l'était pas, et ce n'était pas une comparaison qui
 > échouait : le champ n'était lu nulle part et le marché n'était pas reconnu — voir
 > `bugs-connus.md` §23.
+> ### La nationalité du vainqueur ne se lit PAS dans les résultats
+> C'est le second marché dont l'issue n'est ni un pilote, ni une écurie, ni un oui/non :
+> elle nomme **un peuple ou un pays**. Et la donnée n'est nulle part dans `session_result` :
+> `country_code` de `/drivers` est **déprécié et disparaît fin 2026**. La nationalité vient
+> donc d'une **table statique**, `app/calcul/pilotes.py`, sous le même garde-fou de saison
+> que les alias — numéro **et** nom de famille doivent concorder, sans quoi rien n'est rendu
+> et le pronostic reste non jugé. **À mettre à jour à chaque saison**, comme la grille.
+>
+> Les deux formes sont acceptées (« Néerlandais » et « Pays-Bas »), rien ne disant laquelle
+> Unibet écrit. **Aucune n'a été confrontée à un vrai marché** : une issue inconnue est
+> journalisée en toutes lettres et laisse `NULL`. Implémenté en v`0.55.0`.
+
 **Via `race_control`** : safety car, drapeau rouge.
 **Via `laps`** : meilleur tour (minimum de `lap_duration`).
 
@@ -191,6 +203,18 @@ abandonnent, celui qui a parcouru le plus de tours l'emporte.
 > n'était pas reconnu, donc il laissait `NULL`, donc il ne criait pas. Le filet a fait
 > exactement son travail — la leçon n'est pas de le retirer, c'est de **relire les
 > avertissements `[points] … laissé(s) sans points` après chaque Grand Prix**.
+
+> ### Le filet ne protège que ce qu'il n'a pas jugé
+> `NULL` se rattrape ; `0` **ne se rattrape pas**. `attribuer_points` ne réécrit que les
+> `NULL`, si bien qu'un validateur corrigé après coup rattrape les marchés qu'il ne
+> reconnaissait pas — et **jamais** ceux qu'il jugeait mal. Un demi-podium noté `0` par
+> l'ancienne règle est resté `0` après la `0.54.0` : le correctif était juste, la valeur
+> était figée (`bugs-connus.md` §24).
+>
+> Défaire un point acquis demande donc une décision explicite :
+> `POST /jobs/resultats/{gp_id}?forcer=true` rend les points du GP à `NULL` avant de
+> recalculer. C'est **la seule écriture du système qui efface un point**, elle est derrière
+> le secret d'admin, et **le scheduler ne l'appelle jamais**.
 
 ## 5. Championnats
 

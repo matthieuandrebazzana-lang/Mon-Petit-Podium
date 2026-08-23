@@ -392,6 +392,30 @@ plein soleil autant qu'un rapport de contraste.
 
 ---
 
+### 3.15 Aucun libellé de nationalité n'a été vu en vrai — quinze pays écrits à l'aveugle
+
+`NATIONALITES` accepte le peuple et le pays (« Néerlandais », « Pays-Bas ») parce que **rien
+ne dit lequel des deux Unibet écrit**. Les quinze entrées couvrent la grille 2026 ; aucune
+n'a été confrontée à un vrai marché. Une issue inconnue est journalisée en toutes lettres et
+laisse `NULL` — **c'est cette ligne qu'il faut chercher** après le premier vrai marché de
+nationalité, comme pour « écart du gagnant ».
+
+`POST /jobs/resultats/{gp_id}/test` les confronte sans rien écrire. Et **la table est à
+mettre à jour à chaque saison**, au même titre que la grille des pilotes : le garde-fou
+numéro + nom de famille fait qu'une table périmée ne rend rien plutôt que de prêter au
+nouveau titulaire du 12 la nationalité d'Antonelli.
+
+### 3.16 Le recalcul forcé n'a pas de trace en base
+
+`?forcer=true` efface des points acquis, et **rien n'en garde le souvenir** hors des logs
+Railway, qui tournent. Un joueur dont le score baisse entre deux visites n'a aucun moyen de
+savoir pourquoi, et personne n'a de moyen de reconstituer l'état d'avant.
+
+Ce n'est pas bloquant tant que la route reste une intervention manuelle rare derrière le
+secret d'admin — mais dès qu'elle servira une seconde fois, une colonne `recalcule_le` sur
+`grands_prix`, ou une ligne d'audit, coûtera moins cher que la question posée le jour où un
+classement bougera sans explication.
+
 ## 4. Dettes techniques
 
 ### 4.1 `will-change: transform` permanent sur `.t-ecran`

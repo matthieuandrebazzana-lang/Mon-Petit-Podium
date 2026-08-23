@@ -386,7 +386,8 @@ importe ce module, l'importer en retour ferait un cycle.
 ### Marchés reconnus
 
 vainqueur, podium, top N (rang lu dans le nom), écurie gagnante, abandon, safety car,
-safety car virtuel, drapeau rouge, meilleur tour, **écart du gagnant**.
+safety car virtuel, drapeau rouge, meilleur tour, **écart du gagnant**,
+**nationalité du vainqueur**.
 
 > **Seuls « vainqueur », « podium » et « ecurie-vainqueur » ont été observés en vrai.**
 > Les autres sont écrits d'après le cahier des charges et **restent à confronter**.
@@ -404,6 +405,16 @@ oui/non**, mais un intervalle de secondes. Slug reconnu sur « ecart », ou sur 
 « N - M », « entre N et M », « plus de N », « + de N ». **Aucune n'a été confrontée à un
 vrai libellé** : une issue non reconnue est journalisée et laisse `NULL`. Passer par
 `POST /jobs/resultats/{gp_id}/test` avant le premier vrai Grand Prix.
+
+**« Nationalité du vainqueur » est le seul marché dont la réponse n'est pas dans les
+données de course** (v`0.55.0`). Elle vient de `calcul/pilotes.py`, parce que
+`country_code` de `/drivers` est déprécié — le choix était déjà écrit en §9, il est
+maintenant tenu. Slug reconnu sur « nationalite », ou sur « pays » + « vainqueur/gagnant » ;
+le libellé accepte le peuple comme le pays (« Néerlandais », « Pays-Bas »), accents et casse
+indifférents. Les deux inconnues — nationalité du vainqueur, forme du libellé — sont
+journalisées **séparément** : c'est ce qui dira s'il faut mettre la grille à jour ou ajouter
+une forme à `NATIONALITES`. Le garde-fou de saison est celui d'`alias_unibet` : numéro **et**
+nom de famille.
 
 « premier-abandon » est volontairement **non reconnu** tant que la règle d'égalité n'est
 pas écrite : il demande de savoir *qui* a abandonné le premier, pas *si*.
@@ -455,6 +466,28 @@ Synchrone, contrairement au scraper : c'est la route des interventions manuelles
 savoir combien de pronostics ont été notés — **surtout lesquels sont restés en attente** —
 est tout l'intérêt de l'appel. Elle ignore la fenêtre horaire, **jamais l'idempotence**.
 `425 Too Early` si les résultats ne sont pas publiés.
+
+```bash
+# RECALCUL FORCÉ : efface les points du GP, puis les recalcule. SANS rappeler OpenF1.
+curl -X POST "https://<railway>/jobs/resultats/<gp_id>?forcer=true" -H "X-Admin-Secret: <valeur>"
+```
+
+> ### `?forcer=true` — la seule écriture qui défait un point acquis
+>
+> L'idempotence protège un GP d'être noté deux fois. **C'est aussi ce qui fige un verdict
+> faux** : `attribuer_points` ne réécrit que les `NULL`, donc un validateur corrigé après
+> le passage du job rattrape ce qu'il n'avait pas su juger, et jamais ce qu'il avait mal
+> jugé. Rien d'autre ne débloque un `0`.
+>
+> **Les points sont rendus à `NULL`, jamais à `0`.** `0` veut dire « raté » : une remise à
+> zéro gèlerait pour de bon exactement ce qu'on veut recalculer. `pronostic_podium` suit son
+> parent, sans quoi les deux colonnes divergeraient sur un podium resté non jugé.
+>
+> **OpenF1 n'est pas rappelée** : `resultats_gp` n'est pas touché, le calcul rejoue le JSON
+> conservé — ce à quoi sert `donnees_brutes`. La réponse porte `reinitialises`.
+>
+> Défaut `false`, comme `?figer=false` au scraper : la porte de sortie est toujours
+> explicite. **Le scheduler ne l'emprunte jamais.** Voir `bugs-connus.md` §24.
 
 ```bash
 # BANC D'ESSAI — n'écrit RIEN. À utiliser AVANT la course.

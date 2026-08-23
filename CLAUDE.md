@@ -196,136 +196,81 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.54.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
-les onze étapes de développement sont livrées. **Le calcul des points bouge** — deux marchés
-sur dix ne rendaient pas ce qu'ils devaient — le backend passe donc à `0.53.0`.
+**Version `0.55.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+les onze étapes de développement sont livrées. **Le backend passe à `0.54.0`** — un marché
+de plus, et la première route qui défait une écriture.
 
-### Un demi-podium ne rapportait rien, et la documentation le défendait
+### Le calcul était déjà juste : c'est l'idempotence qui gardait le mauvais verdict
 
-Le podium est **le pari le mieux doté de la grille** — le seul qui puisse rapporter la somme
-de deux cotes — et il était le seul à ne jamais rien rapporter à moitié : `all(resultats)`,
-les deux pilotes ou rien. Un joueur qui plaçait le bon nom finissait **à égalité exacte**
-avec celui qui s'était trompé sur les deux.
+Au GP des Pays-Bas, le podium « C.Leclerc + AK.Antonelli » affichait **0 pts** alors
+qu'Antonelli était monté sur le podium, et « écart du gagnant » restait en attente. Les deux
+correctifs de la `0.54.0` paraissaient donc n'avoir servi à rien.
 
-**Ce n'était pas un bug de calcul.** Le code faisait exactement ce que `metier.md` §2
-prescrivait, en toutes lettres, et le raisonnement d'origine tenait : payer la seule cote de
-`pilote_1` ferait rapporter deux montants différents au même pari selon l'ordre de saisie,
-puisque les deux emplacements n'ont aucun ordre entre eux. **La conclusion tirée était la
-mauvaise sortie.** La bonne est de payer chaque cote à *son* pilote : c'est tout aussi
-ordre-indépendant, et le demi-podium rapporte la même chose quel que soit l'emplacement où
-le bon nom a été saisi. Le total **potentiel** ne bouge pas d'un point — il reste le maximum
-atteignable, donc la somme.
+**Ils servaient.** Rejouer le calcul sur les données du GP le montre en une commande : le
+demi-podium rend 28 pts, « Entre 5 et 10 secondes » rend sa cote, et les trois libellés
+exacts d'Unibet se parsent tous les trois. **Le code n'était pas en cause — la chronologie
+l'était.** Le job a tourné à `départ + 1h30` avec le backend d'avant ; le correctif est
+arrivé le soir même, après. Et `attribuer_points` n'écrit que les `NULL`.
 
-**Une jambe non jugeable laisse le pronostic ENTIER à `NULL`.** La ligne ne porte qu'un seul
-`points_gagnes` et `attribuer_points` n'écrit que les `NULL` : payer la seule jambe connue
-figerait un total partiel que le rattrapage **ne corrigerait plus jamais**. Attendre est
-réversible, écrire ne l'est pas — la même asymétrie que « un marché non reconnu vaut `NULL`,
-jamais `0` ».
+**Les deux symptômes n'avaient donc pas la même gravité, alors qu'ils se présentaient
+identiques à l'écran** : le `NULL` de l'écart était rattrapable par un simple rejeu, le `0`
+du demi-podium était **définitivement figé**. C'est le filet « `NULL` jamais `0` » vu depuis
+l'autre côté — il protège d'un verdict inventé, pas d'un verdict faux mais assumé, parce
+qu'un `0` est une décision et que l'idempotence défend les décisions.
 
-### « Écart du gagnant » : le champ n'était pas mal lu, il n'était pas lu
+D'où `POST /jobs/resultats/{gp_id}?forcer=true` : les points du GP retournent à `NULL`, puis
+le calcul reprend. **OpenF1 n'est pas rappelée** — `resultats_gp` est intact, c'est
+exactement ce que `donnees_brutes` conserve pour. Défaut `false`, secret d'admin exigé, et
+**le scheduler ne l'emprunte jamais** : le job automatique reste strictement idempotent.
 
-On cherche une comparaison qui échoue — un intervalle mal parsé, une virgule française, des
-millisecondes. **Il n'y avait aucune comparaison.** `gap_to_leader` n'entrait jamais dans
-`Ligne`, et le slug n'était pas reconnu : le marché tombait dans le filet « marché non
-reconnu », qui rend `NULL`. **Le pronostic n'était pas jugé perdant, il n'était pas jugé** —
-et c'est pour cela que le défaut est resté muet six versions.
+> **Écart signalé (§6).** La demande disait « mettre à zéro `points_gagnes` ». Appliquée à la
+> lettre, elle aurait produit **exactement le bug qu'elle corrigeait** : `0` veut dire
+> « raté », `attribuer_points` ne réécrit que les `NULL`, donc le GP serait ressorti avec les
+> mêmes zéros — cette fois pour toujours. La remise est donc à `NULL`, seul état depuis
+> lequel un calcul peut reprendre. Détail dans `bugs-connus.md` §24.
 
-La docstring d'`analyser()` le **présentait comme une décision** : « `gap_to_leader` de type
-mixte (jamais lu — aucun marché validé aujourd'hui n'en dépend) ». C'était vrai à
-l'écriture. Troisième fois qu'un commentaire exact fait passer un manque pour une intention,
-après le numéro sous `rotate(180)` et le tout-ou-rien du podium.
+### La nationalité du vainqueur n'est pas dans les résultats de la course
 
-**`openf1.py` n'était pas en cause et n'a pas été touché** : il conserve les lignes de
-`session_result` telles quelles, donc `gap_to_leader` était déjà en base sur toutes les
-courses passées. Le rattrapage se fait **sans rappeler OpenF1**. L'écart se lit sur la ligne
-du **deuxième** — le champ dit « de combien ce pilote est derrière le leader », donc `null`
-sur celle du premier — et les bornes sont **`[bas, haut[`**, parce que les issues forment une
-partition et que deux bornes inclusives feraient gagner *deux* paris à 5,000 s exactement.
+Troisième marché dont l'issue n'est ni un pilote ni un oui/non, et le premier dont la
+réponse **ne se trouve nulle part dans `session_result`** : `country_code` de `/drivers` est
+déprécié et disparaît fin 2026. La nationalité vient donc d'une table statique dans
+`calcul/pilotes.py` — le choix était déjà écrit dans `scraper.md` §9, il est maintenant tenu.
 
-### Le succès était le seul des trois états à ne pas se voir
+Sous le **même garde-fou de saison que les alias** : numéro **et** nom de famille doivent
+concorder, sinon rien n'est rendu. Une table périmée ne prêtera pas la nationalité
+d'Antonelli au prochain titulaire du 12 — elle laissera le pronostic non jugé, ce qui se voit
+dans les logs. Les deux formes sont acceptées (« Néerlandais » et « Pays-Bas »), rien ne
+disant laquelle Unibet écrit, et **les deux inconnues sont journalisées séparément** : c'est
+ce qui dira s'il faut corriger la grille ou ajouter une forme.
 
-La pastille de points disait le contraire de ce qu'elle montrait : l'aplat **bordeaux plein**
-marquait le pronostic **réussi**, et le raté comme le non-jugé prenaient tous deux le même
-bordeaux sur beige. Toute la colonne était rouge, le succès y était l'état le plus sombre, et
-**`null` était indistinguable de `0`** — la seule distinction qu'aucun écran n'a le droit de
-perdre. `Verdict`, juste à côté, la tenait seule.
+### Vérifier le calcul avant de conclure à un bug de calcul
 
-Réussi passe au **vert sauge**, raté au bordeaux plein, en attente au beige — 4,86:1, 10,88:1
-et 9,32:1, mesurés. **Aucune teinte nouvelle** : c'est le vert que le design system emploie
-déjà pour dire « c'est acquis ». Le bloc était **recopié à l'identique** dans les deux écrans
-de résultats ; il devient `PastillePoints`, exportée à côté de `Verdict`, qui avait été
-partagée une version plus tôt pour exactement la même raison.
+Trois lignes de Python sur les données du GP ont écarté deux des trois pistes signalées.
+Sans elles, deux validateurs **déjà justes** auraient été « corrigés », et le vrai défaut —
+une chronologie de déploiement — serait resté entier. Quatrième fois qu'une cause supposée
+n'était pas la vraie, après le numéro sous `rotate(180)`, le tout-ou-rien du podium et le
+`gap_to_leader` jamais lu.
 
-### Le dimanche soir appartient encore au Grand Prix du jour
-
-Le passage à `termine`, une heure et demie après le départ, faisait basculer l'accueil sur le
-Grand Prix suivant — deux semaines plus loin, compte à rebours de treize jours —
-**au moment précis où tout le monde ouvre l'application**. Le Grand Prix couru garde la place
-jusqu'à **minuit, heure du téléphone**.
-
-**La frontière est le jour civil, pas une durée** : « six heures après » basculerait en pleine
-soirée pour un départ à 15h et en pleine nuit pour Las Vegas. Et **il n'y a rien à coudre
-entre les deux règles** — entre l'arrivée et le passage à `termine`, le Grand Prix est encore
-`cotes_figees`, donc déjà servi comme le plus proche à venir. `chargerProchainGp` les porte
-toutes les deux, et lui seul. Conséquence : **`couru` se lit désormais sur le statut**, il ne
-se déduit plus du chemin pris — le figer à `false` aurait proposé de pronostiquer sur une
-course déjà courue, le défaut même que la `0.53.0` venait de corriger sur les calendriers.
-
-### Le calendrier s'ouvre là où il sert, et l'archive recule
-
-Une carte terminée passe à `opacity: 0,4` et l'écran défile jusqu'au premier Grand Prix qui
-ne l'est pas. Une seule question, un seul propriétaire — `estGpPasse` — parce que deux
-prédicats écrits séparément auraient donné un calendrier ouvert sur une carte pâle, ou une
-carte vive hors de l'écran. **C'est le statut qui tranche, pas la date** : un Grand Prix couru
-mais jamais scrapé n'est pas en base, reste « à venir », et reste vif.
-
-Le défilement se calcule sur la chaîne des **`offsetTop`** et non sur
-`getBoundingClientRect()` : l'écran entre en scène sous un `translateX` et ses blocs sous un
-`translateY`, donc le rectangle rendu est décalé pendant toute l'entrée — exactement au
-moment du calcul.
-
-> **Écart signalé (§6).** L'opacité compose l'encre **et** son fond sur le beige : la
-> pastille « Terminé » tombe de **4,86:1 à 1,74:1**, sous les 3:1 d'un grand texte porteur de
-> sens. La valeur demandée a été appliquée et l'arbitrage se défend — l'archive se lit à la
-> pâleur avant de se lire au mot — mais **`0,75` est le point où la pastille repasse le
-> plancher**, une constante et une ligne. Tableau dans `calendrier.md` §8, arbitrage dans
-> `roadmap.md` §3.14.
-
-### Rien de nouveau côté mouvement, une troisième fois
-
-Le portier a rejeté les trois candidats. L'opacité d'archive est un **état permanent**, pas
-un changement d'état. Le réordonnancement de la liste s'applique **avant** le premier rendu
-d'une donnée qui arrive du réseau : il n'y a pas d'« avant » à faire tenir, et c'est le
-squelette qui occupe l'intervalle. Le défilement d'ouverture est une **position de départ**,
-pas une transition — et l'onglet Calendrier est ouvert plusieurs fois par jour, ce qui le
-place dans la bande où l'on retire du mouvement au lieu d'en ajouter. Il est instantané.
-
-**Zéro jeton, zéro ligne de CSS.** Les seuls tris sont ceux de `Onglets` et de `.t-acc`, déjà
-dans le vocabulaire.
-
-*La version `0.53.0` avait remis le numéro du museau à l'endroit — la planche l'écrivait sous
-`rotate(180)`, convention d'une vraie monoplace, alors que toutes les vues de l'app sont des
-vues de dessus — livré « Résultats par Grand Prix » et la couleur de texte du membre, dont le
-`NULL` veut dire « pas de choix » et non « pas de couleur ». La `0.52.0` avait fait entrer la
-photo DANS le cockpit. La `0.51.0` avait réparé les photos (`{m,n}` plafonné à 255 par
-PostgreSQL). La `0.45.0` avait fait passer le multiplicateur des points de 100 à 10.
-**Un scraping reste obligatoire.***
+*La version `0.54.0` avait fait payer le podium pilote par pilote, fait entrer
+`gap_to_leader` dans `Ligne`, sorti le succès du bordeaux, gardé le dimanche soir sur le
+Grand Prix couru et ouvert le calendrier là où il sert. La `0.53.0` avait remis le numéro du
+museau à l'endroit. La `0.52.0` avait fait entrer la photo DANS le cockpit. La `0.51.0` avait
+réparé les photos. La `0.45.0` avait fait passer le multiplicateur des points de 100 à 10.*
 
 **Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
 les plus urgents :
 
-1. **Appliquer les migrations 15, 16, 17 puis 18, dans cet ordre, puis déclencher un
-   scraping.** La 17 est celle sans laquelle **aucune photo ne s'enregistre**. La 18 est
-   celle sans laquelle **la couleur du texte ne s'enregistre pas**. Si la 2, la 8, la 10, la
-   12 ou la 16 est rejouée un jour, rejouer la 18 derrière. **Aucune migration n'est requise
-   par la version `0.54.0`** — les deux correctifs de calcul sont entièrement dans
-   `app/calcul/points.py`, et le tri des membres est fait côté écran.
-2. **Confronter « écart du gagnant » à de vrais libellés Unibet, sans attendre la course** :
-   `POST /jobs/resultats/{gp_id}/test` n'écrit rien. Les formes d'issue reconnues (« moins de
-   N », « N - M », « plus de N ») n'ont **jamais été vues** ; une issue non reconnue est
-   journalisée en toutes lettres, c'est cette ligne-là qu'il faut chercher. Puis rejouer
-   `POST /jobs/resultats/{gp_id}` sur les Grands Prix déjà courus — **les données sont déjà
-   en base**, `gap_to_leader` compris, et les podiums restés à `NULL` se rattraperont avec.
+1. **Rejouer le GP des Pays-Bas en forçant**, une fois la `0.54.0` du backend déployée sur
+   Railway :
+   `curl -X POST "https://<railway>/jobs/resultats/33b835cc-5c17-40f7-a41f-3e95fc14885a?forcer=true" -H "X-Admin-Secret: <valeur>"`.
+   **Sans `?forcer=true`, les demi-podiums notés `0` ne bougeront pas** — seuls les `NULL`
+   se rattrapent. La réponse porte `reinitialises` (points effacés) et `en_attente` (ce que
+   le calcul n'a toujours pas su juger) : **c'est cette seconde liste qu'il faut lire.**
+2. **Appliquer les migrations 15, 16, 17 puis 18, dans cet ordre.** La 17 est celle sans
+   laquelle **aucune photo ne s'enregistre**. La 18 est celle sans laquelle **la couleur du
+   texte ne s'enregistre pas**. Si la 2, la 8, la 10, la 12 ou la 16 est rejouée un jour,
+   rejouer la 18 derrière. **Aucune migration n'est requise par la version `0.55.0`** — le
+   recalcul forcé n'écrit que des colonnes existantes, et la nationalité vit dans le code.
 3. **Tester sur iPhone réel** — jamais fait. En priorité : **l'opacité `0,4`** des cartes
    passées, qui est un jugement de lisibilité en plein soleil autant qu'un rapport de
    contraste ; **le défilement d'ouverture du calendrier**, qui se pose sur des `offsetTop`

@@ -37,6 +37,7 @@ Bas 2026 (22 pilotes, marchés « Vainqueur » et « Podium »), les numéros et
 écuries sur `/drivers` d'OpenF1 pour la même saison.
 """
 
+import unicodedata
 from dataclasses import dataclass, field
 
 # Saison décrite par la table. Sert aux messages de journal : voir « 2026 » dans
@@ -53,6 +54,11 @@ class Pilote:
     nom_famille: str
     acronyme: str
     equipe: str
+    # Code de nationalité, clé de `NATIONALITES`. Il vit ICI et non dans les
+    # données OpenF1 : `country_code` de `/drivers` est déprécié et disparaît
+    # fin 2026 (`scraper.md` §9). Le marché « nationalité du vainqueur » ne peut
+    # donc dépendre que d'une table statique, et c'est celle-ci.
+    nationalite: str = ""
     # Libellés Unibet que les cinq clés dérivées ne retrouvent pas. Vide pour la
     # quasi-totalité de la grille : n'y mettre que ce qui manque réellement,
     # une liste qui grossit sans raison finirait par créer des ambiguïtés.
@@ -69,34 +75,75 @@ class Pilote:
 # Vainqueur » doit retrouver, et `points.equipe_du_libelle` sait déjà ramener
 # « Red Bull » et « Haas » sur elle.
 GRILLE: tuple[Pilote, ...] = (
-    Pilote(1, "Lando", "Norris", "NOR", "McLaren"),
-    Pilote(3, "Max", "Verstappen", "VER", "Red Bull Racing"),
-    Pilote(5, "Gabriel", "Bortoleto", "BOR", "Audi"),
-    Pilote(6, "Isack", "Hadjar", "HAD", "Red Bull Racing"),
-    Pilote(10, "Pierre", "Gasly", "GAS", "Alpine"),
-    Pilote(11, "Sergio", "Perez", "PER", "Cadillac"),
+    Pilote(1, "Lando", "Norris", "NOR", "McLaren", "GBR"),
+    Pilote(3, "Max", "Verstappen", "VER", "Red Bull Racing", "NED"),
+    Pilote(5, "Gabriel", "Bortoleto", "BOR", "Audi", "BRA"),
+    Pilote(6, "Isack", "Hadjar", "HAD", "Red Bull Racing", "FRA"),
+    Pilote(10, "Pierre", "Gasly", "GAS", "Alpine", "FRA"),
+    Pilote(11, "Sergio", "Perez", "PER", "Cadillac", "MEX"),
     # OpenF1 abrège son prénom en « Kimi », Unibet garde les deux initiales de
     # « Andrea Kimi ». Sans cet alias, le favori du GP (28 pts) ne serait
     # rapproché d'aucun pilote et tous ses pronostics resteraient à NULL.
-    Pilote(12, "Kimi", "Antonelli", "ANT", "Mercedes", ("AK.Antonelli", "A.Antonelli")),
-    Pilote(14, "Fernando", "Alonso", "ALO", "Aston Martin"),
-    Pilote(16, "Charles", "Leclerc", "LEC", "Ferrari"),
-    Pilote(18, "Lance", "Stroll", "STR", "Aston Martin"),
-    Pilote(23, "Alexander", "Albon", "ALB", "Williams"),
-    Pilote(27, "Nico", "Hulkenberg", "HUL", "Audi"),
-    Pilote(30, "Liam", "Lawson", "LAW", "Racing Bulls"),
-    Pilote(31, "Esteban", "Ocon", "OCO", "Haas F1 Team"),
-    Pilote(41, "Arvid", "Lindblad", "LIN", "Racing Bulls"),
-    Pilote(43, "Franco", "Colapinto", "COL", "Alpine"),
-    Pilote(44, "Lewis", "Hamilton", "HAM", "Ferrari"),
+    Pilote(
+        12, "Kimi", "Antonelli", "ANT", "Mercedes", "ITA",
+        alias=("AK.Antonelli", "A.Antonelli"),
+    ),
+    Pilote(14, "Fernando", "Alonso", "ALO", "Aston Martin", "ESP"),
+    Pilote(16, "Charles", "Leclerc", "LEC", "Ferrari", "MON"),
+    Pilote(18, "Lance", "Stroll", "STR", "Aston Martin", "CAN"),
+    Pilote(23, "Alexander", "Albon", "ALB", "Williams", "THA"),
+    Pilote(27, "Nico", "Hulkenberg", "HUL", "Audi", "GER"),
+    Pilote(30, "Liam", "Lawson", "LAW", "Racing Bulls", "NZL"),
+    Pilote(31, "Esteban", "Ocon", "OCO", "Haas F1 Team", "FRA"),
+    Pilote(41, "Arvid", "Lindblad", "LIN", "Racing Bulls", "GBR"),
+    Pilote(43, "Franco", "Colapinto", "COL", "Alpine", "ARG"),
+    Pilote(44, "Lewis", "Hamilton", "HAM", "Ferrari", "GBR"),
     # Unibet suffixe « Jr », OpenF1 non. « csainzjr » ne ressemble à aucune des
     # cinq clés dérivées : sans alias, aucun pronostic sur Sainz ne serait noté.
-    Pilote(55, "Carlos", "Sainz", "SAI", "Williams", ("C.Sainz Jr", "Carlos Sainz Jr")),
-    Pilote(63, "George", "Russell", "RUS", "Mercedes"),
-    Pilote(77, "Valtteri", "Bottas", "BOT", "Cadillac"),
-    Pilote(81, "Oscar", "Piastri", "PIA", "McLaren"),
-    Pilote(87, "Oliver", "Bearman", "BEA", "Haas F1 Team"),
+    Pilote(
+        55, "Carlos", "Sainz", "SAI", "Williams", "ESP",
+        alias=("C.Sainz Jr", "Carlos Sainz Jr"),
+    ),
+    Pilote(63, "George", "Russell", "RUS", "Mercedes", "GBR"),
+    Pilote(77, "Valtteri", "Bottas", "BOT", "Cadillac", "FIN"),
+    Pilote(81, "Oscar", "Piastri", "PIA", "McLaren", "AUS"),
+    Pilote(87, "Oliver", "Bearman", "BEA", "Haas F1 Team", "GBR"),
 )
+
+
+# Les libellés sous lesquels Unibet peut écrire une nationalité, par code. Le
+# marché « nationalité du vainqueur » ne propose ni un pilote ni un oui/non :
+# son issue est un **peuple ou un pays**, et rien ne dit lequel des deux Unibet
+# écrit. Les deux formes sont donc acceptées, plus les variantes courantes.
+#
+# **Rien n'est dérivé par règle.** Un pluriel obtenu en ajoutant « s » ferait de
+# « Pays-Bas » un « Pays-Ba », et une règle de féminin ferait de « Français » un
+# « Française » qui existe déjà. Chaque forme est écrite parce qu'elle est
+# plausible sous la plume d'Unibet, jamais parce qu'un algorithme la produit.
+#
+# **Aucun libellé n'a été confronté à un vrai marché Unibet** — comme les sept
+# autres familles de `metier.md` §4. Une issue non reconnue est journalisée en
+# toutes lettres et laisse le pronostic à `NULL`, jamais à `0` : c'est cette
+# ligne de journal qu'il faudra chercher après le premier vrai marché.
+NATIONALITES: dict[str, tuple[str, ...]] = {
+    "GBR": ("Britannique", "Britanniques", "Royaume-Uni", "Grande-Bretagne",
+            "Anglais", "Anglaise", "Angleterre"),
+    "NED": ("Néerlandais", "Néerlandaise", "Pays-Bas", "Hollandais", "Hollande"),
+    "BRA": ("Brésilien", "Brésilienne", "Brésil"),
+    "FRA": ("Français", "Française", "France"),
+    "MEX": ("Mexicain", "Mexicaine", "Mexique"),
+    "ITA": ("Italien", "Italienne", "Italie"),
+    "ESP": ("Espagnol", "Espagnole", "Espagne"),
+    "MON": ("Monégasque", "Monaco"),
+    "CAN": ("Canadien", "Canadienne", "Canada"),
+    "THA": ("Thaïlandais", "Thaïlandaise", "Thaïlande", "Thaï"),
+    "GER": ("Allemand", "Allemande", "Allemagne"),
+    "NZL": ("Néo-Zélandais", "Néo-Zélandaise", "Nouvelle-Zélande"),
+    "ARG": ("Argentin", "Argentine", "Argentinien"),
+    "FIN": ("Finlandais", "Finlandaise", "Finlande"),
+    "AUS": ("Australien", "Australienne", "Australie"),
+}
+
 
 PAR_NUMERO: dict[int, Pilote] = {pilote.numero: pilote for pilote in GRILLE}
 
@@ -110,6 +157,21 @@ def _cle(texte: str) -> str:
     ici est une comparaison de noms de famille sans accent ni casse.
     """
     return "".join(caractere for caractere in texte.lower() if caractere.isalnum())
+
+
+def _cle_nationalite(texte: str) -> str:
+    """Réduit un libellé de nationalité à ses lettres, accents et tirets ôtés.
+
+    « Néo-Zélandais », « neo zelandais » et « NÉOZÉLANDAIS » se ramènent tous à
+    « neozelandais ». Les accents passent par `unicodedata` et non par une table
+    de substitution : « é » et « ï » n'ont pas à être énumérés.
+    """
+    sans_accents = "".join(
+        caractere
+        for caractere in unicodedata.normalize("NFD", texte or "")
+        if unicodedata.category(caractere) != "Mn"
+    )
+    return "".join(c for c in sans_accents.lower() if c.isalnum())
 
 
 def alias_unibet(numero: int, nom_famille: str) -> tuple[str, ...]:
@@ -127,6 +189,62 @@ def alias_unibet(numero: int, nom_famille: str) -> tuple[str, ...]:
     if _cle(pilote.nom_famille) != _cle(nom_famille or ""):
         return ()
     return pilote.alias
+
+
+def _indexer_nationalites() -> dict[str, str]:
+    """Index inverse { libellé normalisé → code }, construit une fois.
+
+    Une forme revendiquée par **deux** nationalités est retirée plutôt
+    qu'attribuée à la première venue — exactement comme une clé de nom ambiguë
+    dans `points._indexer_pilotes`. Mieux vaut ne pas juger un pronostic que le
+    juger sur la mauvaise nationalité. Le cas n'existe pas dans la table
+    d'aujourd'hui ; il n'a pas à être découvert le jour où quelqu'un ajoute une
+    quinzième entrée.
+    """
+    index: dict[str, str] = {}
+    ambigus: set[str] = set()
+    for code, libelles in NATIONALITES.items():
+        for libelle in libelles:
+            cle = _cle_nationalite(libelle)
+            if not cle:
+                continue
+            if index.get(cle, code) != code:
+                ambigus.add(cle)
+            index[cle] = code
+    for cle in ambigus:
+        del index[cle]
+    return index
+
+
+_PAR_LIBELLE: dict[str, str] = _indexer_nationalites()
+
+
+def code_nationalite(libelle: str) -> str | None:
+    """Le code de nationalité derrière un libellé Unibet, ou `None`.
+
+    `None` veut dire « je ne reconnais pas cette issue » — pas « aucun pilote
+    n'a cette nationalité ». L'appelant laisse alors le pronostic à `NULL` et
+    journalise le libellé en clair : c'est cette ligne qui dira quelle forme
+    ajouter à `NATIONALITES`.
+    """
+    return _PAR_LIBELLE.get(_cle_nationalite(libelle))
+
+
+def nationalite_du_pilote(numero: int, nom_famille: str) -> str | None:
+    """La nationalité d'un pilote, sous le même garde-fou que `alias_unibet`.
+
+    **Le nom de famille est exigé en plus du numéro**, et pour la raison déjà
+    donnée : les numéros sont réattribués d'une saison à l'autre. Une table
+    périmée qui croirait encore le 12 italien ne dira rien du tout plutôt que de
+    prêter la nationalité d'Antonelli à son successeur — le pronostic reste non
+    validé, ce qui se voit dans les logs et se rattrape.
+    """
+    pilote = PAR_NUMERO.get(numero)
+    if pilote is None or not pilote.nationalite:
+        return None
+    if _cle(pilote.nom_famille) != _cle(nom_famille or ""):
+        return None
+    return pilote.nationalite
 
 
 def index_pilotes() -> dict[str, dict]:

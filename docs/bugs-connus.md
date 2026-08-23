@@ -722,3 +722,63 @@ reconnu sur « ecart » ou « marge » + « victoire ».
   Prix, pas par la vraie route.
 - **Le commentaire qui défendait l'absence a été réécrit.** Même leçon qu'au §20 et au §22 :
   un manque qui s'explique dans une docstring cesse d'être cherché.
+
+---
+
+## 24. Le calcul était déjà bon — c'est l'idempotence qui gardait le mauvais verdict
+
+**Symptôme.** Au GP des Pays-Bas, le podium obligatoire « C.Leclerc + AK.Antonelli »
+affiche **0 pts** alors qu'Antonelli est bien monté sur le podium ; les pronostics
+« écart du gagnant » restent **en attente**. Les deux correctifs de la version `0.54.0`
+paraissent donc n'avoir servi à rien.
+
+**Cause réelle — et ce n'est ni le podium ni l'écart.** Les deux validateurs sont justes,
+et rejouer le calcul à la main sur les données du GP le montre en une commande :
+le demi-podium rend 28 pts, « Entre 5 et 10 secondes » rend sa cote. **Le code n'a jamais
+été en cause.**
+
+Ce qui l'était, c'est la **chronologie**. Le job de résultats a tourné à `départ + 1h30`,
+avec le backend d'**avant** la `0.54.0` — le podium était encore tout-ou-rien, l'écart
+encore non reconnu. Il a écrit `0` sur le podium et laissé `NULL` sur l'écart. Le correctif
+a été livré le soir même, **après**. Et `attribuer_points` n'écrit **que** les
+`points_gagnes` encore `NULL` (`scraper.md` §11) :
+
+| État écrit par l'ancien code | Ce que le rattrapage peut faire |
+|---|---|
+| `NULL` (écart du gagnant, marché non reconnu) | **rattrapable** — un simple `POST /jobs/resultats/{gp_id}` suffit |
+| `0` (demi-podium jugé perdant) | **définitivement figé** — plus aucun appel ne le réécrit |
+
+**C'est le filet de `NULL ≠ 0` vu depuis l'autre côté.** La règle protège d'un verdict
+inventé ; elle ne protège pas d'un verdict **faux mais assumé**. Un `0` est une décision,
+et l'idempotence défend les décisions — y compris celles d'un validateur qu'on vient de
+corriger. **Les deux symptômes n'avaient donc pas la même gravité**, alors qu'ils se
+présentaient identiques à l'écran.
+
+**Correctif (version `0.55.0`).** `POST /jobs/resultats/{gp_id}?forcer=true` :
+`reinitialiser_points()` rend les `points_gagnes` du GP à `NULL`, puis le calcul reprend
+normalement. Défaut `false`, secret d'admin exigé, **jamais appelé par le scheduler** — le
+job automatique reste strictement idempotent.
+
+**Ne pas refaire.**
+
+- **On remet à `NULL`, jamais à `0`.** C'était la formulation spontanée de la demande
+  (« mettre à zéro `points_gagnes` »), et elle aurait produit **exactement le bug qu'elle
+  cherchait à corriger** : `0` veut dire « raté », `attribuer_points` ne réécrit que les
+  `NULL`, donc le GP serait ressorti avec les mêmes zéros, définitivement. Le seul état
+  depuis lequel un calcul peut reprendre est `NULL`.
+- **`pronostic_podium.points_gagnes` se remet à `NULL` avec son parent.** Il en *dérive*
+  et `attribuer_points` le resynchronise — mais seulement pour les podiums qui reçoivent
+  une attribution. Un podium resté non jugé garderait sinon son ancien total à côté d'un
+  parent vide : les deux colonnes divergeraient, ce que le trigger d'origine avait
+  précisément pour but d'empêcher.
+- **OpenF1 n'est pas rappelée.** `resultats_gp` n'est pas touché ; le calcul rejoue le JSON
+  conservé. C'est exactement ce à quoi sert `donnees_brutes`, et ce qui rend l'opération
+  sans risque sur un Grand Prix vieux de plusieurs semaines.
+- **Vérifier le calcul AVANT de conclure à un bug de calcul.** Trois lignes de Python sur
+  les données du GP ont suffi à écarter deux des trois pistes. Sans cette vérification, on
+  aurait « corrigé » deux validateurs déjà justes — et le vrai défaut, qui est une
+  chronologie de déploiement, serait resté entier.
+- **Un correctif de validateur livré après le job ne s'applique à rien tout seul.** Il
+  demande toujours un rattrapage explicite, et un rattrapage **forcé** dès que l'ancien
+  code a écrit autre chose que `NULL`. À se rappeler pour les huit familles de marchés
+  encore jamais confrontées à de vrais libellés.

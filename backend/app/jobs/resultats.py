@@ -123,7 +123,60 @@ async def cotes_du_gp(gp_id: str) -> dict[str, dict]:
     return {ligne["id_outcome_unibet"]: ligne for ligne in lignes}
 
 
-async def traiter(gp: dict) -> dict:
+async def reinitialiser_points(gp_id: str) -> int:
+    """Rend à `NULL` les points de tous les pronostics d'un GP. Rend leur nombre.
+
+    > ### On remet à `NULL`, jamais à `0` — et c'est toute la fonction
+    >
+    > `0` veut dire « raté » (règle 4.1), et `attribuer_points` n'écrit **que**
+    > les `points_gagnes` encore `NULL` (`scraper.md` §11). Remettre `0` gèlerait
+    > donc définitivement ce qu'on cherche justement à recalculer : le GP
+    > ressortirait avec exactement les mêmes zéros, et plus rien ne pourrait les
+    > corriger. `NULL` est le seul état depuis lequel le calcul peut reprendre.
+    >
+    > C'est la même asymétrie que partout ailleurs dans le module : attendre est
+    > réversible, écrire ne l'est pas.
+
+    **C'est la seule écriture du système qui défait un point acquis**, et elle
+    n'existe que pour un cas : un validateur corrigé après coup, dont les
+    verdicts d'avant sont faux. Elle n'est jamais appelée par le scheduler — le
+    job automatique reste strictement idempotent — mais seulement par
+    `POST /jobs/resultats/{gp_id}?forcer=true`, derrière le secret d'admin.
+
+    `pronostic_podium.points_gagnes` est remis à `NULL` avec le parent. Il en
+    DÉRIVE (migration `resultats_points` §5) et `attribuer_points` le resynchronise
+    à la prochaine attribution — mais seulement pour les podiums qui en
+    reçoivent une. Un podium qui resterait non jugé garderait sinon l'ancien
+    total à côté d'un parent vide, et les deux colonnes divergeraient : ce que
+    le trigger d'origine avait précisément pour but d'empêcher.
+    """
+    podiums = await selectionner(
+        "pronostics",
+        {"gp_id": f"eq.{gp_id}", "type": "eq.podium", "select": "id"},
+    )
+    if podiums:
+        identifiants = ",".join(str(ligne["id"]) for ligne in podiums)
+        await mettre_a_jour(
+            "pronostic_podium",
+            {"pronostic_id": f"in.({identifiants})"},
+            {"points_gagnes": None},
+        )
+
+    remis = await mettre_a_jour(
+        "pronostics",
+        {"gp_id": f"eq.{gp_id}", "points_gagnes": "not.is.null"},
+        {"points_gagnes": None},
+    )
+    logger.warning(
+        "[resultats] RECALCUL FORCÉ : %d pronostic(s) du GP %s remis à NULL. "
+        "Les points déjà acquis sont effacés et vont être recalculés.",
+        len(remis),
+        gp_id,
+    )
+    return len(remis)
+
+
+async def traiter(gp: dict, forcer: bool = False) -> dict:
     """Traite un GP de bout en bout : résultats, points, clôture.
 
     La fenêtre horaire de la règle 4.3 n'est **pas** appliquée ici mais par
@@ -132,6 +185,12 @@ async def traiter(gp: dict) -> dict:
     dont l'heure n'est pas venue — sans jamais sauter le moindre contrôle
     d'idempotence, qui vit tout entier dans les trois étages décrits en tête de
     module.
+
+    `forcer=True` est la **seule** exception, et elle ne vient jamais du
+    scheduler : les points déjà attribués sont rendus à `NULL` avant le calcul,
+    pour qu'un validateur corrigé puisse rejuger un GP que l'ancien avait mal
+    jugé. OpenF1 n'est pas rappelée pour autant — `resultats_gp` est intact, et
+    c'est exactement ce que `donnees_brutes` conserve pour.
     """
     gp_id = str(gp["id"])
     nom = str(gp.get("nom") or gp_id)
@@ -158,6 +217,11 @@ async def traiter(gp: dict) -> dict:
             "gp_id",
         )
         logger.info("[resultats] %s : résultats OpenF1 enregistrés.", nom)
+
+    # Après la récupération, avant la lecture : les pronostics doivent être lus
+    # une fois qu'ils sont revenus à NULL, sans quoi le filtre
+    # `points_gagnes=is.null` de `_pronostics_a_noter` ne remonterait rien.
+    rapport["reinitialises"] = await reinitialiser_points(gp_id) if forcer else 0
 
     pronostics = await _pronostics_a_noter(gp_id)
     rapport["pronostics_a_noter"] = len(pronostics)
@@ -355,7 +419,7 @@ def arreter() -> None:
         logger.info("[resultats] Surveillance arrêtée.")
 
 
-async def declencher_maintenant(gp_id: str) -> dict:
+async def declencher_maintenant(gp_id: str, forcer: bool = False) -> dict:
     """Traite un GP à la demande, quelle que soit l'heure. Utilisé par la route.
 
     Le GP est relu en base plutôt que reçu de l'appelant : c'est la seule façon
@@ -369,5 +433,9 @@ async def declencher_maintenant(gp_id: str) -> dict:
     if not lignes:
         raise ValueError("Ce Grand Prix n'existe pas.")
 
-    logger.info("[resultats] Déclenchement manuel pour %s.", lignes[0].get("nom"))
-    return await traiter(lignes[0])
+    logger.info(
+        "[resultats] Déclenchement manuel pour %s%s.",
+        lignes[0].get("nom"),
+        " — RECALCUL FORCÉ" if forcer else "",
+    )
+    return await traiter(lignes[0], forcer=forcer)

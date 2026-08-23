@@ -95,6 +95,10 @@ class RapportJob(BaseModel):
     statut: str | None = None
     deja_recupere: bool = False
     pronostics_a_noter: int = 0
+    # Nombre de points effacés par `?forcer=true`. Zéro sur un appel ordinaire :
+    # une valeur par défaut, comme tout nouveau champ de modèle (règle 3.3), pour
+    # qu'un backend déployé sans elle ne rende pas 500 sur toute la réponse.
+    reinitialises: int = 0
     attribues: int = 0
     restants: int = 0
     en_attente: list[str] = []
@@ -316,6 +320,7 @@ async def resultats_du_grand_prix(
 @journaliser_echecs(DOMAINE, "Déclenchement du job de résultats")
 async def declencher_resultats(
     gp_id: UUID,
+    forcer: bool = False,
     x_admin_secret: str | None = Header(default=None),
 ) -> RapportJob:
     """Traite un Grand Prix à la demande : résultats, points, clôture.
@@ -330,6 +335,24 @@ async def declencher_resultats(
     Elle ignore la fenêtre horaire de la règle 4.3, jamais l'idempotence : un
     pronostic déjà noté ne le sera pas une seconde fois, quel que soit le nombre
     d'appels.
+
+    ### `?forcer=true` — la porte de sortie, et elle efface
+
+    C'est la **seule** façon de faire rejuger un pronostic déjà noté, et donc la
+    seule écriture du système qui défait un point acquis. Elle existe pour un cas
+    précis : un validateur corrigé **après** que le job a tourné. L'idempotence
+    est ce qui protège un GP d'être noté deux fois — c'est aussi ce qui fige un
+    verdict faux, et rien d'autre ne le débloque.
+
+    Les points sont rendus à `NULL`, **jamais à `0`** : `0` veut dire « raté » et
+    `attribuer_points` ne réécrit que les `NULL`, si bien qu'une remise à zéro
+    gèlerait pour de bon exactement ce qu'on veut recalculer (`reinitialiser_points`).
+
+    **OpenF1 n'est pas rappelée** : `resultats_gp` n'est pas touché, le calcul
+    rejoue le JSON conservé. C'est précisément à cela que sert `donnees_brutes`.
+
+    Le défaut est `false`, comme `?figer=false` au scraper : la porte de sortie
+    est toujours explicite.
     """
     exiger_secret(x_admin_secret, DOMAINE)
 
@@ -339,7 +362,7 @@ async def declencher_resultats(
     exiger_configuration()
 
     try:
-        rapport = await job.declencher_maintenant(str(gp_id))
+        rapport = await job.declencher_maintenant(str(gp_id), forcer=forcer)
     except ValueError as erreur:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(erreur)

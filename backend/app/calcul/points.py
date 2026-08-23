@@ -540,6 +540,53 @@ def _ecart_du_gagnant(course: Course, libelle: str) -> bool | None:
     return bas <= ecart < haut
 
 
+def _nationalite_du_vainqueur(course: Course, libelle: str) -> bool | None:
+    """Le vainqueur a-t-il la nationalité proposée par l'issue ?
+
+    **La nationalité ne se lit pas dans les données de course.** `country_code`
+    de `/drivers` est déprécié et disparaît fin 2026 (`scraper.md` §9) : elle
+    vient donc de la table statique de `calcul/pilotes.py`, sous le même
+    garde-fou de saison que les alias — numéro **et** nom de famille doivent
+    concorder, sans quoi rien n'est rendu.
+
+    Comme « écart du gagnant », c'est un marché dont l'issue n'est pas un
+    pilote, et **chacune des deux inconnues rend `None` pour son propre
+    compte** : la nationalité du vainqueur peut manquer (table périmée, pilote
+    hors grille) et le libellé peut n'être aucune nationalité connue. Les
+    distinguer dans les logs est ce qui dira, au premier vrai marché, s'il faut
+    mettre la grille à jour ou ajouter une forme à `NATIONALITES`.
+    """
+    tete = course.par_position(1)
+    if tete is None:
+        return None
+
+    identite = course.pilotes.get(tete.numero) or {}
+    du_vainqueur = grille.nationalite_du_pilote(
+        tete.numero, str(identite.get("nom_famille") or "")
+    )
+    if du_vainqueur is None:
+        logger.warning(
+            "[points] Nationalité du vainqueur : le numéro %s (%s) n'est pas "
+            "dans la grille %s, ou son nom n'y concorde pas. Pronostic laissé "
+            "non jugé.",
+            tete.numero,
+            identite.get("nom") or "?",
+            grille.SAISON,
+        )
+        return None
+
+    proposee = grille.code_nationalite(libelle)
+    if proposee is None:
+        logger.warning(
+            "[points] Nationalité du vainqueur : l'issue « %s » ne correspond à "
+            "aucune nationalité connue. Pronostic laissé non jugé.",
+            libelle,
+        )
+        return None
+
+    return du_vainqueur == proposee
+
+
 def _safety_car(course: Course, libelle: str) -> bool | None:
     reponse = _reponse_binaire(libelle)
     if reponse is None:
@@ -616,6 +663,16 @@ def validateur(marche: str):
     # quelqu'un les confonde.
     if "ecart" in slug or ("marge" in slug and "victoire" in slug):
         return _ecart_du_gagnant
+
+    # « nationalité du vainqueur » — l'autre marché dont l'issue n'est pas un
+    # pilote. Il porte le même piège de voisinage que le précédent : le slug
+    # CONTIENT « vainqueur », et seule l'égalité stricte du test plus haut
+    # l'empêche d'être pris pour le marché obligatoire. C'est aussi pourquoi il
+    # est reconnu ici, en compagnie de l'écart, et non parmi les préfixes du bas.
+    if "nationalite" in slug or (
+        "pays" in slug and ("vainqueur" in slug or "gagnant" in slug)
+    ):
+        return _nationalite_du_vainqueur
 
     if "virtual" in slug and "safety" in slug:
         return _safety_car_virtuel
