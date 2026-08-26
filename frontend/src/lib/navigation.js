@@ -19,6 +19,11 @@ const CHEMINS_AVEC_BARRE = [
   "/championnats",
   "/championnats/:id",
   "/calendrier",
+  // La fiche d'un Grand Prix : elle appartient à l'onglet Calendrier, comme
+  // l'écran d'un championnat appartient au sien. On y consulte, on n'y saisit
+  // rien — et retirer la barre obligerait à ressortir par le bouton de retour
+  // pour changer d'onglet.
+  "/calendrier/:slug",
   "/profil",
   "/profils/:profilId",
   // Les résultats d'un Grand Prix, dans leurs deux formes (étape 9). La barre
@@ -77,7 +82,11 @@ export const ONGLETS = [
     cle: "calendrier",
     libelle: "Calendrier",
     vers: "/calendrier",
-    actif: (chemin) => chemin === "/calendrier",
+    // La fiche d'un Grand Prix allume l'onglet qui la porte : « un onglet reste
+    // allumé sur tout ce qui lui appartient », comme le classement et la vue
+    // piste d'un championnat gardent le leur.
+    actif: (chemin) =>
+      chemin === "/calendrier" || chemin.startsWith("/calendrier/"),
   },
   {
     cle: "profil",

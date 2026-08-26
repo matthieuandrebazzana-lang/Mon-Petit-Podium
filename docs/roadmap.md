@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **26 août 2026**, version `0.58.0`.
+État au **26 août 2026**, version `0.59.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -214,6 +214,8 @@ navigateur. Points à regarder en priorité :
 | **Le sélecteur de Grand Prix** | vingt-quatre pastilles dans une piste qui déborde très largement l'écran. `scrollIntoView({inline: "center"})` ramène-t-il l'option choisie sans à-coup sur Safari iOS ? Et la pastille glissante suit-elle, alors qu'elle se positionne sur des `offsetLeft` mesurés dans un conteneur qui défile en même temps ? |
 | **Le numéro remis à l'endroit** | la compensation de ligne de base est calculée sur la métrique d'Helvetica. Safari iOS peut retomber sur une autre fonte système si « Helvetica Neue » n'est pas résolue : vérifier que le numéro reste centré sur le museau, pas seulement lisible |
 | **Un en-tête de marché sur deux lignes** | il est **collant**, donc sa hauteur est prise sur la liste pendant tout le défilement du marché. Vérifier sur un petit écran qu'un titre long ne laisse pas moins d'une rangée et demie de widgets visibles — c'est le seul cas où deux lignes coûteraient plus qu'elles ne rapportent |
+| **La rangée des derniers vainqueurs** (`0.59.0`) | quatrième rangée `snap-x` du projet, et la première à porter cinq SVG de voiture — soit cinq dessins de quarante formes qui défilent à l'inertie. C'est aussi la seule dont le calage a demandé `scroll-pl-4` : vérifier que la première carte s'aligne bien sur le reste de la page **après** un défilement puis un retour au début, pas seulement au premier rendu |
+| **Les deux liens d'une carte de calendrier** (`0.59.0`) | le corps et la bande d'action sont deux `<a>` frères dans un même `<article>`. Vérifier qu'un appui sur la bande n'ouvre pas la fiche, qu'un appui près de la couture ne se trompe pas de destination, et que `pressable-large` enfonce bien la **carte entière** dans les deux cas — c'est `:active` remontant aux ancêtres, et Safari iOS est le seul juge |
 
 ---
 
@@ -369,14 +371,59 @@ la bascule d'un chargement à l'autre.
 
 Douze cartes de 200 px font près de trois écrans, **sans en-tête collant** pour dire où
 l'on est. Levier : `HAUTEUR_CARTE` (le tracé, la bande et le squelette suivent seuls).
-Question voisine : faire défiler jusqu'au prochain GP à jouer à l'ouverture ? Cela demande
-un `scrollIntoView` et un choix explicite sur le comportement du retour.
+
+> ✅ **Le défilement d'ouverture est fait** (`0.54.0`), et **la profondeur aussi**
+> (`0.59.0`) : chaque carte ouvre désormais quelque chose. Ce qui reste est l'en-tête
+> collant — l'écran n'a toujours pas de titre qui accompagne le défilement, là où l'écran
+> de détail, lui, en a un.
 
 ### 3.8 Lisibilité des tracés sur les drapeaux clairs
 
 Le trait blanc à 60 % vaut **2,44:1 au pire** (Brésil). Lisible mais discret. Deux leviers
 d'une ligne, **dans cet ordre** : monter le trait à 70 %, ou approfondir la surcouche de 15
 à 25 %. **Ne pas toucher au voile** — il est calculé pour le texte.
+
+### 3.8 bis L'Australie n'a pas de drapeau, et deux pilotes en manquent
+
+`NATIONALITES` (`DrapeauxGP.jsx`) déclare l'Australie **sans drapeau**, délibérément : sa
+croix du Sud n'a pas de description que le CSS ou une spécification simple puisse rendre
+sans l'approximer, et un drapeau approximé est ce que `DrapeauxSVG.jsx` existe pour ne plus
+faire (version `0.24.0`). Les cartes de Piastri et de Ricciardo restent donc sur du blanc
+là où les huit autres portent un lavis à 9 %.
+
+**Ce n'est pas une panne** — le gentilé est écrit sous le nom, et le fond n'a jamais porté
+l'information. C'est une irrégularité visible dans une rangée, rien de plus.
+
+Deux façons de la lever, dans cet ordre de préférence :
+
+1. **Ajouter le drapeau à `assets/flags.svg`** et l'extraire par script, comme les six
+   autres. C'est la voie du projet, et elle ne demande aucune exception.
+2. **Le construire depuis la spécification officielle** (Union Jack au canton, étoile du
+   Commonwealth à sept branches, cinq étoiles de la croix du Sud), comme l'a été le
+   Royaume-Uni en `0.59.0`. Les coordonnées des étoiles se calculent ; **encore faut-il
+   disposer du texte du Flags Act**, sans quoi on retombe dans l'approximation.
+
+### 3.8 ter Deux rangées horizontales calent leur première carte hors de l'alignement
+
+Le rendu de la `0.59.0` a montré que `-mx-4 px-4` **ne suffit pas** sur une rangée
+`snap-mandatory` : avec `scroll-padding: auto`, une carte `snap-start` s'aligne sur le bord
+du scrollport, donc sur la boîte de rembourrage, et le navigateur pose `scrollLeft = 16` au
+premier calcul. La première carte revient coller le bord de l'écran, seize pixels à gauche
+de tout le reste de la page. Mesuré : `li.left = 0` pour un `ul` dont le `padding-left`
+calculé vaut bien `16px`.
+
+`VainqueursCircuit` porte le correctif (`scroll-pl-4`). **Les deux rangées plus anciennes
+ne l'ont pas** :
+
+| Où | Classe |
+|---|---|
+| Favoris du tableau des cotes | `ecrans/Cotes.jsx` |
+| Aperçus de la page publique | `composants/ApercusApp.jsx` |
+
+Elles portent exactement le même `-mx-4 px-4`, donc très probablement le même décalage.
+**Elles n'ont pas été retouchées** : ce sont deux écrans qui marchent, et la correction
+demande le même rendu de vérification contre la feuille compilée — un défaut de géométrie
+pure ne se constate pas autrement.
 
 ### 3.9 Fidélité de `assets/flags.svg`
 

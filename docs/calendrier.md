@@ -77,7 +77,8 @@ occupant l'onglet qui devait porter la saison.
 ## 3. La table `GP_2026`
 
 Douze Grands Prix, de Zandvoort à Yas Marina. Champs : `slug`, `nom`, `pays`, `circuit`,
-`date` (date nue `AAAA-MM-JJ`), `mois` (libellé court en capitales).
+`date` (date nue `AAAA-MM-JJ`), `mois` (libellé court en capitales), et **`seances`**
+depuis la version `0.59.0`.
 
 | slug | nom | circuit | date |
 |---|---|---|---|
@@ -94,11 +95,45 @@ Douze Grands Prix, de Zandvoort à Yas Marina. Champs : `slug`, `nom`, `pays`, `
 | `qatar` | GP Qatar | Lusail | 2026-11-29 |
 | `abu-dhabi` | GP Abu Dhabi | Yas Marina | 2026-12-06 |
 
+### `seances` — cinq instants UTC, et une règle bornée (v`0.59.0`)
+
+> ### Écart signalé (CLAUDE.md §6)
+>
+> Le §4 ci-dessous dit « l'heure ne vient jamais d'ici ». **Elle en vient maintenant, pour
+> trois séances sur cinq**, et la limite est nette : la base ne connaît que
+> `date_course` et `date_qualifications`. Les trois essais libres n'existent nulle part
+> côté serveur — ni Unibet ni OpenF1 ne les servent — donc sans table statique, l'écran de
+> détail n'aurait pas pu exister.
+>
+> **La règle n'est pas levée, elle est bornée.** `seancesDuGp` écrase les valeurs
+> statiques des qualifications et de la course par celles de la base dès qu'elles
+> existent, et **la fermeture des pronostics ne lit toujours QUE `gp.date_course`**. Rien
+> de ce qui décide n'a changé de propriétaire.
+
+Les cinq clés — `el1`, `el2`, `el3`, `qualifications`, `course` — portent des **instants
+UTC complets**, jamais des heures locales. Un `Intl.DateTimeFormat` sans `timeZone` rend
+ensuite l'heure du téléphone, où qu'il soit (`formaterSeance`, `lib/format.js`). C'est ce
+qui fait tomber juste le cas de **Las Vegas**, dont la course part le samedi 20h locale,
+c'est-à-dire le **dimanche** en UTC — et dont la carte du calendrier continue d'afficher
+le samedi, puisque `date` reste une date nue.
+
+**Ces heures sont prévisionnelles**, comme celles de la migration 19 : convention des
+horaires usuels d'un week-end, converties au fuseau réel de chaque circuit. Le scraper
+écrase les deux qu'il connaît au premier passage.
+
+> **Une divergence à relire** : `azerbaidjan` porte `2026-09-26`, un **samedi**, quand
+> toutes les autres courses de la table tombent un dimanche. Les séances de Bakou suivent
+> la date de la table plutôt que le calendrier de la FIA — le contraire ferait afficher
+> une course le lendemain de son propre quantième. La date est à vérifier avec le reste de
+> la table.
+
 > ### Les `slug` doivent rester ceux de `slugCircuit`
 > Ce sont eux qui donnent **le drapeau et le tracé**. Un slug inconnu fait retomber la
-> carte sur le bordeaux de la marque, sans circuit. **Trois tables doivent porter les
-> mêmes clés** : `GP_2026`, `TRACES` (`TracesCircuits.jsx`) et `DRAPEAUX`
-> (`DrapeauxGP.jsx`). Un test le vérifie.
+> carte sur le bordeaux de la marque, sans circuit. **Cinq tables doivent porter les
+> mêmes clés** : `GP_2026`, `TRACES` (`TracesCircuits.jsx`), `DRAPEAUX` et `IDENTITES`
+> (`DrapeauxGP.jsx`, `TracesCircuits.jsx`), et **`CIRCUITS`** (`lib/circuits.js`, depuis
+> la version `0.59.0`). Un test vérifie les trois premières ; `circuits.js` se contrôle
+> lui-même au chargement, en développement seulement.
 
 **À mettre à jour chaque saison**, au même titre que `backend/app/calcul/pilotes.py` et
 `lib/ecuries.js`. Elle se relit sur le calendrier officiel de la FIA. Ajouter les GP du
@@ -115,8 +150,9 @@ début de saison demande aussi **leur drapeau et leur tracé**.
 >
 > `jourDe()` lit donc la chaîne elle-même, et `mois` est écrit dans la table.
 
-**L'HEURE de départ ne vient jamais d'ici** : seule la base la connaît, et c'est elle qui
-décide de la fermeture.
+**L'HEURE qui DÉCIDE ne vient jamais d'ici** : la fermeture des pronostics se calcule sur
+`gp.date_course`, servi par la base, et sur rien d'autre. Ce que `seances` ajoute depuis la
+`0.59.0` est un **affichage** — voir l'encadré du §3.
 
 Le zéro de tête est retiré : « 04 » se lit comme un numéro de série, « 4 » comme une date.
 
@@ -310,3 +346,96 @@ Il compte **les cartes qui ne sont pas terminées**, jamais une constante.
 >
 > **À faire, sans quoi les deux écrans se contrediront dès la première course courue.**
 > Voir `roadmap.md`.
+
+---
+
+## 11. L'écran de détail d'un Grand Prix (v`0.59.0`)
+
+`/calendrier/:slug` — la fiche d'un Grand Prix, atteinte **en touchant une carte**.
+
+C'est le geste qui manquait : les douze cartes portaient une date, un drapeau et un tracé,
+et n'ouvraient rien tant que les cotes n'étaient pas arrêtées. Onze cartes sur douze
+étaient, la plupart du temps, des vignettes sans profondeur.
+
+### Où mène une carte
+
+| État de la carte | Corps de la carte | Bande d'action |
+|---|---|---|
+| À venir | **fiche** `/calendrier/:slug` | aucune |
+| Pronos ouverts | **fiche** | « Pronostiquer » / « Voir mes pronos » |
+| Fermé | **fiche** | aucune |
+| Terminé | **résultats** `/grands-prix/:id/resultats` | « Voir les résultats » |
+
+> **Le départage passe par `etatDuGpSaison`, jamais par le statut brut.** C'est la fonction
+> qui décide déjà de la pastille et de la pâleur de la carte. Une seconde lecture du statut
+> aurait pu envoyer vers les résultats une carte affichée « À venir ».
+
+**`destinationDuGp` rend TOUJOURS une destination**, contrairement à `actionDuGp` : la
+carte est tapable sur les douze, y compris quand la base dort. Une carte sur deux qui ne
+réagit pas ne s'essaie pas deux fois.
+
+> ### Deux `<a>` frères, jamais imbriqués
+> Le corps et la bande mènent à deux endroits différents dès que les cotes sont arrêtées.
+> Un `<a>` dans un `<a>` est un balisage invalide que les navigateurs défont en silence.
+>
+> **Un seul `pressable-large`, monté sur l'`<article>`** : `:active` s'applique à
+> l'élément activé **et à ses ancêtres**, donc presser l'un ou l'autre lien enfonce la
+> carte entière. Posé sur les deux liens, le retour aurait désolidarisé la zone
+> d'informations de la bande, et un appui sur la bande aurait composé 0,985 dans une carte
+> déjà à 0,985 — soit 3 %, la secousse que `pressable-large` existe pour éviter.
+
+### Les trois blocs
+
+1. **Le programme** — les cinq séances en heure locale (`SeancesWeekend`). C'est ce qu'on
+   vient chercher la semaine qui précède, donc c'est en haut. Une séance passée pâlit à
+   `0,5` ; **la prochaine**, si elle est à moins de 24 h, prend une pastille amber.
+2. **Le circuit** — le tracé en grand sur une bande de hauteur **fixe** (`xMidYMid meet`
+   met chaque circuit à l'échelle dedans), puis cinq chiffres en 2 × 2 + 1.
+3. **Le palmarès** — les derniers vainqueurs (`VainqueursCircuit`), la seule rangée qui
+   défile à l'horizontale.
+
+Un bouton « Voir les cotes » se colle en bas quand `cotesArretees(gp)` — **et non sur le
+statut `cotes_figees` seul** : `POST /scraper/declencher` peut être appelé un mardi, et le
+statut aurait posé un bouton vers une grille de départ qui n'existe pas encore. Même règle
+que les trois autres surfaces qui portent un bouton de pronostics.
+
+### Les données
+
+**Trois sources, chacune propriétaire de ce qu'elle sait.** `GP_2026` donne le nom, le
+pays, le circuit et les séances ; `CIRCUITS` (`lib/circuits.js`) donne la fiche et le
+palmarès ; la base, croisée par `enrichir`, donne l'identifiant, le statut et les deux
+heures qu'elle seule connaît.
+
+**Le chargeur et la clé de cache sont ceux de l'onglet Calendrier** — `chargerSaison` et
+`cleSaison`, désormais partagés. La réponse est déjà en cache quand on arrive ici, donc
+l'écran s'ouvre plein ; et deux chargeurs écrits séparément auraient rangé deux formes de
+données sous une seule clé.
+
+> **L'écran reste lisible sans la base**, exactement comme les douze cartes (§1). Railway
+> endormi ne retire que la pastille d'état, l'heure confirmée des deux dernières séances,
+> et le bouton.
+
+### `lib/circuits.js`
+
+Une entrée par slug : `longueur_km`, `nombre_tours`, `distance_km`, `premier_gp`,
+`record_tour` (`{temps, pilote, annee}` ou `null`) et `derniers_vainqueurs`.
+
+> ### Écart signalé : rien ici n'est vérifié par le code
+> C'est une **donnée de référence saisie à la main**, au même titre que la grille de
+> `backend/app/calcul/pilotes.py`. Aucune route ne la sert, aucun test ne peut la démentir.
+> Elle se relit sur les fiches officielles de la FIA, **une fois par saison**, en même
+> temps que `GP_2026`.
+
+**Deux entrées demandent une lecture attentive.** Madrid n'a jamais couru : `record_tour`
+vaut `null` et `nombre_tours` est prévisionnel. Et `derniers_vainqueurs` liste **le Grand
+Prix, pas le circuit** — le palmarès du GP d'Espagne s'est joué à Barcelone, celui de
+Malaisie date de 2013-2017. C'est le palmarès qu'on vient chercher ; le restreindre au
+tracé aurait laissé deux blocs vides, et le millésime de chaque carte le dit.
+
+**Les listes ne font pas toutes cinq entrées** — Las Vegas en a trois, le Qatar quatre — et
+on ne les complète pas. La rangée défile, elle n'a pas de longueur à respecter.
+
+`ecurie` est un slug de `lib/livrees.js`, `nationalite` une clé de `NATIONALITES`
+(`DrapeauxGP.jsx`), et `numero` est celui que le pilote portait **cette année-là** : c'est
+un palmarès, il dit ce qui s'est passé. Le nom peint sur l'aileron est **dérivé** de
+`pilote` (`nomSurLaVoiture`), jamais saisi une seconde fois.

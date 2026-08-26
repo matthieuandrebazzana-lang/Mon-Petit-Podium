@@ -38,7 +38,11 @@
  */
 
 /**
- * Les six drapeaux, par slug de `slugCircuit`.
+ * Les sept drapeaux, par slug de pays.
+ *
+ * **Les clés sont des PAYS, pas des Grands Prix**, et la table le montrait
+ * déjà : `las-vegas` n'y figure pas, il emprunte `etats-unis`. C'est ce qui
+ * permet aux nationalités de pilotes d'y puiser sans table concurrente.
  *
  * Chaque forme porte sa couleur en `f`, puis **une seule** géométrie :
  * `d` pour un chemin, `r` pour un rectangle `[x, y, largeur, hauteur]`,
@@ -122,6 +126,59 @@ export const DRAPEAUX_SVG = {
       { f: "#078544", r: [422.54, 2288, 458.62, 101.83] },
       { f: "#FFFFFF", r: [422.54, 2389.83, 458.62, 101.83] },
       { f: "#010101", p: "881.16 2491.66 881.15 2593.49 422.39 2593.49 422.54 2491.66 881.16 2491.66" },
+    ],
+  },
+
+  /* ------------------------------------------------------------------------
+     Le septième drapeau ne vient PAS de la planche — écart signalé (CLAUDE.md
+     §6), et c'est le seul du module.
+
+     `assets/flags.svg` ne dessine que des pays HÔTES. Le Royaume-Uni n'en est
+     pas un cette saison ; il entre ici parce qu'une NATIONALITÉ de pilote en a
+     besoin (voir `NATIONALITES` dans `DrapeauxGP.jsx`), et six vainqueurs sur
+     dix de la table des circuits sont britanniques. Aucune borne de dégradé ne
+     sait dire un sautoir contre-changé : sans dessin, ces six cartes seraient
+     les seules sans fond.
+
+     **La règle d'extraction n'est pas enfreinte, elle est appliquée à une autre
+     source.** Ce drapeau a une géométrie SPÉCIFIÉE — champ 1:2, croix de
+     Saint-Georges rouge au 1/5 de la hauteur, liseré blanc au 1/15 de chaque
+     côté, sautoir blanc de 6 et sautoir rouge contre-changé de 4 dans le
+     système 60 × 30. Les quinze formes ci-dessous ont été **calculées par
+     script** depuis cette spécification (découpe de Sutherland–Hodgman des
+     bandes diagonales par le cadre puis par les quatre triangles de la
+     contre-charge), rendues, et relues à l'image. Aucune coordonnée n'a été
+     tapée à la main : c'est exactement la règle 1 de `composants.md` §4, dont
+     l'objet est d'écarter la transcription manuelle, pas la géométrie exacte.
+
+     Les slivers rouges de quelques dixièmes d'unité autour du centre sont un
+     produit du découpage, pas une faute : la croix de Saint-Georges est peinte
+     après et les recouvre entièrement. Les retirer aurait demandé de juger à
+     l'œil quelles formes le script a bien calculées.
+
+     **L'Australie, elle, n'entre pas** — et c'est la même règle qui le décide :
+     sa croix du Sud n'a pas de spécification que je puisse poser sans
+     l'approximer, et un drapeau approximé est précisément ce que ce module
+     existe pour ne plus faire. Ses vainqueurs restent donc sans fond, comme
+     n'importe quel pays absent de la table. Voir `roadmap.md`. */
+  "royaume-uni": {
+    viewBox: "0 0 60 30",
+    formes: [
+      { f: "#012169", r: [0, 0, 60, 30] },
+      { f: "#FFFFFF", p: "0 3.354 53.292 30 60 30 60 26.646 6.708 0 0 0" },
+      { f: "#FFFFFF", p: "53.292 0 0 26.646 0 30 6.708 30 60 3.354 60 0" },
+      { f: "#C8102E", p: "60 30 60 27.764 34.472 15 30 15" },
+      { f: "#C8102E", p: "27.764 16.118 30 17.236 30 15" },
+      { f: "#C8102E", p: "0 2.236 25.528 15 30 15 0 0" },
+      { f: "#C8102E", p: "32.236 13.882 30 12.764 30 15" },
+      { f: "#C8102E", p: "32.236 16.118 34.472 15 30 15" },
+      { f: "#C8102E", p: "0 30 4.472 30 30 17.236 30 15" },
+      { f: "#C8102E", p: "27.764 13.882 25.528 15 30 15" },
+      { f: "#C8102E", p: "55.528 0 30 12.764 30 15 60 0" },
+      { f: "#FFFFFF", r: [25, 0, 10, 30] },
+      { f: "#FFFFFF", r: [0, 10, 60, 10] },
+      { f: "#C8102E", r: [27, 0, 6, 30] },
+      { f: "#C8102E", r: [0, 12, 60, 6] },
     ],
   },
 };

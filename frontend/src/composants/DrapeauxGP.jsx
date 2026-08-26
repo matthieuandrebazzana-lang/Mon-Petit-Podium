@@ -462,3 +462,100 @@ export function VoileDrapeau({ voile }) {
     />
   );
 }
+
+/* --------------------------------------------------------------------------
+   Les nationalités de pilotes — une seconde question, la MÊME source de
+   couleurs.
+
+   L'écran « Détail GP » pose le drapeau du vainqueur en fond de sa carte, à
+   très faible opacité. C'est une question distincte de celle du bloc d'un Grand
+   Prix : `DRAPEAUX` est indexée par slug de CIRCUIT (`las-vegas` et
+   `etats-unis` sont deux entrées pour un seul pays), et « britannique » n'y
+   entrerait sous aucune clé. Une table à part était donc nécessaire.
+
+   **Mais pas une seconde liste de couleurs.** Quatre nationalités sur huit
+   décrivent un pays que `DRAPEAUX` peint déjà : elles le RÉFÉRENCENT au lieu de
+   le recopier, et c'est tout l'objet de la table ci-dessous. Deux jeux de
+   bandes écrits séparément auraient divergé au premier ajustement, et le
+   symptôme aurait été discret — le drapeau néerlandais d'une carte de
+   vainqueur légèrement différent de celui du bloc de Zandvoort, sur le même
+   écran.
+
+   **Une nationalité sans drapeau n'est pas une panne**, c'est la règle du
+   module depuis la version `0.15.0` : aucune teinte de repli, jamais. La carte
+   garde alors son blanc, et son libellé de pays continue de dire la
+   nationalité — qui n'a jamais reposé sur le fond.
+   -------------------------------------------------------------------------- */
+
+/**
+ * Les huit nationalités que la table des circuits nomme, et le drapeau de
+ * chacune.
+ *
+ * `pays` renvoie vers `DRAPEAUX` quand le pays y est déjà décrit ; sinon
+ * l'entrée porte ses propres bandes, dans la forme exacte de `DRAPEAUX`.
+ * `libelle` est le gentilé affiché — c'est lui qui porte le sens, le fond n'est
+ * qu'une texture.
+ *
+ * `australie` est déclarée **sans drapeau**, et c'est délibéré : sa croix du Sud
+ * n'a pas de description que le CSS ou une spécification puisse rendre sans
+ * l'approximer (voir l'en-tête de `DrapeauxSVG.jsx`). La déclarer ici lui donne
+ * son gentilé ; l'absence de `pays` et de `drapeau` lui retire son fond.
+ */
+export const NATIONALITES = {
+  neerlandaise: { libelle: "Pays-Bas", pays: "pays-bas" },
+  espagnole: { libelle: "Espagne", pays: "espagne" },
+  mexicaine: { libelle: "Mexique", pays: "mexique" },
+  italienne: { libelle: "Italie", pays: "italie" },
+  britannique: {
+    libelle: "Royaume-Uni",
+    drapeau: {
+      type: "svg",
+      svg: "royaume-uni",
+      base: "#012169",
+      couleurs: ["#012169", "#FFFFFF", "#C8102E"],
+    },
+  },
+  monegasque: {
+    libelle: "Monaco",
+    drapeau: { type: "horizontal", couleurs: ["#CE1126", "#FFFFFF"] },
+  },
+  allemande: {
+    libelle: "Allemagne",
+    drapeau: {
+      type: "horizontal",
+      couleurs: ["#000000", "#DD0000", "#FFCE00"],
+    },
+  },
+  australienne: { libelle: "Australie" },
+};
+
+/** Le même calcul que pour les Grands Prix, figé au chargement du module.
+ *  Les entrées qui renvoient à un pays réutilisent l'apparence **déjà
+ *  calculée** : une nationalité ne peut donc pas recevoir un voile différent de
+ *  celui du drapeau qu'elle désigne. */
+const APPARENCES_NATIONALITE = Object.fromEntries(
+  Object.entries(NATIONALITES).map(([cle, entree]) => {
+    const drapeau = entree.pays ? DRAPEAUX[entree.pays] : entree.drapeau;
+    if (!drapeau) return [cle, { libelle: entree.libelle, fond: null, svg: null }];
+    return [
+      cle,
+      {
+        libelle: entree.libelle,
+        ...apparence(drapeau.couleurs),
+        fond: fondCss(drapeau),
+        svg: drapeau.svg && aUnDrapeauSvg(drapeau.svg) ? drapeau.svg : null,
+      },
+    ];
+  }),
+);
+
+/**
+ * Le drapeau d'une nationalité, ou `null` si elle n'est pas dans la table.
+ *
+ * `fond` peut valoir `null` sur une nationalité pourtant connue — l'Australie :
+ * l'appelant a son gentilé mais n'a rien à peindre. Les deux cas se traitent
+ * pareil chez lui, il suffit de tester `fond`.
+ */
+export function drapeauDeNationalite(cle) {
+  return APPARENCES_NATIONALITE[cle] ?? null;
+}

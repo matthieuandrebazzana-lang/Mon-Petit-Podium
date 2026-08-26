@@ -11,10 +11,10 @@ Les composants importants, leurs responsabilités, et où vivent les SVG.
 src/
 ├── App.jsx              routeur + les trois groupes de routes
 ├── auth/AuthContexte.jsx
-├── composants/          réutilisables (39 fichiers)
+├── composants/          réutilisables (41 fichiers)
 │   └── icones/          6 icônes extraites de planches SVG
-├── ecrans/              un fichier par écran (20)
-└── lib/                 accès aux données, formatage, hooks (23)
+├── ecrans/              un fichier par écran (21)
+└── lib/                 accès aux données, formatage, hooks (24)
 ```
 
 ---
@@ -110,6 +110,9 @@ lui appartient. Retoucher l'onglet déjà ouvert **ramène en haut de l'écran**
 | `Repli` | anime `grid-template-rows`, pas un `transform` — et **ne doit jamais employer `.t-acc`** (§5) |
 | `FondPiste` | `preserveAspectRatio="none"` : la planche s'étire en hauteur. Les deux `<rect>` du bandeau en sont **volontairement absents** |
 | `Icones` | les variantes `pleine` emploient **`fill-rule="evenodd"`** : la porte de la maison est un **trou dans l'aplat**, jamais un rectangle blanc posé dessus — qui se verrait le jour où le fond n'est plus blanc |
+| `CarteGpSaison` | **deux `<a>` frères**, jamais imbriqués (le corps et la bande mènent ailleurs). Le `pressable-large` est sur l'`<article>` : `:active` remonte aux ancêtres, et le poser sur les deux liens composerait 0,985 × 0,985 |
+| `VainqueursCircuit` | `scroll-pl-4` **doit rester égal au `px-4`** : sans lui, le calage `snap-start` aligne la première carte sur le scrollport et annule le rembourrage (`roadmap.md` §3.8 ter) |
+| `SeancesWeekend` | c'est le **rang** qui décide de la mise en avant, pas le seuil de 24 h — un vendredi matin, EL1 et EL2 y tiennent toutes les deux |
 
 ---
 
@@ -209,6 +212,46 @@ il ne se voit jamais, mais c'est le drapeau de « ce bloc porte un drapeau », q
 lisent pour savoir s'ils retombent sur le bordeaux de repli.
 
 `preserveAspectRatio="xMidYMid slice"` — le pendant d'`object-fit: cover`.
+
+### Les nationalités de pilotes — une seconde question, la MÊME source de couleurs (`0.59.0`)
+
+L'écran de détail pose le drapeau du vainqueur en fond de sa carte, à **9 %**. C'est une
+question distincte de celle du bloc d'un Grand Prix : `DRAPEAUX` est indexée par slug de
+**circuit** (`las-vegas` et `etats-unis` sont deux entrées pour un seul pays), et
+« britannique » n'y entrerait sous aucune clé.
+
+**D'où `NATIONALITES` — mais pas une seconde liste de couleurs.** Quatre nationalités sur
+huit décrivent un pays que `DRAPEAUX` peint déjà : elles le **référencent** au lieu de le
+recopier. Deux jeux de bandes écrits séparément auraient divergé au premier ajustement, et
+le symptôme aurait été discret — le drapeau néerlandais d'une carte de vainqueur
+légèrement différent de celui du bloc de Zandvoort, sur le même écran.
+
+`drapeauDeNationalite(cle)` rend le gentilé **et** l'apparence, calculée par le même
+`apparence()` que les pays hôtes.
+
+> **Le lavis ne passe PAS par le voile calculé**, et c'est la seule différence avec le bloc
+> de l'accueil. Là-bas le drapeau est peint à pleine intensité sous du texte blanc, et le
+> voile garantit les 3:1 ; ici c'est l'opacité de 9 % qui joue ce rôle, en amont. Mesuré
+> sur le pire substrat (le bleu britannique) : `#012169` à 9 % sur blanc donne `#E8EBF1`,
+> où `#1A1A1A` vaut **14,9:1**.
+
+> ### Le septième drapeau dessiné ne vient pas de la planche — écart signalé
+> `assets/flags.svg` ne dessine que des pays hôtes, et le Royaume-Uni n'en est pas un cette
+> saison. Aucune borne de dégradé ne sait dire un sautoir contre-changé : sans dessin, six
+> cartes de vainqueur sur dix seraient les seules sans fond.
+>
+> **La règle 1 du §4 n'est pas enfreinte, elle est appliquée à une autre source.** Ce
+> drapeau a une géométrie **spécifiée** — champ 1:2, croix de Saint-Georges au 1/5 de la
+> hauteur, liseré blanc au 1/15, sautoir blanc de 6 et sautoir rouge contre-changé de 4
+> dans le système 60 × 30. Les quinze formes ont été **calculées par script** depuis cette
+> spécification (découpe de Sutherland–Hodgman des bandes diagonales par le cadre puis par
+> les quatre triangles de la contre-charge), rendues, et relues à l'image. Aucune
+> coordonnée n'a été tapée à la main : c'est l'objet de la règle 1, qui écarte la
+> transcription manuelle et non la géométrie exacte.
+>
+> **L'Australie n'entre pas**, et c'est la même règle qui le décide : sa croix du Sud n'a
+> pas de spécification qu'on puisse poser sans l'approximer. Ses vainqueurs restent sans
+> fond, comme n'importe quel pays absent de la table (`roadmap.md` §3.8 bis).
 
 ### Les voitures
 

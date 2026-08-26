@@ -285,3 +285,50 @@ export function formaterRestant(millisecondes) {
   if (minutes > 0) return `${minutes}min ${secondes}s`;
   return `${secondes}s`;
 }
+
+/**
+ * Le jour et l'heure d'une séance du week-end, **dans le fuseau du téléphone**.
+ *
+ * `Intl.DateTimeFormat` sans option `timeZone` rend le fuseau de l'appareil :
+ * c'est tout ce qu'il faut, et c'est ce qui rend la table statique de
+ * `calendrier2026.js` utilisable telle quelle. Les séances y sont écrites en
+ * instants UTC ; un joueur à Montréal lit « ven. 4 sept. · 07h30 » là où un
+ * joueur à Paris lit « ven. 4 sept. · 13h30 », et c'est le même instant.
+ *
+ * **Le jour est formaté sur l'instant, jamais recomposé.** C'est le pendant
+ * exact de la règle de `jourDe` (`calendrier2026.js`), prise par l'autre bout :
+ * là-bas une date NUE ne doit pas passer par `new Date`, ici un INSTANT ne doit
+ * pas être découpé à la main. Un décalage de fuseau change le quantième autant
+ * que l'heure — la course de Las Vegas part le samedi soir à Las Vegas et le
+ * dimanche matin à Paris, et la seule façon d'écrire les deux est de laisser
+ * `Intl` le faire.
+ *
+ * Rend `{ jour: null, heure: null }` sur un instant absent ou illisible :
+ * l'appelant dit « — » à sa manière, jamais cette fonction à sa place.
+ */
+export function formaterSeance(iso) {
+  if (!iso) return { jour: null, heure: null };
+
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) return { jour: null, heure: null };
+
+  const jour = new Intl.DateTimeFormat("fr-FR", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  })
+    .format(instant)
+    // « ven. 4 sept. » — le point du mois abrégé fait doublon avec celui du
+    // jour et alourdit une ligne déjà courte.
+    .replace(/\.$/, "");
+
+  const heure = new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+    .format(instant)
+    // « 15:00 » → « 15h00 », l'écriture des maquettes (voir `formaterDepart`).
+    .replace(":", "h");
+
+  return { jour: jour.charAt(0).toUpperCase() + jour.slice(1), heure };
+}

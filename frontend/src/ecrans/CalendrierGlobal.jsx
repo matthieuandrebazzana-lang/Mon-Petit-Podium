@@ -5,12 +5,12 @@ import CarteGpSaison from "../composants/CarteGpSaison.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import {
   GP_2026,
-  chargerCotesEnBase,
+  chargerSaison,
   enrichir,
   etatDuGpSaison,
   indexProchainGpSaison,
 } from "../lib/calendrier2026.js";
-import { chargerMesGpPronostiques, cleSaison } from "../lib/pronostics.js";
+import { cleSaison } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
 
 /**
@@ -74,30 +74,15 @@ export default function CalendrierGlobal() {
   // est la même pour tout le monde, mais deux personnes qui se relaient sur le
   // même téléphone ne doivent jamais hériter du cache de l'autre.
   const cle = utilisateur ? cleSaison(utilisateur.id) : null;
-  // **Deux lectures dans un seul chargeur, et elles partent ensemble.** Les
-  // cotes en base disent quels Grands Prix sont ouverts ; mes pronostics disent
-  // ce que le bouton doit proposer sur ceux-là. Enchaînées, elles auraient
-  // additionné un aller-retour Supabase au réveil de Railway sur l'onglet le
-  // plus consulté après l'accueil.
-  //
-  // La seconde ne peut pas faire échouer la première : `chargerMesGpPronostiques`
-  // rend toujours `ok` (voir sa note). Le calendrier s'affiche donc entier même
-  // si elle échoue, et ses boutons retombent sur « Pronostiquer », qui reste
-  // vrai — on peut toujours rouvrir sa saisie jusqu'à la fermeture.
+  // **Le chargeur vit dans `lib/calendrier2026.js`**, partagé avec l'écran de
+  // détail d'un Grand Prix : les deux écrans lisent la même chose sous la même
+  // clé de cache, et deux chargeurs écrits séparément auraient rangé deux
+  // formes de données sous un seul nom. Voir `chargerSaison` pour les deux
+  // règles qu'il porte — les lectures partent ensemble, et la seconde ne peut
+  // pas faire échouer la première.
   const profilId = utilisateur?.id ?? null;
   const chargeur = useCallback(
-    async (signal) => {
-      const [cotes, joues] = await Promise.all([
-        chargerCotesEnBase(signal),
-        chargerMesGpPronostiques(profilId, signal),
-      ]);
-      if (!cotes.ok) return cotes;
-      return {
-        ok: true,
-        message: null,
-        donnees: { cotes: cotes.donnees, joues: [...joues.donnees] },
-      };
-    },
+    (signal) => chargerSaison(profilId, signal),
     [profilId],
   );
   const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);

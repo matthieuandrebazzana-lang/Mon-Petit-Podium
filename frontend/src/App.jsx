@@ -23,6 +23,7 @@ import GrandsPrixDuMembre from "./ecrans/GrandsPrixDuMembre.jsx";
 import Calendrier from "./ecrans/Calendrier.jsx";
 import ResultatsChampionnat from "./ecrans/ResultatsChampionnat.jsx";
 import CalendrierGlobal from "./ecrans/CalendrierGlobal.jsx";
+import DetailGp from "./ecrans/DetailGp.jsx";
 import ListeChampionnats from "./ecrans/ListeChampionnats.jsx";
 import ResultatsGp from "./ecrans/ResultatsGp.jsx";
 
@@ -79,6 +80,14 @@ export default function App() {
               confondus. Le calendrier d'un championnat, lui, reste sous
               « /championnats/:id/calendrier » — c'est là qu'il appartient. */}
           <Route path="/calendrier" element={<CalendrierGlobal />} />
+          {/* La fiche d'un Grand Prix, atteinte en touchant sa carte. Elle est
+              indexée par le **slug de la liste statique** et non par
+              l'identifiant en base, et c'est structurel : onze des douze Grands
+              Prix de la saison n'ont pas encore d'identifiant, et ce sont
+              précisément ceux-là que cet écran sert. `GP_2026` est la seule
+              autorité sur ce qu'est un slug valide — `DetailGp` renvoie au
+              calendrier pour tout le reste. */}
+          <Route path="/calendrier/:slug" element={<DetailGp />} />
           {/* « creer » et « rejoindre » sont déclarés avant « :id » : sans cet
               ordre, React Router ferait de « creer » un identifiant. */}
           <Route path="/championnats/creer" element={<CreerChampionnat />} />

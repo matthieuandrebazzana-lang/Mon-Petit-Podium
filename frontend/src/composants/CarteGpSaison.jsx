@@ -8,6 +8,7 @@ import {
 } from "./DrapeauxGP.jsx";
 import {
   actionDuGp,
+  destinationDuGp,
   estGpPasse,
   etatDuGpSaison,
   jourDe,
@@ -47,6 +48,29 @@ import {
  * le texte de la carte et non aux seuls drapeaux à plusieurs bandes — c'est le
  * traitement que la vue piste applique déjà à sa légende, qui passe tantôt sur
  * l'asphalte et tantôt sur une bordure blanche.
+ *
+ * ## La carte s'ouvre (version `0.59.0`)
+ *
+ * Son corps mène quelque part sur **les douze cartes**, et non plus seulement
+ * sur celles qui portaient un bouton : un Grand Prix couru ouvre ses résultats,
+ * tous les autres ouvrent leur fiche (`destinationDuGp`). C'est ce qui manquait
+ * — onze cartes sur douze étaient, la plupart du temps, des vignettes qui
+ * n'ouvraient rien.
+ *
+ * ### Deux liens dans une carte, et un seul retour d'appui
+ *
+ * Le corps et la bande mènent à deux endroits différents dès que les cotes sont
+ * arrêtées — « Pronostiquer » n'est pas la fiche du week-end. Ce sont donc deux
+ * `<Link>` **frères**, jamais imbriqués : un `<a>` dans un `<a>` est un balisage
+ * invalide, que les navigateurs défont en silence.
+ *
+ * **Mais un seul `pressable-large`, et il est monté sur l'`<article>`.** `:active`
+ * s'applique à l'élément activé **et à ses ancêtres** : presser l'un ou l'autre
+ * des deux liens enfonce donc la carte entière, d'un seul mouvement. Posé sur
+ * les deux liens, le retour aurait enfoncé la zone d'informations sans la bande
+ * — deux morceaux d'un même objet se désolidarisant sous le doigt — et un appui
+ * sur la bande aurait composé 0,985 dans une carte déjà à 0,985, soit 3 % : la
+ * secousse que `pressable-large` existe pour éviter.
  */
 
 /** Hauteur de la carte. Écrite une fois : le tracé, la bande d'action et le
@@ -113,6 +137,9 @@ export default function CarteGpSaison({
   // `aPronostique` en fait partie : « ai-je déjà joué ce Grand Prix ? » est une
   // lecture, et une carte ne lit rien.
   const action = actionDuGp(gp, etat, previsualisation, aPronostique);
+  // Le corps de la carte mène toujours quelque part, y compris quand la base
+  // dort : c'est ce qui rend le geste apprenable. Voir `destinationDuGp`.
+  const destination = destinationDuGp(gp, etat);
   const jour = jourDe(gp.date);
 
   // Le pays hôte donne à la fois les couleurs de la carte et le tracé du
@@ -123,7 +150,7 @@ export default function CarteGpSaison({
 
   return (
     <article
-      className={`rounded-bloc shadow-aplat relative overflow-hidden ${
+      className={`rounded-bloc shadow-aplat pressable-large relative overflow-hidden ${
         drapeau.fond ? "" : "bg-primaire"
       }`}
       style={{
@@ -156,7 +183,20 @@ export default function CarteGpSaison({
 
       {/* --- Le contenu, posé par-dessus ---------------------------------- */}
       <div className="relative flex h-full flex-col">
-        <div className="relative min-h-0 flex-1">
+        {/* La zone d'informations est le lien, et la bande en est un second,
+            frère du premier. Le libellé accessible nomme la destination, ce
+            qu'aucun élément visible ne fait ici : la carte montre une date et
+            un drapeau, pas un verbe. */}
+        <Link
+          to={destination}
+          state={retour ? { retour } : undefined}
+          aria-label={
+            etat.cle === "termine"
+              ? `${gp.nom} — voir les résultats`
+              : `${gp.nom} — voir le week-end`
+          }
+          className="relative block min-h-0 flex-1"
+        >
           {/* Le tracé est borné à la zone d'informations et ne court pas sous
               la bande d'action : celle-ci est opaque, et un circuit qui
               passerait dessous se lirait comme un trait coupé net.
@@ -249,7 +289,7 @@ export default function CarteGpSaison({
               </div>
             </div>
           </div>
-        </div>
+        </Link>
 
         {/* La bande n'existe que là où il y a quelque chose à faire. Un Grand
             Prix à venir n'a pas encore de cotes ; un Grand Prix fermé n'accepte
@@ -268,7 +308,9 @@ export default function CarteGpSaison({
             // l'écran qui la monte qui sait d'où l'on part.
             state={retour ? { retour } : undefined}
             style={{ height: `${HAUTEUR_BANDE}px` }}
-            className={`pressable-large relative flex w-full shrink-0 items-center justify-center text-[15px] font-medium ${action.style}`}
+            // Pas de `pressable-large` ici : c'est l'`<article>` qui le porte,
+            // et `:active` remonte jusqu'à lui. Voir l'en-tête.
+            className={`relative flex w-full shrink-0 items-center justify-center text-[15px] font-medium ${action.style}`}
           >
             {action.libelle}
           </Link>

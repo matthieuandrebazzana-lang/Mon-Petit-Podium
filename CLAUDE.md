@@ -196,9 +196,100 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.58.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+**Version `0.59.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
 les onze étapes de développement sont livrées. **Le backend reste à `0.56.0`** — ni la
-`0.57.0` ni la `0.58.0` ne touchent à son code.
+`0.57.0`, ni la `0.58.0`, ni la `0.59.0` ne touchent à son code.
+
+### Le calendrier a une profondeur : chaque carte ouvre quelque chose
+
+Les douze cartes portaient une date, un drapeau et un tracé, et **n'ouvraient rien** tant
+que les cotes n'étaient pas arrêtées. Onze sur douze étaient, la plupart du temps, des
+vignettes. `/calendrier/:slug` est la fiche qui manquait — le programme du week-end, le
+circuit, le palmarès. Un Grand Prix **couru** n'y va pas : il ouvre ses résultats, parce
+que la question qu'on se pose devant une course passée est « qui a gagné », pas « à quelle
+heure sont les EL1 ». `destinationDuGp` tranche sur `etatDuGpSaison`, la fonction qui décide
+déjà de la pastille et de la pâleur — une seconde lecture du statut aurait pu envoyer aux
+résultats une carte affichée « À venir ».
+
+**Le corps de la carte et sa bande d'action sont deux `<a>` FRÈRES**, jamais imbriqués : ils
+mènent ailleurs dès que les cotes sont arrêtées, et un `<a>` dans un `<a>` est un balisage
+que les navigateurs défont en silence. Mais **un seul `pressable-large`, monté sur
+l'`<article>`** — `:active` s'applique à l'élément activé *et à ses ancêtres*, donc la carte
+s'enfonce entière quel que soit le lien pressé. Posé sur les deux, le retour aurait
+désolidarisé la zone d'informations de la bande, et un appui sur la bande aurait composé
+0,985 dans une carte déjà à 0,985 : les 3 % que `pressable-large` existe pour éviter.
+
+> **Trois écarts signalés (§6).** `GP_2026` porte désormais `seances`, ce qui contredit
+> « l'heure ne vient jamais d'ici » — **la règle est bornée, pas levée** : la base ne
+> connaît que `date_course` et `date_qualifications`, les trois essais libres n'existent
+> nulle part côté serveur, et `seancesDuGp` laisse la base écraser les deux qu'elle porte.
+> **La fermeture des pronostics lit toujours `gp.date_course`, et rien d'autre.** Ensuite,
+> le bouton du bas teste `cotesArretees` et non le statut `cotes_figees` que la demande
+> nommait : un `POST /scraper/declencher` lancé un mardi aurait sinon posé un bouton vers
+> une grille de départ inexistante — le défaut de la `0.38.0`, rouvert par la lettre de la
+> demande. Enfin l'opacité `0,5` d'une séance passée donne **3,07:1**, sous le plancher
+> d'un texte ordinaire ; `0,65` le repasse. C'est l'arbitrage déjà retenu pour les cartes
+> terminées, et il est écrit là où il se lit.
+
+**`lib/circuits.js` est une donnée de référence saisie à la main**, comme la grille de
+`pilotes.py` : aucune route ne la sert, aucun test ne peut la démentir, elle se relit sur
+les fiches de la FIA une fois par saison. Deux entrées demandent une lecture attentive —
+Madrid n'a jamais couru (`record_tour` vaut `null`, le nombre de tours est prévisionnel), et
+`derniers_vainqueurs` liste **le Grand Prix, pas le circuit** : le palmarès d'Espagne s'est
+joué à Barcelone, celui de Malaisie date de 2013-2017. Les listes ne font pas toutes cinq
+entrées — Las Vegas en a trois, le Qatar quatre — et **on ne les complète pas**.
+
+### Le rendu contre la feuille compilée a trouvé les deux seuls vrais défauts
+
+Ni l'un ni l'autre ne se voyait dans le JSX, et c'est la septième fois.
+
+**`-mx-4 px-4` ne suffit pas sur une rangée `snap-mandatory`.** Avec `scroll-padding: auto`,
+une carte `snap-start` s'aligne sur le bord du *scrollport* — la boîte de rembourrage — donc
+le navigateur pose `scrollLeft = 16` au premier calcul et la première carte revient coller
+le bord de l'écran, seize pixels à gauche de tout le reste. Mesuré : `li.left = 0` pour un
+`ul` dont le `padding-left` calculé vaut bien `16px`. `scroll-pl-4` déplace ce bord, et les
+deux valeurs doivent rester égales. **Les deux rangées plus anciennes portent le même
+`-mx-4 px-4` sans lui** — favoris des cotes, aperçus de la page publique : notées dans
+`roadmap.md` §3.8 ter, pas retouchées, ce sont deux écrans qui marchent.
+
+**Un seuil de vingt-quatre heures allume DEUX séances**, pas une. Le vendredi matin, EL1 et
+EL2 y tiennent toutes les deux, et deux mises en avant n'en sont plus une. Le délai dit
+« est-ce proche ? » ; c'est le **rang** qui dit laquelle. `seancesDuGp` ne marque donc que
+la première séance non passée, et seulement si elle tient dans le seuil — une seule pastille
+amber par écran, comme partout ailleurs.
+
+### Le Royaume-Uni est le premier drapeau que la planche ne donne pas
+
+`assets/flags.svg` ne dessine que des pays **hôtes**, et six vainqueurs sur dix de la table
+des circuits sont britanniques. Aucune borne de dégradé ne sait dire un sautoir
+contre-changé : sans dessin, ces six cartes seraient les seules sans fond.
+
+**La règle d'extraction n'est pas enfreinte, elle est appliquée à une autre source.** Ce
+drapeau a une géométrie **spécifiée** — croix de Saint-Georges au 1/5 de la hauteur, liseré
+blanc au 1/15, sautoir blanc de 6 et sautoir rouge de 4 dans le système 60 × 30. Les quinze
+formes ont été **calculées par script** depuis cette spécification, rendues, et relues à
+l'image. Aucune coordonnée n'a été tapée à la main : c'est l'objet de la règle 1, qui écarte
+la transcription manuelle et non la géométrie exacte.
+
+> **L'Australie n'entre pas**, et c'est la même règle qui le décide : sa croix du Sud n'a
+> pas de description que je puisse poser sans l'approximer, et un drapeau approximé est ce
+> que `DrapeauxSVG.jsx` existe pour ne plus faire. Piastri et Ricciardo restent donc sur du
+> blanc — leur gentilé est écrit sous leur nom, et le fond n'a jamais porté l'information.
+> `roadmap.md` §3.8 bis.
+
+**Une seule liste de couleurs pour deux questions** : `NATIONALITES` **référence**
+`DRAPEAUX` pour les quatre pays qu'elle décrit déjà, au lieu de les recopier. Sans quoi le
+drapeau néerlandais d'une carte de vainqueur aurait fini par différer de celui du bloc de
+Zandvoort, sur le même écran.
+
+### Rien n'anime, et c'est la décision
+
+L'écran entre sous `.t-ecran` et ses blocs sous `.t-stagger-line`. **C'est tout.** Aucun de
+ses éléments ne change d'état sous les yeux du joueur ; le tracé du circuit ne se dessine
+pas — ce serait joli la première fois et une attente les vingt suivantes, sur une fiche
+qu'on ouvre plusieurs fois dans la semaine qui précède la course. La mise en avant d'une
+séance ne pulse pas et ne porte pas de compte à rebours, qui demanderait une horloge vivante
+sur un écran de consultation. **Aucun jeton de mouvement n'entre avec cette version.**
 
 ### La saison entière est en base, sous un identifiant qui n'est pas encore le sien
 
@@ -362,7 +453,9 @@ une chronologie de déploiement — serait resté entier. Quatrième fois qu'une
 n'était pas la vraie, après le numéro sous `rotate(180)`, le tout-ou-rien du podium et le
 `gap_to_leader` jamais lu.
 
-*La version `0.56.0` avait fait juger « Autres » contre ses issues sœurs. La `0.55.0` avait
+*La version `0.58.0` avait posé les onze Grands Prix restants en base. La `0.57.0` avait
+retiré la règle du dimanche soir et donné deux échéances au décompte. La `0.56.0` avait fait
+juger « Autres » contre ses issues sœurs. La `0.55.0` avait
 sorti la nationalité du vainqueur d'une table statique et ouvert le recalcul forcé. La `0.54.0`
 avait fait payer le podium pilote par pilote, fait entrer `gap_to_leader` dans `Ligne`, sorti
 le succès du bordeaux, gardé le dimanche soir sur le Grand Prix couru — règle **retirée par la
@@ -400,6 +493,9 @@ les plus urgents :
    dans » doit suivre le **statut**, pas le décompte qui atteint zéro (`roadmap.md` §1.6 bis).
 5. **Tester sur iPhone réel** — jamais fait. En priorité : **l'opacité `0,4`** des cartes
    passées, qui est un jugement de lisibilité en plein soleil autant qu'un rapport de
-   contraste ; **le défilement d'ouverture du calendrier**, qui se pose sur des `offsetTop`
-   mesurés pendant l'animation d'entrée ; **le sélecteur de vingt-quatre Grands Prix** ; et
-   **la photo de 15px dans le cockpit**.
+   contraste ; **les deux liens d'une carte de calendrier**, où un appui près de la couture
+   ne doit pas se tromper de destination ; **la rangée des derniers vainqueurs**, cinq SVG
+   de voiture qui défilent à l'inertie et dont le calage a demandé `scroll-pl-4` ; **le
+   défilement d'ouverture du calendrier**, qui se pose sur des `offsetTop` mesurés pendant
+   l'animation d'entrée ; **le sélecteur de vingt-quatre Grands Prix** ; et **la photo de
+   15px dans le cockpit**.

@@ -2,6 +2,7 @@ import { appelApi } from "./api.js";
 import { cotesArretees, ETATS_GP } from "./calendrier.js";
 import { slugCircuit } from "../composants/TracesCircuits.jsx";
 import { etatFermeture } from "./format.js";
+import { chargerMesGpPronostiques } from "./pronostics.js";
 
 /**
  * Les douze Grands Prix restants de la saison 2026 — **la source de vérité de
@@ -34,6 +35,40 @@ import { etatFermeture } from "./format.js";
  * départ, elle, ne vient jamais d'ici — seule la base la connaît, et c'est elle
  * qui décide de la fermeture des pronostics (règle 4.3).
  *
+ * ## `seances` : ce champ contredit le paragraphe ci-dessus, et voici la limite
+ *
+ * > ### Écart signalé (CLAUDE.md §6)
+ * >
+ * > L'écran « Détail GP » affiche les cinq séances du week-end — EL1, EL2, EL3,
+ * > qualifications, course — et **la base n'en connaît que deux** :
+ * > `date_course` et `date_qualifications`. Les trois essais libres n'existent
+ * > nulle part côté serveur, et rien ne les y fera entrer : ni Unibet ni OpenF1
+ * > ne les servent. Sans table statique, le bloc n'aurait pas pu exister.
+ * >
+ * > **La règle « seule la base connaît l'heure » n'est donc pas levée, elle est
+ * > bornée** : elle continue de valoir pour les deux séances que la base porte.
+ * > `seancesDuGp` ci-dessous écrase les valeurs statiques des qualifications et
+ * > de la course par celles de la base dès qu'elles existent, et la fermeture
+ * > des pronostics ne lit toujours QUE `gp.date_course`. Rien de ce qui décide
+ * > n'a changé de propriétaire ; seul l'affichage a gagné trois lignes que la
+ * > base ne saura jamais dire.
+ * >
+ * > **Ces heures sont prévisionnelles.** Elles suivent la convention des
+ * > horaires usuels d'un week-end de Formule 1, converties au fuseau réel de
+ * > chaque circuit — exactement la convention posée par la migration 19 pour
+ * > les onze lignes manuelles. Elles sont écrites en **instants UTC complets**
+ * > et non en heures locales : un `Intl.DateTimeFormat` rend ensuite l'heure du
+ * > téléphone, où qu'il soit. C'est aussi ce qui fait tomber juste le cas de Las
+ * > Vegas, dont la course part le samedi 20h locale, c'est-à-dire le **dimanche**
+ * > en UTC.
+ * >
+ * > **Une divergence à signaler, sans la corriger ici** : la date de
+ * > l'Azerbaïdjan (`2026-09-26`) tombe un samedi, quand toutes les autres
+ * > courses de la table tombent un dimanche. Les séances de Bakou suivent la
+ * > date de CETTE table plutôt que le calendrier de la FIA — le contraire ferait
+ * > afficher une course le lendemain de son propre quantième. La date est à
+ * > relire en même temps que le reste de la table.
+ *
  * ## À mettre à jour
  *
  * Comme `backend/app/calcul/pilotes.py`, cette table décrit **une saison**. Elle
@@ -43,18 +78,138 @@ import { etatFermeture } from "./format.js";
  * bordeaux de la marque, sans circuit.
  */
 export const GP_2026 = [
-  { slug: "pays-bas", nom: "GP Pays-Bas", pays: "Pays-Bas", circuit: "Zandvoort", date: "2026-08-23", mois: "AOÛT" },
-  { slug: "italie", nom: "GP Italie", pays: "Italie", circuit: "Monza", date: "2026-09-06", mois: "SEPT" },
-  { slug: "espagne", nom: "GP Espagne", pays: "Espagne", circuit: "Madrid", date: "2026-09-13", mois: "SEPT" },
-  { slug: "azerbaidjan", nom: "GP Azerbaïdjan", pays: "Azerbaïdjan", circuit: "Bakou", date: "2026-09-26", mois: "SEPT" },
-  { slug: "malaisie", nom: "GP Malaisie", pays: "Malaisie", circuit: "Sepang", date: "2026-10-04", mois: "OCT" },
-  { slug: "singapour", nom: "GP Singapour", pays: "Singapour", circuit: "Singapour", date: "2026-10-11", mois: "OCT" },
-  { slug: "etats-unis", nom: "GP États-Unis", pays: "États-Unis", circuit: "Austin", date: "2026-10-25", mois: "OCT" },
-  { slug: "mexique", nom: "GP Mexique", pays: "Mexique", circuit: "Hermanos Rodríguez", date: "2026-11-01", mois: "NOV" },
-  { slug: "bresil", nom: "GP Brésil", pays: "Brésil", circuit: "Interlagos", date: "2026-11-15", mois: "NOV" },
-  { slug: "las-vegas", nom: "GP Las Vegas", pays: "États-Unis", circuit: "Las Vegas", date: "2026-11-21", mois: "NOV" },
-  { slug: "qatar", nom: "GP Qatar", pays: "Qatar", circuit: "Lusail", date: "2026-11-29", mois: "NOV" },
-  { slug: "abu-dhabi", nom: "GP Abu Dhabi", pays: "Abu Dhabi", circuit: "Yas Marina", date: "2026-12-06", mois: "DÉC" },
+  {
+    slug: "pays-bas", nom: "GP Pays-Bas", pays: "Pays-Bas", circuit: "Zandvoort",
+    date: "2026-08-23", mois: "AOÛT",
+    seances: {
+      el1: "2026-08-21T11:30:00Z",
+      el2: "2026-08-21T15:00:00Z",
+      el3: "2026-08-22T10:30:00Z",
+      qualifications: "2026-08-22T14:00:00Z",
+      course: "2026-08-23T13:00:00Z",
+    },
+  },
+  {
+    slug: "italie", nom: "GP Italie", pays: "Italie", circuit: "Monza",
+    date: "2026-09-06", mois: "SEPT",
+    seances: {
+      el1: "2026-09-04T11:30:00Z",
+      el2: "2026-09-04T15:00:00Z",
+      el3: "2026-09-05T10:30:00Z",
+      qualifications: "2026-09-05T14:00:00Z",
+      course: "2026-09-06T13:00:00Z",
+    },
+  },
+  {
+    slug: "espagne", nom: "GP Espagne", pays: "Espagne", circuit: "Madrid",
+    date: "2026-09-13", mois: "SEPT",
+    seances: {
+      el1: "2026-09-11T11:30:00Z",
+      el2: "2026-09-11T15:00:00Z",
+      el3: "2026-09-12T10:30:00Z",
+      qualifications: "2026-09-12T14:00:00Z",
+      course: "2026-09-13T13:00:00Z",
+    },
+  },
+  {
+    slug: "azerbaidjan", nom: "GP Azerbaïdjan", pays: "Azerbaïdjan", circuit: "Bakou",
+    date: "2026-09-26", mois: "SEPT",
+    seances: {
+      el1: "2026-09-24T08:30:00Z",
+      el2: "2026-09-24T12:00:00Z",
+      el3: "2026-09-25T08:30:00Z",
+      qualifications: "2026-09-25T12:00:00Z",
+      course: "2026-09-26T11:00:00Z",
+    },
+  },
+  {
+    slug: "malaisie", nom: "GP Malaisie", pays: "Malaisie", circuit: "Sepang",
+    date: "2026-10-04", mois: "OCT",
+    seances: {
+      el1: "2026-10-02T04:30:00Z",
+      el2: "2026-10-02T08:30:00Z",
+      el3: "2026-10-03T04:30:00Z",
+      qualifications: "2026-10-03T08:00:00Z",
+      course: "2026-10-04T07:00:00Z",
+    },
+  },
+  {
+    slug: "singapour", nom: "GP Singapour", pays: "Singapour", circuit: "Singapour",
+    date: "2026-10-11", mois: "OCT",
+    seances: {
+      el1: "2026-10-09T09:30:00Z",
+      el2: "2026-10-09T13:00:00Z",
+      el3: "2026-10-10T09:30:00Z",
+      qualifications: "2026-10-10T13:00:00Z",
+      course: "2026-10-11T12:00:00Z",
+    },
+  },
+  {
+    slug: "etats-unis", nom: "GP États-Unis", pays: "États-Unis", circuit: "Austin",
+    date: "2026-10-25", mois: "OCT",
+    seances: {
+      el1: "2026-10-23T17:30:00Z",
+      el2: "2026-10-23T21:00:00Z",
+      el3: "2026-10-24T17:30:00Z",
+      qualifications: "2026-10-24T21:00:00Z",
+      course: "2026-10-25T19:00:00Z",
+    },
+  },
+  {
+    slug: "mexique", nom: "GP Mexique", pays: "Mexique", circuit: "Hermanos Rodríguez",
+    date: "2026-11-01", mois: "NOV",
+    seances: {
+      el1: "2026-10-30T18:30:00Z",
+      el2: "2026-10-30T22:00:00Z",
+      el3: "2026-10-31T17:30:00Z",
+      qualifications: "2026-10-31T21:00:00Z",
+      course: "2026-11-01T20:00:00Z",
+    },
+  },
+  {
+    slug: "bresil", nom: "GP Brésil", pays: "Brésil", circuit: "Interlagos",
+    date: "2026-11-15", mois: "NOV",
+    seances: {
+      el1: "2026-11-13T14:30:00Z",
+      el2: "2026-11-13T18:00:00Z",
+      el3: "2026-11-14T14:30:00Z",
+      qualifications: "2026-11-14T18:00:00Z",
+      course: "2026-11-15T17:00:00Z",
+    },
+  },
+  {
+    slug: "las-vegas", nom: "GP Las Vegas", pays: "États-Unis", circuit: "Las Vegas",
+    date: "2026-11-21", mois: "NOV",
+    seances: {
+      el1: "2026-11-20T02:30:00Z",
+      el2: "2026-11-20T06:00:00Z",
+      el3: "2026-11-21T02:30:00Z",
+      qualifications: "2026-11-21T06:00:00Z",
+      course: "2026-11-22T04:00:00Z",
+    },
+  },
+  {
+    slug: "qatar", nom: "GP Qatar", pays: "Qatar", circuit: "Lusail",
+    date: "2026-11-29", mois: "NOV",
+    seances: {
+      el1: "2026-11-27T13:30:00Z",
+      el2: "2026-11-27T17:00:00Z",
+      el3: "2026-11-28T14:30:00Z",
+      qualifications: "2026-11-28T18:00:00Z",
+      course: "2026-11-29T16:00:00Z",
+    },
+  },
+  {
+    slug: "abu-dhabi", nom: "GP Abu Dhabi", pays: "Abu Dhabi", circuit: "Yas Marina",
+    date: "2026-12-06", mois: "DÉC",
+    seances: {
+      el1: "2026-12-04T09:30:00Z",
+      el2: "2026-12-04T13:00:00Z",
+      el3: "2026-12-05T10:30:00Z",
+      qualifications: "2026-12-05T14:00:00Z",
+      course: "2026-12-06T13:00:00Z",
+    },
+  },
 ];
 
 /**
@@ -263,4 +418,186 @@ export function actionDuGp(gp, etat, previsualisation = false, aPronostique = fa
     };
   }
   return null;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Les séances d'un week-end                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Les cinq séances, dans l'ordre du week-end et sous les libellés affichés.
+ *
+ * **L'ordre est déclaré, pas trié.** Un week-end de Formule 1 se déroule
+ * toujours ainsi, et trier sur l'instant ferait dépendre la structure du
+ * week-end de deux heures venues de la base : une `date_qualifications`
+ * aberrante réordonnerait l'écran au lieu de sauter aux yeux à sa place.
+ *
+ * Les libellés courts sont ceux du paddock — « EL1 » et non « Essais libres 1 »,
+ * qui ne tiendrait pas sur une rangée d'iPhone.
+ */
+export const SEANCES = [
+  { cle: "el1", libelle: "EL1", nom: "Essais libres 1" },
+  { cle: "el2", libelle: "EL2", nom: "Essais libres 2" },
+  { cle: "el3", libelle: "EL3", nom: "Essais libres 3" },
+  { cle: "qualifications", libelle: "Qualifications", nom: "Qualifications" },
+  { cle: "course", libelle: "Course", nom: "Course" },
+];
+
+/**
+ * En deçà de ce délai, la **prochaine** séance est « imminente » et l'écran la
+ * met en avant.
+ *
+ * Vingt-quatre heures, c'est-à-dire la veille : c'est le moment où l'on ouvre
+ * l'app pour savoir à quelle heure regarder.
+ *
+ * > **Le seuil ne suffit PAS à n'en allumer qu'une**, et le rendu l'a montré :
+ * > un vendredi matin, EL1 et EL2 sont toutes deux à moins de vingt-quatre
+ * > heures, et deux mises en avant n'en sont plus une. Le délai dit « est-ce
+ * > proche ? » ; c'est le **rang** qui dit laquelle. `seancesDuGp` ne marque
+ * > donc que la première séance non passée, et seulement si elle tient dans le
+ * > seuil. Une seule pastille amber par écran, comme partout ailleurs dans
+ * > l'app.
+ */
+export const SEUIL_IMMINENT_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Les cinq séances d'un Grand Prix, datées, avec leur état.
+ *
+ * **La base l'emporte sur la table statique partout où elle a une réponse.**
+ * Deux séances sur cinq sont en base — les qualifications et la course — et ce
+ * sont les deux seules dont l'heure engage quelque chose : la première ouvre
+ * les pronostics, la seconde les ferme. Les afficher depuis la table statique
+ * alors que la base dit autre chose ferait mentir l'écran à côté d'un compte à
+ * rebours juste, et c'est exactement le défaut que `etatPronostics` a corrigé en
+ * `0.57.0` — un libellé écrit deux fois finit par dire deux choses.
+ *
+ * Les trois essais libres n'ont pas d'équivalent en base : ils restent
+ * prévisionnels, et l'en-tête du module le dit.
+ *
+ * Une séance dont l'instant est illisible est **rendue quand même**, sans date :
+ * une rangée manquante ferait croire que le week-end n'a pas d'EL3, là qu'un
+ * « — » dit qu'on ne connaît pas encore son heure. C'est la règle des douze
+ * cartes du calendrier, appliquée aux cinq rangées d'un week-end.
+ */
+export function seancesDuGp(gp, maintenant = Date.now()) {
+  const statiques = gp?.seances ?? {};
+  // Les deux seules substitutions, écrites une fois. Un `??` sur une chaîne
+  // vide passerait — d'où le test de vérité, la base servant `null` et non `""`.
+  const enBase = {
+    qualifications: gp?.date_qualifications || null,
+    course: gp?.date_course || null,
+  };
+
+  const datees = SEANCES.map((seance) => {
+    const iso = enBase[seance.cle] ?? statiques[seance.cle] ?? null;
+    const instant = iso ? Date.parse(iso) : NaN;
+    const date = Number.isFinite(instant) ? instant : null;
+
+    return {
+      ...seance,
+      iso,
+      instant: date,
+      // La source est exposée pour que l'écran puisse le dire : « prévisionnel »
+      // n'a pas le même poids qu'une heure confirmée par le programme d'Unibet.
+      confirmee: Boolean(enBase[seance.cle]),
+      passee: date !== null && date <= maintenant,
+      imminente: false,
+    };
+  });
+
+  // **Une seule mise en avant, et c'est la PROCHAINE.** Le rang tranche, le
+  // délai ne fait que l'autoriser — voir `SEUIL_IMMINENT_MS`. Une séance dont
+  // l'heure est inconnue n'est ni passée ni prochaine : elle ne peut pas prendre
+  // la place, mais elle ne bloque pas non plus celle d'après, sans quoi un EL3
+  // sans horaire éteindrait la mise en avant de la course.
+  const prochaine = datees.find(
+    (seance) => seance.instant !== null && !seance.passee,
+  );
+  if (
+    prochaine &&
+    prochaine.instant - maintenant <= SEUIL_IMMINENT_MS
+  ) {
+    prochaine.imminente = true;
+  }
+
+  return datees;
+}
+
+/**
+ * Le Grand Prix de la saison qui porte ce slug, ou `null`.
+ *
+ * Exporté plutôt que laissé à un `find` chez l'appelant : l'écran de détail
+ * arrive par une URL, donc par une chaîne que personne n'a validée, et c'est ce
+ * module qui sait ce qu'est un slug valide.
+ */
+export function gpParSlug(slug) {
+  return GP_2026.find((gp) => gp.slug === slug) ?? null;
+}
+
+/**
+ * Le chargeur de la saison : les cotes en base **et** les Grands Prix que
+ * j'ai déjà joués, en un seul aller-retour.
+ *
+ * **Deux écrans le partagent** — l'onglet Calendrier et l'écran de détail d'un
+ * Grand Prix — et ils partagent avec lui la clé de cache `cleSaison`. C'est ce
+ * qui rend l'ouverture du détail instantanée : la réponse est déjà là, et le
+ * *stale-while-revalidate* la rafraîchit derrière. Deux chargeurs écrits
+ * séparément auraient produit deux entrées de cache sous la même clé, donc deux
+ * formes de données pour un seul nom — le genre de faute dont le symptôme
+ * n'apparaît qu'au second écran.
+ *
+ * **Les deux lectures partent ensemble.** Les cotes disent quels Grands Prix
+ * sont ouverts, les pronostics disent ce que le bouton doit proposer sur
+ * ceux-là. Enchaînées, elles auraient additionné un aller-retour Supabase au
+ * réveil de Railway.
+ *
+ * **La seconde ne peut pas faire échouer la première** :
+ * `chargerMesGpPronostiques` rend toujours `ok` (voir sa note). Le calendrier
+ * s'affiche donc entier même si elle échoue, et ses boutons retombent sur
+ * « Pronostiquer », qui reste vrai.
+ */
+export async function chargerSaison(profilId, signal) {
+  const [cotes, joues] = await Promise.all([
+    chargerCotesEnBase(signal),
+    chargerMesGpPronostiques(profilId, signal),
+  ]);
+  if (!cotes.ok) return cotes;
+  return {
+    ok: true,
+    message: null,
+    donnees: { cotes: cotes.donnees, joues: [...joues.donnees] },
+  };
+}
+
+/**
+ * Où mène le CORPS d'une carte de Grand Prix — sa zone d'informations, par
+ * opposition à sa bande d'action (`actionDuGp`).
+ *
+ * **Deux destinations, et c'est l'état qui tranche.** Un Grand Prix couru ouvre
+ * ses **résultats** : la question qu'on se pose devant une course passée est
+ * « qui a gagné, et combien j'ai marqué ». Tous les autres ouvrent leur
+ * **fiche** : le programme du week-end, le circuit, le palmarès.
+ *
+ * **Le départage passe par `etatDuGpSaison`, jamais par le statut brut** — c'est
+ * la fonction qui décide déjà de la pastille et de la pâleur de la carte, et une
+ * seconde lecture du statut aurait pu envoyer vers les résultats une carte
+ * affichée « À venir ». Un seul propriétaire pour « ce Grand Prix est-il
+ * derrière nous ? ».
+ *
+ * **La fiche est indexée par le slug, jamais par l'identifiant en base**, et
+ * c'est structurel : onze des douze Grands Prix de la saison n'ont pas encore
+ * d'identifiant, et ce sont précisément ceux dont on vient lire la fiche. Les
+ * résultats, eux, n'existent pas sans la base — d'où le repli sur la fiche si
+ * l'identifiant manquait, plutôt qu'un lien mort.
+ *
+ * Contrairement à `actionDuGp`, cette fonction **rend toujours une
+ * destination** : la carte est tapable sur les douze, y compris quand la base
+ * dort. C'est ce qui rend le geste apprenable — une carte sur deux qui ne
+ * réagit pas ne s'essaie pas deux fois.
+ */
+export function destinationDuGp(gp, etat) {
+  if (etat.cle === "termine" && gp.gp_id) {
+    return `/grands-prix/${gp.gp_id}/resultats`;
+  }
+  return `/calendrier/${gp.slug}`;
 }
