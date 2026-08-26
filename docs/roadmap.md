@@ -118,18 +118,47 @@ donc dans aucun conflit d'ordre. **Elle peut être jouée avant ou après les 15
 > coup**, en gardant la ligne du scraper — celle qui porte les cotes — et en supprimant la
 > ligne manuelle **si et seulement si elle est vide**.
 
-> **Les heures insérées sont prévisionnelles.** `calendrier2026.js` ne contient aucune
-> heure ; celles-ci suivent la convention des horaires usuels de la F1 (15h00 locale,
-> heure habituelle pour les quatre courses de nuit), converties au fuseau réel de chaque
-> circuit. **Le scraper les écrase au premier passage.** À surveiller d'ici là : une carte
-> du calendrier peut passer à « Fermé » sur la foi d'une heure devinée.
+> **Les heures de COURSE insérées sont prévisionnelles.** Elles suivent la convention des
+> horaires usuels de la F1 (15h00 locale, heure habituelle pour les quatre courses de
+> nuit), converties au fuseau réel de chaque circuit. **Le scraper les remplace au premier
+> passage.** À surveiller d'ici là : une carte du calendrier peut passer à « Fermé » sur la
+> foi d'une heure devinée.
 
-> **Non éprouvée sur un PostgreSQL jetable** — ni Docker ni `psql` disponibles à
-> l'écriture, comme pour les migrations 12, 13 et 14. La logique de `slug_gp` a été
-> vérifiée hors PostgreSQL (les six cas d'épreuve, la table de traduction, et la
-> concordance des onze noms avec les slug de `GP_2026`), et la fonction **s'éprouve
-> elle-même** dans un bloc `do $$` au moment où on la joue. **À surveiller au premier
-> passage dans le SQL Editor.**
+> ### ⚠️ Ses heures de QUALIFICATIONS sont fausses — la 20 les corrige
+> La 19 pose `date_qualifications = date_course − 22h`. **Neuf des onze sont fausses**, de
+> une à quatre heures (`bugs-connus.md` §27). Jouer la 19 **sans** la 20 fait afficher des
+> qualifications à 17h00 pour le GP d'Italie, qui les court à 16h00.
+>
+> **Elle n'est pas réécrite pour autant** — les migrations sont historiques (`database.md`
+> §7). Enchaîner la 20 juste derrière, toujours dans cet ordre.
+
+> **Éprouvée sur un PostgreSQL 16 jetable**, contrairement à ce qui était écrit ici : le
+> démon Docker était disponible au moment de la `0.61.0`. La 19 s'exécute, ses six cas
+> d'épreuve de `slug_gp` passent, elle insère onze lignes, et rejouée en insère zéro. Le
+> harnais était réduit aux colonnes qu'elle touche — **ce n'est donc pas le schéma de la
+> 3**, et le premier passage dans le SQL Editor reste à surveiller.
+
+### 1.3 quater Appliquer la migration 20 — les horaires de qualifications
+
+`20260826180000_qualifications_horaires_2026` corrige les onze `date_qualifications` que la
+19 dérive de `date_course`. **À jouer juste après la 19, toujours** — jouée avant, elle ne
+trouve rien à corriger et la 19 repose ensuite les heures dérivées.
+
+Elle ne remplace aucune fonction et n'entre dans aucun conflit d'ordre avec les 15 à 18.
+Elle annonce **« 9 Grand(s) Prix corrigé(s) »** au premier passage — neuf et non onze,
+Austin et le Mexique ayant un écart réel de 22 h — puis « rien à corriger ». Elle rend
+enfin un tableau de contrôle : **la colonne `ecart` est celle qui parle**, douze fois
+« 22:00:00 » signifierait que tout est encore dérivé.
+
+> **Elle va de pair avec la `0.57.0` du backend**, qui retire le repli du scraper. Sans ce
+> déploiement Railway, le scraper réécrira `date_course − 22h` par-dessus la correction au
+> premier passage, et il n'y a **pas** d'ordre à respecter entre les deux : jouer la
+> migration d'abord ou déployer d'abord revient au même, mais **les deux sont nécessaires**.
+
+> **Éprouvée sur un PostgreSQL 16 jetable.** Les deux chemins convergent, la migration est
+> idempotente, une heure annoncée par Unibet n'est jamais réécrite, une ligne déjà adoptée
+> est bien retrouvée, et les onze instants finaux concordent au caractère près avec
+> `GP_2026.seances.qualifications` — croisés par script, pas relus à l'œil.
 
 ### 1.4 Vérifier les migrations appliquées
 

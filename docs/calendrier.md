@@ -99,8 +99,32 @@ depuis la version `0.59.0`.
 
 > **Les horaires ont été repris en `0.60.0`.** Dix séances réparties sur six Grands Prix
 > ont changé d'instant (Italie, Singapour, Austin, Mexique, Brésil, Las Vegas) ; les autres
-> étaient déjà justes. Elles restent **prévisionnelles**, et le scraper écrase toujours les
-> deux qu'il connaît.
+> étaient déjà justes. Elles restent **prévisionnelles**, et le scraper remplace les deux
+> qu'il connaît dès qu'Unibet les publie.
+
+> ### Les qualifications ne se dérivent plus de la course (v`0.61.0`)
+>
+> **Les onze heures de qualifications de cette table étaient déjà justes** — la `0.60.0`
+> les avait relevées. Le défaut était ailleurs, et corriger cette table seule n'y aurait
+> rien changé : `seancesDuGp` **préfère l'heure de la base** à celle d'ici, et la base
+> portait `date_course − 22h`, posé par la migration 19 et réécrit à chaque scraping par
+> le repli du scraper. La fiche du GP d'Italie annonçait donc **17h00 pour des
+> qualifications à 16h00** : une heure devinée chassait une heure relevée.
+>
+> Trois propriétaires écrivent maintenant **les mêmes instants** : cette table, la
+> migration 19 (à l'insertion) et la migration 20 (en correction). Le repli du scraper est
+> retiré (`0.57.0` du backend) — quand Unibet se tait, rien n'est écrit et la valeur en
+> base survit.
+>
+> **Aucune constante ne pouvait marcher** : l'écart entre les qualifications et le départ
+> vaut 23 h sur huit week-ends, 22 h sur deux (Austin, Mexique), 24 h au Brésil et **26 h à
+> Las Vegas**, dont les qualifications se courent le vendredi soir. Neuf des onze lignes
+> portaient une heure fausse, de une à quatre heures.
+>
+> **Éprouvé sur un PostgreSQL jetable**, ce que les migrations 12, 13, 14 et 19 n'avaient
+> pas pu être : les deux chemins (base neuve / base déjà migrée) convergent vers le même
+> état, les deux migrations sont idempotentes, une heure annoncée par Unibet n'est jamais
+> réécrite, et la correction retrouve une ligne déjà adoptée.
 
 > ### Écart signalé (CLAUDE.md §6)
 >

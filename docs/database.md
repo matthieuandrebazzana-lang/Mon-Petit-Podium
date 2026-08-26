@@ -124,7 +124,7 @@ toute la table sans lui.
 | `id_unibet` | text **unique** | **clé de rapprochement du scraper** |
 | `nom` | text | orthographe changeante — jamais une clé |
 | `date_course` | timestamptz, nullable | **en UTC** |
-| `date_qualifications` | timestamptz, nullable | migration 11 |
+| `date_qualifications` | timestamptz, nullable | migration 11 — **écrite, jamais dérivée** (migration 20) |
 | `statut` | text | `a_venir` \| `cotes_figees` \| `termine` |
 
 > **Le rapprochement se fait sur `id_unibet`, JAMAIS sur le nom.** Unibet écrit
@@ -157,11 +157,30 @@ toute la table sans lui.
 > ligne à laquelle quoi que ce soit pend**, `on delete cascade` emportant sinon des cotes
 > ou des pronostics sans bruit.
 >
-> **Les heures posées par la 19 sont prévisionnelles** (15h00 locale, heure habituelle pour
-> les courses de nuit, converties au fuseau réel du circuit). Le scraper les écrase au
-> premier passage. Conséquence à connaître : une carte du calendrier peut passer à
-> « Fermé » sur la foi d'une heure devinée, là où un GP absent de la base restait
+> **Les heures de COURSE posées par la 19 sont prévisionnelles** (15h00 locale, heure
+> habituelle pour les courses de nuit, converties au fuseau réel du circuit). Le scraper
+> les remplace au premier passage. Conséquence à connaître : une carte du calendrier peut
+> passer à « Fermé » sur la foi d'une heure devinée, là où un GP absent de la base restait
 > « à venir » (`calendrier.md` §6).
+
+> ### Les heures de QUALIFICATIONS ne se dérivent plus (migration 20, backend `0.57.0`)
+>
+> La 19 les posait à `date_course − 22h` — l'ancien repli du scraper. **22 h est une
+> constante, l'écart réel n'en est pas une** : 23 h sur huit week-ends de 2026, 22 h sur
+> deux (Austin, Mexique), 24 h au Brésil, **26 h à Las Vegas** dont les qualifications se
+> courent le vendredi soir. Neuf lignes sur onze portaient une heure fausse.
+>
+> Et le scraper la **réécrivait** à chaque passage, faute d'événement de qualification chez
+> Unibet — c'est le régime normal, pas l'exception (`scraper.md` §5). Comme `seancesDuGp`
+> préfère l'heure de la base à celle de `GP_2026`, la fiche du GP d'Italie annonçait des
+> qualifications à **17h00** pour une heure réelle de **16h00** : une heure devinée
+> chassait une heure relevée, et corriger la table statique seule n'y aurait rien changé.
+>
+> **Le repli est retiré du scraper.** Quand Unibet se tait, la clé n'est pas écrite dans
+> l'upsert et la valeur de la 20 survit. `date_qualifications` reste nullable pour la
+> raison ci-dessus, mais **une ligne neuve dont Unibet ne publie pas le programme n'a plus
+> d'horaire du tout** — donc pas de figeage automatique. C'est l'écart signalé de
+> `scraper.md` §5, et une raison de plus de tenir le geste d'adoption.
 
 ### `public.cotes`
 
@@ -415,7 +434,7 @@ applicatif de plus**.
 
 ---
 
-## 6. Les dix-neuf migrations
+## 6. Les vingt migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -438,6 +457,7 @@ applicatif de plus**.
 | 17 | `20260822120000_photos_contrainte_regex` | **corrige les deux `check` de la 16, incompilables** | 16 |
 | 18 | `20260823120000_couleur_texte_voiture` | `couleur_texte` sur `profils`, servie au classement et aux pronostics | 1, 16 |
 | 19 | `20260826120000_calendrier_2026_grands_prix` | **insère les 11 GP restants de 2026**, `slug_gp`, `adopter_grand_prix` | 3, 11 |
+| 20 | `20260826180000_qualifications_horaires_2026` | **corrige les horaires de qualifications de la 19**, qui les dérivait de `date_course` | 3, 11, **19** |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -455,15 +475,28 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **2**, **8**, **10** ou **12** après **16** | les photos aux cartes, classements et résultats | rejouer 16 |
 | **16** après **17** | l'enregistrement de toute photo, de nouveau refusé en `2201B` | rejouer 17 |
 | **2**, **8**, **10**, **12** ou **16** après **18** | la couleur de texte au classement et aux résultats | rejouer 18 |
+| **19** après **20** | les onze horaires de qualifications, redevenus `date_course − 22h` | rejouer 20 |
 
 **La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12
 et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre les écrans
 où *quelqu'un d'autre* voit la voiture. La perdre ne casse rien — le frontend retombe sur
 l'encre calculée — mais le réglage cesse d'être visible ailleurs que sur son propre profil.
 
-**Les migrations 11, 14, 15, 17 et 19 ne remplacent aucune fonction** : elles ne peuvent pas
-entrer en conflit d'ordre. La 17 ne remplace que deux contraintes `check`, et il faut donc
-la rejouer si l'on rejoue la 16 — qui reposerait les contraintes fautives.
+**Les migrations 11, 14, 15, 17, 19 et 20 ne remplacent aucune fonction** : elles ne
+peuvent pas entrer en conflit d'ordre sur une *fonction*. La 17 ne remplace que deux
+contraintes `check`, et il faut donc la rejouer si l'on rejoue la 16 — qui reposerait les
+contraintes fautives.
+
+> ### La 20 introduit un conflit d'ordre d'un genre nouveau : sur des DONNÉES
+> Les huit pièges du tableau portent tous sur une fonction remplacée. Celui de la 20 porte
+> sur une **valeur** : la 19 insère `date_course − 22h`, la 20 corrige. **Rejouer la 19
+> après la 20 ne réinsère rien** — son garde-fou sur le slug l'en empêche — donc les
+> horaires survivent. Le piège n'existe que si la 19 est jouée pour la **première** fois
+> après la 20, c'est-à-dire sur une base neuve où l'on aurait inversé les deux. La 20 ne
+> trouverait alors rien à corriger, et la 19 poserait les heures dérivées derrière elle.
+>
+> **La 19 n'a pas été réécrite pour autant**, et c'est la règle du §7 : les migrations sont
+> historiques. La correction vit dans la 20, qui la porte seule et le dit dans son en-tête.
 
 > ### La 17 répare un défaut que la 16 ne pouvait pas voir
 >
@@ -528,6 +561,21 @@ Les migrations **12, 13 et 14** n'ont pas été jouées contre un Docker (démon
 au moment de leur écriture), contrairement aux onze premières. La 13 a été comparée ligne
 à ligne à la 10 : trois lignes de différence, toutes attendues. **À surveiller au premier
 passage dans le SQL Editor.**
+
+> ### La 19 et la 20 l'ont été, sur PostgreSQL 16
+> Le démon Docker était disponible cette fois. Les deux migrations ont été jouées sur une
+> base jetable, contre un harnais réduit aux colonnes qu'elles touchent — **pas le schéma
+> de la 3**, ce que ce contrôle ne remplace donc pas. Six choses ont été vérifiées :
+>
+> - la 19 s'exécute, ses six cas d'épreuve de `slug_gp` passent, elle insère onze lignes ;
+> - **rejouée, elle en insère zéro** — le garde-fou sur le slug tient ;
+> - la 20 corrige **neuf** lignes (Austin et le Mexique portaient déjà la bonne heure), et
+>   rejouée n'en corrige plus aucune ;
+> - une heure qu'Unibet aurait annoncée entre-temps n'est **jamais** réécrite ;
+> - une ligne déjà **adoptée** — dont l'`id_unibet` n'est plus le placeholder — est bien
+>   retrouvée et corrigée, ce qui était l'objet du rapprochement par slug ;
+> - les onze instants finaux **concordent au caractère près** avec
+>   `GP_2026.seances.qualifications`, croisés par script et non relus à l'œil.
 
 ---
 

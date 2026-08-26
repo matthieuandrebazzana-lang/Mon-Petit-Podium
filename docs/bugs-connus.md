@@ -926,3 +926,65 @@ complète dans `metier.md` §3.
   lui, était resté dupliqué avec celui de l'accueil, et les deux ont dit la même chose
   fausse pendant onze versions. Le partage d'un composant ne couvre que ce qu'on lui a
   confié.
+
+---
+
+## 27. Les qualifications s'affichaient une heure trop tard — et la table statique était juste
+
+**Symptôme.** Sur la fiche d'un Grand Prix (`/calendrier/:slug`), la rangée
+« Qualifications » annonce une heure fausse. Le GP d'Italie affiche **17h00** pour des
+qualifications qui se courent à **16h00**. Neuf des onze Grands Prix restants sont touchés,
+de une à quatre heures d'écart ; Austin et le Mexique tombent juste.
+
+**La cause n'est pas dans `GP_2026`.** La table statique portait déjà les bonnes heures —
+la `0.60.0` les avait relevées sur le calendrier officiel. **Les corriger n'aurait rien
+corrigé** : `seancesDuGp` **préfère l'heure de la base** à celle de la table statique, pour
+les deux séances que la base connaît. C'est la règle voulue, posée en `0.59.0` — « la base
+l'emporte partout où elle a une réponse » — et elle suppose que la base dise vrai.
+
+Elle disait faux, et par **deux chemins qui se renforçaient** :
+
+1. **La migration 19** insérait `date_qualifications = date_course − 22 heures` pour les
+   onze lignes manuelles ;
+2. **le scraper** réappliquait le même calcul (`REPLI_QUALIFICATIONS`) à chaque passage où
+   Unibet n'annonce pas d'événement de qualification — c'est-à-dire, d'après le constat de
+   terrain d'août 2026, **le régime normal et non l'exception** (`scraper.md` §5).
+
+Corriger l'un sans l'autre ne suffisait donc pas : la base seule aurait été réécrite au
+premier scraping, le scraper seul aurait laissé les onze lignes en place.
+
+**22 h ne pouvait pas marcher.** L'écart entre les qualifications et le départ n'est pas une
+constante : 23 h sur huit week-ends, 22 h sur deux (Austin et le Mexique, dont la course
+part deux heures plus tôt en heure locale), 24 h au Brésil, et **26 h à Las Vegas**, dont
+les qualifications se courent le vendredi soir. Une constante appliquée aux douze en manque
+neuf.
+
+**Correctif.** L'heure des qualifications est **écrite**, jamais dérivée. La migration 20
+pose les onze instants, les mêmes que `GP_2026.seances.qualifications` ; le repli du
+scraper est retiré (`0.57.0`), et quand Unibet se tait la clé n'est simplement pas écrite
+dans l'upsert — la valeur en base survit.
+
+### Ce qu'il ne faut pas refaire
+
+- **Ne pas corriger la source qu'on regarde sans vérifier qui gagne.** La table statique
+  était juste et sous les yeux ; la valeur affichée venait d'ailleurs. Quand deux sources
+  répondent à la même question, la question à se poser d'abord est « laquelle l'emporte ? ».
+- **Une constante de temps n'est pas une source unique, c'est une supposition.** Le motif
+  d'origine était bon — la migration 19 réutilisait exprès le repli du scraper pour n'avoir
+  qu'une règle et un propriétaire. **Le motif était bon, la règle était fausse** : partager
+  une valeur fausse la propage au lieu de la corriger.
+- **Un repli qui s'applique tout le temps n'est plus un repli.** Il était écrit pour le cas
+  rare et journalisé en `warning` ; il était en fait le cas normal. Un `warning` qui sort à
+  chaque passage ne se lit plus comme une alerte.
+- **Deviner une donnée l'écrase.** Le vrai dommage n'était pas la devinette, c'était
+  l'écriture : une heure relevée à la main était remplacée par un calcul à chaque scraping.
+  Ne rien écrire laisse la donnée juste en place — c'est « on se ferme sur une donnée qu'on
+  n'a pas » appliqué à l'écriture.
+- **Le prix du retrait est assumé, et il est réel.** Une ligne neuve dont Unibet ne publie
+  pas le programme n'a plus d'horaire de qualifications, donc pas de figeage automatique ni
+  de bouton de pronostics. Le cas concret est une **ligne manuelle jamais adoptée**. Une
+  heure manquante se voit dans les logs ; une heure fausse ne se voyait pas.
+- **La migration 19 n'a pas été réécrite.** Les migrations de ce dépôt sont historiques
+  (`database.md` §7). La 20 corrige derrière elle, et l'ordre 19 → 20 devient un piège
+  d'ordre à part entière — le premier qui porte sur des **données** et non sur une fonction
+  remplacée.

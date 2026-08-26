@@ -44,7 +44,7 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from html import unescape
 from json import JSONDecodeError, loads
 from zoneinfo import ZoneInfo
@@ -118,16 +118,26 @@ EVENEMENT_COURSE = "course"
 # Le motif est volontairement large et posé sur le libellé brut : Unibet écrit
 # « Qualifications », mais rien ne garantit qu'il n'écrira pas « Qualifying »
 # demain, ni qu'il ne suffixera pas le libellé. Un motif trop strict ferait
-# retomber tous les Grands Prix sur le repli sans que rien ne le signale — alors
-# que le repli, lui, est journalisé à chaque fois.
+# taire l'heure de tous les Grands Prix sans que rien ne le signale — alors que
+# l'absence, elle, est journalisée à chaque fois.
 MOTIF_QUALIFICATIONS = re.compile(r"qualif", re.IGNORECASE)
 
-# Repli quand Unibet n'annonce pas ses qualifications : elles se courent le
-# samedi après-midi pour une course le dimanche après-midi, soit 22 heures avant
-# le départ. Ce n'est pas une devinette élégante, c'est un plancher raisonnable —
-# et le scraping se déclenchera deux heures après, donc le samedi en fin de
-# journée. Le cas est journalisé pour qu'il ne passe jamais inaperçu.
-REPLI_QUALIFICATIONS = timedelta(hours=22)
+# **Il n'y a plus de repli `date_course - 22h`** (retiré en `0.57.0`).
+#
+# Il calculait l'heure des qualifications depuis celle de la course, et il
+# l'ÉCRASAIT en base : à chaque scraping d'un Grand Prix dont Unibet ne publie
+# pas encore le programme — c'est-à-dire le régime normal, constaté sur le
+# terrain en août 2026 (`scraper.md` §5) — une heure devinée remplaçait celle
+# que la migration 20 a écrite explicitement, relevée sur le calendrier
+# officiel. Le symptôme se lisait sur l'écran de détail d'un Grand Prix, qui
+# préfère l'heure de la base à celle de la table statique (`seancesDuGp`) : le
+# GP d'Italie y aurait annoncé 17h00 pour des qualifications à 16h00.
+#
+# **Une heure de qualifications se stocke, elle ne se dérive pas.** Quand Unibet
+# se tait, la clé n'est simplement pas écrite dans l'upsert, et la valeur déjà
+# en base survit — voir `enregistrer_gp`. C'est la règle « on se ferme sur une
+# donnée qu'on n'a pas, jamais l'inverse » appliquée à l'écriture plutôt qu'à la
+# lecture.
 
 # Rubrique dont dépendent les GP dans l'arborescence d'Unibet, et donc segment
 # correspondant dans l'URL d'une page d'événement. Le nœud racine la confirme
@@ -261,8 +271,8 @@ def resoudre_qualifications(gp: GrandPrix) -> tuple[datetime | None, str]:
     Renvoie `(date, origine)` avec `origine` valant :
 
     - `"unibet"` — un événement de qualification a été trouvé chez le bookmaker ;
-    - `"repli"`  — aucun, l'heure est déduite de `date_course - 22h` ;
-    - `"inconnue"` — ni l'un ni l'autre : le GP n'a même pas d'heure de course.
+    - `"inconnue"` — aucun. **On ne devine pas**, et l'appelant n'écrit alors
+      rien : la valeur déjà en base survit.
 
     **La dernière qualification l'emporte, jamais la première.** Un week-end
     sprint en compte deux : la qualification du sprint le vendredi, et la vraie
@@ -273,6 +283,12 @@ def resoudre_qualifications(gp: GrandPrix) -> tuple[datetime | None, str]:
 
     Celles qui tomberaient après le départ sont écartées : ce serait un horaire
     abîmé, et il déclencherait un scraping après la course.
+
+    **Le troisième cas a disparu en `0.57.0`** : `date_course - 22h` était une
+    heure DÉRIVÉE de la course, et elle écrasait en base l'heure explicite du
+    calendrier officiel à chaque passage. Voir le commentaire de
+    `MOTIF_QUALIFICATIONS` ci-dessus. `gp.date_course` n'est donc plus lu ici
+    que pour écarter les qualifications postérieures au départ.
     """
     candidates = sorted(gp.qualifications)
     if gp.date_course:
@@ -280,9 +296,6 @@ def resoudre_qualifications(gp: GrandPrix) -> tuple[datetime | None, str]:
 
     if candidates:
         return candidates[-1], "unibet"
-
-    if gp.date_course:
-        return gp.date_course - REPLI_QUALIFICATIONS, "repli"
 
     return None, "inconnue"
 
@@ -559,30 +572,38 @@ async def _enregistrer(gp: GrandPrix) -> dict:
     # L'heure des qualifications est écrite même pour un GP figé : c'est une
     # donnée de programme, pas une cote. La refuser à un GP déjà figé priverait
     # l'interface d'un horaire exact qu'Unibet vient d'annoncer.
+    #
+    # **Et elle n'est écrite QUE si Unibet l'annonce.** Depuis la `0.57.0` il n'y
+    # a plus de repli dérivé de `date_course` : quand le bookmaker se tait, la
+    # clé est absente de `ligne`, donc l'upsert ne la touche pas et l'heure
+    # explicite posée par la migration 20 reste en place. Écrire une heure
+    # devinée par-dessus une heure relevée sur le calendrier officiel était le
+    # défaut corrigé en `0.61.0` côté écran.
     qualifs, origine = resoudre_qualifications(gp)
     if qualifs:
         ligne["date_qualifications"] = qualifs.isoformat()
-        if origine == "unibet":
-            logger.info(
-                "[scraper] %s : qualifications annoncées par Unibet à %s "
-                "(scraping automatique prévu 2h après).",
-                gp.nom,
-                qualifs.isoformat(),
-            )
-        else:
-            logger.warning(
-                "[scraper] %s : aucune épreuve de qualification trouvée chez Unibet. "
-                "Repli sur date_course - %s, soit %s.",
-                gp.nom,
-                REPLI_QUALIFICATIONS,
-                qualifs.isoformat(),
-            )
-    else:
-        logger.warning(
-            "[scraper] %s : ni qualifications ni heure de course connues. "
-            "Le déclenchement automatique du scraping restera impossible pour ce "
-            "Grand Prix tant qu'Unibet n'aura pas publié son programme.",
+        logger.info(
+            "[scraper] %s : qualifications annoncées par Unibet à %s "
+            "(scraping automatique prévu 2h après).",
             gp.nom,
+            qualifs.isoformat(),
+        )
+    else:
+        # WARNING et non INFO, et il faut le lire dans les deux sens : soit
+        # l'heure explicite est déjà en base et tout va bien, soit la ligne est
+        # neuve — un Grand Prix qu'aucune migration n'a posé, ou une ligne
+        # manuelle jamais adoptée (`adopter_grand_prix`, migration 19) — et elle
+        # restera sans heure, donc sans figeage automatique et sans bouton de
+        # pronostics. C'est le prix assumé du retrait du repli : une heure
+        # manquante se voit dans les logs, une heure fausse ne se voyait pas.
+        logger.warning(
+            "[scraper] %s : aucune épreuve de qualification trouvée chez Unibet "
+            "(origine « %s »). Aucune heure n'est écrite — celle déjà en base est "
+            "conservée. Si la ligne est neuve, le déclenchement automatique du "
+            "scraping restera impossible tant qu'Unibet n'aura pas publié son "
+            "programme.",
+            gp.nom,
+            origine,
         )
 
     enregistres = await upserter("grands_prix", [ligne], "id_unibet")

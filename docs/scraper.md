@@ -153,18 +153,49 @@ que beaucoup d'images Linux minces n'embarquent pas.
 Une qualification postérieure au départ est écartée (horaire abîmé, et elle déclencherait
 un scraping après la course).
 
-**Repli : `date_course − 22h`**, journalisé en `warning` à chaque fois. 22 h place les
-qualifications le samedi après-midi pour une course le dimanche après-midi ; le scraping
-tombe alors le samedi en fin de journée.
+### Il n'y a plus de repli (v`0.57.0`)
 
-> **Les logs disent toujours lequel des deux cas s'applique** — c'est ce qui empêche le
-> repli de devenir le régime normal sans que personne ne s'en aperçoive. **À relire dans
-> les logs le samedi du premier vrai Grand Prix** (chercher « qualifications annoncées par
-> Unibet » ou « aucune épreuve de qualification trouvée »).
+Le scraper retenait `date_course − 22h` quand Unibet n'annonçait rien. **Ce repli est
+retiré**, et `resoudre_qualifications` ne rend plus que deux cas : `"unibet"`, ou
+`"inconnue"`.
+
+> **Il ne devinait pas seulement, il écrasait.** L'upsert écrivait
+> `date_qualifications` à chaque passage. Une heure explicite posée en base par la
+> migration 19 était donc remplacée par le calcul au premier scraping — et
+> `seancesDuGp` (`lib/calendrier2026.js`) préfère l'heure de la base à celle de la table
+> statique. La fiche du GP d'Italie annonçait 17h00 pour des qualifications à 16h00.
+
+Et la constante était fausse. L'écart réel entre les qualifications et le départ vaut
+**23 h** sur huit week-ends de 2026, **22 h** sur deux (Austin et le Mexique), **24 h** au
+Brésil et **26 h** à Las Vegas, dont les qualifications se courent le vendredi soir : une
+constante appliquée aux douze en manque neuf.
+
+**Quand Unibet se tait, la clé n'est pas écrite dans `ligne`** — l'upsert ne la touche
+pas, et la valeur déjà en base survit. C'est la règle « on se ferme sur une donnée qu'on
+n'a pas » appliquée à l'écriture plutôt qu'à la lecture. L'heure vient alors des
+migrations 19 et 20, relevée sur le calendrier officiel de la FIA.
+
+> ### Écart signalé (CLAUDE.md §6) : ce que le retrait coûte
+> Une ligne **neuve** dont Unibet ne publie pas le programme reste désormais sans heure
+> de qualifications — donc **sans figeage automatique et sans bouton de pronostics**,
+> jusqu'à ce qu'Unibet la publie. Avant, elle recevait une heure approchée qui finissait
+> par déclencher le job.
+>
+> Le cas concret est **une ligne manuelle jamais adoptée** : le scraper insère alors une
+> seconde ligne, qui n'hérite d'aucune heure. C'est une raison de plus de tenir le geste
+> d'adoption (`adopter_grand_prix`, `roadmap.md`), pas un argument pour rendre le repli —
+> une heure manquante se voit dans les logs, une heure fausse ne se voyait pas.
+
+> **Le `warning` se lit dans les deux sens** : soit l'heure explicite est déjà en base et
+> tout va bien, soit la ligne est neuve et restera muette. **À relire dans les logs le
+> samedi du premier vrai Grand Prix** (chercher « qualifications annoncées par Unibet » ou
+> « aucune épreuve de qualification trouvée »).
 
 *Constat de terrain, août 2026 (J-7)* : le nœud racine **n'exposait aucun événement de
 qualification** — un seul événement « Course », rien d'autre, vérifié aussi dans le bloc
-SSR. **C'est donc le repli qui s'applique aujourd'hui.**
+SSR. **C'est donc le cas `"inconnue"` qui s'applique aujourd'hui**, et c'est exactement
+pourquoi le repli faisait des dégâts : il ne se déclenchait pas à la marge, il était le
+régime normal.
 
 ---
 

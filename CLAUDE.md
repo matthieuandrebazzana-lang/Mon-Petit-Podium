@@ -196,9 +196,83 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.60.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
-les onze étapes de développement sont livrées. **Le backend reste à `0.56.0`** — ni la
-`0.57.0`, ni la `0.58.0`, ni la `0.59.0`, ni la `0.60.0` ne touchent à son code.
+**Version `0.61.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+les onze étapes de développement sont livrées. **Le backend passe à `0.57.0`** — la
+`0.61.0` retire le repli `date_course − 22h` de `app/scraper/unibet.py`, et c'est le
+premier changement de code backend depuis la `0.56.0`. **Il doit être déployé sur
+Railway**, sans quoi le scraper réécrira l'heure que la migration 20 vient de corriger.
+
+### Une heure devinée chassait une heure relevée, et la table juste était sous les yeux
+
+La fiche du GP d'Italie annonçait des qualifications à **17h00** pour une séance qui se
+court à **16h00**. Neuf des onze Grands Prix restants étaient touchés, de une à quatre
+heures.
+
+**`GP_2026` était déjà juste** — la `0.60.0` avait relevé ces onze heures — et les corriger
+n'aurait rien corrigé du tout. `seancesDuGp` **préfère l'heure de la base** à celle de la
+table statique pour les deux séances que la base connaît : c'est la règle voulue de la
+`0.59.0`, et elle suppose que la base dise vrai. La base disait faux par **deux chemins qui
+se renforçaient** — la migration 19 insérait `date_course − 22h`, et le scraper
+réappliquait le même calcul à chaque passage. Corriger l'un sans l'autre ne suffisait pas.
+
+**Le motif d'origine était bon, la règle était fausse.** La migration 19 réutilisait
+délibérément le repli du scraper pour n'avoir qu'une seule règle et un seul propriétaire —
+la bonne réaction, appliquée à une valeur qui ne la méritait pas. **Partager une constante
+fausse la propage au lieu de la corriger.** Et l'écart réel n'est pas une constante : 23 h
+sur huit week-ends, 22 h sur deux (Austin et le Mexique), 24 h au Brésil, **26 h à Las
+Vegas** dont les qualifications se courent le vendredi soir.
+
+**Un repli qui s'applique tout le temps n'est plus un repli.** Il était écrit pour le cas
+rare et journalisé en `warning` ; le constat de terrain d'août 2026 dit qu'Unibet n'expose
+aucun événement de qualification, donc il était le **régime normal**. Un avertissement qui
+sort à chaque passage ne se lit plus comme une alerte.
+
+**Le dommage n'était pas la devinette, c'était l'écriture.** L'upsert écrivait
+`date_qualifications` à chaque scraping, donc remplaçait une heure relevée à la main par un
+calcul. Le correctif n'écrit plus rien quand Unibet se tait : la clé est absente de la
+ligne, et la valeur en base survit. C'est « on se ferme sur une donnée qu'on n'a pas »
+appliqué à l'**écriture** plutôt qu'à la lecture.
+
+> **Écart signalé (§6) : le retrait a un prix, et il est réel.** Une ligne **neuve** dont
+> Unibet ne publie pas le programme n'a plus d'horaire de qualifications — donc pas de
+> figeage automatique, pas de bouton de pronostics. Le cas concret est une ligne manuelle
+> **jamais adoptée**, pour laquelle le scraper insère une seconde ligne qui n'hérite
+> d'aucune heure. C'est une raison de plus de tenir le geste d'adoption, pas un argument
+> pour rendre le repli : **une heure manquante se voit dans les logs, une heure fausse ne
+> se voyait pas.**
+
+> **Second écart signalé (§6).** La demande donnait pour Austin « 23h00 heure française »
+> **et** « UTC 22h00 » — les deux ne s'accordent pas, la France étant encore à UTC+2 le
+> samedi 24 octobre 2026 (le changement d'heure tombe le 25). **L'UTC explicitement demandé
+> a été retenu** : c'est celui que la table portait déjà, et il place la séance à 17h00
+> heure d'Austin, le créneau habituel d'une qualification. Les dix autres conversions sont
+> exactes, et les onze heures rendent toutes un créneau plausible en heure locale.
+
+**Aucune des onze valeurs de `GP_2026` n'a bougé** — c'est le résultat, pas un raccourci :
+elles étaient justes, et la vérification les a confrontées une par une à l'heure française
+demandée. Le fichier ne change que par ses commentaires.
+
+**La migration 19 n'a pas été réécrite.** Les migrations de ce dépôt sont historiques
+(`database.md` §7). La **20** corrige derrière elle, et l'ordre `19 → 20` devient un piège
+d'ordre à part entière — **le premier qui porte sur des données** et non sur une fonction
+remplacée. Rejouer la 19 après la 20 est sans danger : son garde-fou sur le slug l'empêche
+de réinsérer quoi que ce soit.
+
+### Les migrations ont enfin été jouées sur un vrai PostgreSQL
+
+Le démon Docker était disponible cette fois — ce qui n'avait pas été le cas pour les
+migrations 12, 13, 14 ni 19. Les 19 et 20 ont tourné sur un PostgreSQL 16 jetable, contre
+un harnais réduit aux colonnes qu'elles touchent : **ce n'est pas le schéma de la migration
+3**, et ce contrôle ne remplace donc pas le premier passage dans le SQL Editor.
+
+Six choses ont été vérifiées, et deux n'auraient pas été trouvées autrement : que la 20
+retrouve bien une ligne **déjà adoptée** (dont l'`id_unibet` n'est plus le placeholder),
+et qu'elle **ne réécrit jamais** une heure qu'Unibet aurait annoncée entre-temps. Les onze
+instants finaux ont été croisés **par script** avec `GP_2026.seances.qualifications`, pas
+relus à l'œil.
+
+*La version `0.60.0` avait repris dix horaires de séances et fermé la grille de statistiques
+en carré. La `0.59.0` avait ouvert l'écran de détail d'un Grand Prix.*
 
 ### Un week-end n'a pas toujours les mêmes cinq séances
 
@@ -567,9 +641,13 @@ les plus urgents :
    laquelle **aucune photo ne s'enregistre**. La 18 est celle sans laquelle **la couleur du
    texte ne s'enregistre pas**. Si la 2, la 8, la 10, la 12 ou la 16 est rejouée un jour,
    rejouer la 18 derrière. **La `0.58.0` apporte la 19** — les onze Grands Prix restants —
-   qui ne dépend que de la 3 et de la 11 et ne remplace aucune fonction : elle peut se jouer
-   avant ou après les quatre autres. Les `0.56.0` et `0.57.0`, elles, n'exigeaient rien.
-3. **Adopter chaque ligne manuelle avant son week-end**, une fois la 19 jouée :
+   et **la `0.61.0` apporte la 20**, qui corrige ses horaires de qualifications. Les deux
+   ne dépendent que de la 3 et de la 11 et ne remplacent aucune fonction : elles se jouent
+   avant ou après les quatre autres, **mais la 19 avant la 20, toujours**. Jouer la 19
+   seule fait afficher des qualifications à 17h00 pour un GP d'Italie qui les court à 16h00.
+   **Déployer la `0.57.0` du backend avec elles** : sans ce déploiement, le scraper
+   réécrira `date_course − 22h` par-dessus la correction au premier passage.
+3. **Adopter chaque ligne manuelle avant son week-end**, une fois les 19 et 20 jouées :
    `select public.adopter_grand_prix('manuel-italie-2026', '<id Unibet réel>');`, le vendredi
    ou le samedi matin. **Sans ce geste, le scraper insère une seconde ligne pour la même
    course** — il se rapproche sur `id_unibet`, jamais sur le nom. Le prochain à adopter est

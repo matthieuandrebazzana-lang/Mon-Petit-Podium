@@ -117,7 +117,11 @@ export const ETATS_GP = {
  * Pays-Bas, constaté en base à la version `0.38.0` — statut `cotes_figees`
  * deux jours avant des qualifications annoncées au 22 août. La date des
  * qualifications, elle, ne peut pas être avancée par un `curl` : elle vient du
- * programme d'Unibet, ou du repli `date_course - 22h` du scraper.
+ * programme d'Unibet, ou de l'heure écrite explicitement en base (migrations 19
+ * et 20). **Elle n'est jamais dérivée de `date_course`** — le repli
+ * `date_course - 22h` a été retiré du scraper en `0.57.0`, parce qu'il écrasait
+ * l'heure relevée sur le calendrier officiel par une constante fausse sur neuf
+ * Grands Prix de douze.
  *
  * **On se ferme sur une donnée qu'on n'a pas, jamais l'inverse.** Un
  * `date_qualifications` absent — colonne nulle, cache écrit par une version

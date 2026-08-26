@@ -55,14 +55,25 @@ import { chargerMesGpPronostiques } from "./pronostics.js";
  * > n'a changé de propriétaire ; seul l'affichage a gagné les trois lignes que
  * > la base ne saura jamais dire.
  * >
- * > **Ces heures sont prévisionnelles.** Elles suivent la convention des
- * > horaires usuels d'un week-end de Formule 1, converties au fuseau réel de
- * > chaque circuit — exactement la convention posée par la migration 19 pour
- * > les onze lignes manuelles. Elles sont écrites en **instants UTC complets**
- * > et non en heures locales : un `Intl.DateTimeFormat` rend ensuite l'heure du
- * > téléphone, où qu'il soit. C'est aussi ce qui fait tomber juste le cas de Las
- * > Vegas, dont la course part le samedi 20h locale, c'est-à-dire le **dimanche**
- * > en UTC.
+ * > **Ces heures sont prévisionnelles**, au sens où le scraper les remplace
+ * > dès qu'Unibet publie son programme. Elles sont écrites en **instants UTC
+ * > complets** et non en heures locales : un `Intl.DateTimeFormat` rend ensuite
+ * > l'heure du téléphone, où qu'il soit. C'est aussi ce qui fait tomber juste le
+ * > cas de Las Vegas, dont la course part le samedi 20h locale, c'est-à-dire le
+ * > **dimanche** en UTC.
+ * >
+ * > **Les onze heures de QUALIFICATIONS, elles, sont relevées et non devinées**
+ * > (v`0.61.0`), et les mêmes instants sont écrits en base par les migrations 19
+ * > et 20 — trois tables qui se relisent ensemble, une fois par saison. C'est ce
+ * > qui manquait : `seancesDuGp` préfère l'heure de la base à celle d'ici, et la
+ * > base portait `date_course − 22h`. La fiche du GP d'Italie annonçait donc
+ * > 17h00 pour des qualifications à 16h00 — **une heure devinée chassait une
+ * > heure relevée**, et corriger cette table seule n'y aurait rien changé.
+ * >
+ * > **Aucune de ces heures ne se dérive d'une autre.** L'écart entre les
+ * > qualifications et le départ vaut 23 h sur huit week-ends, 22 h sur deux,
+ * > 24 h au Brésil et 26 h à Las Vegas, dont les qualifications se courent le
+ * > vendredi soir : toute constante appliquée aux douze en manque neuf.
  * >
  * > **Le nombre de séances n'est pas fixe** : `seances` porte les clés du
  * > week-end réel, et c'est leur PRÉSENCE qui décide des rangées affichées.
@@ -515,6 +526,14 @@ export const SEUIL_IMMINENT_MS = 24 * 60 * 60 * 1000;
  *
  * Les essais libres et les deux séances de sprint n'ont pas d'équivalent en
  * base : elles restent prévisionnelles, et l'en-tête du module le dit.
+ *
+ * **Cette préférence suppose que la base dise vrai, et c'est ce qui a manqué.**
+ * Jusqu'à la `0.61.0` la base portait `date_course − 22h` pour les onze Grands
+ * Prix posés par la migration 19 : la substitution ci-dessous remplaçait donc
+ * l'heure juste de `GP_2026` par une heure dérivée, et la fiche de l'Italie
+ * annonçait 17h00 au lieu de 16h00. La règle n'était pas en cause — les deux
+ * sources écrivent maintenant les mêmes instants, et le scraper ne dérive plus
+ * rien. **Corriger la table statique seule n'aurait rien corrigé du tout.**
  *
  * Une séance dont l'instant est illisible est **rendue quand même**, sans date :
  * une rangée manquante ferait croire que le week-end n'a pas d'EL3, là qu'un
