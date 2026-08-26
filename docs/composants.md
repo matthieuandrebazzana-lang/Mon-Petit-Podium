@@ -113,6 +113,8 @@ lui appartient. Retoucher l'onglet déjà ouvert **ramène en haut de l'écran**
 | `CarteGpSaison` | **deux `<a>` frères**, jamais imbriqués (le corps et la bande mènent ailleurs). Le `pressable-large` est sur l'`<article>` : `:active` remonte aux ancêtres, et le poser sur les deux liens composerait 0,985 × 0,985 |
 | `VainqueursCircuit` | **grille 2 colonnes, plus une rangée qui défile** (v`0.60.0`) : la voiture passe AU-DESSUS du nom, sans quoi « Verstappen » (79 px) se tronque dans une colonne qui n'en laisse que 77,5 à 375 px |
 | `SeancesWeekend` | c'est le **rang** qui décide de la mise en avant, pas le seuil de 24 h — un vendredi matin, les deux premières séances y tiennent. Le nombre de rangées **n'est pas fixe** : il vient des clés que `gp.seances` déclare (week-end sprint) |
+| `DrapeauxPilotes` | **`preserveAspectRatio="none"`, pas `slice`** — une rangée de classement fait 5,2:1, un drapeau 1,5:1, et `slice` recadrait l'Allemagne en rouge uni. Et **aucun `fill` sur un ancêtre** : la bande noire allemande n'a pas d'attribut `fill` et l'hériterait |
+| `LigneClassement` (`ResultatsGp`) | **aucun texte en `texte-doux`** : sur le lavis de drapeau à 8 %, le gris ne vaut que 2,39:1. Le prénom et l'écurie prennent le marron `secondaire` |
 
 ---
 
@@ -253,6 +255,30 @@ légèrement différent de celui du bloc de Zandvoort, sur le même écran.
 > pas de spécification qu'on puisse poser sans l'approximer. Ses vainqueurs restent sans
 > fond, comme n'importe quel pays absent de la table (`roadmap.md` §3.8 bis).
 
+### Les drapeaux de pilotes — la seule bibliothèque du frontend (`0.62.0`)
+
+`composants/DrapeauxPilotes.jsx` importe **quinze** drapeaux de `country-flag-icons`, un
+module par pays, indexés par code ISO 3166-1 alpha-2. C'est la seule entorse à la règle
+« tout est extrait par script d'une planche » — et c'est cette règle même qui la commande.
+
+**La grille 2026 demande quinze pays.** Sept d'entre eux — Australie, Nouvelle-Zélande,
+Brésil, Mexique, Canada, Thaïlande, Argentine — n'ont aucune description qu'un dégradé
+sache poser sans l'approximer, et `assets/flags.svg` ne dessine que des pays **hôtes**.
+Le choix était donc entre approximer sept drapeaux et en prendre quinze exacts.
+
+| Point | Pourquoi |
+|---|---|
+| **`country-flag-icons`, pas `react-world-flags`** | le second embarque les 250 drapeaux en data-URI dans un lot UMD de **3,6 Mo** et les résout par `require.context`, une API propre à webpack que Vite n'implémente pas. Le premier est de l'ESM pur, `sideEffects: false` : les quinze imports pèsent **+15,5 Ko** au lot, mesurés |
+| **`preserveAspectRatio="none"`** | même arbitrage que `FondPiste`. Une rangée fait 5,2:1, un drapeau 1,5:1 : `slice` recadrait sur la bande centrale, et l'Allemagne ressortait rouge uni. `none` garde **toutes** les bandes. `VainqueursCircuit` garde son `slice` — ses cartes sont presque carrées |
+| **Aucun `fill` ni `color` sur un ancêtre** | la bande noire allemande n'a pas d'attribut `fill` et **hérite** ; le Canada pose le piège à l'envers avec `fill="red"` en mot-clé. Invisible à la lecture du JSX |
+| **Le lavis à 8 %, mesuré** | pire substrat le noir → `#EBEBEB` : `texte` **14,60:1**, `secondaire` **8,86:1**, `primaire` **9,13:1**. **`texte-doux` : 2,39:1, banni de ces lignes** |
+| **Un pays absent ne rend rien** | la règle du projet depuis la `0.15.0`, jamais une couleur de repli |
+
+> **Deux systèmes de drapeaux coexistent donc**, et c'est un écart assumé au principe de la
+> source unique : `DRAPEAUX` garde les pays hôtes parce que son champ `couleurs` alimente
+> le calcul de `voileNecessaire`, qu'un SVG importé ne peut pas nourrir. Le détail et la
+> façon de le résorber sont dans `roadmap.md` §3.8 quater.
+
 ### Les voitures
 
 **`voitures_perso.svg`** empile quatre voitures, chacune peinte par **son propre couple de
@@ -291,7 +317,8 @@ le mode personnalisé — ce qui se voit à l'écran au lieu de planter.
 | `useFermeture.js` | `useFermeture` (« est-ce fermé ? »), `useEtatPronostics` (le décompte du week-end) |
 | `couleurs.js` | aplats de bloc, contraste, encres |
 | `palette.js` | 20 couleurs de voiture, luminance, `livreeDuMembre` |
-| `ecuries.js` | onze écuries, grille 2026 — voir `ecuries.md` |
+| `ecuries.js` | onze écuries, grille 2026, `ecurieDuLibelle` — voir `ecuries.md` |
+| `nationalites.js` | **la nationalité des 22 pilotes**, en ISO alpha-2 — contrepartie de `pilotes.py` |
 | `calendrier.js` | `ETATS_GP`, `cotesArretees`, `etatPronostics` — **seule lectrice du statut `cotes_figees`** |
 | `calendrier2026.js` | **la liste des GP** — voir `calendrier.md` |
 | `navigation.js` | barre, onglets, `origineRetour` |

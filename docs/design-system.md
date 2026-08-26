@@ -74,7 +74,7 @@ une liste — voir `decisions.md` §18.
 
 ### Les palettes hors thème
 
-Quatre familles de couleurs vivent **hors du bloc `@theme`**, chacune dans son module, et
+Cinq familles de couleurs vivent **hors du bloc `@theme`**, chacune dans son module, et
 partagent toutes le même périmètre : elles ne peignent que l'objet qu'elles décrivent.
 
 | Module | Ce qu'elles peignent |
@@ -82,6 +82,7 @@ partagent toutes le même périmètre : elles ne peignent que l'objet qu'elles d
 | `lib/palette.js` | les 20 couleurs de voiture personnalisable |
 | `lib/ecuries.js` | fond (9,4 %) et liseré (60 %) d'un widget de cote |
 | `composants/DrapeauxGP.jsx` | le fond d'un bloc de Grand Prix |
+| `composants/DrapeauxPilotes.jsx` | le lavis de drapeau d'une ligne de classement |
 | `lib/livrees.js` | teintes des livrées, **lues dans `ecuries.js`** |
 
 **`teinteMembre` (`lib/couleurs.js`) est une cinquième liste**, et elle ne sort pas du bloc
@@ -89,6 +90,15 @@ partagent toutes le même périmètre : elles ne peignent que l'objet qu'elles d
 par empreinte de l'identifiant d'un membre. Elle porte **les deux formes** de chaque teinte
 — la classe Tailwind pour la pastille en HTML, le `#rrggbb` pour le cockpit de la voiture
 en SVG, où un `fill` n'accepte pas `bg-primaire`. Une seule question, un seul propriétaire.
+
+> **`DrapeauxPilotes` est le seul de ces modules dont les couleurs ne sont pas écrites
+> dans le dépôt** : ce sont les quinze SVG de `country-flag-icons`. Le périmètre est le
+> même que les autres — il ne peint qu'un lavis à 8 % en fond d'une ligne de classement —
+> mais le **calcul de contraste ne pouvait pas être dérivé** comme celui de
+> `voileNecessaire` : un SVG importé n'expose pas ses bandes. Les quinze drapeaux ont donc
+> été mesurés **couleur par couleur, par script**, et c'est le noir qui décide (`#EBEBEB`
+> composé) : `texte` 14,60:1, `secondaire` 8,86:1, `primaire` 9,13:1, **`texte-doux`
+> 2,39:1 — hors de question**. Voir `composants.md` §4.
 
 **Aucune ne peint un fond d'écran, un bouton ou un texte d'interface.** Des tests
 vérifient le cloisonnement.
@@ -147,6 +157,12 @@ Espacement entre blocs : **12px**. Padding intérieur : **16–20px**.
 > demandée, et c'est elle qui dit où commence l'encadré), et le **filet de 4px** d'une
 > ligne de classement — qui n'est pas une bordure au sens de la règle : c'est un aplat
 > posé **à l'intérieur**, pas un trait qui cerne le bloc.
+>
+> **Ce filet est aussi ce qui sépare deux sections d'un écran** (`TitreSection`, version
+> `0.62.0`) : la demande voulait « un séparateur visuel marqué », et le seul trait que la
+> palette autorise est celui-là. Le séparateur est donc **l'espace d'abord** — 24px au
+> lieu de 12 au-dessus d'un changement de sujet — et le filet ensuite, qui donne à l'œil
+> un point d'accroche à gauche du titre. Jamais une règle horizontale.
 
 ---
 

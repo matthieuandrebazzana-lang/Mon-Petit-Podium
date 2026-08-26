@@ -196,13 +196,139 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.61.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
-les onze étapes de développement sont livrées. **Le backend passe à `0.57.0`** — la
-`0.61.0` retire le repli `date_course − 22h` de `app/scraper/unibet.py`, et c'est le
-premier changement de code backend depuis la `0.56.0`. **Il doit être déployé sur
-Railway**, sans quoi le scraper réécrira l'heure que la migration 20 vient de corriger.
+**Version `0.62.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+les onze étapes de développement sont livrées. **Le backend reste à `0.57.0`** — la
+`0.62.0` ne touche que le frontend, et la route des résultats servait déjà tout ce que
+l'écran refondu affiche. **La `0.57.0` du backend reste à déployer sur Railway**, sans quoi
+le scraper réécrira l'heure que la migration 20 vient de corriger.
 
-### Une heure devinée chassait une heure relevée, et la table juste était sous les yeux
+### Un écran de résultats qui répond aux deux questions dans l'ordre où on se les pose
+
+L'écran des résultats d'un Grand Prix ouvrait sur le podium de la course et enterrait les
+pronostics du joueur dans un accordéon, sous le classement des membres. Il ouvre maintenant
+sur **« Mes résultats »** — le total, puis un widget par pronostic avec son marché, sa
+sélection et son verdict — puis sur **« Résultats du GP »**, le classement complet, une
+ligne par pilote avec sa position, la voiture de son écurie, son nom, ses points FIA et
+**le drapeau de sa nationalité en fond à 8 %**.
+
+**Le seul vrai changement de comportement est que « Mes résultats » ne dépend plus de
+`disponible`.** La route sert les pronostics des membres qu'un classement ait été récupéré
+ou non ; l'ancien écran les cachait tous derrière ce drapeau et laissait le joueur, avant
+la course, sans aucune trace de ce qu'il avait validé. Les points s'y affichent alors comme
+**potentiels**, ce que `PastillePoints` savait déjà dire — son troisième état, le beige,
+existait pour exactement ça et n'avait jamais servi ici.
+
+### Quinze drapeaux exacts valent mieux que sept approximés
+
+`assets/flags.svg` ne dessine que des pays **hôtes**, et la grille 2026 demande **quinze**
+pays. Sept d'entre eux — l'Australie, la Nouvelle-Zélande, le Brésil, le Mexique, le
+Canada, la Thaïlande, l'Argentine — n'ont aucune description qu'un dégradé sache poser sans
+l'approximer. C'est la règle de `DrapeauxSVG.jsx` qui tranche, et elle tranche **pour** la
+bibliothèque : le choix était entre approximer sept drapeaux et en prendre quinze exacts.
+
+> **Écart signalé (§6) : ce n'est pas `react-world-flags`.** La demande le nommait « de
+> préférence », et il ne convient pas pour deux raisons **mesurées** : son `dist` est un
+> lot UMD de **3,6 Mo** qui embarque les 250 drapeaux en data-URI sans découpage possible,
+> et son code les résout par `require.context`, une API propre à **webpack** que Vite
+> n'implémente pas. `country-flag-icons` fait ce que la demande décrit — « import SVG par
+> code ISO 3166-1 alpha-2 » — en ESM pur et `sideEffects: false` : le lot passe de 818 724
+> à 834 181 octets, soit **+15,5 Ko pour quinze pays**, et le contrôle confirme qu'aucun
+> des 250 autres n'entre.
+
+> **Second écart (§6) : il y a une TROISIÈME section, et elle est conservée.** La demande
+> décrit deux sections et ne dit rien du classement des membres du championnat — ni de le
+> garder, ni de le retirer. Le retirer aurait supprimé, sur la foi d'un silence, la seule
+> surface où l'on voit ce que ses amis ont pronostiqué. « Mes résultats » répond à « qu'ai-je
+> marqué », pas à « qui a gagné entre nous ».
+
+> **Troisième écart (§6) : ni « 20 pilotes », ni le barème en dur.** La grille 2026 en
+> compte **vingt-deux**, et l'écran rend toutes les lignes que la course a publiées :
+> couper à vingt aurait effacé deux classés, compléter à vingt aurait inventé des lignes.
+> Et `points_fia` arrive d'OpenF1 plutôt que d'être déduit de la position, parce qu'il sait
+> ce que la position seule ne dit pas — le point du sprint, une pénalité appliquée après
+> l'arrivée, une disqualification. **Le barème aurait eu tort d'abord sur le week-end
+> sprint de Singapour.**
+
+### Le rendu contre la feuille compilée a trouvé deux défauts, et le second est le drapeau
+
+Neuvième fois, et cette fois avec un vrai navigateur : les composants réels rendus sous la
+feuille compilée, mesurés à 320, 375 et 430 px, puis **regardés en image**.
+
+**`preserveAspectRatio="slice"` était le mauvais réflexe, et il venait du reste du projet.**
+Une rangée de classement fait **343 × 65,5 px**, soit un rapport de **5,2:1**, là où un
+drapeau en fait 1,5:1. `slice` — le pendant d'`object-fit: cover`, la valeur que
+`DrapeauxSVG` et `VainqueursCircuit` emploient — recadre donc sur la **bande centrale** et
+jette tout le reste : l'Allemagne ressortait **entièrement rouge**, indistinguable d'un pays
+à drapeau rouge, et l'Espagne entièrement jaune. Le drapeau ne disait plus la nationalité,
+ce qui est la seule chose qu'on lui demande. **Rien dans le JSX ne le laissait deviner**, et
+la mesure de contraste, elle, passait très bien.
+
+`none` rend les deux échelles indépendantes : toutes les bandes survivent, seule leur
+proportion s'étire. **C'est exactement l'arbitrage de `FondPiste`** — un dessin qui doit
+couvrir une boîte dont le rapport de forme n'est pas le sien. Et **`VainqueursCircuit` garde
+son `slice`** : ses cartes sont presque carrées, le recadrage y mord de quelques pixels. Ce
+n'est pas la même boîte, donc ce n'est pas la même réponse.
+
+Le premier défaut était plus ordinaire et ne se voyait pas davantage : **à 320 px, le
+sous-titre de « Mes résultats » se tronquait.** Les trois sous-titres ont été raccourcis
+jusqu'à tenir sur le plus petit iPhone.
+
+### Le contraste d'un lavis importé ne se dérive pas, il se mesure
+
+`voileNecessaire` calcule l'opacité d'un voile depuis la bande la plus claire de chaque
+drapeau — **et il ne peut rien faire ici** : un SVG importé d'une bibliothèque n'expose pas
+ses bandes. Les quinze drapeaux ont donc été ouverts et mesurés **couleur par couleur, par
+script**, y compris les deux que la lecture rate — le `fill="red"` en mot-clé du Canada, et
+la bande noire allemande qui **n'a aucun attribut `fill`** et tient son noir du défaut SVG.
+
+Le pire substrat est ce noir, composé à 8 % sur blanc en `#EBEBEB` : l'encre `texte` y vaut
+**14,60:1**, le marron `secondaire` **8,86:1**, le bordeaux `primaire` **9,13:1**.
+
+> **`texte-doux` n'y tient pas — 2,39:1**, et c'est ce qui décide de la ligne : le prénom et
+> l'écurie passent au marron `secondaire`. Le design system signale déjà ce défaut deux
+> fois, et une rangée de classement est exactement « une phrase qu'on vient lire ».
+
+> **La bande allemande sans `fill` est le piège du fichier.** Elle **hérite** de tout `fill`
+> qu'un ancêtre déclarerait : poser une couleur sur le calque du lavis repeindrait le noir
+> allemand sans qu'aucune ligne de JSX ne le laisse voir. Aucun `fill` ni `color` ne doit
+> donc être posé sur un conteneur de ces SVG.
+
+### Deux tables de plus, et aucune n'est une seconde source
+
+`lib/nationalites.js` est la **contrepartie frontend** du champ `nationalite` de
+`backend/app/calcul/pilotes.py`, comme `lib/ecuries.js` l'est déjà de sa grille. Les codes
+ne peuvent pas être les mêmes — le backend emploie le CIO à trois lettres parce que c'est la
+langue du sport, le frontend l'ISO alpha-2 parce que c'est ce qu'une planche de drapeaux
+comprend — et la conversion est écrite pilote par pilote plutôt que dérivée d'une table CIO
+→ ISO : quinze correspondances ne valent pas une seconde table à tenir, et trois ne se
+devinent pas (NED → NL, GER → DE, MON → MC).
+
+**Elle porte le garde-fou de saison d'`alias_unibet`, transposé** : numéro **et** nom de
+famille doivent concorder. Si le 12 n'est plus Antonelli, la table périmée ne collera pas le
+drapeau italien sur son successeur — elle ne rendra rien. **Une ligne sans drapeau se voit ;
+une ligne sous le mauvais drapeau ne se voit pas.**
+
+`ecurieDuLibelle` (`lib/ecuries.js`) et `livreeDeLEcurie` (`lib/livrees.js`) répondent au
+troisième consommateur d'une question que le module traitait déjà : le classement sert
+l'écurie **dans la forme d'OpenF1** — « Red Bull Racing », « Haas F1 Team » — et la ligne
+doit en tirer la livrée à dessiner. Le rapprochement n'est pas réécrit : il part des **mêmes
+trois tables** que la couleur, si bien qu'une douzième orthographe d'Unibet demandera une
+seule ligne pour les deux réponses.
+
+> **Vérifié par script, pas à l'œil** : les onze écuries d'OpenF1 rendent bien onze slugs de
+> livrée, les vingt-deux pilotes rendent bien leur pays, les six cas du garde-fou tombent
+> juste, et les quinze codes déclarés sont exactement les quinze drapeaux dessinés.
+
+### Rien n'anime, et c'est la décision
+
+L'écran entre sous `.t-ecran` et ses sections sous `.t-stagger-line` ; l'accordéon des
+membres garde son `.t-acc`. **C'est tout, et aucun jeton de mouvement n'entre.** Le verdict
+d'un pronostic est **déjà calculé quand l'écran s'ouvre** : le révéler par une animation
+raconterait un suspense qui n'existe pas, et le joueur revient sur cette page plusieurs fois
+dans la semaine. Vingt-deux lignes de classement qui entreraient en cascade mettraient plus
+d'une seconde à se poser sur une liste qu'on vient parcourir de haut en bas.
+
+### `0.61.0` — une heure devinée chassait une heure relevée, et la table juste était sous les yeux
 
 La fiche du GP d'Italie annonçait des qualifications à **17h00** pour une séance qui se
 court à **16h00**. Neuf des onze Grands Prix restants étaient touchés, de une à quatre
@@ -271,8 +397,9 @@ et qu'elle **ne réécrit jamais** une heure qu'Unibet aurait annoncée entre-te
 instants finaux ont été croisés **par script** avec `GP_2026.seances.qualifications`, pas
 relus à l'œil.
 
-*La version `0.60.0` avait repris dix horaires de séances et fermé la grille de statistiques
-en carré. La `0.59.0` avait ouvert l'écran de détail d'un Grand Prix.*
+*La version `0.61.0` avait rendu leur heure aux qualifications. La `0.60.0` avait repris dix
+horaires de séances et fermé la grille de statistiques en carré. La `0.59.0` avait ouvert
+l'écran de détail d'un Grand Prix.*
 
 ### Un week-end n'a pas toujours les mêmes cinq séances
 
@@ -663,5 +790,7 @@ les plus urgents :
    ne doit pas se tromper de destination ; **la rangée des derniers vainqueurs**, cinq SVG
    de voiture qui défilent à l'inertie et dont le calage a demandé `scroll-pl-4` ; **le
    défilement d'ouverture du calendrier**, qui se pose sur des `offsetTop` mesurés pendant
-   l'animation d'entrée ; **le sélecteur de vingt-quatre Grands Prix** ; et **la photo de
-   15px dans le cockpit**.
+   l'animation d'entrée ; **le sélecteur de vingt-quatre Grands Prix** ; **la photo de
+   15px dans le cockpit** ; et, depuis la `0.62.0`, **le lavis de drapeau à 8 %** — même
+   jugement de plein soleil que l'opacité `0,4` — sur un écran qui dessine désormais
+   **vingt-deux voitures d'écurie** en une seule liste.

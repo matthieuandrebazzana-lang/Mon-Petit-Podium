@@ -6,7 +6,10 @@ import BlocErreur from "../composants/BlocErreur.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import Voiture from "../composants/Voiture.jsx";
+import DrapeauPays from "../composants/DrapeauxPilotes.jsx";
 import { livreeDuMembre } from "../lib/palette.js";
+import { livreeDeLEcurie } from "../lib/livrees.js";
+import { nationaliteDuPilote } from "../lib/nationalites.js";
 import { Barre, Carte, Pave, Rangee } from "../composants/Squelette.jsx";
 import {
   IconeChevronAccordeon,
@@ -18,7 +21,6 @@ import {
   chargerResultatsGp,
   classerLesMembres,
   cleResultats,
-  podiumDeLaCourse,
 } from "../lib/calendrier.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import { choixDuPronostic } from "../lib/pronostics.js";
@@ -34,7 +36,7 @@ import { formaterDepart, formaterPoints } from "../lib/format.js";
  *   partout ailleurs, et l'écran s'affiche sans session — c'est pour cela que sa
  *   route vit hors des groupes public et protégé de `App.jsx`, comme
  *   `/nouveau-mot-de-passe` ;
- * - le **classement du championnat** n'apparaît qu'avec un `championnat_id`,
+ * - les **pronostics des membres** n'apparaissent qu'avec un `championnat_id`,
  *   donc uniquement quand on arrive ici depuis un championnat dont on est
  *   membre. La route exige le jeton et vérifie l'appartenance ; l'écran ne
  *   décide rien, il affiche ce qu'on lui sert.
@@ -42,141 +44,80 @@ import { formaterDepart, formaterPoints } from "../lib/format.js";
  * **Un Grand Prix non couru n'est pas une erreur.** La route rend
  * `disponible: false` plutôt qu'un `404` (étape 6), et l'écran le dit avec la
  * date et l'heure du départ. Un écran vide laisserait croire à une panne.
+ *
+ * ## La refonte en sections (version `0.62.0`)
+ *
+ * L'écran répondait à deux questions dans un ordre qui n'était pas celui où on
+ * se les pose. Il ouvre maintenant sur **« Mes résultats »** — ce que *j'ai*
+ * marqué, pronostic par pronostic — puis sur **« Résultats du GP »**, le
+ * classement complet de la course. Les deux sections portent le même en-tête,
+ * un titre et un filet bordeaux, pour se lire comme deux pairs et non comme un
+ * bloc et son annexe.
+ *
+ * > **Écart signalé (CLAUDE.md §6) : il y a une TROISIÈME section, et elle est
+ * > conservée.** La demande décrit deux sections et ne dit rien du classement
+ * > des membres du championnat — ni de le garder, ni de le retirer. Le retirer
+ * > aurait supprimé la seule surface où l'on voit ce que ses amis ont
+ * > pronostiqué sur ce Grand Prix, avec son accordéon et ses photos, sur la foi
+ * > d'un silence. « Mes résultats » répond à « qu'ai-je marqué », pas à « qui a
+ * > gagné entre nous » : les deux questions coexistaient déjà, elles coexistent
+ * > toujours, sous un titre de section comme les deux autres.
+ *
+ * > **Second écart (§6) : « les 20 pilotes ».** La grille 2026 en compte
+ * > **vingt-deux**, et un classement peut en porter plus encore (un pilote de
+ * > remplacement dans le week-end). L'écran rend **toutes** les lignes que la
+ * > course a publiées plutôt qu'un nombre écrit en dur : couper à vingt aurait
+ * > fait disparaître les deux derniers classés, et compléter à vingt aurait
+ * > inventé des lignes. C'est le refus déjà opposé aux palmarès courts de Las
+ * > Vegas et du Qatar en version `0.60.0`.
+ *
+ * > **Troisième écart (§6) : les points FIA ne sont pas calculés depuis la
+ * > position.** La demande donne le barème (25-18-15-12-10-8-6-4-2-1-0) ;
+ * > `points_fia` arrive déjà d'OpenF1, qui sait ce que la position seule ne dit
+ * > pas — le point du sprint, une pénalité appliquée après l'arrivée, une
+ * > disqualification. Poser le barème par-dessus aurait remplacé un fait par
+ * > une règle, et la règle aurait eu tort d'abord sur le week-end sprint de
+ * > Singapour.
  */
 
 /* -------------------------------------------------------------------------- */
-/*  Le classement de la course                                                */
+/*  L'en-tête d'une section                                                   */
 /* -------------------------------------------------------------------------- */
-
-/** Une marche du podium. Le vainqueur est au centre, comme dans la maquette. */
-function Marche({ ligne, premier }) {
-  const rang = premier ? "1er" : `${ligne.position}e`;
-
-  return (
-    <div
-      className={`rounded-champ flex-1 px-2 py-2.5 text-center ${
-        premier ? "bg-accent/15" : "bg-fond"
-      }`}
-    >
-      <p
-        className={`text-label-sm ${premier ? "text-accent" : "text-texte-doux"} uppercase`}
-      >
-        {premier ? `🏆 ${rang}` : rang}
-      </p>
-      <p className="text-texte mt-1 truncate text-[13px] font-medium">
-        {ligne.pilote}
-      </p>
-      <p className="text-texte-doux mt-0.5 truncate text-[10px]">
-        {ligne.equipe ?? "—"}
-      </p>
-    </div>
-  );
-}
 
 /**
- * Une ligne du classement complet.
+ * Le titre d'une section, et le séparateur qui la détache de la précédente.
  *
- * `points_fia` est le seul nombre de l'application qui ne soit pas des points au
- * sens de la règle 4.1 : ce sont les points du championnat du monde (25, 18,
- * 15…). Il est donc écrit « 25 pts FIA » et jamais avec `formaterPoints`, qui
- * habille les points de l'app. Les confondre ferait lire le classement F1 comme
- * un classement de pronostics.
+ * **Le séparateur n'est pas un trait.** Le design system proscrit les bordures
+ * fines (§3) et n'en excepte que le **filet de 4px** d'une ligne de classement,
+ * qui est un aplat posé à l'intérieur et non un trait qui cerne. C'est ce filet
+ * qui est repris ici, en bordeaux, à côté d'un titre en 19px — la hiérarchie
+ * passe donc par **la taille, la graisse et l'espace**, comme partout ailleurs,
+ * et le filet ne fait que donner à l'œil un point d'accroche à gauche.
+ *
+ * Un `<h2>` et non un `<p>` : trois sections sur un écran forment un plan, et
+ * un lecteur d'écran doit pouvoir sauter de l'une à l'autre.
  */
-function LignePilote({ ligne }) {
-  const classe = ligne.position !== null && ligne.position !== undefined;
-
+function TitreSection({ titre, sousTitre }) {
   return (
-    <li className="flex items-center gap-3 py-2">
+    <div className="flex items-center gap-2.5 px-1">
       <span
-        className={`w-6 shrink-0 text-center text-[14px] font-medium ${
-          ligne.position <= 3 && classe ? "text-primaire" : "text-texte-doux"
-        }`}
-      >
-        {classe ? ligne.position : "—"}
-      </span>
-
-      <span className="min-w-0 flex-1">
-        <span className="text-texte block truncate text-[14px] font-medium">
-          {ligne.pilote}
-        </span>
-        <span className="text-texte-doux block truncate text-[11px]">
-          {[ligne.equipe, ligne.abandon ? "Abandon" : null]
-            .filter(Boolean)
-            .join(" · ") || " "}
-        </span>
-      </span>
-
-      {ligne.points_fia > 0 && (
-        <span className="bg-fond text-secondaire rounded-[10px] px-2 py-1 text-[12px] font-medium">
-          {ligne.points_fia} pts FIA
-        </span>
-      )}
-    </li>
-  );
-}
-
-/**
- * Le bloc de course : le podium en vedette, le classement complet replié.
- *
- * La maquette 11 ne montre que le podium ; la demande veut tout le classement.
- * Les deux tiennent parce que le reste est **replié dans un accordéon**
- * (transitions-dev 21, déjà installé) plutôt qu'étalé : vingt-deux lignes
- * posées d'emblée noieraient le podium, qui est ce qu'on vient lire en premier.
- */
-function BlocCourse({ classement }) {
-  const [ouvert, setOuvert] = useState(false);
-  const podium = podiumDeLaCourse(classement);
-
-  return (
-    <div className="rounded-carte bg-surface shadow-carte t-acc p-4" data-open={ouvert}>
-      <p className="text-label text-texte-doux mb-2.5 uppercase">
-        Résultats de la course
-      </p>
-
-      {podium.length > 0 ? (
-        <div className="flex items-end gap-2">
-          {podium.map((ligne) => (
-            <Marche
-              key={ligne.driver_number ?? ligne.pilote}
-              ligne={ligne}
-              premier={ligne.position === 1}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="text-corps-sm text-texte-doux">
-          Le classement publié ne comporte encore aucune position.
-        </p>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setOuvert((etat) => !etat)}
-        aria-expanded={ouvert}
-        className="text-primaire min-h-tactile pressable -mb-2 mt-1 flex w-full items-center justify-center gap-1.5 text-[13px] font-medium"
-      >
-        {ouvert ? "Masquer le classement" : "Classement complet"}
-        <IconeChevronAccordeon className="t-acc-chevron size-4" />
-      </button>
-
-      <div className="t-acc-panel">
-        <div className="t-acc-panel-inner">
-          <ul className="pt-1">
-            {(classement ?? []).map((ligne) => (
-              <LignePilote
-                key={ligne.driver_number ?? `${ligne.position}-${ligne.pilote}`}
-                ligne={ligne}
-              />
-            ))}
-          </ul>
-        </div>
+        aria-hidden="true"
+        className="bg-primaire h-6 w-1 shrink-0 rounded-full"
+      />
+      <div className="min-w-0">
+        <h2 className="text-texte text-[19px] leading-tight font-medium tracking-[-0.01em]">
+          {titre}
+        </h2>
+        {sousTitre && (
+          <p className="text-secondaire mt-0.5 truncate text-[12px]">{sousTitre}</p>
+        )}
       </div>
     </div>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Le classement du championnat                                              */
+/*  Section 1 — Mes résultats                                                 */
 /* -------------------------------------------------------------------------- */
 
 /** Verdict d'un pronostic. Repris de la maquette 13, mêmes trois états.
@@ -279,6 +220,319 @@ export function PastillePoints({ pointsGagnes, points }) {
     </span>
   );
 }
+
+/**
+ * Un pronostic, en widget.
+ *
+ * Trois choses, dans l'ordre où on les lit : **le marché** (« Vainqueur »), **la
+ * sélection** (« M.Verstappen »), **le verdict**. Le marché est en label parce
+ * qu'il classe ; la sélection est ce qu'on vient lire, elle est donc la plus
+ * grosse et la seule en encre pleine.
+ *
+ * La pastille et la coche disent la même chose de deux façons — un nombre coloré
+ * et un pictogramme — et c'est délibéré : la couleur seule ne porte jamais une
+ * information (WCAG 1.4.1), et `Verdict` porte l'`aria-label` qui la nomme.
+ */
+function WidgetPronostic({ pronostic }) {
+  return (
+    <li className="rounded-widget bg-surface shadow-carte flex items-center gap-3 px-3.5 py-2.5">
+      <span className="min-w-0 flex-1">
+        <span className="text-label-sm text-secondaire block truncate uppercase">
+          {pronostic.libelle ?? pronostic.type}
+        </span>
+        <span className="text-texte mt-0.5 block truncate text-[14px] font-medium">
+          {choixDuPronostic(pronostic)}
+        </span>
+      </span>
+
+      <span className="flex shrink-0 items-center gap-2">
+        <PastillePoints
+          pointsGagnes={pronostic.points_gagnes}
+          points={pronostic.points}
+        />
+        <Verdict pointsGagnes={pronostic.points_gagnes} />
+      </span>
+    </li>
+  );
+}
+
+/**
+ * La fiche récapitulative du joueur connecté.
+ *
+ * **Elle ne dépend pas de `disponible`**, et c'est le seul vrai changement de
+ * comportement de la refonte. La route sert les pronostics des membres qu'un
+ * classement de course ait été récupéré ou non : avant la course, la section
+ * affiche donc les pronostics déjà posés, tous en attente, avec leurs points
+ * **potentiels**. L'ancien écran les cachait derrière `disponible` et laissait
+ * le joueur sans aucune trace de ce qu'il avait validé.
+ *
+ * Trois absences, trois messages différents, parce qu'elles ne veulent pas dire
+ * la même chose : pas de championnat dans l'URL (personne n'est « moi » ici),
+ * un membre qui n'a rien joué, et un membre qui a joué mais dont rien n'est
+ * encore jugé.
+ */
+function MesResultats({ moi, avecChampionnat }) {
+  if (!avecChampionnat) {
+    return (
+      <div className="rounded-carte bg-surface shadow-carte px-5 py-6 text-center">
+        <p className="text-corps text-texte font-medium">Tes pronostics</p>
+        <p className="text-corps-sm text-secondaire mx-auto mt-1 max-w-[32ch]">
+          Ouvre ce Grand Prix depuis un championnat pour retrouver ce que tu y as
+          pronostiqué.
+        </p>
+      </div>
+    );
+  }
+
+  if (!moi || !moi.aJoue) {
+    return (
+      <div className="rounded-carte bg-surface shadow-carte px-5 py-6 text-center">
+        <p className="text-corps text-texte font-medium">
+          Aucun pronostic sur ce Grand Prix
+        </p>
+        <p className="text-corps-sm text-secondaire mx-auto mt-1 max-w-[32ch]">
+          Tu n'as rien validé pour cette course.
+        </p>
+      </div>
+    );
+  }
+
+  const juge = moi.total !== null && moi.total !== undefined;
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {/* Le bloc rouge de la maquette : le total du joueur sur ce GP, et son
+          rang parmi les membres. `total` nul ne vaut pas zéro — c'est « rien
+          n'est encore jugé », et l'écrire « 0 » annoncerait un échec qui n'a
+          pas eu lieu (règle 4.1). */}
+      <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-3 p-5">
+        <div className="min-w-0">
+          <p className="text-label-sm uppercase text-white/60">Mes points ce GP</p>
+          <p className="text-score-lg mt-1.5 text-white">
+            {juge ? moi.total : "—"}
+          </p>
+          <p className="mt-1 text-[11px] text-white/50">
+            {juge
+              ? `${moi.reussis} prono${moi.reussis > 1 ? "s" : ""} réussi${moi.reussis > 1 ? "s" : ""} sur ${moi.juges}`
+              : `${moi.pronostics.length} pronostic${moi.pronostics.length > 1 ? "s" : ""} en attente de validation`}
+          </p>
+        </div>
+
+        <div className="rounded-champ shrink-0 bg-white/15 px-4 py-2.5 text-center">
+          <p className="text-[26px] leading-none font-medium text-white">
+            {moi.rang}
+            <span className="text-[15px]">e</span>
+          </p>
+          <p className="text-label-sm mt-1 text-white/50 uppercase">ce GP</p>
+        </div>
+      </div>
+
+      <ul className="flex flex-col gap-2">
+        {moi.pronostics.map((pronostic) => (
+          <WidgetPronostic key={pronostic.id} pronostic={pronostic} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Section 2 — Résultats du GP                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Opacité du drapeau en fond d'une ligne.
+ *
+ * Mesuré sur les quinze drapeaux de la grille 2026, couleur par couleur : le
+ * pire substrat est le noir (bande allemande, champ de l'Union Jack), qui
+ * compose `#EBEBEB` sur blanc. L'encre `texte` y vaut **14,60:1**, le marron
+ * `secondaire` **8,86:1**, le bordeaux `primaire` **9,13:1**.
+ *
+ * > **`texte-doux` n'y tient pas — 2,39:1.** Aucun texte de ces lignes ne prend
+ * > donc le gris. C'est le défaut que le design system §5 signale déjà deux
+ * > fois, et une ligne de classement est exactement « une phrase qu'on vient
+ * > lire ».
+ */
+const OPACITE_DRAPEAU = 0.08;
+
+/** Hauteur de la voiture. La planche donne 141,11 × 288,09, soit un rapport de
+ *  0,49 : à 42px de haut elle fait 21px de large. Les deux dimensions sont
+ *  fixées, donc `boiteLibre` n'a rien à faire ici — `Voiture` ne pose pas
+ *  d'`aspect-ratio`, contrairement à `TracesCircuits`. */
+const HAUTEUR_VOITURE = "h-[42px] w-[21px]";
+
+/**
+ * Le nom d'un pilote, coupé en prénom et nom de famille.
+ *
+ * **OpenF1 écrit son `full_name` avec le nom de famille en capitales** — « Max
+ * VERSTAPPEN ». Le reste de l'application écrit les noms en casse ordinaire, et
+ * une colonne de vingt-deux capitales se lit comme un cri. Le nom est donc
+ * ramené à l'initiale majuscule **seulement s'il est entièrement en
+ * capitales** : un nom déjà bien casé ressort intact, et « Sainz Jr » ne devient
+ * pas « Sainz jr ». Chaque morceau séparé par un espace ou un trait d'union est
+ * traité à part, sans quoi « Hulkenberg-Schumacher » perdrait sa seconde
+ * majuscule.
+ */
+function couperLeNom(nom) {
+  const mots = String(nom ?? "").trim().split(/\s+/).filter(Boolean);
+  if (mots.length === 0) return { prenom: "", famille: "" };
+
+  const brut = mots[mots.length - 1];
+  const famille = /[a-zà-ÿ]/.test(brut)
+    ? brut
+    : brut
+        .toLocaleLowerCase("fr-FR")
+        .replace(/(^|[\s-])(\p{L})/gu, (_, avant, lettre) =>
+          avant + lettre.toLocaleUpperCase("fr-FR"),
+        );
+
+  return { prenom: mots.slice(0, -1).join(" "), famille };
+}
+
+/**
+ * Une ligne du classement.
+ *
+ * De gauche à droite : la position, la voiture de l'écurie, le pilote, les
+ * points du championnat du monde. Le drapeau du pilote est en fond, à 8 %.
+ *
+ * `points_fia` est le seul nombre de l'application qui ne soit pas des points au
+ * sens de la règle 4.1 : ce sont les points du championnat du monde (25, 18,
+ * 15…). Il est donc écrit « 25 pts FIA » et jamais avec `formaterPoints`, qui
+ * habille les points de l'app. Les confondre ferait lire le classement F1 comme
+ * un classement de pronostics.
+ *
+ * **Un zéro et une absence de classement ne s'écrivent pas pareil.** Un pilote
+ * classé qui ne marque pas porte « 0 pt » en encre marron, sans aplat : c'est un
+ * fait, et il vaut la peine d'être lu. Un pilote **non classé** — `position`
+ * nulle, l'abandon précoce — n'a pas de résultat du tout, et porte un tiret. La
+ * même distinction que `NULL` et `0` ailleurs dans l'application.
+ */
+function LigneClassement({ ligne }) {
+  const classe = ligne.position !== null && ligne.position !== undefined;
+  const nationalite = nationaliteDuPilote(ligne.driver_number, ligne.pilote);
+  const livree = livreeDeLEcurie(ligne.equipe);
+  const { prenom, famille } = couperLeNom(ligne.pilote);
+
+  // Trois états, un seul mot. Ils ne peuvent pas se cumuler à l'écran, et
+  // l'ordre est celui de la gravité : un disqualifié a d'abord été classé.
+  const mention = ligne.disqualifie
+    ? "Disqualifié"
+    : ligne.non_partant
+      ? "Non partant"
+      : ligne.abandon
+        ? "Abandon"
+        : null;
+
+  return (
+    <li>
+      <article className="rounded-widget bg-surface shadow-carte relative overflow-hidden">
+        {/* Le lavis. `absolute inset-0` plutôt qu'un pseudo-élément, comme
+            `lueur-haute` et les cartes de vainqueur : un pseudo-élément
+            obligerait l'appelant à poser `relative` et `overflow-hidden`
+            lui-même. AUCUN `fill` ni `color` ici — la bande noire du drapeau
+            allemand n'a pas d'attribut `fill` et l'hériterait. */}
+        {nationalite && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{ opacity: OPACITE_DRAPEAU }}
+          >
+            <DrapeauPays code={nationalite.code} className="size-full" />
+          </span>
+        )}
+
+        <div className="relative flex items-center gap-2.5 px-3 py-2">
+          <span
+            className={`w-6 shrink-0 text-center text-[16px] font-medium ${
+              classe && ligne.position <= 3 ? "text-primaire" : "text-texte"
+            }`}
+          >
+            {classe ? ligne.position : "—"}
+          </span>
+
+          {/* La vraie livrée de l'écurie, tirée du nom que sert OpenF1. Un
+              libellé inconnu retombe sur la voiture personnalisable plutôt que
+              de laisser un trou — la règle de `livreeDuMembre`. */}
+          <Voiture
+            mode="ecurie"
+            ecurie={livree}
+            numero={ligne.driver_number ?? ""}
+            titre={`Voiture de ${ligne.pilote}`}
+            className={`shrink-0 ${HAUTEUR_VOITURE}`}
+          />
+
+          <span className="min-w-0 flex-1">
+            {prenom && (
+              <span className="text-secondaire block truncate text-[11px]">
+                {prenom}
+              </span>
+            )}
+            {/* Le nom de famille porte la reconnaissance : plus gros et plus
+                gras que le prénom, la hiérarchie par la taille et la graisse
+                plutôt que par une couleur de plus. */}
+            <span className="text-texte block truncate text-[15px] leading-tight font-medium">
+              {famille}
+            </span>
+            <span className="text-secondaire block truncate text-[11px]">
+              {[ligne.equipe, mention].filter(Boolean).join(" · ") || " "}
+            </span>
+          </span>
+
+          {ligne.points_fia > 0 ? (
+            <span className="bg-fond text-secondaire shrink-0 rounded-[10px] px-2 py-1 text-[12px] font-medium">
+              {ligne.points_fia} pts FIA
+            </span>
+          ) : (
+            <span className="text-secondaire shrink-0 text-[12px]">
+              {classe ? "0 pt" : "—"}
+            </span>
+          )}
+        </div>
+      </article>
+    </li>
+  );
+}
+
+/**
+ * Le classement complet de la course, une ligne par pilote, dans l'ordre
+ * d'arrivée.
+ *
+ * **Rien n'est replié.** L'ancien écran mettait le podium en vedette et cachait
+ * les vingt autres lignes dans un accordéon, pour ne pas noyer ce qu'on venait
+ * lire en premier. La section a maintenant son propre titre et son propre
+ * territoire : elle **est** ce qu'on vient lire, et un accordéon fermé sur sa
+ * propre section serait une porte devant une pièce vide. Le podium n'a pas non
+ * plus de traitement à part — les trois premières positions sont en bordeaux,
+ * ce qui suffit à les trouver d'un coup d'œil dans une colonne.
+ */
+function ClassementCourse({ classement }) {
+  if (!classement?.length) {
+    return (
+      <div className="rounded-carte bg-surface shadow-carte px-5 py-6 text-center">
+        <p className="text-corps text-texte font-medium">Classement vide</p>
+        <p className="text-corps-sm text-secondaire mx-auto mt-1 max-w-[32ch]">
+          La course est enregistrée mais son classement ne comporte encore aucune
+          position.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="flex flex-col gap-2">
+      {classement.map((ligne) => (
+        <LigneClassement
+          key={ligne.driver_number ?? `${ligne.position}-${ligne.pilote}`}
+          ligne={ligne}
+        />
+      ))}
+    </ul>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Section 3 — Le classement du championnat                                  */
+/* -------------------------------------------------------------------------- */
 
 /**
  * Une rangée de membre, dépliable sur ses pronostics.
@@ -399,28 +653,30 @@ function LigneMembre({ ligne, estMoi, avecPhotos = false }) {
 /*  Squelette                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/** La silhouette suit la hauteur réelle de ce qui arrive (§8 du design
+ *  system) : un en-tête de section, le bloc rouge, deux widgets de pronostic,
+ *  puis quatre rangées de classement. Sans quoi l'écran sursaute à l'arrivée
+ *  des données. */
 function SqueletteResultats() {
   return (
     <div className="flex flex-col gap-3">
+      <Barre largeur="w-1/3" hauteur="h-4" />
+
       {/* Le bloc rouge garde sa couleur : c'est la surface, pas le contenu, et
           la voir changer au moment de la révélation ferait clignoter l'écran. */}
       <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-3 p-5">
         <div className="flex-1">
           <div className="h-2.5 w-24 rounded-full bg-white/25" />
-          <div className="mt-3 h-9 w-20 rounded-champ bg-white/25" />
+          <div className="rounded-champ mt-3 h-9 w-20 bg-white/25" />
           <div className="mt-2.5 h-2.5 w-32 rounded-full bg-white/20" />
         </div>
-        <div className="h-14 w-16 rounded-champ bg-white/15" />
+        <div className="rounded-champ h-14 w-16 bg-white/15" />
       </div>
 
-      <Carte>
-        <Barre largeur="w-2/5" hauteur="h-2.5" />
-        <div className="mt-3 flex items-end gap-2">
-          <Pave className="h-[68px] flex-1" />
-          <Pave className="h-[68px] flex-1" />
-          <Pave className="h-[68px] flex-1" />
-        </div>
-      </Carte>
+      <Pave className="h-[54px]" arrondi="rounded-widget" />
+      <Pave className="h-[54px]" arrondi="rounded-widget" />
+
+      <Barre largeur="w-2/5" hauteur="h-4" />
 
       <Carte>
         {[0, 1, 2, 3].map((rang) => (
@@ -459,6 +715,10 @@ export default function ResultatsGp() {
   // championnat et qu'à la vue piste : quelqu'un a-t-il une photo ?
   const avecPhotos = membres.some((ligne) => Boolean(ligne.avatar_url));
   const moi = membres.find((ligne) => ligne.profil_id === utilisateur?.id) ?? null;
+  // `null` veut dire « pas demandé » (aucun championnat dans l'URL), jamais
+  // « championnat vide » — la convention de la route, tenue par l'écran.
+  const avecChampionnat =
+    donnees?.membres !== null && donnees?.membres !== undefined;
 
   function reessayer() {
     setTentative((n) => n + 1);
@@ -489,10 +749,7 @@ export default function ResultatsGp() {
           libelleRetour={championnatId ? "Championnat" : "Accueil"}
           sousTitre={
             gp
-              ? [
-                  donnees?.disponible ? "Terminé" : "À venir",
-                  depart.courte,
-                ]
+              ? [donnees?.disponible ? "Terminé" : "À venir", depart.courte]
                   .filter(Boolean)
                   .join(" · ")
               : null
@@ -508,7 +765,31 @@ export default function ResultatsGp() {
           >
             {donnees && (
               <div className="flex flex-col gap-3">
-                {!donnees.disponible ? (
+                {/* ---- Section 1 : Mes résultats ---- */}
+                <TitreSection
+                  titre="Mes résultats"
+                  sousTitre="Ce que tes pronostics ont rapporté"
+                />
+                <MesResultats moi={moi} avecChampionnat={avecChampionnat} />
+
+                {/* ---- Section 2 : Résultats du GP ----
+                    `mt-3` s'ajoute au `gap-3` du conteneur : 24px au lieu de 12
+                    au-dessus d'un changement de sujet. L'espace est la moitié
+                    du séparateur, le filet du titre est l'autre. */}
+                <div className="mt-3">
+                  <TitreSection
+                    titre="Résultats du GP"
+                    sousTitre={
+                      donnees.disponible
+                        ? "Classement officiel de la course"
+                        : "Classement pas encore publié"
+                    }
+                  />
+                </div>
+
+                {donnees.disponible ? (
+                  <ClassementCourse classement={donnees.classement} />
+                ) : (
                   /* Données manquantes, pas une erreur : la course n'a pas
                      encore de classement publié. Le message dit quand revenir
                      plutôt que de laisser l'écran vide. */
@@ -525,73 +806,31 @@ export default function ResultatsGp() {
                         : "L'horaire de la course n'est pas encore annoncé. Les points sont attribués dans les deux heures qui suivent le départ."}
                     </p>
                   </div>
-                ) : (
+                )}
+
+                {/* ---- Section 3 : le championnat ----
+                    Conservée, et signalée en tête de fichier : la demande ne
+                    demandait pas de la retirer. */}
+                {avecChampionnat && (
                   <>
-                    {/* Bloc rouge de la maquette : mes points sur ce GP. Il
-                        n'existe que si l'on regarde depuis un championnat —
-                        sans championnat, personne n'est « moi » ici. */}
-                    {moi && (
-                      <div className="rounded-bloc bg-primaire shadow-bloc flex items-center justify-between gap-3 p-5">
-                        <div className="min-w-0">
-                          <p className="text-label-sm uppercase text-white/60">
-                            Mes points ce GP
-                          </p>
-                          <p className="text-score-lg mt-1.5 text-white">
-                            {moi.total ?? "—"}
-                          </p>
-                          <p className="mt-1 text-[11px] text-white/50">
-                            {moi.aJoue
-                              ? `${moi.reussis} prono${moi.reussis > 1 ? "s" : ""} réussi${moi.reussis > 1 ? "s" : ""} sur ${moi.pronostics.length}`
-                              : "Aucun pronostic sur ce Grand Prix"}
-                          </p>
-                        </div>
-
-                        <div className="rounded-champ shrink-0 bg-white/15 px-4 py-2.5 text-center">
-                          <p className="text-[26px] leading-none font-medium text-white">
-                            {moi.rang}
-                            <span className="text-[15px]">e</span>
-                          </p>
-                          <p className="text-label-sm mt-1 text-white/50 uppercase">
-                            ce GP
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    <BlocCourse classement={donnees.classement} />
-
-                    {donnees.membres === null || donnees.membres === undefined ? (
-                      /* Arrivé ici sans championnat : la partie publique est
-                         servie, et on dit pourquoi le reste manque plutôt que
-                         de laisser croire que le championnat est vide. */
-                      <div className="rounded-carte bg-surface shadow-carte px-5 py-6 text-center">
-                        <p className="text-corps text-texte font-medium">
-                          Les pronostics de tes amis
-                        </p>
-                        <p className="text-corps-sm text-texte-doux mx-auto mt-1 max-w-[30ch]">
-                          Ouvre ce Grand Prix depuis un championnat pour voir ce
-                          que chaque membre y a marqué.
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-label text-texte-doux px-1 uppercase">
-                          Classement ce GP
-                        </p>
-                        <div className="rounded-carte bg-surface shadow-carte px-4 py-2">
-                          <ul>
-                            {membres.map((ligne) => (
-                              <LigneMembre
-                                key={ligne.profil_id}
-                                ligne={ligne}
-                                estMoi={ligne.profil_id === utilisateur?.id}
-                                avecPhotos={avecPhotos}
-                              />
-                            ))}
-                          </ul>
-                        </div>
-                      </>
-                    )}
+                    <div className="mt-3">
+                      <TitreSection
+                        titre="Classement ce GP"
+                        sousTitre="Ce que chaque membre y a marqué"
+                      />
+                    </div>
+                    <div className="rounded-carte bg-surface shadow-carte px-4 py-2">
+                      <ul>
+                        {membres.map((ligne) => (
+                          <LigneMembre
+                            key={ligne.profil_id}
+                            ligne={ligne}
+                            estMoi={ligne.profil_id === utilisateur?.id}
+                            avecPhotos={avecPhotos}
+                          />
+                        ))}
+                      </ul>
+                    </div>
                   </>
                 )}
               </div>

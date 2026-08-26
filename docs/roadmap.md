@@ -245,6 +245,8 @@ navigateur. Points à regarder en priorité :
 | **Un en-tête de marché sur deux lignes** | il est **collant**, donc sa hauteur est prise sur la liste pendant tout le défilement du marché. Vérifier sur un petit écran qu'un titre long ne laisse pas moins d'une rangée et demie de widgets visibles — c'est le seul cas où deux lignes coûteraient plus qu'elles ne rapportent |
 | **La rangée des derniers vainqueurs** (`0.59.0`) | quatrième rangée `snap-x` du projet, et la première à porter cinq SVG de voiture — soit cinq dessins de quarante formes qui défilent à l'inertie. C'est aussi la seule dont le calage a demandé `scroll-pl-4` : vérifier que la première carte s'aligne bien sur le reste de la page **après** un défilement puis un retour au début, pas seulement au premier rendu |
 | **Les deux liens d'une carte de calendrier** (`0.59.0`) | le corps et la bande d'action sont deux `<a>` frères dans un même `<article>`. Vérifier qu'un appui sur la bande n'ouvre pas la fiche, qu'un appui près de la couture ne se trompe pas de destination, et que `pressable-large` enfonce bien la **carte entière** dans les deux cas — c'est `:active` remontant aux ancêtres, et Safari iOS est le seul juge |
+| **Le lavis des drapeaux à 8 %** (`0.62.0`) | vingt-deux rangées portant chacune un SVG de drapeau en `absolute inset-0`, sous un SVG de voiture. Deux choses à regarder : le coût de composition au défilement d'une liste de vingt-deux couches superposées, et surtout **la lisibilité du lavis en plein soleil** — 8 % sur blanc est un jugement d'écran de bureau autant qu'un rapport de contraste, et c'est le même doute que l'opacité `0,4` des cartes passées (§3.14) |
+| **Les vingt-deux voitures d'un classement** (`0.62.0`) | chaque rangée dessine une livrée complète, soit quarante formes × vingt-deux sur un seul écran qui défile. La vue piste en montre seize et n'a jamais été éprouvée non plus : c'est le plus gros nombre de dessins de voiture qu'un écran du projet ait porté |
 
 ---
 
@@ -433,6 +435,36 @@ Deux façons de la lever, dans cet ordre de préférence :
    Commonwealth à sept branches, cinq étoiles de la croix du Sud), comme l'a été le
    Royaume-Uni en `0.59.0`. Les coordonnées des étoiles se calculent ; **encore faut-il
    disposer du texte du Flags Act**, sans quoi on retombe dans l'approximation.
+
+### 3.8 quater Deux systèmes de drapeaux coexistent — écart signalé (`0.62.0`)
+
+Depuis la `0.62.0`, le projet peint des drapeaux de **deux** façons, et c'est un écart au
+principe « une source unique par question » (CLAUDE.md §6) qu'il faut connaître :
+
+| Question | Propriétaire | Comment |
+|---|---|---|
+| le drapeau d'un **pays hôte**, et celui d'un **vainqueur de circuit** | `DRAPEAUX` / `NATIONALITES` (`DrapeauxGP.jsx`) | dégradés CSS et sept dessins extraits de `assets/flags.svg` |
+| le drapeau d'un **pilote de la grille** | `lib/nationalites.js` + `composants/DrapeauxPilotes.jsx` | quinze SVG de `country-flag-icons`, par code ISO |
+
+**Ce n'est pas une duplication gratuite.** Le champ `couleurs` de `DRAPEAUX` n'est pas
+décoratif : c'est la matière du calcul de `voileNecessaire`, qui dérive l'opacité du voile
+de la bande la plus claire de chaque drapeau (design-system §5). Un SVG importé d'une
+bibliothèque **ne peut pas alimenter ce calcul** — il n'expose pas ses bandes. Les deux
+systèmes répondent donc à deux questions qui n'ont pas les mêmes besoins : là-bas un
+drapeau à pleine intensité sous du texte blanc, ici un lavis à 8 % sous du texte foncé.
+
+**Ce que la `0.62.0` règle au passage, et qu'il faut noter :** les quinze pays de la grille
+2026 incluent l'Australie et la Finlande, les deux nationalités que §3.8 bis laissait sans
+fond. **Elles ont maintenant un drapeau exact — mais seulement sur l'écran de résultats.**
+Les cartes de vainqueur de `VainqueursCircuit` restent sur du blanc, parce qu'elles
+passent par l'autre système. §3.8 bis n'est donc **pas** clos.
+
+**La façon de le clore un jour**, et elle lève les deux points à la fois : faire de
+`country-flag-icons` la source de tous les drapeaux de **nationalité** (jamais des pays
+hôtes, qui ont besoin du voile), et faire pointer `NATIONALITES` vers `lib/nationalites.js`
+pour le dessin en gardant ses `couleurs` pour le calcul. Le chantier touche
+`VainqueursCircuit` et `DetailGp` : hors du périmètre de la `0.62.0`, qui ne devait
+toucher qu'un écran.
 
 ### 3.8 ter Deux rangées horizontales calent leur première carte hors de l'alignement
 

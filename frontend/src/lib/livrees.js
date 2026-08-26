@@ -1,4 +1,4 @@
-import { COULEURS_NOMS_ECURIES } from "./ecuries.js";
+import { COULEURS_NOMS_ECURIES, ecurieDuLibelle } from "./ecuries.js";
 
 /**
  * Les onze livrées d'écurie — la partie *métadonnée*, sans le moindre dessin.
@@ -63,4 +63,22 @@ export function estLivree(slug) {
 export function teinteLivree(slug) {
   const nom = nomLivree(slug);
   return nom ? (COULEURS_NOMS_ECURIES[nom] ?? null) : null;
+}
+
+/**
+ * La livrée que porte une écurie, désignée par n'importe lequel de ses
+ * libellés — « Red Bull », « Red Bull Racing », « Oracle Red Bull Racing », ou
+ * même un de ses pilotes.
+ *
+ * Elle sert le classement d'une course, qui reçoit l'écurie **dans la forme
+ * d'OpenF1** et n'a que ça pour choisir la voiture à dessiner. Le rapprochement
+ * n'est pas refait ici : `ecurieDuLibelle` reste le seul juge de « quelle
+ * écurie ? », et ce module ne fait que traduire son verdict en slug.
+ *
+ * `null` pour un libellé inconnu — la voiture retombe alors sur le mode
+ * personnalisé, ce que `Voiture` garantit, plutôt que de laisser un trou.
+ */
+export function livreeDeLEcurie(libelle) {
+  const nom = ecurieDuLibelle(libelle);
+  return nom ? (LIVREES.find((livree) => livree.nom === nom)?.slug ?? null) : null;
 }

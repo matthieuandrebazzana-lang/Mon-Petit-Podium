@@ -147,6 +147,41 @@ const INDEX = new Map(
 );
 
 /**
+ * Index { libellé normalisé → nom canonique d'écurie }.
+ *
+ * Il répond à une question voisine de celle de `couleurEcurie`, mais pas à la
+ * même : « de quelle écurie ce libellé parle-t-il ? » plutôt que « de quelle
+ * couleur est-il ? ». Les deux partent des mêmes trois tables — la grille, les
+ * onze noms, les alias — pour que le jour où Unibet ou OpenF1 écrit une
+ * douzième orthographe, **une seule ligne à ajouter** serve les deux réponses.
+ */
+const NOMS = new Map([
+  ...Object.keys(ECURIES).map((ecurie) => [cle(ecurie), ecurie]),
+  ...Object.entries(ALIAS_ECURIES).map(([libelle, ecurie]) => [cle(libelle), ecurie]),
+  ...Object.entries(GRILLE).flatMap(([ecurie, pilotes]) =>
+    pilotes.map((pilote) => [cle(pilote), ecurie]),
+  ),
+]);
+
+/**
+ * Le nom canonique de l'écurie que désigne un libellé — écurie **ou** pilote.
+ *
+ * Elle existe parce qu'un troisième consommateur est arrivé : le classement de
+ * course sert l'écurie **dans la forme d'OpenF1** (« Red Bull Racing », « Haas
+ * F1 Team »), et la ligne doit en tirer la livrée à dessiner. La ramener sur le
+ * nom canonique est exactement ce que les alias savent déjà faire pour la
+ * couleur ; l'écrire une seconde fois ailleurs aurait fait diverger les deux au
+ * premier libellé retouché — le défaut que ce module a précisément corrigé en
+ * fondant ses trois tables en une.
+ *
+ * Rend `null` pour tout ce qu'elle ne connaît pas, jamais un nom de repli.
+ */
+export function ecurieDuLibelle(libelle) {
+  if (libelle === null || libelle === undefined || libelle === "") return null;
+  return NOMS.get(cle(libelle)) ?? null;
+}
+
+/**
  * La couleur d'écurie d'un libellé de cote — pilote **ou** écurie.
  *
  * Rend `null` pour tout ce qu'elle ne connaît pas : un pilote arrivé en cours de
