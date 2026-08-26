@@ -244,11 +244,12 @@ le mode personnalisé — ce qui se voit à l'écran au lieu de planter.
 | `useDonnees.js` | cache localStorage *stale-while-revalidate* |
 | `api.js` | seul point de traduction des échecs réseau |
 | `erreurs.js` | seul point de traduction des erreurs d'authentification |
-| `format.js` | **seul endroit qui habille un nombre de points** |
+| `format.js` | **seul endroit qui habille un nombre de points** ; `MARGE_FERMETURE_MS`, `DELAI_OUVERTURE_MS`, les deux comptes à rebours |
+| `useFermeture.js` | `useFermeture` (« est-ce fermé ? »), `useEtatPronostics` (le décompte du week-end) |
 | `couleurs.js` | aplats de bloc, contraste, encres |
 | `palette.js` | 20 couleurs de voiture, luminance, `livreeDuMembre` |
 | `ecuries.js` | onze écuries, grille 2026 — voir `ecuries.md` |
-| `calendrier.js` | `ETATS_GP`, `cotesArretees` — **seule lectrice du statut `cotes_figees`** |
+| `calendrier.js` | `ETATS_GP`, `cotesArretees`, `etatPronostics` — **seule lectrice du statut `cotes_figees`** |
 | `calendrier2026.js` | **la liste des GP** — voir `calendrier.md` |
 | `navigation.js` | barre, onglets, `origineRetour` |
 | `pronostics.js` | marchés, favoris, exclusion croisée, `choixDuPronostic`, `oublierMesPronostics` |
@@ -275,6 +276,32 @@ Trois règles ont été **sorties des écrans** vers `lib/pronostics.js` — `op
 seraient vérifiables qu'en montant un DOM que le projet n'outille pas. Sorties de là, elles
 s'éprouvent directement. Même motif pour `VueAdmin`, fonction pure de ses props, séparée de
 `SectionAdmin` qui porte l'état.
+
+### `Horloge` et `etatPronostics` — l'horloge ne décide plus de ce qu'elle annonce (`0.57.0`)
+
+`composants/Horloge.jsx` fabrique les trois tuiles, en deux tailles, et **rien d'autre**.
+Le titre au-dessus (« Ouverture dans », « Fermeture dans », « Pronostics »), la phrase
+décomptée et le mot qui remplace le décompte quand il n'y en a pas viennent tous de
+`etatPronostics` (`lib/calendrier.js`), servi par le hook `useEtatPronostics`.
+
+> **Elle les calculait elle-même, et c'était une seconde source.** Le libellé était figé à
+> « Fermeture dans » dans le composant et **une seconde fois** dans les cases de statut du
+> bloc d'accueil, écrites séparément. Les deux ont annoncé la fermeture de pronostics pas
+> encore ouverts pendant onze versions — le symptôme exact que le partage de `Horloge` en
+> `0.18.0` cherchait à éviter, revenu par la porte du texte. Règle métier et arbitrage
+> complet dans `metier.md` §3.
+
+**Quatre surfaces, un seul état** : les deux cases du bloc d'accueil, l'horloge de l'écran
+de saisie, celle du récapitulatif. `texte` non nul est **le seul test** pour savoir s'il y
+a quelque chose à décompter — l'horloge n'a plus à distinguer « fermé » de « heure
+inconnue » pour choisir entre les tuiles et le mot.
+
+**`useEtatPronostics` met les trois champs du Grand Prix en dépendance un par un, jamais
+l'objet.** `useDonnees` sert un objet neuf à chaque revalidation en arrière-plan, même
+quand rien n'a changé : la minuterie serait détruite et réarmée sans fin.
+
+**`useFermeture` reste en place**, pour le tableau des cotes : il n'affiche aucun décompte
+et ne pose qu'une question booléenne.
 
 ### `image.js` et `stockage.js` — deux plafonds qui ne mesurent pas la même chose
 

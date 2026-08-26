@@ -33,7 +33,7 @@ import {
   formaterPilote,
   formaterPoints,
 } from "../lib/format.js";
-import { useFermeture } from "../lib/useFermeture.js";
+import { useEtatPronostics } from "../lib/useFermeture.js";
 
 /* --------------------------------------------------------------------------
    Zone 1 — le hero.
@@ -424,7 +424,7 @@ export default function RecapPronostics() {
     [donnees, index],
   );
 
-  const etat = useFermeture(gp?.date_course);
+  const etat = useEtatPronostics(gp);
   const aPronostique = Boolean(gp) && !pronostics.vide;
 
   const obligatoires = [

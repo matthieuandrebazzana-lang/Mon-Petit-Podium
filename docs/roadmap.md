@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **23 août 2026**, version `0.54.0`.
+État au **26 août 2026**, version `0.57.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -128,6 +128,23 @@ par `etatDuGpSaison`, comme le fait déjà `CalendrierGlobal`.
 
 > **Sans cela, les deux écrans se contrediront dès la première course courue** — l'accueil
 > dira « 12 restants » quand le calendrier en montrera 11. Voir `calendrier.md` §10.
+
+### 1.6 bis Vérifier « Ouverture dans » contre un vrai samedi de qualifications
+
+La version `0.57.0` fait décompter au widget d'accueil **`date_qualifications + 2h`** tant
+que les cotes ne sont pas arrêtées. Le délai est celui du job du samedi, pas une donnée
+servie : c'est une **prévision**, et elle n'a jamais été confrontée à un vrai week-end.
+
+Deux choses à regarder le premier samedi :
+
+- **La bascule.** « Ouverture dans » doit céder la place à « Fermeture dans » quand le
+  statut passe à `cotes_figees`, pas quand le décompte atteint zéro — le statut ne change
+  qu'en base, et c'est le rafraîchissement du cache qui le rapporte. Un écart de quelques
+  minutes entre les deux est normal ; un écran resté sur « Ouverture / À confirmer » après
+  un scraping réussi ne l'est pas.
+- **Le retard du job.** S'il tourne systématiquement plus de deux heures après les
+  qualifications, `DELAI_OUVERTURE_MS` (`lib/format.js`) est à revoir — c'est la seule
+  valeur à toucher, elle n'est écrite qu'une fois.
 
 ### 1.7 Tester sur iPhone réel
 

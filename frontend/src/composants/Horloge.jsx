@@ -4,7 +4,8 @@ import TexteEchange from "./TexteEchange.jsx";
 import { blocsRestant } from "../lib/format.js";
 
 /**
- * Le compte à rebours de fermeture, en horloge à trois tuiles.
+ * Le compte à rebours du week-end, en horloge à trois tuiles — l'ouverture des
+ * pronostics tant qu'elle n'a pas eu lieu, leur fermeture ensuite.
  *
  * **Extrait de l'écran récapitulatif (version `0.18.0`) parce qu'un deuxième
  * écran le demande.** Deux compositions écrites séparément auraient divergé au
@@ -92,17 +93,22 @@ export default function Horloge({
 }) {
   const style = TAILLES[taille] ?? TAILLES.compacte;
 
-  // Trois états, et ils ne disent pas la même chose. Un Grand Prix dont Unibet
-  // n'a pas annoncé l'horaire **reste ouvert** — c'est la règle tenue aux trois
-  // étages depuis l'étape 5 — mais il n'a aucun décompte à afficher : écrire
-  // « 0s » serait faux dans les deux sens.
-  const inconnue = !etat.ferme && !etat.texte;
-  const label = etat.ferme ? "Pronostics" : inconnue ? "Départ" : "Fermeture dans";
-  const blocs = etat.ferme ? null : blocsRestant(etat.restant, { avecSecondes });
+  // **L'horloge ne décide plus de ce qu'elle annonce.** Le titre et le mot de
+  // remplacement viennent d'`etatPronostics` (`lib/calendrier.js`), qui connaît
+  // les deux échéances du week-end — l'ouverture, puis la fermeture — et les
+  // sert aussi aux deux cases de statut du bloc d'accueil. Les calculer ici en
+  // aurait fait une seconde source, qui aurait dit « Fermeture dans » là où
+  // l'accueil disait « Ouverture dans », sur le même Grand Prix.
+  //
+  // **`texte` est le seul test.** Un Grand Prix dont Unibet n'a pas annoncé
+  // l'horaire de départ **reste ouvert** — la règle des trois étages — mais n'a
+  // rien à décompter, pas plus qu'une ouverture dont l'heure prévue est déjà
+  // passée : écrire « 0s » serait faux dans les deux sens.
+  const blocs = etat.texte ? blocsRestant(etat.restant, { avecSecondes }) : null;
 
   return (
     <>
-      <p className="text-label text-texte-doux text-center uppercase">{label}</p>
+      <p className="text-label text-texte-doux text-center uppercase">{etat.label}</p>
 
       {blocs ? (
         <div className={`mt-3 flex items-start justify-center ${style.ecart}`}>
@@ -127,10 +133,10 @@ export default function Horloge({
         </div>
       ) : (
         <p className="text-score text-primaire mt-2 text-center">
-          {/* Les deux états sans décompte gardent l'échange en place
+          {/* Les états sans décompte gardent l'échange en place
               (transitions-dev 04) : le passage de l'horloge à « Fermés » se
               produit sous les yeux du joueur, à cinq minutes du départ. */}
-          <TexteEchange valeur={etat.ferme ? "Fermés" : "À confirmer"} />
+          <TexteEchange valeur={etat.substitut} />
         </p>
       )}
     </>

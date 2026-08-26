@@ -95,22 +95,59 @@ découvrirait qu'après la course. Constantes `MARCHE_VAINQUEUR` / `MARCHE_PODIU
 | **Samedi, qualifications + 2h** | Scraping Unibet. Pénalités confirmées, grille définitive. **Les cotes sont figées.** |
 | Samedi soir → dimanche | Les joueurs pronostiquent librement. **Les pronostics sont visibles par les autres membres dès leur saisie.** |
 | **Dimanche, départ − 5 min** | Fermeture. Plus aucune modification. |
-| **Dimanche, départ + 1h30** | Job de résultats : `/session_result` toutes les 5 min, puis calcul et attribution. |
-| **Dimanche soir → minuit local** | Le widget de l'accueil **reste** sur le Grand Prix couru. Il ne bascule sur le suivant que le lendemain. |
+| **Dimanche, départ + 1h30** | Job de résultats : `/session_result` toutes les 5 min, puis calcul et attribution. Le statut passe à `termine`. |
+| **Dès `termine`** | Le widget de l'accueil bascule sur le **Grand Prix suivant**. Le Grand Prix couru se consulte sur son écran de résultats. |
 
-> ### Le dimanche soir appartient encore au Grand Prix du jour
-> Le passage à `termine` faisait basculer l'accueil sur le Grand Prix suivant — deux
-> semaines plus loin, avec un compte à rebours de treize jours — **au moment précis où
-> tout le monde ouvre l'application**. Le Grand Prix couru garde donc la place jusqu'à
-> **minuit, heure du téléphone**.
+> ### Un Grand Prix terminé n'est plus le prochain (v`0.57.0`)
+> Le Grand Prix couru gardait la place du widget d'accueil **jusqu'à minuit, heure du
+> téléphone** — une lecture supplémentaire ramenait le `termine` du jour et le servait
+> avant les autres. **La règle est retirée.** Elle laissait l'accueil sur un Grand Prix
+> fini bien après qu'il l'était, et le défaut ne venait pas de son implémentation mais de
+> son principe : **le seul état qui dise « c'est fini » est le statut, pas l'heure qu'il
+> est.**
 >
-> **La frontière est le jour civil, pas une durée.** « Six heures après » basculerait en
-> pleine soirée pour un départ à 15h et en pleine nuit pour Las Vegas ; minuit est la
-> seule limite qu'un joueur puisse prévoir sans la calculer.
+> Dès qu'un Grand Prix passe à `termine`, le suivant prend sa place — `a_venir` ou
+> `cotes_figees`, le plus proche. Il n'y a donc plus de fenêtre pendant laquelle l'accueil
+> annonce une course déjà courue, et plus rien à coudre entre deux règles :
+> `chargerProchainGp` n'en porte plus qu'une.
 >
-> **Il n'y a rien à coudre entre les deux règles** : entre l'arrivée et le passage à
-> `termine`, le Grand Prix est encore `cotes_figees` et la lecture ordinaire le sert déjà
-> comme le plus proche à venir. `chargerProchainGp` porte les deux, et lui seul.
+> **Rien ne change entre l'arrivée et le passage à `termine`** : le Grand Prix est encore
+> `cotes_figees`, donc il reste servi comme le plus proche à venir, avec un compte à
+> rebours à zéro et des pronostics fermés — ce qui est exact.
+
+> ### Le compte à rebours a DEUX échéances, pas une (v`0.57.0`)
+> Il annonçait toujours « Fermeture dans », y compris sur un Grand Prix dont les
+> pronostics n'étaient pas encore ouverts : il annonçait la fermeture d'une chose qui
+> n'avait pas commencé, et promettait treize jours pour agir là où il n'y avait rien à
+> faire.
+>
+> | Phase | Échéance décomptée | Ce qui est écrit |
+> |---|---|---|
+> | Avant le relevé des cotes | `date_qualifications` + 2h | « Ouverture dans » |
+> | Pronostics ouverts | `date_course` − 5 min | « Fermeture dans » |
+> | Après la fermeture | — | « Pronostics / Fermés » |
+>
+> **C'est `cotesArretees` qui départage les deux phases, jamais le statut brut**, et c'est
+> ce qui fait tenir l'ensemble : le bouton de pronostics du bloc d'accueil s'affiche sur
+> exactement la même condition. Un Grand Prix passé à `cotes_figees` par un
+> `POST /scraper/declencher` lancé un mardi annoncerait sinon « Fermeture dans » au-dessus
+> d'un bloc **sans bouton** — un décompte vers une fermeture que rien n'ouvrira.
+>
+> **« Pas encore ouverts » exige les trois à la fois** : cotes non arrêtées, heure de
+> fermeture pas encore passée, et Grand Prix non `termine`. Le premier test suffit un
+> samedi matin ; il ne suffit pas le dimanche soir, où un Grand Prix couru le passe aussi —
+> et l'écran de saisie aurait déverrouillé son formulaire sur une course déjà courue.
+>
+> **Les deux heures après les qualifications sont une PRÉVISION, pas une garantie**
+> (`DELAI_OUVERTURE_MS`, `lib/format.js`) : c'est le délai du job du samedi, qui peut
+> prendre du retard. Le décompte se tait dès que l'heure prévue est passée sans que le
+> statut ait bougé — « Ouverture / À confirmer ». Mieux vaut ne plus rien promettre que
+> promettre une ouverture déjà en retard.
+>
+> Une seule source, `etatPronostics` (`lib/calendrier.js`), pour les **quatre** surfaces
+> qui portent un décompte : les deux cases du bloc d'accueil, l'horloge de l'écran de
+> saisie, celle du récapitulatif. Le titre, la phrase et le mot de remplacement en
+> viennent tous — l'horloge ne décide plus de ce qu'elle annonce.
 
 Figer les cotes après les qualifications garantit que **tous les joueurs pronostiquent
 avec exactement les mêmes cotes, sur une grille déjà définitive.**

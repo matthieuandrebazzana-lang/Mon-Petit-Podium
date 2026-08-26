@@ -13,6 +13,19 @@
 export const MARGE_FERMETURE_MS = 5 * 60 * 1000;
 
 /**
+ * Règle 4.3 : les cotes sont relevées **deux heures après les qualifications**,
+ * et c'est ce relevé qui ouvre les pronostics.
+ *
+ * Le délai est celui du job du samedi (`docs/scraper.md`) : avant lui il n'y a
+ * aucune cote en base, donc rien à pronostiquer. **C'est une prévision, pas une
+ * garantie** — le job peut prendre du retard, et l'ouverture réelle reste dite
+ * par `cotesArretees`, sur le statut. Le compte à rebours annonce l'heure prévue
+ * et se tait dès qu'elle est passée sans que le statut ait bougé : mieux vaut ne
+ * plus rien promettre que promettre une ouverture déjà en retard.
+ */
+export const DELAI_OUVERTURE_MS = 2 * 60 * 60 * 1000;
+
+/**
  * Le nombre de points, découpé en sa valeur et son unité.
  *
  * Les widgets de cote écrivent les deux à deux tailles différentes — le nombre
@@ -177,6 +190,35 @@ export function etatFermeture(iso, maintenant = Date.now()) {
   if (restant <= 0) return { ferme: true, restant: 0, texte: null };
 
   return { ferme: false, restant, texte: formaterRestant(restant) };
+}
+
+/** Instant d'ouverture prévu des pronostics, ou `null` si les qualifications ne
+ *  sont pas datées. Le pendant exact d'`instantFermeture`. */
+export function instantOuverture(iso) {
+  if (!iso) return null;
+  const qualifications = new Date(iso).getTime();
+  if (Number.isNaN(qualifications)) return null;
+  return qualifications + DELAI_OUVERTURE_MS;
+}
+
+/**
+ * État de l'ouverture à l'instant `maintenant`, dans la même forme
+ * qu'`etatFermeture` — `passee` remplaçant `ferme`.
+ *
+ * **`passee` ne veut pas dire « les pronostics sont ouverts »**, seulement que
+ * l'heure prévue du relevé est derrière nous. C'est `cotesArretees` qui dit
+ * l'ouverture, sur le statut : le job du samedi peut avoir pris du retard, et
+ * annoncer « ouvert » sur une heure calculée ferait promettre au widget un
+ * bouton qui n'existe pas.
+ */
+export function etatOuverture(iso, maintenant = Date.now()) {
+  const ouverture = instantOuverture(iso);
+  if (ouverture === null) return { passee: false, restant: null, texte: null };
+
+  const restant = ouverture - maintenant;
+  if (restant <= 0) return { passee: true, restant: 0, texte: null };
+
+  return { passee: false, restant, texte: formaterRestant(restant) };
 }
 
 /** Le temps restant découpé en unités. Une seule source pour les deux

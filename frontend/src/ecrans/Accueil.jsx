@@ -29,7 +29,7 @@ import { useDonnees } from "../lib/useDonnees.js";
 import { useIdentiteCourante } from "../lib/usePseudo.js";
 import { cotesArretees } from "../lib/calendrier.js";
 import { formaterDepart } from "../lib/format.js";
-import { useFermeture } from "../lib/useFermeture.js";
+import { useEtatPronostics } from "../lib/useFermeture.js";
 import { APP_VERSION } from "../config.js";
 
 /**
@@ -85,7 +85,7 @@ export function BlocProchainGp({ profilId, previsualisation = false }) {
   );
 
   const gp = donnees?.gp ?? null;
-  const etat = useFermeture(gp?.date_course);
+  const etat = useEtatPronostics(gp);
 
   if (chargement && !gp) {
     // Le squelette garde l'aplat rouge du bloc et n'en griser que le contenu :
@@ -215,10 +215,20 @@ export function BlocProchainGp({ profilId, previsualisation = false }) {
       ]
     : [
         { label: "Départ", valeur: depart.heure ?? "À confirmer" },
-        {
-          label: etat.ferme ? "Pronos" : "Fermeture dans",
-          valeur: etat.ferme ? "Fermés" : (etat.texte ?? "À confirmer"),
-        },
+        // **La seconde case ne choisit plus son échéance.** Elle disait
+        // « Fermeture dans » sur tous les Grands Prix, y compris ceux dont les
+        // pronostics n'étaient pas encore ouverts : elle annonçait la fermeture
+        // d'une chose qui n'avait pas commencé, et treize jours de délai pour
+        // agir là où il n'y avait rien à faire. Le libellé et la valeur
+        // viennent maintenant d'`etatPronostics`, qui porte les deux échéances
+        // du week-end et sert aussi les trois horloges — voir
+        // `lib/calendrier.js`.
+        //
+        // **C'est la même condition que le bouton juste dessous** : les deux
+        // lisent `cotesArretees`. Une case « Fermeture dans » au-dessus d'un
+        // bloc sans bouton de pronostics serait une contradiction visible d'un
+        // coup d'œil.
+        { label: etat.label, valeur: etat.texte ?? etat.substitut },
       ];
 
   // Le pays hôte donne à la fois le tracé du circuit et les couleurs du bloc.

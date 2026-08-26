@@ -196,9 +196,46 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.56.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
-les onze étapes de développement sont livrées. **Le backend passe à `0.56.0`** — la première
-issue qui ne se juge pas toute seule.
+**Version `0.57.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+les onze étapes de développement sont livrées. **Le backend reste à `0.56.0`** — la `0.57.0`
+ne touche que le frontend.
+
+### Un Grand Prix terminé n'est plus le prochain, et le décompte a deux échéances
+
+Le widget d'accueil gardait le GP des Pays-Bas, en statut `termine`, à la place du prochain
+Grand Prix. La règle en cause est celle de la `0.53.0` : « le Grand Prix couru garde la place
+jusqu'à minuit, heure du téléphone ». **Elle faisait ce qui était écrit — c'est son principe
+qui était faux.** Elle faisait dépendre « ce Grand Prix est-il fini ? » de l'heure qu'il est,
+là où le statut le dit déjà, seul et sans ambiguïté. `chargerGpDuJour` est supprimée : dès
+qu'un Grand Prix passe à `termine`, le suivant prend sa place.
+
+Ce que cette règle voulait éviter — « Fermeture dans 13j » sur l'écran d'entrée le dimanche
+soir — est **précisément le second défaut**, et il se corrigeait mieux de front. Le compte à
+rebours n'annonçait qu'une échéance alors que le week-end en a deux : il promettait la
+fermeture de pronostics **pas encore ouverts**, sous une case sans bouton, sans dire quand ils
+ouvriraient. Il décompte maintenant `date_qualifications + 2h` avant l'ouverture, et
+`date_course − 5 min` après.
+
+**C'est `cotesArretees` qui départage les deux phases, jamais le statut brut** — la fonction
+qui décide déjà du bouton juste dessous. Un `POST /scraper/declencher` lancé un mardi ferait
+sinon annoncer « Fermeture dans » au-dessus d'un bloc sans bouton, le défaut de la `0.38.0`
+vu depuis le texte. Et **« pas encore ouverts » exige les trois à la fois** : cotes non
+arrêtées, fermeture pas passée, statut différent de `termine` — sans le troisième test, un
+Grand Prix couru retombait en phase d'ouverture et **l'écran de saisie déverrouillait son
+formulaire sur une course déjà courue**.
+
+**Le libellé était écrit deux fois** : dans `Horloge.jsx` et dans les cases de l'accueil.
+`Horloge` avait pourtant été extraite en `0.18.0` pour qu'une composition ne soit pas écrite
+deux fois — mais son **texte** était resté dupliqué, et les deux ont dit la même chose fausse
+pendant onze versions. **Le partage d'un composant ne couvre que ce qu'on lui a confié.**
+Source unique désormais : `etatPronostics` (`lib/calendrier.js`), pour les quatre surfaces.
+Détail dans `bugs-connus.md` §26.
+
+> **Les deux heures après les qualifications sont une prévision, pas une garantie** : c'est le
+> délai du job du samedi, qui peut prendre du retard. Passée l'heure prévue sans que le statut
+> ait bougé, le décompte se tait — « Ouverture / À confirmer ». Jamais un délai négatif, jamais
+> une ouverture promise en retard. `DELAI_OUVERTURE_MS` est la seule valeur à revoir si le job
+> traîne, et elle n'est écrite qu'une fois.
 
 ### « Autres » n'est pas une nationalité, c'est le complémentaire des autres issues
 
@@ -277,14 +314,15 @@ une chronologie de déploiement — serait resté entier. Quatrième fois qu'une
 n'était pas la vraie, après le numéro sous `rotate(180)`, le tout-ou-rien du podium et le
 `gap_to_leader` jamais lu.
 
-*La version `0.55.0` avait sorti la nationalité du vainqueur d'une table statique et ouvert le
-recalcul forcé. La `0.54.0` avait fait payer le podium pilote par pilote, fait entrer
-`gap_to_leader` dans `Ligne`, sorti le succès du bordeaux, gardé le dimanche soir sur le
-Grand Prix couru et ouvert le calendrier là où il sert. La `0.53.0` avait remis le numéro du
+*La version `0.56.0` avait fait juger « Autres » contre ses issues sœurs. La `0.55.0` avait
+sorti la nationalité du vainqueur d'une table statique et ouvert le recalcul forcé. La `0.54.0`
+avait fait payer le podium pilote par pilote, fait entrer `gap_to_leader` dans `Ligne`, sorti
+le succès du bordeaux, gardé le dimanche soir sur le Grand Prix couru — règle **retirée par la
+`0.57.0`** — et ouvert le calendrier là où il sert. La `0.53.0` avait remis le numéro du
 museau à l'endroit. La `0.52.0` avait fait entrer la photo DANS le cockpit. La `0.51.0` avait
 réparé les photos. La `0.45.0` avait fait passer le multiplicateur des points de 100 à 10.*
 
-**Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les trois points
+**Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les quatre points
 les plus urgents :
 
 1. **Rejouer le GP des Pays-Bas en forçant**, une fois la `0.56.0` du backend déployée sur
@@ -299,10 +337,14 @@ les plus urgents :
 2. **Appliquer les migrations 15, 16, 17 puis 18, dans cet ordre.** La 17 est celle sans
    laquelle **aucune photo ne s'enregistre**. La 18 est celle sans laquelle **la couleur du
    texte ne s'enregistre pas**. Si la 2, la 8, la 10, la 12 ou la 16 est rejouée un jour,
-   rejouer la 18 derrière. **Aucune migration n'est requise par la version `0.56.0`** — le
-   recalcul forcé n'écrit que des colonnes existantes, et la nationalité comme le vocabulaire
-   d'« Autres » vivent dans le code.
-3. **Tester sur iPhone réel** — jamais fait. En priorité : **l'opacité `0,4`** des cartes
+   rejouer la 18 derrière. **Aucune migration n'est requise par les versions `0.56.0` et
+   `0.57.0`** — le recalcul forcé n'écrit que des colonnes existantes, la nationalité comme le
+   vocabulaire d'« Autres » vivent dans le code, et le compte à rebours ne lit que des colonnes
+   déjà servies.
+3. **Vérifier « Ouverture dans » le premier samedi de qualifications** — le délai de deux
+   heures est une prévision jamais confrontée à un vrai week-end. La bascule vers « Fermeture
+   dans » doit suivre le **statut**, pas le décompte qui atteint zéro (`roadmap.md` §1.6 bis).
+4. **Tester sur iPhone réel** — jamais fait. En priorité : **l'opacité `0,4`** des cartes
    passées, qui est un jugement de lisibilité en plein soleil autant qu'un rapport de
    contraste ; **le défilement d'ouverture du calendrier**, qui se pose sur des `offsetTop`
    mesurés pendant l'animation d'entrée ; **le sélecteur de vingt-quatre Grands Prix** ; et

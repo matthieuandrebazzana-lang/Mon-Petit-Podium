@@ -1,4 +1,5 @@
 import { appelApi } from "./api.js";
+import { etatFermeture, etatOuverture } from "./format.js";
 
 /**
  * Calendrier d'un championnat et résultats d'un Grand Prix — étape 9.
@@ -134,6 +135,110 @@ export function cotesArretees(gp, maintenant = Date.now()) {
 
   const qualifications = Date.parse(gp.date_qualifications ?? "");
   return Number.isFinite(qualifications) && qualifications <= maintenant;
+}
+
+/**
+ * Ce que le compte à rebours doit dire de ce Grand Prix — **la seule source**
+ * pour les trois surfaces qui en portent un : le bloc de l'accueil, l'écran de
+ * saisie et le récapitulatif.
+ *
+ * ## Deux échéances, pas une
+ *
+ * Le décompte affichait toujours « Fermeture dans », y compris sur un Grand Prix
+ * dont les pronostics n'étaient pas encore ouverts — il annonçait donc la
+ * fermeture d'une chose qui n'avait pas commencé, et le joueur qui attendait le
+ * lui voyait promettre treize jours de délai pour agir. Les deux échéances d'un
+ * week-end sont distinctes et se suivent :
+ *
+ * | Phase | Échéance | Ce qui est dit |
+ * |---|---|---|
+ * | Avant le relevé des cotes | qualifications + 2h | « Ouverture dans » |
+ * | Pronostics ouverts | départ − 5 min | « Fermeture dans » |
+ *
+ * **C'est `cotesArretees` qui départage, pas le statut brut**, et c'est ce qui
+ * fait tenir l'ensemble : le bouton de pronostics du même bloc s'affiche sur
+ * exactement la même condition. Un Grand Prix passé à `cotes_figees` par un
+ * `POST /scraper/declencher` lancé un mardi annoncerait sinon « Fermeture dans »
+ * au-dessus d'un bloc sans bouton — un compte à rebours vers une fermeture que
+ * rien n'ouvrira. La règle 4.3 est lue une fois, et les deux s'accordent.
+ *
+ * ## Ce qui est rendu
+ *
+ * `label` est le titre affiché au-dessus du décompte, `texte` la phrase
+ * (« 2j 14h 32min »), `restant` les millisecondes pour l'horloge à tuiles, et
+ * `substitut` le mot qui prend la place du décompte quand il n'y en a pas.
+ * **`texte` non nul est le seul test à faire pour savoir s'il y a quelque chose à
+ * décompter** : les deux états sans échéance datée le laissent nul.
+ *
+ * `ferme` garde son sens d'origine — les pronostics sont fermés — et **il est
+ * faux pendant toute la phase d'ouverture** : rien n'est fermé avant d'avoir été
+ * ouvert, et c'est lui qui décide ailleurs du bouton « Modifier mes pronos ».
+ */
+export function etatPronostics(gp, maintenant = Date.now()) {
+  // Aucun Grand Prix chargé : l'état d'attente des écrans, celui qu'ils
+  // affichaient déjà sous leur squelette. On n'annonce ni ouverture ni
+  // fermeture d'un Grand Prix qu'on n'a pas lu.
+  if (!gp) {
+    return {
+      phase: "attente",
+      ferme: false,
+      restant: null,
+      texte: null,
+      label: "Départ",
+      substitut: "À confirmer",
+    };
+  }
+
+  const fermeture = etatFermeture(gp.date_course, maintenant);
+
+  // **« Pas encore ouverts » exige les trois à la fois** : des cotes non
+  // arrêtées, une heure de fermeture pas encore passée, et un Grand Prix qui
+  // n'a pas couru. Le premier test suffirait un samedi matin ; il ne suffit
+  // pas le dimanche soir, où un Grand Prix `termine` le passe aussi — et
+  // l'écran de saisie aurait alors déverrouillé son formulaire sur une course
+  // déjà courue, `ferme` étant ce qui le tient fermé. La phase d'ouverture est
+  // celle qui précède, jamais celle qui suit.
+  const jamaisOuverts =
+    !cotesArretees(gp, maintenant) && !fermeture.ferme && gp.statut !== "termine";
+
+  if (jamaisOuverts) {
+    const ouverture = etatOuverture(gp.date_qualifications, maintenant);
+    return {
+      phase: "ouverture",
+      ferme: false,
+      restant: ouverture.restant,
+      texte: ouverture.texte,
+      // Sans qualifications datées, ou l'heure prévue passée sans que le
+      // scraper ait figé quoi que ce soit : le titre perd son « dans », qui
+      // n'introduirait plus rien.
+      label: ouverture.texte ? "Ouverture dans" : "Ouverture",
+      substitut: "À confirmer",
+    };
+  }
+
+  if (fermeture.ferme || gp.statut === "termine") {
+    return {
+      phase: "fermeture",
+      ferme: true,
+      restant: 0,
+      texte: null,
+      label: "Pronostics",
+      substitut: "Fermés",
+    };
+  }
+
+  return {
+    phase: "fermeture",
+    ferme: false,
+    restant: fermeture.restant,
+    texte: fermeture.texte,
+    // Un Grand Prix dont Unibet n'a pas annoncé l'heure de départ **reste
+    // ouvert** — la règle des trois étages — mais il n'a aucune fermeture à
+    // décompter : le titre annonce alors le départ, et le mot dit qu'on
+    // l'attend.
+    label: fermeture.texte ? "Fermeture dans" : "Départ",
+    substitut: "À confirmer",
+  };
 }
 
 /**

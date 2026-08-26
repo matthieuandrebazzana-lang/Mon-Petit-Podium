@@ -856,3 +856,73 @@ exactement le comportement d'avant — « Autres » non jugé, plutôt que mal j
   **À relancer une fois la `0.56.0` déployée sur Railway**, pas avant : un rejeu sur
   l'ancien backend reproduirait le même `NULL`. Lire `en_attente` dans la réponse — c'est
   elle qui dira si « Autres » est enfin jugé, ou si une option sœur reste illisible.
+
+---
+
+## 26. Le widget d'accueil restait sur un Grand Prix fini, et comptait la fermeture de pronostics jamais ouverts
+
+**Symptôme.** Deux défauts sur le même bloc, celui que tout le monde voit en premier.
+
+1. Le GP des Pays-Bas, en statut `termine`, occupait encore la place du prochain Grand
+   Prix — longtemps après le dimanche de la course.
+2. Sur un Grand Prix `a_venir`, la seconde case de statut annonçait « Fermeture dans » et
+   décomptait treize jours. Les pronostics n'étaient pas ouverts, aucun bouton ne s'affichait
+   sous elle, et rien ne disait quand ils le seraient.
+
+**Cause réelle — les deux, et elles ne sont pas les mêmes.**
+
+Pour le premier, la règle « le dimanche soir appartient encore au Grand Prix du jour »
+(version `0.53.0`) : `chargerProchainGp` lançait d'abord `chargerGpDuJour`, une lecture des
+`termine` de la journée civile locale, et la servait avant tout le reste. **Le défaut ne
+venait pas de son implémentation — elle faisait exactement ce qui était écrit — mais de son
+principe** : elle faisait dépendre « ce Grand Prix est-il fini ? » de l'heure qu'il est, là
+où le statut le dit déjà, seul et sans ambiguïté.
+
+Pour le second, un libellé écrit en dur **à deux endroits séparés** : dans `Horloge.jsx`
+(`etat.ferme ? "Pronostics" : inconnue ? "Départ" : "Fermeture dans"`) et une seconde fois
+dans les cases de statut du bloc d'accueil. Ni l'un ni l'autre ne connaissait la première
+échéance du week-end — le relevé des cotes. `useFermeture` ne recevait que `date_course` :
+avec cette seule donnée, **l'ouverture était indécidable**, et le seul décompte possible
+était celui de la fermeture.
+
+**Correctif (version `0.57.0`).**
+
+`chargerGpDuJour` et `debutDuJourLocal` sont supprimés ; `chargerProchainGp` ne fait plus
+qu'une lecture, sur les deux statuts non courus. Un Grand Prix `termine` n'en sort jamais.
+
+Le compte à rebours reçoit une source unique, `etatPronostics` (`lib/calendrier.js`), qui
+prend le **Grand Prix entier** et rend `{ phase, ferme, restant, texte, label, substitut }`.
+Elle tranche sur `cotesArretees` — la fonction qui décide déjà du bouton de pronostics — et
+décompte `date_qualifications + 2h` avant l'ouverture, `date_course − 5 min` après.
+`useEtatPronostics` l'anime ; `Horloge` n'affiche plus que ce qu'on lui donne. Règle métier
+complète dans `metier.md` §3.
+
+**Ne pas refaire.**
+
+- **Ne pas remettre une fenêtre de grâce après `termine`.** Ni minuit, ni « six heures
+  après », ni aucune durée : le statut est la seule réponse à « est-ce fini ? », et le
+  dimanche soir se lit sur l'écran de résultats, qui est fait pour ça. Ce que l'ancienne
+  règle voulait éviter — un compte à rebours de treize jours à l'ouverture de l'app — est
+  précisément ce que le second correctif règle, et sans mentir sur ce qui est fini.
+- **Ne pas trancher les phases sur `gp.statut === "cotes_figees"`.** C'est `cotesArretees`
+  qui décide, statut **et** qualifications passées (règle 4.3), parce que c'est elle qui
+  décide du bouton. Un `POST /scraper/declencher` lancé un mardi ferait sinon annoncer
+  « Fermeture dans » au-dessus d'un bloc sans bouton — un décompte vers une fermeture que
+  rien n'ouvrira. C'est exactement le défaut constaté en `0.38.0`, vu depuis le texte.
+- **La phase d'ouverture est celle qui PRÉCÈDE, jamais celle qui suit.** Tester les seules
+  cotes non arrêtées y ferait retomber tout Grand Prix couru — et `ferme` étant ce qui tient
+  le formulaire de saisie verrouillé, l'écran de saisie se serait rouvert sur une course
+  déjà courue. Les trois conditions vont ensemble : cotes non arrêtées, fermeture pas encore
+  passée, statut différent de `termine`.
+- **Les deux heures après les qualifications sont une prévision, pas une garantie.** Le job
+  du samedi peut prendre du retard. Passée l'heure prévue sans que le statut ait bougé, le
+  décompte se tait — « Ouverture / À confirmer » — au lieu d'afficher un délai négatif ou de
+  promettre une ouverture en retard.
+- **Ne pas mettre l'objet `gp` en dépendance de l'effet du hook.** `useDonnees` sert un
+  objet neuf à chaque revalidation en arrière-plan, même identique : la minuterie serait
+  détruite et réarmée sans fin. Les trois champs sont mis en dépendance un par un.
+- **Un libellé partagé se partage aussi.** `Horloge` avait été extraite en `0.18.0`
+  précisément pour qu'une composition ne soit pas écrite deux fois — mais son **texte**,
+  lui, était resté dupliqué avec celui de l'accueil, et les deux ont dit la même chose
+  fausse pendant onze versions. Le partage d'un composant ne couvre que ce qu'on lui a
+  confié.

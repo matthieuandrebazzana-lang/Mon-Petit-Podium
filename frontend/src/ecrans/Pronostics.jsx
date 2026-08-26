@@ -37,7 +37,7 @@ import {
   formaterPoints,
 } from "../lib/format.js";
 import { origineRetour } from "../lib/navigation.js";
-import { useFermeture } from "../lib/useFermeture.js";
+import { useEtatPronostics } from "../lib/useFermeture.js";
 
 // Les trois aplats de l'écran, et leurs encres, calculés une fois pour toutes :
 // ils ne dépendent d'aucune donnée. Les recalculer à chaque rendu ne coûterait
@@ -341,7 +341,7 @@ export default function Pronostics() {
   const [tentative, setTentative] = useState(0);
   const [prerempli, setPrerempli] = useState(false);
 
-  const etat = useFermeture(gp?.date_course);
+  const etat = useEtatPronostics(gp);
 
   // Préremplissage depuis les pronostics déjà enregistrés, une seule fois : un
   // rafraîchissement en arrière-plan ne doit pas écraser une saisie en cours.
