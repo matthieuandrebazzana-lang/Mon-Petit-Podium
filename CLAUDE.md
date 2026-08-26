@@ -196,9 +196,96 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.59.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+**Version `0.60.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
 les onze étapes de développement sont livrées. **Le backend reste à `0.56.0`** — ni la
-`0.57.0`, ni la `0.58.0`, ni la `0.59.0` ne touchent à son code.
+`0.57.0`, ni la `0.58.0`, ni la `0.59.0`, ni la `0.60.0` ne touchent à son code.
+
+### Un week-end n'a pas toujours les mêmes cinq séances
+
+La demande corrigeait des libellés — « EL1 » en « Essais Libres 1 » — et donnait au passage
+deux horaires pour Singapour que la table ne pouvait pas porter : **une qualification de
+sprint et un sprint**. Le calendrier 2026 le confirme, Singapour est le seul week-end
+sprint des douze restants, et un week-end sprint **n'a qu'une séance d'essais libres**.
+Corriger les seuls libellés aurait laissé l'écran annoncer des EL2 et des EL3 qui n'auront
+pas lieu.
+
+**Aucun drapeau `sprint: true` n'a été ajouté.** `SEANCES` déclare les **sept** clés
+possibles dans l'ordre chronologique — la fusion des deux formats — et c'est la **présence**
+d'une clé dans `gp.seances` qui décide de la rangée. Le format se lit donc dans les heures
+elles-mêmes, et il n'y a pas un second endroit à tenir en accord avec elles le jour où la
+FIA déplace un sprint. Deux listes séparées, une par format, auraient divergé au premier
+libellé retouché : c'est exactement ce qui était arrivé aux deux libellés d'`Horloge`, qui
+ont dit la même chose fausse pendant onze versions.
+
+Le repli — les cinq séances du format ordinaire, sans leurs heures — **vit désormais dans
+`calendrier2026.js` seul**, à côté de l'ordre qu'il suppose. `SeancesWeekend` le recopiait ;
+il appelle maintenant `seancesDuGp(null)`, qui rend exactement la même chose.
+
+> **Écart signalé (§6).** La demande disait « six derniers vainqueurs par GP ». **Deux
+> Grands Prix ne peuvent pas en avoir six** — Las Vegas a couru trois fois, le Qatar quatre
+> — et inventer une ligne pour tenir un gabarit aurait posé une donnée fausse sous un titre
+> qui dit « derniers vainqueurs ». Les deux listes restent courtes, la dernière rangée de la
+> grille reste incomplète. C'est le refus déjà opposé à cinq entrées en `0.59.0`.
+
+**Remonter d'une édition ne rajoute pas un nom du même cercle.** Six listes sautent une
+année blanche, et **le GP des Pays-Bas saute quarante ans** : absent du calendrier de 1986 à
+2020, sa sixième édition la plus récente est celle de 1985, gagnée par Lauda. Trois
+nationalités sont entrées avec ces lignes — la France, l'Autriche, la Finlande — et la
+Finlande rejoint l'Australie parmi **les nationalités déclarées sans drapeau** : une croix
+nordique n'est pas plus descriptible par un dégradé qu'une croix du Sud, et un drapeau
+approximé est ce que `DrapeauxSVG.jsx` existe pour ne plus faire.
+
+`ecurie` est **la seule exception à la règle du millésime**, et elle est structurelle :
+`lib/livrees.js` ne dessine que les onze écuries de 2026, donc une victoire de 2021 sortait
+déjà aux couleurs d'aujourd'hui. La table nomme la **continuation directe** de l'écurie qui
+a gagné — Racing Bulls pour l'AlphaTauri de Gasly, McLaren pour la McLaren-TAG de Lauda.
+
+### Le rendu contre la feuille compilée a écarté la grille que le JSX trouvait évidente
+
+Huitième fois, et cette fois sur une case de statistiques.
+
+**« Distance totale de course » retirée, il reste quatre chiffres**, et trois colonnes
+paraissaient les ranger le plus proprement — une rangée de trois courtes, le record sur
+toute la largeur. **À 320 px, une colonne sur trois ne laisse que 71 px de contenu, et
+« 6,003 km » s'y casse en deux lignes.** Le libellé, lui, tenait : rien dans le JSX ne
+laissait deviner que c'était la valeur qui manquerait de place. À deux colonnes la même
+valeur dispose de 111 px et tient partout — d'où le **carré de 2 × 2**, sans le moindre
+`col-span`, que la disparition de la cinquième case rendait justement possible.
+
+**Le palmarès a demandé de recomposer la carte, pas seulement la liste.** En rangée qui
+défile, la carte faisait 176 px et posait la voiture à gauche du nom. Une colonne sur deux
+n'en fait plus que 166 à 375 px : le nom n'y disposait que de 77,5 px une fois retirés le
+rembourrage, les 55 px de la voiture et leur gouttière — et **« Verstappen » en demande
+79**, mesuré. Le nom le plus fréquent de la table se serait tronqué sur **tous** les iPhone.
+Or c'est le nom de famille qui porte la reconnaissance : la voiture passe donc **au-dessus**,
+centrée, et la ligne du nom prend toute la largeur utile. Les onze noms de la table y
+tiennent entiers dès 320 px.
+
+> **Deux compromis mesurés et assumés, tous deux à 320 px seulement** (§6). Le détail du
+> record — « Charles Leclerc · 2019 » — demande 120 px et n'en a que 111 : il se tronque là,
+> et `truncate` est déjà ce que cette ligne secondaire porte. Et « Qualifications Sprint »
+> se replie sur deux lignes quand la pastille « Bientôt » l'accompagne. Dès 375 px, tout
+> tient sur une ligne.
+
+**Le drapeau de fond passe de 9 % à 18 %**, et le contraste a été remesuré sur les seize
+teintes que les onze nationalités peignent. Le pire substrat est le noir de l'Allemagne :
+`#D1D1D1` composé, où l'encre vaut **11,40:1** et le marron `secondaire` **6,91:1**. Les
+deux valeurs demandées passent le plancher avec marge — `0,20` donne encore 10,84:1 — donc
+**le choix entre elles est esthétique, pas de lisibilité**, et c'est la plus discrète qui
+est retenue.
+
+**`scroll-pl-4` est parti avec le défilement.** La `0.59.0` avait dû l'ajouter pour qu'une
+carte `snap-start` ne colle pas le bord de l'écran ; une grille n'a pas de bord de calage,
+donc pas de bord de calage à corriger. **Les deux rangées plus anciennes gardent le leur** —
+favoris des cotes, aperçus de la page publique : `roadmap.md` §3.8 ter, toujours ouvert.
+
+### Dix horaires corrigés, et rien de ce qui décide n'a changé de main
+
+Six Grands Prix sur douze avaient au moins une séance à la mauvaise heure — Italie,
+Singapour, Austin, Mexique, Brésil, Las Vegas ; les six autres étaient déjà justes. Les
+heures restent écrites en **instants UTC complets** et restent **prévisionnelles** : le
+scraper écrase les deux qu'il connaît au premier passage, et **la fermeture des pronostics
+lit toujours `gp.date_course`, et rien d'autre.**
 
 ### Le calendrier a une profondeur : chaque carte ouvre quelque chose
 
@@ -453,7 +540,8 @@ une chronologie de déploiement — serait resté entier. Quatrième fois qu'une
 n'était pas la vraie, après le numéro sous `rotate(180)`, le tout-ou-rien du podium et le
 `gap_to_leader` jamais lu.
 
-*La version `0.58.0` avait posé les onze Grands Prix restants en base. La `0.57.0` avait
+*La version `0.59.0` avait ouvert l'écran de détail d'un Grand Prix. La `0.58.0` avait posé
+les onze Grands Prix restants en base. La `0.57.0` avait
 retiré la règle du dimanche soir et donné deux échéances au décompte. La `0.56.0` avait fait
 juger « Autres » contre ses issues sœurs. La `0.55.0` avait
 sorti la nationalité du vainqueur d'une table statique et ouvert le recalcul forcé. La `0.54.0`

@@ -97,6 +97,11 @@ depuis la version `0.59.0`.
 
 ### `seances` — cinq instants UTC, et une règle bornée (v`0.59.0`)
 
+> **Les horaires ont été repris en `0.60.0`.** Dix séances réparties sur six Grands Prix
+> ont changé d'instant (Italie, Singapour, Austin, Mexique, Brésil, Las Vegas) ; les autres
+> étaient déjà justes. Elles restent **prévisionnelles**, et le scraper écrase toujours les
+> deux qu'il connaît.
+
 > ### Écart signalé (CLAUDE.md §6)
 >
 > Le §4 ci-dessous dit « l'heure ne vient jamais d'ici ». **Elle en vient maintenant, pour
@@ -110,8 +115,34 @@ depuis la version `0.59.0`.
 > existent, et **la fermeture des pronostics ne lit toujours QUE `gp.date_course`**. Rien
 > de ce qui décide n'a changé de propriétaire.
 
-Les cinq clés — `el1`, `el2`, `el3`, `qualifications`, `course` — portent des **instants
-UTC complets**, jamais des heures locales. Un `Intl.DateTimeFormat` sans `timeZone` rend
+### Le nombre de séances n'est pas fixe : un week-end sprint (v`0.60.0`)
+
+`SEANCES` déclare **sept clés** dans l'ordre où elles se courent ; `gp.seances` en porte
+cinq, et **c'est leur présence qui décide des rangées affichées**.
+
+| Format | Vendredi | Samedi | Dimanche |
+|---|---|---|---|
+| ordinaire | `el1`, `el2` | `el3`, `qualifications` | `course` |
+| **sprint** | `el1`, `qualifications_sprint` | `sprint`, `qualifications` | `course` |
+
+**Singapour est le seul week-end sprint des douze**, et donc le seul à ne porter ni `el2`
+ni `el3` : ce ne sont pas des heures manquantes, ce sont des séances qui n'ont pas lieu.
+
+> **Aucun drapeau `sprint: true`.** Le format se lit dans les clés que la table déclare, et
+> rien d'autre — un booléen aurait été un second endroit à tenir en accord avec les heures,
+> donc un second endroit à corriger le jour où la FIA déplace un sprint. `SEANCES` est
+> **la fusion des deux formats** dans l'ordre chronologique, et le filtre en tire l'ordre
+> juste dans les deux cas ; deux listes séparées auraient divergé au premier libellé
+> retouché.
+
+**Les libellés s'écrivent en toutes lettres depuis la `0.60.0`** — « Essais Libres 1 » et
+non « EL1 ». La rangée réserve sa colonne de droite à l'heure et laisse tout le reste au
+libellé ; « Qualifications » s'y écrivait déjà en entier. À 320 px, « Qualifications
+Sprint » se replie sur deux lignes quand la pastille « Bientôt » l'accompagne — mesuré
+contre la feuille compilée, et assumé : la rangée reste dans sa carte, et dès 375 px tout
+tient sur une ligne.
+
+Les clés portent des **instants UTC complets**, jamais des heures locales. Un `Intl.DateTimeFormat` sans `timeZone` rend
 ensuite l'heure du téléphone, où qu'il soit (`formaterSeance`, `lib/format.js`). C'est ce
 qui fait tomber juste le cas de **Las Vegas**, dont la course part le samedi 20h locale,
 c'est-à-dire le **dimanche** en UTC — et dont la carte du calendrier continue d'afficher
@@ -388,11 +419,14 @@ réagit pas ne s'essaie pas deux fois.
 
 1. **Le programme** — les cinq séances en heure locale (`SeancesWeekend`). C'est ce qu'on
    vient chercher la semaine qui précède, donc c'est en haut. Une séance passée pâlit à
-   `0,5` ; **la prochaine**, si elle est à moins de 24 h, prend une pastille amber.
+   `0,5` ; **la prochaine**, si elle est à moins de 24 h, prend une pastille amber. Cinq
+   rangées, mais **pas toujours les mêmes cinq** — voir le §3 et le week-end sprint.
 2. **Le circuit** — le tracé en grand sur une bande de hauteur **fixe** (`xMidYMid meet`
-   met chaque circuit à l'échelle dedans), puis cinq chiffres en 2 × 2 + 1.
-3. **Le palmarès** — les derniers vainqueurs (`VainqueursCircuit`), la seule rangée qui
-   défile à l'horizontale.
+   met chaque circuit à l'échelle dedans), puis **quatre chiffres en carré de 2 × 2**
+   depuis la `0.60.0` : « Distance totale de course » a été retirée, et c'est sa
+   disparition qui ferme le carré.
+3. **Le palmarès** — les derniers vainqueurs (`VainqueursCircuit`), en **grille de deux
+   colonnes sur trois rangées**. Ce n'est plus une rangée qui défile.
 
 Un bouton « Voir les cotes » se colle en bas quand `cotesArretees(gp)` — **et non sur le
 statut `cotes_figees` seul** : `POST /scraper/declencher` peut être appelé un mardi, et le
@@ -417,8 +451,12 @@ données sous une seule clé.
 
 ### `lib/circuits.js`
 
-Une entrée par slug : `longueur_km`, `nombre_tours`, `distance_km`, `premier_gp`,
-`record_tour` (`{temps, pilote, annee}` ou `null`) et `derniers_vainqueurs`.
+Une entrée par slug : `longueur_km`, `nombre_tours`, `premier_gp`, `record_tour`
+(`{temps, pilote, annee}` ou `null`) et `derniers_vainqueurs`.
+
+> **`distance_km` a été retirée en `0.60.0`.** Elle se dérivait de deux champs voisins, et
+> sa case était la seule à porter une valeur longue — « 306,720 km » — dans une grille de
+> cases courtes.
 
 > ### Écart signalé : rien ici n'est vérifié par le code
 > C'est une **donnée de référence saisie à la main**, au même titre que la grille de
@@ -432,8 +470,20 @@ Prix, pas le circuit** — le palmarès du GP d'Espagne s'est joué à Barcelone
 Malaisie date de 2013-2017. C'est le palmarès qu'on vient chercher ; le restreindre au
 tracé aurait laissé deux blocs vides, et le millésime de chaque carte le dit.
 
-**Les listes ne font pas toutes cinq entrées** — Las Vegas en a trois, le Qatar quatre — et
-on ne les complète pas. La rangée défile, elle n'a pas de longueur à respecter.
+**Les listes font six entrées depuis la `0.60.0`**, ce qui remplit la grille de 2 × 3 — mais
+c'est la grille qui suit la donnée, jamais l'inverse. **Deux Grands Prix ne peuvent pas en
+avoir six** : Las Vegas n'a couru que trois fois, le Qatar quatre. On ne les complète pas,
+et la dernière rangée reste incomplète.
+
+Remonter d'une édition ne rajoute pas un nom du même cercle : six listes sautent une année
+blanche (2020, et 2020-2021 pour Singapour), et **le GP des Pays-Bas saute quarante ans** —
+absent du calendrier de 1986 à 2020, sa sixième édition la plus récente est celle de 1985.
+Trois nationalités sont entrées avec ces lignes : la France, l'Autriche et la Finlande.
+
+> **`ecurie` est la seule exception à la règle du millésime**, et elle est structurelle :
+> `lib/livrees.js` ne dessine que les onze écuries de 2026. La table nomme donc la
+> **continuation directe** de l'écurie qui a gagné — Racing Bulls pour l'AlphaTauri de
+> Gasly en 2020, McLaren pour la McLaren-TAG de Lauda en 1985.
 
 `ecurie` est un slug de `lib/livrees.js`, `nationalite` une clé de `NATIONALITES`
 (`DrapeauxGP.jsx`), et `numero` est celui que le pilote portait **cette année-là** : c'est

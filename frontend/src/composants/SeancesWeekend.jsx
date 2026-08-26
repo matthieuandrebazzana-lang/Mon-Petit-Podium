@@ -1,11 +1,11 @@
-import { SEANCES, seancesDuGp } from "../lib/calendrier2026.js";
+import { seancesDuGp } from "../lib/calendrier2026.js";
 import { formaterSeance } from "../lib/format.js";
 
 /**
  * Le programme du week-end — cinq rangées, en heure locale du téléphone.
  *
  * C'est le premier bloc de l'écran « Détail GP », et c'est ce qu'on vient y
- * chercher : à quelle heure regarder. Les cinq séances sont datées par
+ * chercher : à quelle heure regarder. Les séances sont datées par
  * `seancesDuGp`, qui laisse la base l'emporter sur la table statique partout où
  * elle a une réponse — voir sa note, et l'écart signalé en tête de
  * `calendrier2026.js`.
@@ -15,6 +15,21 @@ import { formaterSeance } from "../lib/format.js";
  * auraient fait cinq objets là où il n'y a qu'un programme. Les rangées se
  * séparent par du blanc, jamais par un filet — la section 3 du design system
  * proscrit les bordures fines.
+ *
+ * **Cinq, mais pas toujours les mêmes cinq.** Un week-end sprint remplace EL2
+ * et EL3 par la qualification du sprint et le sprint — c'est `seancesDuGp` qui
+ * le sait, sur la seule foi des clés que la table déclare, et ce composant n'a
+ * rien à en connaître. Il n'y a **aucune liste de repli ici** : celle du format
+ * ordinaire vit dans `calendrier2026.js`, à côté de l'ordre qu'elle suppose.
+ * Écrite deux fois, elle aurait fini par ne plus dire la même chose que lui.
+ *
+ * ## Les libellés s'écrivent en toutes lettres (v`0.60.0`)
+ *
+ * « EL1 » supposait qu'une rangée d'iPhone ne pouvait pas porter « Essais
+ * Libres 1 ». Elle le peut : la colonne de droite est réservée à l'heure, tout
+ * le reste revient au libellé, et « Qualifications » s'y écrivait déjà en
+ * entier. C'était l'abréviation du paddock demandée à quelqu'un qui vient
+ * peut-être de découvrir la Formule 1.
  *
  * ## Les deux états d'une rangée
  *
@@ -110,22 +125,11 @@ function Rangee({ seance }) {
  *  une horloge qu'on ne contrôle pas. Il ne rend pas le composant vivant pour
  *  autant — rien ne le réévalue, et c'est voulu (voir l'en-tête). */
 export default function SeancesWeekend({ gp, maintenant = Date.now() }) {
-  const seances = gp ? seancesDuGp(gp, maintenant) : null;
-
-  // Aucun Grand Prix, ou une table statique sans séances pour lui : on montre
-  // les cinq noms sans leurs heures plutôt qu'un bloc vide. Le programme d'un
-  // week-end de Formule 1 est vrai sans la base, exactement comme les douze
-  // cartes du calendrier le sont (`calendrier.md` §1).
-  const rangees =
-    seances ??
-    SEANCES.map((seance) => ({
-      ...seance,
-      iso: null,
-      instant: null,
-      confirmee: false,
-      passee: false,
-      imminente: false,
-    }));
+  // **Un seul chemin, y compris sans Grand Prix.** `seancesDuGp(null)` rend les
+  // cinq séances du format ordinaire sans leurs heures — c'est son repli, écrit
+  // là où vit l'ordre qu'il suppose (voir `SEANCES_ORDINAIRE`). Le recopier ici
+  // aurait fait deux listes pour une seule question.
+  const rangees = seancesDuGp(gp, maintenant);
 
   return (
     <ul className="rounded-bloc bg-surface shadow-bloc space-y-0.5 p-2">

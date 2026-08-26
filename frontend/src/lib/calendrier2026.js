@@ -39,19 +39,21 @@ import { chargerMesGpPronostiques } from "./pronostics.js";
  *
  * > ### Écart signalé (CLAUDE.md §6)
  * >
- * > L'écran « Détail GP » affiche les cinq séances du week-end — EL1, EL2, EL3,
- * > qualifications, course — et **la base n'en connaît que deux** :
- * > `date_course` et `date_qualifications`. Les trois essais libres n'existent
- * > nulle part côté serveur, et rien ne les y fera entrer : ni Unibet ni OpenF1
- * > ne les servent. Sans table statique, le bloc n'aurait pas pu exister.
+ * > L'écran « Détail GP » affiche les séances du week-end — essais libres,
+ * > qualifications, course, et sur un week-end sprint la qualification du
+ * > sprint et le sprint lui-même — et **la base n'en connaît que deux** :
+ * > `date_course` et `date_qualifications`. Les essais libres et les deux
+ * > séances de sprint n'existent nulle part côté serveur, et rien ne les y fera
+ * > entrer : ni Unibet ni OpenF1 ne les servent. Sans table statique, le bloc
+ * > n'aurait pas pu exister.
  * >
  * > **La règle « seule la base connaît l'heure » n'est donc pas levée, elle est
  * > bornée** : elle continue de valoir pour les deux séances que la base porte.
  * > `seancesDuGp` ci-dessous écrase les valeurs statiques des qualifications et
  * > de la course par celles de la base dès qu'elles existent, et la fermeture
  * > des pronostics ne lit toujours QUE `gp.date_course`. Rien de ce qui décide
- * > n'a changé de propriétaire ; seul l'affichage a gagné trois lignes que la
- * > base ne saura jamais dire.
+ * > n'a changé de propriétaire ; seul l'affichage a gagné les trois lignes que
+ * > la base ne saura jamais dire.
  * >
  * > **Ces heures sont prévisionnelles.** Elles suivent la convention des
  * > horaires usuels d'un week-end de Formule 1, converties au fuseau réel de
@@ -61,6 +63,13 @@ import { chargerMesGpPronostiques } from "./pronostics.js";
  * > téléphone, où qu'il soit. C'est aussi ce qui fait tomber juste le cas de Las
  * > Vegas, dont la course part le samedi 20h locale, c'est-à-dire le **dimanche**
  * > en UTC.
+ * >
+ * > **Le nombre de séances n'est pas fixe** : `seances` porte les clés du
+ * > week-end réel, et c'est leur PRÉSENCE qui décide des rangées affichées.
+ * > Singapour est le seul week-end **sprint** des douze, donc le seul à porter
+ * > `qualifications_sprint` et `sprint` — et le seul à ne porter ni `el2` ni
+ * > `el3`, qui ne sont pas des heures manquantes mais des séances qui n'ont pas
+ * > lieu. Voir `SEANCES`, qui déclare l'ordre des sept clés possibles.
  * >
  * > **Une divergence à signaler, sans la corriger ici** : la date de
  * > l'Azerbaïdjan (`2026-09-26`) tombe un samedi, quand toutes les autres
@@ -93,8 +102,8 @@ export const GP_2026 = [
     slug: "italie", nom: "GP Italie", pays: "Italie", circuit: "Monza",
     date: "2026-09-06", mois: "SEPT",
     seances: {
-      el1: "2026-09-04T11:30:00Z",
-      el2: "2026-09-04T15:00:00Z",
+      el1: "2026-09-04T10:30:00Z",
+      el2: "2026-09-04T14:00:00Z",
       el3: "2026-09-05T10:30:00Z",
       qualifications: "2026-09-05T14:00:00Z",
       course: "2026-09-06T13:00:00Z",
@@ -133,13 +142,18 @@ export const GP_2026 = [
       course: "2026-10-04T07:00:00Z",
     },
   },
+  // **Le seul week-end SPRINT des douze** (voir `SEANCES`) : une seule séance
+  // d'essais libres, la qualification du sprint le vendredi, le sprint puis la
+  // qualification de la course le samedi. Les clés `el2` et `el3` sont donc
+  // absentes — ce ne sont pas des heures manquantes, ce sont des séances qui
+  // n'ont pas lieu.
   {
     slug: "singapour", nom: "GP Singapour", pays: "Singapour", circuit: "Singapour",
     date: "2026-10-11", mois: "OCT",
     seances: {
-      el1: "2026-10-09T09:30:00Z",
-      el2: "2026-10-09T13:00:00Z",
-      el3: "2026-10-10T09:30:00Z",
+      el1: "2026-10-09T08:30:00Z",
+      qualifications_sprint: "2026-10-09T12:30:00Z",
+      sprint: "2026-10-10T09:00:00Z",
       qualifications: "2026-10-10T13:00:00Z",
       course: "2026-10-11T12:00:00Z",
     },
@@ -151,7 +165,7 @@ export const GP_2026 = [
       el1: "2026-10-23T17:30:00Z",
       el2: "2026-10-23T21:00:00Z",
       el3: "2026-10-24T17:30:00Z",
-      qualifications: "2026-10-24T21:00:00Z",
+      qualifications: "2026-10-24T22:00:00Z",
       course: "2026-10-25T19:00:00Z",
     },
   },
@@ -162,8 +176,8 @@ export const GP_2026 = [
       el1: "2026-10-30T18:30:00Z",
       el2: "2026-10-30T22:00:00Z",
       el3: "2026-10-31T17:30:00Z",
-      qualifications: "2026-10-31T21:00:00Z",
-      course: "2026-11-01T20:00:00Z",
+      qualifications: "2026-10-31T23:00:00Z",
+      course: "2026-11-01T21:00:00Z",
     },
   },
   {
@@ -171,7 +185,7 @@ export const GP_2026 = [
     date: "2026-11-15", mois: "NOV",
     seances: {
       el1: "2026-11-13T14:30:00Z",
-      el2: "2026-11-13T18:00:00Z",
+      el2: "2026-11-13T19:00:00Z",
       el3: "2026-11-14T14:30:00Z",
       qualifications: "2026-11-14T18:00:00Z",
       course: "2026-11-15T17:00:00Z",
@@ -181,10 +195,10 @@ export const GP_2026 = [
     slug: "las-vegas", nom: "GP Las Vegas", pays: "États-Unis", circuit: "Las Vegas",
     date: "2026-11-21", mois: "NOV",
     seances: {
-      el1: "2026-11-20T02:30:00Z",
-      el2: "2026-11-20T06:00:00Z",
-      el3: "2026-11-21T02:30:00Z",
-      qualifications: "2026-11-21T06:00:00Z",
+      el1: "2026-11-20T00:30:00Z",
+      el2: "2026-11-20T04:00:00Z",
+      el3: "2026-11-21T00:30:00Z",
+      qualifications: "2026-11-21T04:00:00Z",
       course: "2026-11-22T04:00:00Z",
     },
   },
@@ -425,59 +439,87 @@ export function actionDuGp(gp, etat, previsualisation = false, aPronostique = fa
 /* -------------------------------------------------------------------------- */
 
 /**
- * Les cinq séances, dans l'ordre du week-end et sous les libellés affichés.
+ * Les sept séances possibles d'un week-end, dans l'ordre où elles se courent.
  *
  * **L'ordre est déclaré, pas trié.** Un week-end de Formule 1 se déroule
  * toujours ainsi, et trier sur l'instant ferait dépendre la structure du
  * week-end de deux heures venues de la base : une `date_qualifications`
  * aberrante réordonnerait l'écran au lieu de sauter aux yeux à sa place.
  *
- * Les libellés courts sont ceux du paddock — « EL1 » et non « Essais libres 1 »,
- * qui ne tiendrait pas sur une rangée d'iPhone.
+ * ## Sept clés déclarées, cinq rangées affichées
+ *
+ * Aucun week-end ne les court toutes les sept — **c'est la présence de la clé
+ * dans `gp.seances` qui décide**, et les deux formats en tirent chacun cinq
+ * séances de cette même liste :
+ *
+ * | Format | Vendredi | Samedi | Dimanche |
+ * |---|---|---|---|
+ * | ordinaire | EL1, EL2 | EL3, qualifications | course |
+ * | **sprint** | EL1, qualif. sprint | sprint, qualifications | course |
+ *
+ * L'ordre déclaré ci-dessous est donc **la fusion des deux**, et le filtre en
+ * tire l'ordre juste dans les deux cas. Deux listes écrites séparément — une
+ * par format — auraient divergé au premier libellé retouché, exactement comme
+ * les deux libellés de `Horloge` en `0.57.0` (CLAUDE.md §6).
+ *
+ * ## Les libellés sont écrits en toutes lettres (v`0.60.0`)
+ *
+ * « EL1 » était l'abréviation du paddock, retenue parce qu'une rangée d'iPhone
+ * ne paraissait pas pouvoir porter « Essais Libres 1 ». **Elle le peut** : la
+ * rangée réserve sa colonne de droite à l'heure et laisse tout le reste au
+ * libellé, et « Qualifications » — le plus long des sept — s'y écrivait déjà en
+ * entier. Un écran de consultation ouvert par quelqu'un qui découvre la Formule
+ * 1 n'a aucune raison de lui demander de décoder trois lettres.
  */
 export const SEANCES = [
-  { cle: "el1", libelle: "EL1", nom: "Essais libres 1" },
-  { cle: "el2", libelle: "EL2", nom: "Essais libres 2" },
-  { cle: "el3", libelle: "EL3", nom: "Essais libres 3" },
-  { cle: "qualifications", libelle: "Qualifications", nom: "Qualifications" },
-  { cle: "course", libelle: "Course", nom: "Course" },
+  { cle: "el1", libelle: "Essais Libres 1" },
+  { cle: "el2", libelle: "Essais Libres 2" },
+  { cle: "qualifications_sprint", libelle: "Qualifications Sprint" },
+  { cle: "el3", libelle: "Essais Libres 3" },
+  { cle: "sprint", libelle: "Sprint" },
+  { cle: "qualifications", libelle: "Qualifications" },
+  { cle: "course", libelle: "Course" },
 ];
 
 /**
- * En deçà de ce délai, la **prochaine** séance est « imminente » et l'écran la
- * met en avant.
+ * Le week-end d'un Grand Prix dont on ne sait rien : le format ordinaire.
  *
- * Vingt-quatre heures, c'est-à-dire la veille : c'est le moment où l'on ouvre
- * l'app pour savoir à quelle heure regarder.
- *
- * > **Le seuil ne suffit PAS à n'en allumer qu'une**, et le rendu l'a montré :
- * > un vendredi matin, EL1 et EL2 sont toutes deux à moins de vingt-quatre
- * > heures, et deux mises en avant n'en sont plus une. Le délai dit « est-ce
- * > proche ? » ; c'est le **rang** qui dit laquelle. `seancesDuGp` ne marque
- * > donc que la première séance non passée, et seulement si elle tient dans le
- * > seuil. Une seule pastille amber par écran, comme partout ailleurs dans
- * > l'app.
+ * C'est le repli de `seancesDuGp` quand la table statique n'a pas d'entrée —
+ * un Grand Prix ajouté à `GP_2026` avant que ses horaires soient écrits, ou
+ * l'écran monté sans Grand Prix du tout. **Cinq noms sans leurs heures valent
+ * mieux qu'un bloc vide** : le programme d'un week-end de Formule 1 est vrai
+ * sans la base, exactement comme les douze cartes du calendrier
+ * (`calendrier.md` §1). Le format sprint, lui, ne se devine pas — il ne
+ * s'affiche que là où la table le déclare.
  */
+const SEANCES_ORDINAIRE = ["el1", "el2", "el3", "qualifications", "course"];
+
 export const SEUIL_IMMINENT_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Les cinq séances d'un Grand Prix, datées, avec leur état.
+ * Les séances d'un Grand Prix, datées, avec leur état.
+ *
+ * **Le format du week-end vient de la table, jamais d'un réglage.** Les clés
+ * présentes dans `gp.seances` disent quelles séances se courent ; `SEANCES`
+ * dit dans quel ordre. Un week-end sprint n'a donc rien à déclarer d'autre que
+ * ses heures — pas de drapeau `sprint: true` à tenir en accord avec elles, et
+ * pas de second endroit à corriger quand la FIA déplace un sprint.
  *
  * **La base l'emporte sur la table statique partout où elle a une réponse.**
- * Deux séances sur cinq sont en base — les qualifications et la course — et ce
- * sont les deux seules dont l'heure engage quelque chose : la première ouvre
- * les pronostics, la seconde les ferme. Les afficher depuis la table statique
- * alors que la base dit autre chose ferait mentir l'écran à côté d'un compte à
- * rebours juste, et c'est exactement le défaut que `etatPronostics` a corrigé en
+ * Deux séances sont en base — les qualifications et la course — et ce sont les
+ * deux seules dont l'heure engage quelque chose : la première ouvre les
+ * pronostics, la seconde les ferme. Les afficher depuis la table statique alors
+ * que la base dit autre chose ferait mentir l'écran à côté d'un compte à rebours
+ * juste, et c'est exactement le défaut que `etatPronostics` a corrigé en
  * `0.57.0` — un libellé écrit deux fois finit par dire deux choses.
  *
- * Les trois essais libres n'ont pas d'équivalent en base : ils restent
- * prévisionnels, et l'en-tête du module le dit.
+ * Les essais libres et les deux séances de sprint n'ont pas d'équivalent en
+ * base : elles restent prévisionnelles, et l'en-tête du module le dit.
  *
  * Une séance dont l'instant est illisible est **rendue quand même**, sans date :
  * une rangée manquante ferait croire que le week-end n'a pas d'EL3, là qu'un
  * « — » dit qu'on ne connaît pas encore son heure. C'est la règle des douze
- * cartes du calendrier, appliquée aux cinq rangées d'un week-end.
+ * cartes du calendrier, appliquée aux rangées d'un week-end.
  */
 export function seancesDuGp(gp, maintenant = Date.now()) {
   const statiques = gp?.seances ?? {};
@@ -488,22 +530,35 @@ export function seancesDuGp(gp, maintenant = Date.now()) {
     course: gp?.date_course || null,
   };
 
-  const datees = SEANCES.map((seance) => {
-    const iso = enBase[seance.cle] ?? statiques[seance.cle] ?? null;
-    const instant = iso ? Date.parse(iso) : NaN;
-    const date = Number.isFinite(instant) ? instant : null;
+  // **La présence décide, pas la valeur.** Une heure que la base seule connaît
+  // fait exister sa rangée même si la table statique se tait ; un `el2` absent
+  // de la table d'un week-end sprint ne fait apparaître aucune rangée vide.
+  // Sans aucune clé du tout, on retombe sur le format ordinaire.
+  const cles = new Set([
+    ...Object.keys(statiques),
+    ...Object.keys(enBase).filter((cle) => enBase[cle]),
+  ]);
+  const retenues = cles.size ? cles : new Set(SEANCES_ORDINAIRE);
 
-    return {
-      ...seance,
-      iso,
-      instant: date,
-      // La source est exposée pour que l'écran puisse le dire : « prévisionnel »
-      // n'a pas le même poids qu'une heure confirmée par le programme d'Unibet.
-      confirmee: Boolean(enBase[seance.cle]),
-      passee: date !== null && date <= maintenant,
-      imminente: false,
-    };
-  });
+  const datees = SEANCES.filter((seance) => retenues.has(seance.cle)).map(
+    (seance) => {
+      const iso = enBase[seance.cle] ?? statiques[seance.cle] ?? null;
+      const instant = iso ? Date.parse(iso) : NaN;
+      const date = Number.isFinite(instant) ? instant : null;
+
+      return {
+        ...seance,
+        iso,
+        instant: date,
+        // La source est exposée pour que l'écran puisse le dire :
+        // « prévisionnel » n'a pas le même poids qu'une heure confirmée par le
+        // programme d'Unibet.
+        confirmee: Boolean(enBase[seance.cle]),
+        passee: date !== null && date <= maintenant,
+        imminente: false,
+      };
+    },
+  );
 
   // **Une seule mise en avant, et c'est la PROCHAINE.** Le rang tranche, le
   // délai ne fait que l'autoriser — voir `SEUIL_IMMINENT_MS`. Une séance dont

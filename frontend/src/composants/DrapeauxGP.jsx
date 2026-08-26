@@ -488,7 +488,7 @@ export function VoileDrapeau({ voile }) {
    -------------------------------------------------------------------------- */
 
 /**
- * Les huit nationalités que la table des circuits nomme, et le drapeau de
+ * Les onze nationalités que la table des circuits nomme, et le drapeau de
  * chacune.
  *
  * `pays` renvoie vers `DRAPEAUX` quand le pays y est déjà décrit ; sinon
@@ -496,10 +496,20 @@ export function VoileDrapeau({ voile }) {
  * `libelle` est le gentilé affiché — c'est lui qui porte le sens, le fond n'est
  * qu'une texture.
  *
- * `australie` est déclarée **sans drapeau**, et c'est délibéré : sa croix du Sud
- * n'a pas de description que le CSS ou une spécification puisse rendre sans
- * l'approximer (voir l'en-tête de `DrapeauxSVG.jsx`). La déclarer ici lui donne
- * son gentilé ; l'absence de `pays` et de `drapeau` lui retire son fond.
+ * **Trois entrées sont arrivées avec la version `0.60.0`**, en même temps que
+ * la sixième édition de chaque palmarès (`lib/circuits.js`) : la France de
+ * Gasly, l'Autriche de Lauda et la Finlande de Bottas. Les six vainqueurs les
+ * plus récents d'un Grand Prix ne sont pas les cinq premiers plus un du même
+ * cercle — remonter d'une édition fait entrer des pilotes que la table ne
+ * nommait pas.
+ *
+ * **Deux nationalités sont déclarées sans drapeau, et c'est la même règle qui
+ * les y met.** L'Australie a sa croix du Sud, la Finlande sa croix nordique :
+ * ni le CSS ni une spécification que je puisse poser sans l'approximer n'en
+ * rendent le dessin, et `DrapeauxSVG.jsx` existe précisément pour ne plus
+ * approximer un drapeau (voir son en-tête). Les déclarer ici leur donne leur
+ * gentilé ; l'absence de `pays` et de `drapeau` leur retire leur fond, ce qui
+ * n'a jamais retiré une information — la carte se lit entière sans lui.
  */
 export const NATIONALITES = {
   neerlandaise: { libelle: "Pays-Bas", pays: "pays-bas" },
@@ -526,6 +536,25 @@ export const NATIONALITES = {
       couleurs: ["#000000", "#DD0000", "#FFCE00"],
     },
   },
+  // Tricolore vertical : trois bandes égales, ce que `fondCss` sait dire
+  // exactement. Aucun `parts` — les trois bandes de 1946 le sont bien.
+  francaise: {
+    libelle: "France",
+    drapeau: {
+      type: "vertical",
+      couleurs: ["#002395", "#FFFFFF", "#ED2939"],
+    },
+  },
+  autrichienne: {
+    libelle: "Autriche",
+    drapeau: {
+      type: "horizontal",
+      couleurs: ["#ED2939", "#FFFFFF", "#ED2939"],
+    },
+  },
+  // Croix nordique : voir l'en-tête. Sans dessin, pas de fond — jamais une
+  // approximation, et jamais une teinte de repli.
+  finlandaise: { libelle: "Finlande" },
   australienne: { libelle: "Australie" },
 };
 

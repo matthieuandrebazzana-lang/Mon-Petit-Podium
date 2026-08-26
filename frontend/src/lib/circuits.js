@@ -40,17 +40,34 @@
  *   `nombre_tours` est **prévisionnel** — c'est le premier entier qui porte la
  *   course au-dessus des 305 km réglementaires. L'écran affiche « — » là où la
  *   valeur manque, jamais un zéro.
- * - **`derniers_vainqueurs` liste le GRAND PRIX, pas le circuit.** Les cinq
- *   derniers vainqueurs du GP d'Espagne ont gagné à Barcelone, pas à Madrid ;
- *   ceux du GP de Malaisie datent de 2013–2017, la course ayant disparu du
- *   calendrier entre-temps. C'est le palmarès que l'on vient chercher, et le
- *   restreindre au tracé aurait laissé deux blocs vides. Le millésime de chaque
- *   carte le dit.
+ * - **`derniers_vainqueurs` liste le GRAND PRIX, pas le circuit.** Les derniers
+ *   vainqueurs du GP d'Espagne ont gagné à Barcelone, pas à Madrid ; ceux du GP
+ *   de Malaisie datent de 2012–2017, la course ayant disparu du calendrier
+ *   entre-temps. C'est le palmarès que l'on vient chercher, et le restreindre au
+ *   tracé aurait laissé deux blocs vides. Le millésime de chaque carte le dit.
  *
- * **Les listes ne font pas toutes cinq entrées**, et on ne les complète pas :
- * Las Vegas n'a couru que trois fois, le Qatar quatre (2022 manque à l'appel).
- * Inventer une sixième ligne pour tenir un gabarit serait une donnée fausse ;
- * la rangée défile, elle n'a pas de longueur à respecter.
+ * ## Six éditions, et les trous ne se comblent pas (v`0.60.0`)
+ *
+ * La grille de l'écran est de deux colonnes sur trois rangées, donc **six
+ * cartes** — mais c'est la grille qui suit la donnée, jamais l'inverse.
+ *
+ * > ### Écart signalé (CLAUDE.md §6)
+ * >
+ * > La demande dit « six derniers vainqueurs par GP ». **Deux Grands Prix ne
+ * > peuvent pas en avoir six** : Las Vegas n'a couru que trois fois, le Qatar
+ * > quatre (2022 manque à l'appel). Inventer une ligne pour tenir un gabarit
+ * > serait une donnée fausse posée sous un titre qui dit « derniers
+ * > vainqueurs » — exactement ce que la version `0.59.0` avait refusé de faire à
+ * > cinq. Les deux listes restent donc courtes, et la grille se termine sur une
+ * > rangée incomplète, ce qui ne se lit pas comme un défaut.
+ *
+ * **Remonter d'une édition n'ajoute pas un sixième nom du même cercle.** Six
+ * des douze listes sautent une année blanche (2020 pour l'Azerbaïdjan, Austin,
+ * le Mexique et le Brésil ; 2020 **et** 2021 pour Singapour), et le GP des
+ * Pays-Bas saute **quarante ans** — il est sorti du calendrier de 1986 à 2020,
+ * donc sa sixième édition la plus récente est celle de 1985. Trois nationalités
+ * sont entrées avec ces six lignes : la France, l'Autriche et la Finlande
+ * (`DrapeauxGP.jsx`).
  *
  * ## Le pilote, sa voiture et son drapeau
  *
@@ -64,6 +81,14 @@
  * `numero` est celui que le pilote portait **cette année-là**, pas celui de sa
  * carrière : Verstappen court sous le 33 en 2021 et sous le 1 à partir de 2022,
  * Vettel sous le 1 en 2013. C'est un palmarès, il dit ce qui s'est passé.
+ *
+ * > **`ecurie` est la seule exception à cette règle du millésime**, et elle est
+ * > structurelle : `lib/livrees.js` ne dessine que les onze écuries de 2026, et
+ * > une voiture de 2021 y sort donc déjà aux couleurs d'aujourd'hui. La table
+ * > nomme alors **la continuation directe** de l'écurie qui a gagné — Racing
+ * > Bulls pour l'AlphaTauri de Gasly en 2020, comme McLaren pour la McLaren-TAG
+ * > de Lauda en 1985. Une clé inconnue rendrait une voiture personnalisable à la
+ * > place d'une livrée, et le contrôle en fin de fichier l'attrape.
  */
 
 import { NATIONALITES } from "../composants/DrapeauxGP.jsx";
@@ -74,22 +99,23 @@ export const CIRCUITS = {
   "pays-bas": {
     longueur_km: 4.259,
     nombre_tours: 72,
-    distance_km: 306.587,
     premier_gp: 1952,
     record_tour: { temps: "1:11.097", pilote: "Lewis Hamilton", annee: 2021 },
+    // Le Grand Prix est resté quarante ans hors du calendrier : la sixième
+    // édition la plus récente est celle de 1985. C'est le millésime qui le dit.
     derniers_vainqueurs: [
       { annee: 2025, pilote: "Oscar Piastri", numero: 81, ecurie: "mclaren", nationalite: "australienne" },
       { annee: 2024, pilote: "Lando Norris", numero: 4, ecurie: "mclaren", nationalite: "britannique" },
       { annee: 2023, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2022, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2021, pilote: "Max Verstappen", numero: 33, ecurie: "red-bull", nationalite: "neerlandaise" },
+      { annee: 1985, pilote: "Niki Lauda", numero: 1, ecurie: "mclaren", nationalite: "autrichienne" },
     ],
   },
 
   italie: {
     longueur_km: 5.793,
     nombre_tours: 53,
-    distance_km: 306.72,
     premier_gp: 1950,
     record_tour: { temps: "1:21.046", pilote: "Rubens Barrichello", annee: 2004 },
     derniers_vainqueurs: [
@@ -98,6 +124,9 @@ export const CIRCUITS = {
       { annee: 2023, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2022, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2021, pilote: "Daniel Ricciardo", numero: 3, ecurie: "mclaren", nationalite: "australienne" },
+      // AlphaTauri en 2020 — voir l'en-tête : `ecurie` nomme l'écurie
+      // d'aujourd'hui, et Racing Bulls en est la continuation directe.
+      { annee: 2020, pilote: "Pierre Gasly", numero: 10, ecurie: "racing-bulls", nationalite: "francaise" },
     ],
   },
 
@@ -106,7 +135,6 @@ export const CIRCUITS = {
   espagne: {
     longueur_km: 5.474,
     nombre_tours: 56,
-    distance_km: 306.544,
     premier_gp: 2026,
     record_tour: null,
     derniers_vainqueurs: [
@@ -115,21 +143,23 @@ export const CIRCUITS = {
       { annee: 2023, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2022, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2021, pilote: "Lewis Hamilton", numero: 44, ecurie: "mercedes", nationalite: "britannique" },
+      { annee: 2020, pilote: "Lewis Hamilton", numero: 44, ecurie: "mercedes", nationalite: "britannique" },
     ],
   },
 
   azerbaidjan: {
     longueur_km: 6.003,
     nombre_tours: 51,
-    distance_km: 306.049,
     premier_gp: 2016,
     record_tour: { temps: "1:43.009", pilote: "Charles Leclerc", annee: 2019 },
+    // 2020 n'a pas eu lieu : la sixième édition remonte à 2019.
     derniers_vainqueurs: [
       { annee: 2025, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2024, pilote: "Oscar Piastri", numero: 81, ecurie: "mclaren", nationalite: "australienne" },
       { annee: 2023, pilote: "Sergio Pérez", numero: 11, ecurie: "red-bull", nationalite: "mexicaine" },
       { annee: 2022, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2021, pilote: "Sergio Pérez", numero: 11, ecurie: "red-bull", nationalite: "mexicaine" },
+      { annee: 2019, pilote: "Valtteri Bottas", numero: 77, ecurie: "mercedes", nationalite: "finlandaise" },
     ],
   },
 
@@ -138,7 +168,6 @@ export const CIRCUITS = {
   malaisie: {
     longueur_km: 5.543,
     nombre_tours: 56,
-    distance_km: 310.408,
     premier_gp: 1999,
     record_tour: { temps: "1:34.080", pilote: "Sebastian Vettel", annee: 2017 },
     derniers_vainqueurs: [
@@ -147,14 +176,15 @@ export const CIRCUITS = {
       { annee: 2015, pilote: "Sebastian Vettel", numero: 5, ecurie: "ferrari", nationalite: "allemande" },
       { annee: 2014, pilote: "Lewis Hamilton", numero: 44, ecurie: "mercedes", nationalite: "britannique" },
       { annee: 2013, pilote: "Sebastian Vettel", numero: 1, ecurie: "red-bull", nationalite: "allemande" },
+      { annee: 2012, pilote: "Fernando Alonso", numero: 5, ecurie: "ferrari", nationalite: "espagnole" },
     ],
   },
 
-  // 2020 et 2021 n'ont pas eu lieu : le cinquième vainqueur remonte à 2019.
+  // 2020 et 2021 n'ont pas eu lieu : la cinquième édition remonte à 2019 et la
+  // sixième à 2018.
   singapour: {
     longueur_km: 4.94,
     nombre_tours: 62,
-    distance_km: 306.143,
     premier_gp: 2008,
     record_tour: { temps: "1:34.486", pilote: "Daniel Ricciardo", annee: 2024 },
     derniers_vainqueurs: [
@@ -163,59 +193,62 @@ export const CIRCUITS = {
       { annee: 2023, pilote: "Carlos Sainz", numero: 55, ecurie: "ferrari", nationalite: "espagnole" },
       { annee: 2022, pilote: "Sergio Pérez", numero: 11, ecurie: "red-bull", nationalite: "mexicaine" },
       { annee: 2019, pilote: "Sebastian Vettel", numero: 5, ecurie: "ferrari", nationalite: "allemande" },
+      { annee: 2018, pilote: "Lewis Hamilton", numero: 44, ecurie: "mercedes", nationalite: "britannique" },
     ],
   },
 
   "etats-unis": {
     longueur_km: 5.513,
     nombre_tours: 56,
-    distance_km: 308.405,
     premier_gp: 2012,
     record_tour: { temps: "1:36.169", pilote: "Charles Leclerc", annee: 2019 },
+    // 2020 n'a pas eu lieu : la sixième édition remonte à 2019.
     derniers_vainqueurs: [
       { annee: 2025, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2024, pilote: "Charles Leclerc", numero: 16, ecurie: "ferrari", nationalite: "monegasque" },
       { annee: 2023, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2022, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2021, pilote: "Max Verstappen", numero: 33, ecurie: "red-bull", nationalite: "neerlandaise" },
+      { annee: 2019, pilote: "Valtteri Bottas", numero: 77, ecurie: "mercedes", nationalite: "finlandaise" },
     ],
   },
 
   mexique: {
     longueur_km: 4.304,
     nombre_tours: 71,
-    distance_km: 305.354,
     premier_gp: 1963,
     record_tour: { temps: "1:17.774", pilote: "Valtteri Bottas", annee: 2021 },
+    // 2020 n'a pas eu lieu : la sixième édition remonte à 2019.
     derniers_vainqueurs: [
       { annee: 2025, pilote: "Lando Norris", numero: 4, ecurie: "mclaren", nationalite: "britannique" },
       { annee: 2024, pilote: "Carlos Sainz", numero: 55, ecurie: "ferrari", nationalite: "espagnole" },
       { annee: 2023, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2022, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2021, pilote: "Max Verstappen", numero: 33, ecurie: "red-bull", nationalite: "neerlandaise" },
+      { annee: 2019, pilote: "Lewis Hamilton", numero: 44, ecurie: "mercedes", nationalite: "britannique" },
     ],
   },
 
   bresil: {
     longueur_km: 4.309,
     nombre_tours: 71,
-    distance_km: 305.879,
     premier_gp: 1973,
     record_tour: { temps: "1:10.540", pilote: "Valtteri Bottas", annee: 2018 },
+    // 2020 n'a pas eu lieu : la sixième édition remonte à 2019.
     derniers_vainqueurs: [
       { annee: 2025, pilote: "Lando Norris", numero: 4, ecurie: "mclaren", nationalite: "britannique" },
       { annee: 2024, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2023, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2022, pilote: "George Russell", numero: 63, ecurie: "mercedes", nationalite: "britannique" },
       { annee: 2021, pilote: "Lewis Hamilton", numero: 44, ecurie: "mercedes", nationalite: "britannique" },
+      { annee: 2019, pilote: "Max Verstappen", numero: 33, ecurie: "red-bull", nationalite: "neerlandaise" },
     ],
   },
 
-  // Trois éditions seulement. On ne complète pas à cinq.
+  // Trois éditions seulement. On ne complète pas à six.
   "las-vegas": {
     longueur_km: 6.201,
     nombre_tours: 50,
-    distance_km: 310.05,
     premier_gp: 2023,
     record_tour: { temps: "1:34.876", pilote: "Lando Norris", annee: 2024 },
     derniers_vainqueurs: [
@@ -229,7 +262,6 @@ export const CIRCUITS = {
   qatar: {
     longueur_km: 5.419,
     nombre_tours: 57,
-    distance_km: 308.611,
     premier_gp: 2021,
     record_tour: { temps: "1:23.196", pilote: "Max Verstappen", annee: 2021 },
     derniers_vainqueurs: [
@@ -243,7 +275,6 @@ export const CIRCUITS = {
   "abu-dhabi": {
     longueur_km: 5.281,
     nombre_tours: 58,
-    distance_km: 306.183,
     premier_gp: 2009,
     record_tour: { temps: "1:26.103", pilote: "Max Verstappen", annee: 2021 },
     derniers_vainqueurs: [
@@ -252,6 +283,7 @@ export const CIRCUITS = {
       { annee: 2023, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2022, pilote: "Max Verstappen", numero: 1, ecurie: "red-bull", nationalite: "neerlandaise" },
       { annee: 2021, pilote: "Max Verstappen", numero: 33, ecurie: "red-bull", nationalite: "neerlandaise" },
+      { annee: 2020, pilote: "Max Verstappen", numero: 33, ecurie: "red-bull", nationalite: "neerlandaise" },
     ],
   },
 };
@@ -275,7 +307,7 @@ export function ficheCircuit(slug) {
  * **Dérivé, jamais saisi.** `pilote` porte déjà le nom complet, et un second
  * champ l'aurait répété — deux textes écrits séparément divergent au premier
  * ajustement (CLAUDE.md §6). Le dernier mot est le nom de famille pour les
- * quarante-huit entrées de la table.
+ * soixante-sept entrées de la table.
  *
  * `Voiture` raccourcit lui-même à dix caractères, ce qui est exactement la
  * longueur de « VERSTAPPEN ».

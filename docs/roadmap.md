@@ -388,8 +388,10 @@ d'une ligne, **dans cet ordre** : monter le trait à 70 %, ou approfondir la sur
 `NATIONALITES` (`DrapeauxGP.jsx`) déclare l'Australie **sans drapeau**, délibérément : sa
 croix du Sud n'a pas de description que le CSS ou une spécification simple puisse rendre
 sans l'approximer, et un drapeau approximé est ce que `DrapeauxSVG.jsx` existe pour ne plus
-faire (version `0.24.0`). Les cartes de Piastri et de Ricciardo restent donc sur du blanc
-là où les huit autres portent un lavis à 9 %.
+faire (version `0.24.0`). **La Finlande a rejoint ce cas en `0.60.0`** — sa croix nordique
+n'est pas davantage descriptible par un dégradé — de sorte que les cartes de Piastri, de
+Ricciardo et de Bottas restent sur du blanc là où les neuf autres nationalités portent un
+lavis à 18 %.
 
 **Ce n'est pas une panne** — le gentilé est écrit sous le nom, et le fond n'a jamais porté
 l'information. C'est une irrégularité visible dans une rangée, rien de plus.
@@ -412,8 +414,12 @@ premier calcul. La première carte revient coller le bord de l'écran, seize pix
 de tout le reste de la page. Mesuré : `li.left = 0` pour un `ul` dont le `padding-left`
 calculé vaut bien `16px`.
 
-`VainqueursCircuit` porte le correctif (`scroll-pl-4`). **Les deux rangées plus anciennes
-ne l'ont pas** :
+> **`VainqueursCircuit` n'est plus concernée depuis la `0.60.0`** : elle est devenue une
+> **grille de deux colonnes**, donc elle n'a plus de bord de calage du tout. Le
+> `scroll-pl-4` est parti avec le défilement. Le défaut décrit ci-dessus reste entier pour
+> les deux rangées ci-dessous, et c'est chez elles qu'il faut le lire.
+
+**Les deux rangées plus anciennes ne portent pas le correctif** :
 
 | Où | Classe |
 |---|---|

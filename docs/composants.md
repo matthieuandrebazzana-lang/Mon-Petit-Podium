@@ -111,8 +111,8 @@ lui appartient. Retoucher l'onglet déjà ouvert **ramène en haut de l'écran**
 | `FondPiste` | `preserveAspectRatio="none"` : la planche s'étire en hauteur. Les deux `<rect>` du bandeau en sont **volontairement absents** |
 | `Icones` | les variantes `pleine` emploient **`fill-rule="evenodd"`** : la porte de la maison est un **trou dans l'aplat**, jamais un rectangle blanc posé dessus — qui se verrait le jour où le fond n'est plus blanc |
 | `CarteGpSaison` | **deux `<a>` frères**, jamais imbriqués (le corps et la bande mènent ailleurs). Le `pressable-large` est sur l'`<article>` : `:active` remonte aux ancêtres, et le poser sur les deux liens composerait 0,985 × 0,985 |
-| `VainqueursCircuit` | `scroll-pl-4` **doit rester égal au `px-4`** : sans lui, le calage `snap-start` aligne la première carte sur le scrollport et annule le rembourrage (`roadmap.md` §3.8 ter) |
-| `SeancesWeekend` | c'est le **rang** qui décide de la mise en avant, pas le seuil de 24 h — un vendredi matin, EL1 et EL2 y tiennent toutes les deux |
+| `VainqueursCircuit` | **grille 2 colonnes, plus une rangée qui défile** (v`0.60.0`) : la voiture passe AU-DESSUS du nom, sans quoi « Verstappen » (79 px) se tronque dans une colonne qui n'en laisse que 77,5 à 375 px |
+| `SeancesWeekend` | c'est le **rang** qui décide de la mise en avant, pas le seuil de 24 h — un vendredi matin, les deux premières séances y tiennent. Le nombre de rangées **n'est pas fixe** : il vient des clés que `gp.seances` déclare (week-end sprint) |
 
 ---
 

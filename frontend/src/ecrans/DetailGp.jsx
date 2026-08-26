@@ -40,11 +40,11 @@ import { useDonnees } from "../lib/useDonnees.js";
  * 1. **Le programme** — cinq séances en heure locale (`SeancesWeekend`). C'est
  *    ce qu'on vient chercher pendant la semaine qui précède, donc c'est en
  *    haut.
- * 2. **Le circuit** — le tracé en grand, puis cinq chiffres. C'est ce qu'on
+ * 2. **Le circuit** — le tracé en grand, puis quatre chiffres. C'est ce qu'on
  *    regarde une fois, la première année.
- * 3. **Le palmarès** — les derniers vainqueurs (`VainqueursCircuit`). C'est ce
- *    qu'on parcourt sans but précis, donc c'est en bas, et c'est le seul bloc
- *    qui défile à l'horizontale.
+ * 3. **Le palmarès** — les derniers vainqueurs (`VainqueursCircuit`), en grille
+ *    de deux colonnes. C'est ce qu'on parcourt sans but précis, donc c'est en
+ *    bas.
  *
  * ## Les données viennent d'où elles savent
  *
@@ -111,7 +111,7 @@ const HAUTEUR_TRACE = "h-[190px]";
  *  `GrilleStats` applique déjà à ses quatre cases. */
 const ABSENT = "—";
 
-/** Les décimales d'une distance. Trois, comme les fiches officielles : c'est au
+/** Les décimales d'une longueur. Trois, comme les fiches officielles : c'est au
  *  millimètre que se mesure un tracé, et « 4,26 km » aurait l'air arrondi. */
 const distance = new Intl.NumberFormat("fr-FR", {
   minimumFractionDigits: 3,
@@ -129,7 +129,7 @@ const distance = new Intl.NumberFormat("fr-FR", {
  * recopier le composant existant évite de propager un défaut connu.
  *
  * Le contenu est aligné à gauche et non centré : les valeurs vont de « 53 » à
- * « 306,720 km », et cinq longueurs différentes centrées ne laissent aucune
+ * « 1:21.046 », et quatre longueurs différentes centrées ne laissent aucune
  * colonne à l'œil.
  */
 function Stat({ libelle, valeur, detail = null, className = "" }) {
@@ -295,24 +295,38 @@ export default function DetailGp() {
             )}
 
             {fiche && (
-              /* Cinq chiffres, cinq cases : deux rangées de deux, puis le
-                 record sur toute la largeur — il porte trois informations
-                 (le temps, le pilote, l'année) là où les autres n'en portent
-                 qu'une. Aucune case vide, et aucune case inventée pour tenir
-                 un gabarit. */
+              /* Quatre chiffres, quatre cases : un carré de deux sur deux.
+                 Aucune case vide, aucun `col-span`, aucune case inventée pour
+                 tenir un gabarit.
+
+                 **« Distance totale de course » est partie avec la version
+                 `0.60.0`**, et c'est ce qui rend ce carré possible : la case
+                 était la seule à porter une valeur longue (« 306,720 km »), et
+                 la cinquième d'une grille qui ne pouvait alors se fermer que par
+                 un `col-span-2` sous une rangée de deux.
+
+                 > **Trois colonnes ont été essayées d'abord, et le rendu contre
+                 > la feuille compilée les a écartées** (CLAUDE.md §6). À 320 px,
+                 > une colonne sur trois laisse 71 px de contenu et « 6,003 km »
+                 > s'y casse en deux lignes, sous un libellé qui tient pourtant.
+                 > C'est un défaut de géométrie pure, invisible à la lecture du
+                 > JSX — la huitième fois que ce projet ne l'attrape qu'en
+                 > regardant la page. À deux colonnes, la même valeur dispose de
+                 > 111 px et tient d'une ligne dès 320.
+
+                 Le détail du record — « Charles Leclerc · 2019 » — demande
+                 120 px et n'en a que 111 à 320 px : il se tronque là, et
+                 seulement là (139 px dès 375). C'est exactement ce que
+                 `truncate` existe pour faire sur une ligne secondaire, et le
+                 temps du tour, lui, est entier partout. */
               <div className="grid grid-cols-2 gap-2.5">
                 <Stat
                   libelle="Longueur"
                   valeur={`${distance.format(fiche.longueur_km)} km`}
                 />
                 <Stat libelle="Tours" valeur={fiche.nombre_tours ?? ABSENT} />
-                <Stat
-                  libelle="Distance"
-                  valeur={`${distance.format(fiche.distance_km)} km`}
-                />
                 <Stat libelle="Premier GP" valeur={fiche.premier_gp ?? ABSENT} />
                 <Stat
-                  className="col-span-2"
                   libelle="Record du tour"
                   valeur={fiche.record_tour?.temps ?? ABSENT}
                   detail={
