@@ -138,6 +138,31 @@ toute la table sans lui.
 > inventer une date ou à ne pas écrire la ligne — donc à faire disparaître le GP de
 > l'accueil et du calendrier.
 
+> ### Depuis la migration 19, la table n'est plus alimentée par le seul scraper
+>
+> Les onze Grands Prix restants de 2026 y ont été posés à la main. Ils portent un
+> `id_unibet` **inventé**, de la forme `manuel-<slug>-2026`, parce que l'identifiant réel
+> n'existe pas tant qu'Unibet n'a pas ouvert la page du Grand Prix.
+>
+> **Une ligne manuelle doit être ADOPTÉE avant son week-end** —
+> `select public.adopter_grand_prix('manuel-italie-2026', '<id Unibet réel>');`. Sans ce
+> geste, le scraper ne reconnaît pas la ligne (il se rapproche sur `id_unibet`, et sur
+> rien d'autre) : il en insère une **seconde**, et la base porte deux fois la même course.
+> Le symptôme serait discret — `enrichir` rapproche par slug et construit une `Map`, donc
+> la dernière ligne servie l'emporte : le calendrier pourrait s'accrocher à celle qui n'a
+> **pas** les cotes.
+>
+> `adopter_grand_prix` couvre les deux cas : elle renomme le placeholder s'il est seul, et
+> résorbe le doublon si le scraper est arrivé le premier — **en refusant de supprimer une
+> ligne à laquelle quoi que ce soit pend**, `on delete cascade` emportant sinon des cotes
+> ou des pronostics sans bruit.
+>
+> **Les heures posées par la 19 sont prévisionnelles** (15h00 locale, heure habituelle pour
+> les courses de nuit, converties au fuseau réel du circuit). Le scraper les écrase au
+> premier passage. Conséquence à connaître : une carte du calendrier peut passer à
+> « Fermé » sur la foi d'une heure devinée, là où un GP absent de la base restait
+> « à venir » (`calendrier.md` §6).
+
 ### `public.cotes`
 
 `id`, `gp_id` (cascade), `marche` (slug), `libelle_marche` (libellé du bookmaker),
@@ -282,6 +307,8 @@ Objet `{ session, session_result, drivers, race_control, laps, starting_grid, pi
 | `stats_du_profil(profil, saison)` | les quatre chiffres de la grille 2×2 |
 | `calendrier_du_championnat(championnat, profil, saison)` | une ligne par GP |
 | `classement_du_grand_prix(gp)` | classement de la course |
+| `slug_gp(nom)` | `immutable` — empreinte stable d'un nom de GP (migration 19) |
+| `adopter_grand_prix(placeholder, id_unibet)` | fait porter son vrai identifiant à une ligne posée à la main |
 
 > **Pourquoi `security definer` + `service_role` sur les fonctions de lecture agrégée.**
 > Paramétrées par un championnat ou un profil, elles lisent forcément les pronostics
@@ -298,6 +325,12 @@ Objet `{ session, session_result, drivers, race_control, laps, starting_grid, pi
 > C'est la base qui porte l'idempotence, pas le code appelant : appelée dix fois avec des
 > valeurs différentes, elle n'attribue rien deux fois. Ouverte à `authenticated`, elle
 > laisserait n'importe qui s'attribuer le score de son choix.
+
+> **`slug_gp` ne remplace JAMAIS `id_unibet` comme clé de rapprochement.** Elle sert à
+> reconnaître un Grand Prix **déjà présent** malgré une orthographe changeante — c'est le
+> garde-fou d'idempotence de la migration 19, et rien d'autre. Le scraper, lui, continue
+> de se rapprocher sur `id_unibet` seul : un slug est une empreinte, pas une identité, et
+> deux Grands Prix pourraient un jour la partager.
 
 ### Ouvertes
 
@@ -382,7 +415,7 @@ applicatif de plus**.
 
 ---
 
-## 6. Les dix-huit migrations
+## 6. Les dix-neuf migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -404,6 +437,7 @@ applicatif de plus**.
 | 16 | `20260821180000_photos_profil_championnat` | `avatar_url`, `photo_url`, 2 compartiments Storage | 1, 2, 12 |
 | 17 | `20260822120000_photos_contrainte_regex` | **corrige les deux `check` de la 16, incompilables** | 16 |
 | 18 | `20260823120000_couleur_texte_voiture` | `couleur_texte` sur `profils`, servie au classement et aux pronostics | 1, 16 |
+| 19 | `20260826120000_calendrier_2026_grands_prix` | **insère les 11 GP restants de 2026**, `slug_gp`, `adopter_grand_prix` | 3, 11 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -427,7 +461,7 @@ et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre
 où *quelqu'un d'autre* voit la voiture. La perdre ne casse rien — le frontend retombe sur
 l'encre calculée — mais le réglage cesse d'être visible ailleurs que sur son propre profil.
 
-**Les migrations 11, 14, 15 et 17 ne remplacent aucune fonction** : elles ne peuvent pas
+**Les migrations 11, 14, 15, 17 et 19 ne remplacent aucune fonction** : elles ne peuvent pas
 entrer en conflit d'ordre. La 17 ne remplace que deux contraintes `check`, et il faut donc
 la rejouer si l'on rejoue la 16 — qui reposerait les contraintes fautives.
 
@@ -468,6 +502,25 @@ la rejouer si l'on rejoue la 16 — qui reposerait les contraintes fautives.
 >
 > **Après l'avoir jouée, déclencher un scraping** : sans cotes, aucun GP n'est
 > pronosticable.
+
+> **La 19 est la seconde qui touche aux DONNÉES et non au schéma**, après la 15 — et la
+> première qui en ajoute. Elle insère les onze Grands Prix restants de 2026, que le
+> scraper n'aurait rencontrés qu'un par un, la veille de chacun : Unibet n'expose jamais
+> que le Grand Prix suivant (`calendrier.md` §1). Elle referme au passage le point de
+> `roadmap.md` sur le bandeau « Grands Prix restants », qui comptait les lignes en base et
+> n'en trouvait qu'une.
+>
+> **Son idempotence ne repose PAS sur `id_unibet`.** Un `on conflict (id_unibet) do
+> nothing` aurait été le piège exact : une fois la ligne adoptée, son identifiant n'est
+> plus le placeholder, la clause ne trouverait plus de conflit et la migration rejouée
+> réinsérerait le doublon qu'elle existe pour éviter. Le garde-fou porte donc sur
+> `public.slug_gp(nom)` — une empreinte qui survit à l'adoption **comme** au changement
+> d'orthographe qu'Unibet apporte au premier scraping.
+>
+> `slug_gp` est la contrepartie SQL de `slugCircuit`, et s'éprouve elle-même sur six cas
+> dans un bloc `do $$` — la leçon de la 17. Elle ramène les accents par `translate` et non
+> par `unaccent` : l'extension n'est pas garantie active, et une migration qui échoue sur
+> un `create extension` refusé ne s'exécute pas du tout.
 
 ### Non éprouvées sur un PostgreSQL jetable
 

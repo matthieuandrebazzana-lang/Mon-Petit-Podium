@@ -18,8 +18,21 @@ La logique du calendrier et ses particularités.
 C'est la décision structurante, et elle est contre-intuitive.
 
 > **Unibet n'expose jamais que le Grand Prix SUIVANT.** `public.grands_prix` ne contient
-> donc que ce que le scraper a rencontré — **un seul GP à ce jour**. Un calendrier lu en
-> base afficherait une course au milieu d'une saison qui en compte douze.
+> donc que ce que le scraper a rencontré. Un calendrier lu en base afficherait une course
+> au milieu d'une saison qui en compte douze.
+
+> ### La migration 19 a peuplé la base — et ne change RIEN à cette décision
+> Depuis la version `0.58.0`, les onze Grands Prix restants de 2026 sont en base
+> (`database.md` §6). **`GP_2026` reste la source de vérité de l'onglet Calendrier**, et
+> pour la raison d'origine : la base ne porte ni le pays, ni le circuit, ni le drapeau, ni
+> le tracé — elle ne le portera jamais, ce sont des actifs du frontend. Ce que la migration
+> change est ce que la base savait déjà dire : **l'identifiant, le statut, les deux heures**.
+> Elle les fait exister pour douze courses au lieu d'une.
+>
+> **Conséquence directe sur le §6 ci-dessous** : « un GP absent de la base est à venir,
+> toujours » ne couvre plus ces onze-là. Ils ont une heure de départ — **prévisionnelle**,
+> posée par convention et écrasée au premier scraping. Une carte peut donc passer à
+> « Fermé » sur la foi d'une heure devinée, si le départ réel est plus tardif.
 
 C'est exactement le défaut qui avait figé le bandeau « Grands Prix restants » à une
 constante : ici, il est poussé à sa conclusion. **Le calendrier de la Formule 1 est une
@@ -285,6 +298,10 @@ zéro point.
 ## 10. Le décompte de « Grands Prix restants »
 
 Il compte **les cartes qui ne sont pas terminées**, jamais une constante.
+
+> ✅ **Réglé côté base par la migration 19.** `chargerGrandsPrixRestants` compte les
+> lignes en base : il en trouvait une, il en trouve maintenant onze. `chargerProchainGp`
+> rend le GP d'Italie au lieu de `null`. Le paragraphe ci-dessous décrit l'état d'avant.
 
 > ⚠️ **Le bandeau de l'ACCUEIL, lui, affiche encore `GP_RESTANTS = 12`** — une constante
 > posée quand `chargerGrandsPrixRestants` comptait les lignes en base, c'est-à-dire une

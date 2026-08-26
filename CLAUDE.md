@@ -122,7 +122,7 @@ Sans cette règle, cette structure ne sert à rien.
 | Document | Contenu |
 |---|---|
 | [`architecture.md`](docs/architecture.md) | Monorepo, deux chemins de données, variables d'environnement, CORS, journalisation, schedulers |
-| [`database.md`](docs/database.md) | Tables, RLS, fonctions, triggers, les 18 migrations et leurs conflits d'ordre |
+| [`database.md`](docs/database.md) | Tables, RLS, fonctions, triggers, les 19 migrations et leurs conflits d'ordre |
 | [`metier.md`](docs/metier.md) | Points, structure d'un pronostic, calendrier d'un week-end, validation, départage |
 | [`glossary.md`](docs/glossary.md) | Vocabulaire canonique et termes à ne jamais renommer |
 | [`design-system.md`](docs/design-system.md) | Palette, typographie, formes, élévation, contraste, matériaux, mouvement |
@@ -196,9 +196,57 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.57.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
-les onze étapes de développement sont livrées. **Le backend reste à `0.56.0`** — la `0.57.0`
-ne touche que le frontend.
+**Version `0.58.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+les onze étapes de développement sont livrées. **Le backend reste à `0.56.0`** — ni la
+`0.57.0` ni la `0.58.0` ne touchent à son code.
+
+### La saison entière est en base, sous un identifiant qui n'est pas encore le sien
+
+`public.grands_prix` ne contenait qu'une course. La **migration 19** y pose les onze Grands
+Prix restants de 2026, ce qui rend enfin vraies deux requêtes qui mentaient déjà :
+`chargerProchainGp` rendait `null` depuis que les Pays-Bas sont `termine`, et
+`chargerGrandsPrixRestants` comptait une ligne pour une saison qui en a douze.
+
+**Cela ne déplace pas la source de vérité du calendrier.** `GP_2026` la garde, et pour la
+raison d'origine : la base ne porte ni le pays, ni le circuit, ni le drapeau, ni le tracé —
+ce sont des actifs du frontend. La migration ne fait exister pour douze courses que ce que
+la base savait déjà dire pour une : **l'identifiant, le statut, les deux heures.**
+
+> **Trois écarts signalés (§6), tous portés par l'en-tête de la migration.** `pays` et
+> `ville` n'existent pas dans la table et ne sont pas insérés — le frontend en est déjà le
+> propriétaire unique. Les heures sont **prévisionnelles** : `calendrier2026.js` ne
+> contient aucune heure, et son en-tête le dit — « seule la base la connaît ». Elles
+> suivent la convention des horaires usuels de la F1, converties au fuseau réel de chaque
+> circuit, et **le scraper les écrase au premier passage**.
+
+**Le troisième écart est celui qui demande un geste.** `id_unibet` est `not null unique` et
+porte à lui seul l'idempotence du scraper. Les identifiants des Grands Prix à venir
+n'existent pas : ils sont attribués quand Unibet ouvre la page. Les onze lignes portent donc
+un placeholder, `manuel-<slug>-2026`, et **chacune doit être adoptée avant son week-end** —
+`select public.adopter_grand_prix('manuel-italie-2026', '<id réel>');`. Sans ce geste, le
+scraper ne reconnaît pas la ligne et **en insère une seconde**. Le symptôme serait discret :
+`enrichir` rapproche par slug et construit une `Map`, donc la dernière ligne servie
+l'emporte — le calendrier pourrait s'accrocher à celle qui n'a **pas** les cotes.
+
+> **L'idempotence de la migration ne pouvait pas reposer sur `id_unibet`.** Un `on conflict
+> (id_unibet) do nothing` aurait été le piège exact : une fois la ligne adoptée, son
+> identifiant n'est plus le placeholder, la clause ne trouverait plus de conflit, et la
+> migration rejouée **réinsérerait le doublon qu'elle existe pour éviter**. Le garde-fou
+> porte donc sur `public.slug_gp(nom)`, une empreinte qui survit à l'adoption comme au
+> changement d'orthographe. **Une clé d'idempotence doit survivre à ce que la migration
+> elle-même rend possible** — c'est le seul point de cette migration qui ne se voyait pas.
+
+`slug_gp` est la contrepartie SQL de `slugCircuit`, et **s'éprouve elle-même** sur six cas
+dans un bloc `do $$` — la leçon de la 17. Elle ramène les accents par `translate` et non par
+`unaccent` : l'extension n'est pas garantie active, et une migration qui échoue sur un
+`create extension` refusé ne s'exécute pas du tout. **Elle ne remplace jamais `id_unibet`
+comme clé de rapprochement** : un slug est une empreinte, pas une identité.
+
+> **Non éprouvée sur un PostgreSQL jetable** — ni Docker ni `psql` disponibles, comme pour
+> les migrations 12, 13 et 14. Ce qui a pu être vérifié hors PostgreSQL l'a été : les six
+> cas d'épreuve, l'égalité des longueurs de la table `translate`, et la concordance des
+> onze noms insérés avec les slug de `GP_2026` — **des deux côtés**, `slug_gp` et
+> `slugCircuit`, puisque ce sont eux qui donnent le drapeau et le tracé.
 
 ### Un Grand Prix terminé n'est plus le prochain, et le décompte a deux échéances
 
@@ -322,7 +370,7 @@ le succès du bordeaux, gardé le dimanche soir sur le Grand Prix couru — règ
 museau à l'endroit. La `0.52.0` avait fait entrer la photo DANS le cockpit. La `0.51.0` avait
 réparé les photos. La `0.45.0` avait fait passer le multiplicateur des points de 100 à 10.*
 
-**Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les quatre points
+**Ce qui reste à faire est dans [`docs/roadmap.md`](docs/roadmap.md).** Les cinq points
 les plus urgents :
 
 1. **Rejouer le GP des Pays-Bas en forçant**, une fois la `0.56.0` du backend déployée sur
@@ -337,14 +385,20 @@ les plus urgents :
 2. **Appliquer les migrations 15, 16, 17 puis 18, dans cet ordre.** La 17 est celle sans
    laquelle **aucune photo ne s'enregistre**. La 18 est celle sans laquelle **la couleur du
    texte ne s'enregistre pas**. Si la 2, la 8, la 10, la 12 ou la 16 est rejouée un jour,
-   rejouer la 18 derrière. **Aucune migration n'est requise par les versions `0.56.0` et
-   `0.57.0`** — le recalcul forcé n'écrit que des colonnes existantes, la nationalité comme le
-   vocabulaire d'« Autres » vivent dans le code, et le compte à rebours ne lit que des colonnes
-   déjà servies.
-3. **Vérifier « Ouverture dans » le premier samedi de qualifications** — le délai de deux
+   rejouer la 18 derrière. **La `0.58.0` apporte la 19** — les onze Grands Prix restants —
+   qui ne dépend que de la 3 et de la 11 et ne remplace aucune fonction : elle peut se jouer
+   avant ou après les quatre autres. Les `0.56.0` et `0.57.0`, elles, n'exigeaient rien.
+3. **Adopter chaque ligne manuelle avant son week-end**, une fois la 19 jouée :
+   `select public.adopter_grand_prix('manuel-italie-2026', '<id Unibet réel>');`, le vendredi
+   ou le samedi matin. **Sans ce geste, le scraper insère une seconde ligne pour la même
+   course** — il se rapproche sur `id_unibet`, jamais sur le nom. Le prochain à adopter est
+   **le GP d'Italie, couru le 6 septembre 2026**. `adopter_grand_prix` résorbe aussi le
+   doublon après coup, en gardant la ligne du scraper et en supprimant la manuelle **si elle
+   est vide**.
+4. **Vérifier « Ouverture dans » le premier samedi de qualifications** — le délai de deux
    heures est une prévision jamais confrontée à un vrai week-end. La bascule vers « Fermeture
    dans » doit suivre le **statut**, pas le décompte qui atteint zéro (`roadmap.md` §1.6 bis).
-4. **Tester sur iPhone réel** — jamais fait. En priorité : **l'opacité `0,4`** des cartes
+5. **Tester sur iPhone réel** — jamais fait. En priorité : **l'opacité `0,4`** des cartes
    passées, qui est un jugement de lisibilité en plein soleil autant qu'un rapport de
    contraste ; **le défilement d'ouverture du calendrier**, qui se pose sur des `offsetTop`
    mesurés pendant l'animation d'entrée ; **le sélecteur de vingt-quatre Grands Prix** ; et

@@ -1,6 +1,6 @@
 # Reste à faire
 
-État au **26 août 2026**, version `0.57.0`.
+État au **26 août 2026**, version `0.58.0`.
 
 Les seize maquettes sont codées, la barre de navigation est en place, les onze étapes de
 développement sont livrées.
@@ -90,6 +90,47 @@ resterait exécutable par `anon`. Voir `database.md` §6.
 **Rien à convertir** : la colonne reste `NULL` sur toutes les lignes existantes, et c'est
 volontaire (`database.md`, `public.profils`).
 
+### 1.3 ter Appliquer la migration 19 — les onze Grands Prix restants
+
+`20260826120000_calendrier_2026_grands_prix` insère en base les onze Grands Prix restants
+de 2026 (Italie → Abu Dhabi). Le GP des Pays-Bas n'y est pas : il est déjà en base.
+
+Elle ne dépend que de la **3** et de la **11**, ne remplace aucune fonction, et n'entre
+donc dans aucun conflit d'ordre. **Elle peut être jouée avant ou après les 15 à 18.**
+
+> ### Le geste à ne pas oublier : adopter chaque ligne avant son week-end
+>
+> Les onze lignes portent un `id_unibet` **inventé** (`manuel-<slug>-2026`) : le vrai
+> n'existe pas tant qu'Unibet n'a pas ouvert la page du Grand Prix. Or le scraper se
+> rapproche sur `id_unibet` et sur rien d'autre — **il ne reconnaîtra pas la ligne et en
+> insèrera une seconde.**
+>
+> ```sql
+> select public.adopter_grand_prix('manuel-italie-2026', '<id Unibet réel>');
+> ```
+>
+> À jouer **le vendredi ou le samedi matin** du week-end visé, avant l'ouverture de la
+> fenêtre de déclenchement du job (`date_qualifications + 2h`, refermée 4h plus tard). Le
+> vrai identifiant se lit dans le journal du scraper, qui écrit « nom (id) » pour chaque
+> GP rencontré, ou dans l'URL de la page chez le bookmaker.
+>
+> Passé ce délai, rien n'est perdu : `adopter_grand_prix` résorbe aussi le doublon **après
+> coup**, en gardant la ligne du scraper — celle qui porte les cotes — et en supprimant la
+> ligne manuelle **si et seulement si elle est vide**.
+
+> **Les heures insérées sont prévisionnelles.** `calendrier2026.js` ne contient aucune
+> heure ; celles-ci suivent la convention des horaires usuels de la F1 (15h00 locale,
+> heure habituelle pour les quatre courses de nuit), converties au fuseau réel de chaque
+> circuit. **Le scraper les écrase au premier passage.** À surveiller d'ici là : une carte
+> du calendrier peut passer à « Fermé » sur la foi d'une heure devinée.
+
+> **Non éprouvée sur un PostgreSQL jetable** — ni Docker ni `psql` disponibles à
+> l'écriture, comme pour les migrations 12, 13 et 14. La logique de `slug_gp` a été
+> vérifiée hors PostgreSQL (les six cas d'épreuve, la table de traduction, et la
+> concordance des onze noms avec les slug de `GP_2026`), et la fonction **s'éprouve
+> elle-même** dans un bloc `do $$` au moment où on la joue. **À surveiller au premier
+> passage dans le SQL Editor.**
+
 ### 1.4 Vérifier les migrations appliquées
 
 **La liste des migrations appliquées est à revérifier dans le SQL Editor.** Une lecture
@@ -128,6 +169,11 @@ par `etatDuGpSaison`, comme le fait déjà `CalendrierGlobal`.
 
 > **Sans cela, les deux écrans se contrediront dès la première course courue** — l'accueil
 > dira « 12 restants » quand le calendrier en montrera 11. Voir `calendrier.md` §10.
+
+> **La migration 19 en règle la moitié.** `chargerGrandsPrixRestants` comptait les lignes
+> en base et n'en trouvait qu'une ; il en trouve maintenant onze. **Mais `Accueil.jsx`
+> affiche toujours la constante** — c'est le branchement de l'écran qui reste à faire, pas
+> la donnée.
 
 ### 1.6 bis Vérifier « Ouverture dans » contre un vrai samedi de qualifications
 
