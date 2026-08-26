@@ -10,21 +10,32 @@
  *
  * **C'est la contrepartie frontend du champ `nationalite` de
  * `backend/app/calcul/pilotes.py`**, exactement comme `lib/ecuries.js` est la
- * contrepartie de sa grille. Les deux tables décrivent les mêmes vingt-deux
- * pilotes et doivent dire la même chose : toute correction ici se relit là-bas,
- * et réciproquement. **Les codes, en revanche, ne sont pas les mêmes et ne
+ * contrepartie de sa grille. Les deux tables décrivent les mêmes pilotes et
+ * doivent dire la même chose : toute correction ici se relit là-bas, et
+ * réciproquement.
+ *
+ * > **Écart signalé (CLAUDE.md §6) : elles ne disent PLUS la même chose.**
+ * > Tsunoda est ici et pas dans `pilotes.py`. Les deux tables ne servent pas
+ * > la même question — celle-ci habille un classement déjà publié, celle
+ * > là-bas rapproche des libellés Unibet pour **calculer des points** — et
+ * > seule la seconde demande un déploiement Railway, que ce commit ne porte
+ * > pas. La conséquence de l'écart est bornée et connue : si Tsunoda gagnait,
+ * > le marché « nationalité du vainqueur » resterait `NULL`, donc rattrapable,
+ * > jamais `0`. `roadmap.md`.
+ *
+ * **Les codes, en revanche, ne sont pas les mêmes et ne
  * peuvent pas l'être** — `pilotes.py` emploie les codes CIO à trois lettres
  * (« GBR », « NED », « MON ») parce que c'est la langue du sport ; ce module
  * emploie l'ISO 3166-1 alpha-2 (« GB », « NL », « MC ») parce que c'est la clé
  * qu'une planche de drapeaux comprend. La conversion est écrite pilote par
- * pilote plutôt que dérivée par une table CIO → ISO : quinze correspondances ne
+ * pilote plutôt que dérivée par une table CIO → ISO : seize correspondances ne
  * valent pas une seconde table à tenir, et trois d'entre elles ne se devinent
  * pas (NED → NL, GER → DE, MON → MC).
  *
  * **Aucun dessin n'entre ici.** Les formes vivent dans
  * `composants/DrapeauxPilotes.jsx`, pour la raison qui sépare déjà
  * `lib/livrees.js` de `composants/VoituresEcuries.jsx` : ce module est une
- * table de vingt-deux lignes, et le faire porter les drapeaux embarquerait leur
+ * table de vingt-trois lignes, et le faire porter les drapeaux embarquerait leur
  * dessin dans le lot de tout écran qui voudrait seulement savoir de quel pays
  * est un pilote.
  *
@@ -40,7 +51,7 @@
 export const SAISON = 2026;
 
 /**
- * Les vingt-deux pilotes de la grille 2026.
+ * Les vingt-trois pilotes que la saison 2026 a fait courir.
  *
  * `nom` est écrit **dans la forme d'OpenF1** (`full_name`, « Lando Norris ») :
  * c'est elle que `classement_du_grand_prix` sert sous la clé `pilote`, et c'est
@@ -69,6 +80,11 @@ const PILOTES = [
   { numero: 14, nom: "Fernando Alonso", unibet: "F.Alonso", code: "ES", pays: "Espagne" },
   { numero: 16, nom: "Charles Leclerc", unibet: "C.Leclerc", code: "MC", pays: "Monaco" },
   { numero: 18, nom: "Lance Stroll", unibet: "L.Stroll", code: "CA", pays: "Canada" },
+  // Tsunoda n'est pas dans les vingt-deux libellés relevés sur les cotes du GP
+  // Pays-Bas 2026, d'où son absence jusqu'ici — mais il figure au CLASSEMENT
+  // servi par OpenF1, et c'est ce classement que cette table habille. Une ligne
+  // sans drapeau se voyait ; elle n'avait pas de raison d'être.
+  { numero: 22, nom: "Yuki Tsunoda", unibet: "Y.Tsunoda", code: "JP", pays: "Japon" },
   { numero: 23, nom: "Alexander Albon", unibet: "A.Albon", code: "TH", pays: "Thaïlande" },
   { numero: 27, nom: "Nico Hulkenberg", unibet: "N.Hulkenberg", code: "DE", pays: "Allemagne" },
   { numero: 30, nom: "Liam Lawson", unibet: "L.Lawson", code: "NZ", pays: "Nouvelle-Zélande" },

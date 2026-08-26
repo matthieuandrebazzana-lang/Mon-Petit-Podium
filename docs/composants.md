@@ -257,21 +257,28 @@ légèrement différent de celui du bloc de Zandvoort, sur le même écran.
 
 ### Les drapeaux de pilotes — la seule bibliothèque du frontend (`0.62.0`)
 
-`composants/DrapeauxPilotes.jsx` importe **quinze** drapeaux de `country-flag-icons`, un
+`composants/DrapeauxPilotes.jsx` importe **seize** drapeaux de `country-flag-icons`, un
 module par pays, indexés par code ISO 3166-1 alpha-2. C'est la seule entorse à la règle
 « tout est extrait par script d'une planche » — et c'est cette règle même qui la commande.
 
-**La grille 2026 demande quinze pays.** Sept d'entre eux — Australie, Nouvelle-Zélande,
+**La grille 2026 demande seize pays.** Sept d'entre eux — Australie, Nouvelle-Zélande,
 Brésil, Mexique, Canada, Thaïlande, Argentine — n'ont aucune description qu'un dégradé
 sache poser sans l'approximer, et `assets/flags.svg` ne dessine que des pays **hôtes**.
-Le choix était donc entre approximer sept drapeaux et en prendre quinze exacts.
+Le choix était donc entre approximer sept drapeaux et en prendre seize exacts.
+
+> **Le seizième est le Japon, entré en `0.63.0` avec Tsunoda** (`roadmap.md` §3.8 quinquies).
+> C'est le premier de la planche dont l'emblème n'est pas une bande mais une **charge** : le
+> disque, étiré par `preserveAspectRatio="none"` sur une rangée de 5,2:1, ressort en ellipse
+> large. **C'est le rendu voulu et non un défaut** — `slice` en aurait fait une barre rouge
+> centrale, exactement le recadrage que la ligne du tableau ci-dessous décrit. Vérifié à
+> l'image, à 320 px, contre la feuille compilée.
 
 | Point | Pourquoi |
 |---|---|
-| **`country-flag-icons`, pas `react-world-flags`** | le second embarque les 250 drapeaux en data-URI dans un lot UMD de **3,6 Mo** et les résout par `require.context`, une API propre à webpack que Vite n'implémente pas. Le premier est de l'ESM pur, `sideEffects: false` : les quinze imports pèsent **+15,5 Ko** au lot, mesurés |
+| **`country-flag-icons`, pas `react-world-flags`** | le second embarque les 250 drapeaux en data-URI dans un lot UMD de **3,6 Mo** et les résout par `require.context`, une API propre à webpack que Vite n'implémente pas. Le premier est de l'ESM pur, `sideEffects: false` : les seize imports pèsent **+15,5 Ko** au lot, mesurés — et le contrôle du lot confirme **seize** composants pays, pas un de plus |
 | **`preserveAspectRatio="none"`** | même arbitrage que `FondPiste`. Une rangée fait 5,2:1, un drapeau 1,5:1 : `slice` recadrait sur la bande centrale, et l'Allemagne ressortait rouge uni. `none` garde **toutes** les bandes. `VainqueursCircuit` garde son `slice` — ses cartes sont presque carrées |
 | **Aucun `fill` ni `color` sur un ancêtre** | la bande noire allemande n'a pas d'attribut `fill` et **hérite** ; le Canada pose le piège à l'envers avec `fill="red"` en mot-clé. Invisible à la lecture du JSX |
-| **Le lavis à 8 %, mesuré** | pire substrat le noir → `#EBEBEB` : `texte` **14,60:1**, `secondaire` **8,86:1**, `primaire` **9,13:1**. **`texte-doux` : 2,39:1, banni de ces lignes** |
+| **Le lavis à 8 %, mesuré** | pire substrat le noir → `#EBEBEB` : `texte` **14,60:1**, `secondaire` **8,86:1**, `primaire` **9,13:1**. **`texte-doux` : 2,39:1, banni de ces lignes**. Le Japon ne déplace pas ce plancher — son `#D80027` compose `#FCEBEE`, plus clair |
 | **Un pays absent ne rend rien** | la règle du projet depuis la `0.15.0`, jamais une couleur de repli |
 
 > **Deux systèmes de drapeaux coexistent donc**, et c'est un écart assumé au principe de la
@@ -318,11 +325,11 @@ le mode personnalisé — ce qui se voit à l'écran au lieu de planter.
 | `couleurs.js` | aplats de bloc, contraste, encres |
 | `palette.js` | 20 couleurs de voiture, luminance, `livreeDuMembre` |
 | `ecuries.js` | onze écuries, grille 2026, `ecurieDuLibelle` — voir `ecuries.md` |
-| `nationalites.js` | **la nationalité des 22 pilotes**, en ISO alpha-2 — contrepartie de `pilotes.py` |
+| `nationalites.js` | **la nationalité des 23 pilotes**, en ISO alpha-2 — contrepartie de `pilotes.py`, dont elle **diverge** depuis la `0.63.0` (Tsunoda) |
 | `calendrier.js` | `ETATS_GP`, `cotesArretees`, `etatPronostics` — **seule lectrice du statut `cotes_figees`** |
 | `calendrier2026.js` | **la liste des GP** — voir `calendrier.md` |
 | `navigation.js` | barre, onglets, `origineRetour` |
-| `pronostics.js` | marchés, favoris, exclusion croisée, `choixDuPronostic`, `oublierMesPronostics` |
+| `pronostics.js` | marchés, favoris, exclusion croisée, `choixDuPronostic`, `oublierMesPronostics`, `decrirePronostics` |
 | `stockage.js` | **seul juge d'un fichier CHOISI** : formats, plafond de 5 Mo, dépôt, ménage |
 | `image.js` | **seul juge de ce qu'on DÉPOSE** : décodage, recadrage, 800 px, JPEG 0,85 |
 | `usePhoto.js` | l'état de chargement d'une image, cache du navigateur compris |
@@ -346,6 +353,42 @@ Trois règles ont été **sorties des écrans** vers `lib/pronostics.js` — `op
 seraient vérifiables qu'en montant un DOM que le projet n'outille pas. Sorties de là, elles
 s'éprouvent directement. Même motif pour `VueAdmin`, fonction pure de ses props, séparée de
 `SectionAdmin` qui porte l'état.
+
+### `decrirePronostics` — la même mise en forme quelle que soit la porte (`0.63.0`)
+
+L'écran de résultats d'un Grand Prix s'ouvre par **deux chemins** : depuis un championnat,
+et depuis la carte d'un Grand Prix couru du calendrier. Le second n'a aucun championnat à
+donner, et la section « Mes résultats » y affichait « ouvre ce Grand Prix depuis un
+championnat ». Le message était exact et sans remède — la route ne sert **aucun** pronostic
+sans `championnat_id`, et pour une bonne raison (étape 6).
+
+**Un pronostic n'appartient pourtant pas à un championnat.** La table `pronostics` porte
+`(profil_id, gp_id)` et rien d'autre : le joueur en a **un seul jeu** par Grand Prix,
+partagé par tous ses championnats. Le championnat ne décide que de *qui d'autre* a le droit
+de le voir — pour se le montrer à soi-même, il n'a jamais eu son mot à dire.
+
+Sans championnat, les pronostics sont donc lus **directement sous RLS** — le second chemin
+de données de l'étape 5, appliqué au cas que sa politique décrit le mieux : « un joueur qui
+n'appartient encore à aucun championnat doit pouvoir relire ses propres pronostics ».
+`chargerResultatsGp` les sert à côté de la réponse de la route, sous `mes_pronostics`, et
+les deux appels partent **ensemble**.
+
+| Point | Pourquoi |
+|---|---|
+| `mes_pronostics` et `membres` sont **exclusifs** | avec un championnat la route sert déjà le jeu de l'appelant : le relire serait une requête pour une donnée en main, et surtout **une seconde valeur pour la même question**, que deux caches pourraient faire diverger |
+| `decrirePronostics` rend **exactement** les huit champs de `pronostics_du_joueur` | les deux alimentent le même écran à deux sections d'écart. `points` reste la cote de la **première** issue seulement, podium compris — sommer d'un seul côté ferait afficher deux potentiels différents pour le même pari selon la porte d'entrée |
+| `classerLesMembres` reste le **seul** propriétaire du total | la ligne fabriquée hors championnat y passe comme les autres. Deux calculs séparés auraient fini par annoncer deux totaux pour le même joueur sur le même Grand Prix |
+| Le **rang** ne suit pas | il n'a de sens qu'entre membres. Hors championnat la pastille disparaît plutôt que d'annoncer un « 1er » qu'on serait seul à disputer |
+| L'échec de la lecture n'emporte pas l'écran | le classement de la course est public et reste la raison d'ouvrir la page. Seule la section dit qu'elle n'a pas pu charger — jamais « aucun pronostic », qui serait une affirmation non vérifiée |
+| `cleResultats` porte un marqueur `v2` | l'entrée de cache porte un champ de plus : servie telle quelle, une entrée d'avant aurait fait afficher « Aucun pronostic » le temps d'un aller-retour. Même leçon que `cleSaison` |
+
+> **Écart signalé (CLAUDE.md §6) : il y a maintenant DEUX propriétaires de cette mise en
+> forme**, `decrirePronostics` et la fonction SQL `public.pronostics_du_joueur`. L'option
+> propre était de faire servir la seconde par la route sans `championnat_id` — un seul
+> propriétaire, et rien à recopier. Elle a été écartée pour une raison de **calendrier, pas
+> de conception** : le correctif serait parti sur Railway, où la `0.57.0` du backend n'est
+> toujours pas déployée, et la section serait restée aussi vide qu'avant. Le prix est écrit
+> à côté des deux fonctions : **toute retouche de l'une se relit sur l'autre.**
 
 ### `Horloge` et `etatPronostics` — l'horloge ne décide plus de ce qu'elle annonce (`0.57.0`)
 

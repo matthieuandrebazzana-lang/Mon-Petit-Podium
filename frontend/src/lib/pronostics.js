@@ -224,6 +224,14 @@ export async function chargerMesGpPronostiques(profilId, signal) {
  * existe, PostgREST sait donc la suivre. Les cotes, elles, n'ont aucune
  * relation déclarée avec les pronostics — le rapprochement se fait par
  * `id_outcome_unibet`, côté appelant, avec les cotes qu'il a déjà chargées.
+ *
+ * **`points_gagnes` voyage avec le reste depuis la version `0.63.0`**, et
+ * n'ajoute aucune requête : c'est une colonne de plus sur une lecture déjà
+ * filtrée par `(gp_id, profil_id)`. Les trois appelants d'avant l'ignorent —
+ * la saisie et le récapitulatif n'ont rien à en faire, l'accueil ne compte que
+ * les lignes. Le quatrième, « Mes résultats » sur un Grand Prix ouvert hors
+ * championnat, n'existe **que** pour lui. `null` veut toujours dire « pas
+ * encore jugé », jamais « raté » (règle 4.1).
  */
 export async function chargerMesPronostics(gpId, profilId, signal) {
   if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };
@@ -232,7 +240,9 @@ export async function chargerMesPronostics(gpId, profilId, signal) {
   try {
     const requete = supabase
       .from("pronostics")
-      .select("id, type, id_outcome_unibet, pronostic_podium(pilote_1, pilote_2)")
+      .select(
+        "id, type, id_outcome_unibet, points_gagnes, pronostic_podium(pilote_1, pilote_2)",
+      )
       .eq("gp_id", gpId)
       .eq("profil_id", profilId);
 
@@ -485,6 +495,63 @@ export async function chargerRecap(gpId, profilId, signal) {
   return combiner([cotes, miens], (gp, pronostics) => ({ gp, pronostics }));
 }
 
+/**
+ * « Mes résultats » sur un Grand Prix ouvert **hors championnat**.
+ *
+ * ## Le défaut que cela corrige
+ *
+ * La section « Mes résultats » de l'écran de résultats affichait « ouvre ce
+ * Grand Prix depuis un championnat » dès qu'on y arrivait par le calendrier —
+ * c'est-à-dire par le chemin le plus court, celui de la carte d'un Grand Prix
+ * couru. Le message était exact et sans remède : `GET /grands-prix/{id}/
+ * resultats` ne sert **aucun** pronostic sans `championnat_id`, et pour une
+ * bonne raison (étape 6) — les pronostics d'un membre ne sortent qu'aux membres
+ * de ses championnats.
+ *
+ * **Mais un pronostic n'appartient pas à un championnat.** La table
+ * `pronostics` porte `(profil_id, gp_id)` et rien d'autre : le joueur en a
+ * **un seul jeu** par Grand Prix, partagé par tous ses championnats. Le
+ * championnat ne sert qu'à décider *à qui d'autre* on a le droit de le montrer.
+ * Pour se le montrer **à soi-même**, il n'a jamais rien eu à dire.
+ *
+ * ## Pourquoi cette lecture-ci, et pas la route
+ *
+ * C'est le **second chemin de données** de l'étape 5, appliqué au cas qu'il
+ * décrit le mieux : la politique « Pronostics visibles entre membres » ouvre
+ * son premier terme sur `profil_id = auth.uid()`, et son commentaire de
+ * migration dit explicitement pourquoi — « un joueur qui n'appartient encore à
+ * aucun championnat doit pouvoir relire ses propres pronostics ». Un compte
+ * sans championnat est précisément le cas que cette section doit servir.
+ *
+ * > **Écart signalé (CLAUDE.md §6) : l'alternative était backend, et elle a été
+ * > écartée pour une raison de calendrier, pas de conception.** Faire servir
+ * > `pronostics_du_joueur(auth, gp)` par la route sans `championnat_id` aurait
+ * > gardé **un** propriétaire à la mise en forme, au lieu des deux qu'il y a
+ * > maintenant (cette fonction et la fonction SQL). Mais cela déplace le
+ * > correctif sur Railway, où la version `0.57.0` du backend **n'est toujours
+ * > pas déployée** : la section serait restée exactement aussi vide qu'avant,
+ * > jusqu'à un déploiement que ce commit ne peut pas faire. Le prix de l'écart
+ * > est connu et borné — `decrirePronostics` doit rendre les mêmes champs que
+ * > `pronostics_du_joueur`, et c'est écrit à côté d'elle.
+ *
+ * **Les deux lectures sont celles du récapitulatif, sans une de plus** : les
+ * cotes publiques donnent le pilote, le marché et les points possibles, la
+ * lecture RLS donne les pronostics et leurs points gagnés.
+ */
+export async function chargerMesPronosticsDuGp(gpId, profilId, signal) {
+  const recap = await chargerRecap(gpId, profilId, signal);
+  if (!recap.ok) return recap;
+
+  return {
+    ok: true,
+    message: null,
+    donnees: decrirePronostics(
+      recap.donnees.pronostics,
+      indexerCotes(recap.donnees.gp),
+    ),
+  };
+}
+
 // --------------------------------------------------------------------------
 //  Rapprochement cotes ↔ pronostics
 // --------------------------------------------------------------------------
@@ -586,6 +653,91 @@ export function enConflit(choix, prises) {
   return (prises ?? []).some(
     (cote) => cote?.pilote && clePilote(cote.pilote) === cle,
   );
+}
+
+/**
+ * Les pronostics d'un joueur **dans la forme que l'API leur donne**.
+ *
+ * ## Ce que cette fonction doit rendre, et pourquoi ce n'est pas négociable
+ *
+ * Elle est la contrepartie JavaScript de `public.pronostics_du_joueur`
+ * (migration `20260813205200`), la fonction SQL dont sortent les pronostics de
+ * chaque membre d'un championnat. **Les deux alimentent le MÊME écran**, à deux
+ * sections d'écart : « Mes résultats » quand on arrive par le calendrier,
+ * « Classement ce GP » quand on arrive par un championnat. Un pronostic doit
+ * s'y lire à l'identique — même marché, même sélection, même verdict.
+ *
+ * Les huit champs ci-dessous sont donc **exactement** ceux du `jsonb_build_object`
+ * de la fonction SQL, valeur pour valeur, y compris ce qui pourrait surprendre :
+ *
+ * - `points` est la cote de la **première** issue seulement. Pour un podium, la
+ *   seconde vit dans `podium.points_2` et n'est **pas** ajoutée ici. Ce n'est
+ *   pas une omission : c'est ce que la fonction SQL rend, et sommer d'un seul
+ *   côté ferait afficher deux potentiels différents pour le même pari selon la
+ *   porte par laquelle on est entré. Le jour où la somme est retenue, elle se
+ *   décide en SQL et se recopie ici — jamais l'inverse.
+ * - `podium` reste `null` quand la ligne de détail manque, plutôt que d'être un
+ *   objet aux noms nuls : `choixDuPronostic` retombe alors sur `pilote`, ce qui
+ *   nomme au moins un pilote au lieu de n'en nommer aucun.
+ * - `points_gagnes` est `null` tant que le calcul n'a rien tranché, `0` quand le
+ *   pronostic est raté. Les deux ne se confondent jamais (règle 4.1).
+ *
+ * L'ordre est celui de la fonction SQL — vainqueur, podium, bonus, puis le
+ * pilote — et il compte : c'est l'ordre dans lequel le joueur a saisi, donc
+ * celui dans lequel il relit.
+ *
+ * `index` est celui d'`indexerCotes` : une cote y porte `pilote`, `points`,
+ * `marche` et `libelle`, les quatre colonnes que la fonction SQL lit sur la
+ * table `cotes`. Une issue retirée par Unibet depuis la saisie laisse tout à
+ * `null` et le pronostic reste affiché — le faire disparaître ferait croire au
+ * joueur qu'il a oublié de le saisir.
+ */
+export function decrirePronostics(pronostics, index) {
+  const cote = (idOutcome) => index.get(idOutcome) ?? null;
+  const rang = { vainqueur: 1, podium: 2, bonus: 3 };
+
+  return (pronostics ?? [])
+    .map((brut) => {
+      const premiere = cote(brut.id_outcome_unibet);
+
+      // PostgREST rend une jointure « un vers un » tantôt en objet, tantôt en
+      // tableau d'un élément selon la version : les deux formes sont acceptées,
+      // comme partout ailleurs dans ce module.
+      const detail = Array.isArray(brut.pronostic_podium)
+        ? brut.pronostic_podium[0]
+        : brut.pronostic_podium;
+      const seconde = detail ? cote(detail.pilote_2) : null;
+
+      return {
+        id: brut.id,
+        type: brut.type,
+        outcome: brut.id_outcome_unibet,
+        pilote: premiere?.pilote ?? null,
+        marche: premiere?.marche ?? null,
+        libelle: premiere?.libelle ?? null,
+        points: premiere?.points ?? null,
+        points_gagnes: brut.points_gagnes ?? null,
+        podium: detail
+          ? {
+              pilote_1: detail.pilote_1,
+              pilote_2: detail.pilote_2,
+              nom_1: premiere?.pilote ?? null,
+              nom_2: seconde?.pilote ?? null,
+              points_2: seconde?.points ?? null,
+            }
+          : null,
+      };
+    })
+    .sort(
+      (a, b) =>
+        (rang[a.type] ?? 9) - (rang[b.type] ?? 9) ||
+        // Une issue retirée par Unibet n'a plus de pilote : elle passe en
+        // dernier de son groupe, comme le `nulls last` que PostgreSQL applique
+        // par défaut à l'`order by x.pilote` de la fonction SQL. Sans ce test,
+        // la chaîne vide la ferait remonter en tête.
+        (a.pilote === null) - (b.pilote === null) ||
+        String(a.pilote ?? "").localeCompare(String(b.pilote ?? ""), "fr"),
+    );
 }
 
 /**

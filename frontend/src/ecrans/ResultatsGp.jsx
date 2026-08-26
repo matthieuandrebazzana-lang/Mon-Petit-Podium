@@ -41,6 +41,12 @@ import { formaterDepart, formaterPoints } from "../lib/format.js";
  *   membre. La route exige le jeton et vérifie l'appartenance ; l'écran ne
  *   décide rien, il affiche ce qu'on lui sert.
  *
+ * **Les pronostics de l'appelant, eux, ne passent plus par là quand il n'y a
+ * pas de championnat** (version `0.63.0`) : ils sont lus directement sous RLS
+ * et arrivent sous `mes_pronostics`. Le partage est décrit dans
+ * `chargerResultatsGp`, et il tient en une phrase — un pronostic appartient à
+ * un joueur et à un Grand Prix, jamais à un championnat.
+ *
  * **Un Grand Prix non couru n'est pas une erreur.** La route rend
  * `disponible: false` plutôt qu'un `404` (étape 6), et l'écran le dit avec la
  * date et l'heure du départ. Un écran vide laisserait croire à une panne.
@@ -71,8 +77,8 @@ import { formaterDepart, formaterPoints } from "../lib/format.js";
  * > inventé des lignes. C'est le refus déjà opposé aux palmarès courts de Las
  * > Vegas et du Qatar en version `0.60.0`.
  *
- * > **Troisième écart (§6) : les points FIA ne sont pas calculés depuis la
- * > position.** La demande donne le barème (25-18-15-12-10-8-6-4-2-1-0) ;
+ * > **Troisième écart (§6) : les points du championnat du monde ne sont pas
+ * > calculés depuis la position.** La demande donne le barème (25-18-15-12-10-8-6-4-2-1-0) ;
  * > `points_fia` arrive déjà d'OpenF1, qui sait ce que la position seule ne dit
  * > pas — le point du sprint, une pénalité appliquée après l'arrivée, une
  * > disqualification. Poser le barème par-dessus aurait remplacé un fait par
@@ -256,6 +262,20 @@ function WidgetPronostic({ pronostic }) {
   );
 }
 
+/** Une absence, dite en deux phrases. Les quatre cas de `MesResultats` ne
+ *  diffèrent que par leur texte : leur composition, elle, n'a aucune raison
+ *  d'être écrite quatre fois. */
+function Absence({ titre, detail }) {
+  return (
+    <div className="rounded-carte bg-surface shadow-carte px-5 py-6 text-center">
+      <p className="text-corps text-texte font-medium">{titre}</p>
+      <p className="text-corps-sm text-secondaire mx-auto mt-1 max-w-[32ch]">
+        {detail}
+      </p>
+    </div>
+  );
+}
+
 /**
  * La fiche récapitulative du joueur connecté.
  *
@@ -266,34 +286,55 @@ function WidgetPronostic({ pronostic }) {
  * **potentiels**. L'ancien écran les cachait derrière `disponible` et laissait
  * le joueur sans aucune trace de ce qu'il avait validé.
  *
- * Trois absences, trois messages différents, parce qu'elles ne veulent pas dire
- * la même chose : pas de championnat dans l'URL (personne n'est « moi » ici),
- * un membre qui n'a rien joué, et un membre qui a joué mais dont rien n'est
- * encore jugé.
+ * > ### Elle ne dépend plus d'un championnat non plus (version `0.63.0`)
+ * >
+ * > Elle affichait « ouvre ce Grand Prix depuis un championnat » dès qu'on
+ * > arrivait par le calendrier — soit par le chemin le plus court vers un Grand
+ * > Prix couru. Le message était exact et sans remède, et il posait la mauvaise
+ * > question : **un pronostic n'appartient pas à un championnat.** Il est saisi
+ * > pour un couple `(joueur, Grand Prix)` et vaut pour tous les championnats à
+ * > la fois ; le championnat ne décide que de *qui d'autre* a le droit de le
+ * > voir. Pour se le montrer à soi-même, il n'a jamais eu son mot à dire.
+ * >
+ * > Les pronostics arrivent donc de deux sources selon la porte d'entrée, et
+ * > l'écran ne le sait pas : il reçoit dans les deux cas une ligne passée par
+ * > `classerLesMembres`, qui reste le seul propriétaire du total, du nombre de
+ * > jugés et du « a joué ».
+ *
+ * **Le rang, lui, ne suit pas.** Il n'a de sens qu'entre membres : hors
+ * championnat il n'y a personne devant ni derrière, et afficher « 1er ce GP »
+ * pour un joueur seul serait une distinction inventée. La pastille disparaît
+ * plutôt que de mentir — c'est le refus déjà opposé aux palmarès courts.
+ *
+ * Quatre absences, quatre messages, parce qu'elles ne veulent pas dire la même
+ * chose : personne n'est connecté, la lecture a échoué, le joueur n'a rien
+ * joué, ou il a joué sans que rien ne soit encore jugé.
  */
-function MesResultats({ moi, avecChampionnat }) {
-  if (!avecChampionnat) {
+function MesResultats({ moi, avecRang, connecte, echec }) {
+  if (!connecte) {
     return (
-      <div className="rounded-carte bg-surface shadow-carte px-5 py-6 text-center">
-        <p className="text-corps text-texte font-medium">Tes pronostics</p>
-        <p className="text-corps-sm text-secondaire mx-auto mt-1 max-w-[32ch]">
-          Ouvre ce Grand Prix depuis un championnat pour retrouver ce que tu y as
-          pronostiqué.
-        </p>
-      </div>
+      <Absence
+        titre="Tes pronostics"
+        detail="Connecte-toi pour retrouver ce que tu as validé sur ce Grand Prix."
+      />
+    );
+  }
+
+  if (echec) {
+    return (
+      <Absence
+        titre="Pronostics indisponibles"
+        detail="Tes pronostics n'ont pas pu être chargés. Le classement de la course, lui, est à jour."
+      />
     );
   }
 
   if (!moi || !moi.aJoue) {
     return (
-      <div className="rounded-carte bg-surface shadow-carte px-5 py-6 text-center">
-        <p className="text-corps text-texte font-medium">
-          Aucun pronostic sur ce Grand Prix
-        </p>
-        <p className="text-corps-sm text-secondaire mx-auto mt-1 max-w-[32ch]">
-          Tu n'as rien validé pour cette course.
-        </p>
-      </div>
+      <Absence
+        titre="Aucun pronostic sur ce Grand Prix"
+        detail="Tu n'as rien validé pour cette course."
+      />
     );
   }
 
@@ -318,13 +359,18 @@ function MesResultats({ moi, avecChampionnat }) {
           </p>
         </div>
 
-        <div className="rounded-champ shrink-0 bg-white/15 px-4 py-2.5 text-center">
-          <p className="text-[26px] leading-none font-medium text-white">
-            {moi.rang}
-            <span className="text-[15px]">e</span>
-          </p>
-          <p className="text-label-sm mt-1 text-white/50 uppercase">ce GP</p>
-        </div>
+        {/* Le rang n'existe qu'entre membres d'un championnat. Sans eux la
+            pastille disparaît, et le bloc rouge se referme sur son total —
+            `justify-between` n'a alors plus qu'un enfant à pousser. */}
+        {avecRang && (
+          <div className="rounded-champ shrink-0 bg-white/15 px-4 py-2.5 text-center">
+            <p className="text-[26px] leading-none font-medium text-white">
+              {moi.rang}
+              <span className="text-[15px]">e</span>
+            </p>
+            <p className="text-label-sm mt-1 text-white/50 uppercase">ce GP</p>
+          </div>
+        )}
       </div>
 
       <ul className="flex flex-col gap-2">
@@ -343,7 +389,7 @@ function MesResultats({ moi, avecChampionnat }) {
 /**
  * Opacité du drapeau en fond d'une ligne.
  *
- * Mesuré sur les quinze drapeaux de la grille 2026, couleur par couleur : le
+ * Mesuré sur les seize drapeaux de la grille 2026, couleur par couleur : le
  * pire substrat est le noir (bande allemande, champ de l'Union Jack), qui
  * compose `#EBEBEB` sur blanc. L'encre `texte` y vaut **14,60:1**, le marron
  * `secondaire` **8,86:1**, le bordeaux `primaire` **9,13:1**.
@@ -397,9 +443,23 @@ function couperLeNom(nom) {
  *
  * `points_fia` est le seul nombre de l'application qui ne soit pas des points au
  * sens de la règle 4.1 : ce sont les points du championnat du monde (25, 18,
- * 15…). Il est donc écrit « 25 pts FIA » et jamais avec `formaterPoints`, qui
- * habille les points de l'app. Les confondre ferait lire le classement F1 comme
- * un classement de pronostics.
+ * 15…). Il s'écrit **« 25 pts »**, sans le mot « FIA », et **jamais avec
+ * `formaterPoints`** — c'est cette seconde moitié qui compte maintenant que les
+ * deux libellés se ressemblent. `formaterPoints` est le seul habilleur des
+ * points de l'app (règle 4.1) ; lui confier ce nombre-ci le ferait entrer dans
+ * le vocabulaire des pronostics, et un ajustement futur de l'unité se
+ * propagerait ici sans que rien ne le dise.
+ *
+ * > **Écart signalé (CLAUDE.md §6) : « pts » ne distingue plus les deux
+ * > sortes de points, et c'est le contexte seul qui les sépare.** Le mot
+ * > « FIA » était ce qui empêchait de lire « 25 pts » comme un gain de
+ * > pronostic. La section « Résultats du GP » n'affiche aucun point de
+ * > l'application — ni pastille de pari, ni total — donc rien n'y prête à
+ * > confusion ; mais les deux unités cohabitent bien sur le même écran, à deux
+ * > sections d'écart. Le repli n'est pas gratuit, il est accepté.
+ *
+ * Le pluriel est porté par la valeur et non écrit en dur : la dixième place
+ * rapporte **un** point, et « 1 pts » se serait lu sur chaque Grand Prix.
  *
  * **Un zéro et une absence de classement ne s'écrivent pas pareil.** Un pilote
  * classé qui ne marque pas porte « 0 pt » en encre marron, sans aplat : c'est un
@@ -480,7 +540,7 @@ function LigneClassement({ ligne }) {
 
           {ligne.points_fia > 0 ? (
             <span className="bg-fond text-secondaire shrink-0 rounded-[10px] px-2 py-1 text-[12px] font-medium">
-              {ligne.points_fia} pts FIA
+              {ligne.points_fia} pt{ligne.points_fia > 1 ? "s" : ""}
             </span>
           ) : (
             <span className="text-secondaire shrink-0 text-[12px]">
@@ -701,8 +761,8 @@ export default function ResultatsGp() {
     ? cleResultats(utilisateur.id, gpId, championnatId)
     : null;
   const chargeur = useCallback(
-    (signal) => chargerResultatsGp(gpId, championnatId, signal),
-    [gpId, championnatId],
+    (signal) => chargerResultatsGp(gpId, championnatId, utilisateur?.id, signal),
+    [gpId, championnatId, utilisateur?.id],
   );
   const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
 
@@ -714,11 +774,25 @@ export default function ResultatsGp() {
   // Une seule question pour toute la liste, la même qu'au classement du
   // championnat et qu'à la vue piste : quelqu'un a-t-il une photo ?
   const avecPhotos = membres.some((ligne) => Boolean(ligne.avatar_url));
-  const moi = membres.find((ligne) => ligne.profil_id === utilisateur?.id) ?? null;
   // `null` veut dire « pas demandé » (aucun championnat dans l'URL), jamais
   // « championnat vide » — la convention de la route, tenue par l'écran.
   const avecChampionnat =
     donnees?.membres !== null && donnees?.membres !== undefined;
+
+  /* « Mes résultats » a deux sources selon la porte d'entrée, et **une seule
+     mise en forme**. Avec un championnat, ma ligne est déjà dans le classement
+     des membres. Sans, elle est fabriquée à partir des seuls pronostics lus
+     sous RLS — et passe par le MÊME `classerLesMembres`, qui reste le seul
+     propriétaire du total, du nombre de jugés, du nombre de réussis et du
+     « a joué ». Deux calculs écrits séparément auraient fini par annoncer deux
+     totaux différents pour le même joueur sur le même Grand Prix. */
+  const moi = avecChampionnat
+    ? (membres.find((ligne) => ligne.profil_id === utilisateur?.id) ?? null)
+    : donnees?.mes_pronostics
+      ? (classerLesMembres([
+          { profil_id: utilisateur?.id, pronostics: donnees.mes_pronostics },
+        ])[0] ?? null)
+      : null;
 
   function reessayer() {
     setTentative((n) => n + 1);
@@ -770,7 +844,12 @@ export default function ResultatsGp() {
                   titre="Mes résultats"
                   sousTitre="Ce que tes pronostics ont rapporté"
                 />
-                <MesResultats moi={moi} avecChampionnat={avecChampionnat} />
+                <MesResultats
+                  moi={moi}
+                  avecRang={avecChampionnat}
+                  connecte={Boolean(utilisateur)}
+                  echec={Boolean(donnees.mes_pronostics_echec)}
+                />
 
                 {/* ---- Section 2 : Résultats du GP ----
                     `mt-3` s'ajoute au `gap-3` du conteneur : 24px au lieu de 12

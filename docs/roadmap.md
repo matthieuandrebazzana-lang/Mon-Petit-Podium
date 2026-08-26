@@ -246,6 +246,7 @@ navigateur. Points à regarder en priorité :
 | **La rangée des derniers vainqueurs** (`0.59.0`) | quatrième rangée `snap-x` du projet, et la première à porter cinq SVG de voiture — soit cinq dessins de quarante formes qui défilent à l'inertie. C'est aussi la seule dont le calage a demandé `scroll-pl-4` : vérifier que la première carte s'aligne bien sur le reste de la page **après** un défilement puis un retour au début, pas seulement au premier rendu |
 | **Les deux liens d'une carte de calendrier** (`0.59.0`) | le corps et la bande d'action sont deux `<a>` frères dans un même `<article>`. Vérifier qu'un appui sur la bande n'ouvre pas la fiche, qu'un appui près de la couture ne se trompe pas de destination, et que `pressable-large` enfonce bien la **carte entière** dans les deux cas — c'est `:active` remontant aux ancêtres, et Safari iOS est le seul juge |
 | **Le lavis des drapeaux à 8 %** (`0.62.0`) | vingt-deux rangées portant chacune un SVG de drapeau en `absolute inset-0`, sous un SVG de voiture. Deux choses à regarder : le coût de composition au défilement d'une liste de vingt-deux couches superposées, et surtout **la lisibilité du lavis en plein soleil** — 8 % sur blanc est un jugement d'écran de bureau autant qu'un rapport de contraste, et c'est le même doute que l'opacité `0,4` des cartes passées (§3.14) |
+| **Le drapeau japonais étiré** (`0.63.0`) | seizième drapeau de la planche, et le **premier dont l'emblème est une charge et non une bande**. `preserveAspectRatio="none"` étire son disque en ellipse large sur une rangée de 5,2:1 : vérifié à l'image en navigateur, jamais sur un écran de téléphone en plein soleil, où il ne reste qu'un lavis rosé de 8 % |
 | **Les vingt-deux voitures d'un classement** (`0.62.0`) | chaque rangée dessine une livrée complète, soit quarante formes × vingt-deux sur un seul écran qui défile. La vue piste en montre seize et n'a jamais été éprouvée non plus : c'est le plus gros nombre de dessins de voiture qu'un écran du projet ait porté |
 
 ---
@@ -444,7 +445,7 @@ principe « une source unique par question » (CLAUDE.md §6) qu'il faut connaî
 | Question | Propriétaire | Comment |
 |---|---|---|
 | le drapeau d'un **pays hôte**, et celui d'un **vainqueur de circuit** | `DRAPEAUX` / `NATIONALITES` (`DrapeauxGP.jsx`) | dégradés CSS et sept dessins extraits de `assets/flags.svg` |
-| le drapeau d'un **pilote de la grille** | `lib/nationalites.js` + `composants/DrapeauxPilotes.jsx` | quinze SVG de `country-flag-icons`, par code ISO |
+| le drapeau d'un **pilote de la grille** | `lib/nationalites.js` + `composants/DrapeauxPilotes.jsx` | seize SVG de `country-flag-icons`, par code ISO |
 
 **Ce n'est pas une duplication gratuite.** Le champ `couleurs` de `DRAPEAUX` n'est pas
 décoratif : c'est la matière du calcul de `voileNecessaire`, qui dérive l'opacité du voile
@@ -453,7 +454,7 @@ bibliothèque **ne peut pas alimenter ce calcul** — il n'expose pas ses bandes
 systèmes répondent donc à deux questions qui n'ont pas les mêmes besoins : là-bas un
 drapeau à pleine intensité sous du texte blanc, ici un lavis à 8 % sous du texte foncé.
 
-**Ce que la `0.62.0` règle au passage, et qu'il faut noter :** les quinze pays de la grille
+**Ce que la `0.62.0` règle au passage, et qu'il faut noter :** les seize pays de la grille
 2026 incluent l'Australie et la Finlande, les deux nationalités que §3.8 bis laissait sans
 fond. **Elles ont maintenant un drapeau exact — mais seulement sur l'écran de résultats.**
 Les cartes de vainqueur de `VainqueursCircuit` restent sur du blanc, parce qu'elles
@@ -465,6 +466,34 @@ hôtes, qui ont besoin du voile), et faire pointer `NATIONALITES` vers `lib/nati
 pour le dessin en gardant ses `couleurs` pour le calcul. Le chantier touche
 `VainqueursCircuit` et `DetailGp` : hors du périmètre de la `0.62.0`, qui ne devait
 toucher qu'un écran.
+
+### 3.8 quinquies `nationalites.js` et `pilotes.py` ne décrivent plus la même grille (`0.63.0`)
+
+Yuki Tsunoda a été ajouté à `lib/nationalites.js` — numéro 22, `JP`, Japon — parce qu'il
+figurait au **classement** d'un Grand Prix sans y porter de drapeau. Il n'est **pas** dans
+`backend/app/calcul/pilotes.py`, dont la grille tient les vingt-deux libellés relevés sur
+les vraies cotes Unibet du GP Pays-Bas 2026.
+
+Les deux tables sont documentées comme contreparties l'une de l'autre. **Elles divergent
+maintenant d'une ligne**, et l'écart est délibéré :
+
+- elles ne servent pas la même question — `nationalites.js` habille un classement déjà
+  publié, `pilotes.py` rapproche des libellés Unibet pour **calculer des points** ;
+- seule la seconde demande un déploiement Railway, et la `0.57.0` du backend n'y est
+  toujours pas déployée (§1.4).
+
+**Ce que l'écart coûte, précisément.** Si Tsunoda gagnait une course, le marché
+« nationalité du vainqueur » ne saurait pas le juger et laisserait les pronostics à `NULL`
+— donc **rattrapables par un rejeu**, jamais à `0` (règle 4.1). Ses libellés Unibet, eux,
+sont retrouvés par les cinq clés dérivées de `points._indexer_pilotes` : le défaut ne
+touche que la nationalité.
+
+**Ce qu'il faut faire, avec le prochain déploiement backend :** ajouter
+`Pilote(22, "Yuki", "Tsunoda", "TSU", "<écurie>", "JAP")` à `GRILLE` et
+`"JAP": ("Japonais", "Japonaise", "Japon")` à `NATIONALITES` — l'écurie est à relever sur
+`/drivers` d'OpenF1, elle n'est pas devinable ici. Le code CIO du Japon est `JPN` et non
+`JAP` : **à vérifier sur la source avant de l'écrire**, c'est exactement le genre de
+correspondance que §3.15 dit de ne pas deviner.
 
 ### 3.8 ter Deux rangées horizontales calent leur première carte hors de l'alignement
 
@@ -572,7 +601,8 @@ plein soleil autant qu'un rapport de contraste.
 ### 3.15 Aucun libellé de nationalité n'a été vu en vrai — quinze pays écrits à l'aveugle
 
 `NATIONALITES` accepte le peuple et le pays (« Néerlandais », « Pays-Bas ») parce que **rien
-ne dit lequel des deux Unibet écrit**. Les quinze entrées couvrent la grille 2026 ; aucune
+ne dit lequel des deux Unibet écrit**. Les quinze entrées couvrent la grille de
+`pilotes.py` — **le Japon n'en fait pas partie**, voir §3.8 quinquies ; aucune
 n'a été confrontée à un vrai marché. Une issue inconnue est journalisée en toutes lettres et
 laisse `NULL` — **c'est cette ligne qu'il faut chercher** après le premier vrai marché de
 nationalité, comme pour « écart du gagnant ».
@@ -658,6 +688,30 @@ C'est un argument de plus pour regarder : un défaut de perception se verrait de
 suite, à un centimètre d'écart.
 
 ---
+
+### 4.8 Deux propriétaires pour la mise en forme d'un pronostic (`0.63.0`)
+
+`decrirePronostics` (`lib/pronostics.js`) et `public.pronostics_du_joueur` (migration
+`20260813205200`) rendent **les mêmes huit champs**, pour **le même écran**, à deux sections
+d'écart : la première quand les résultats d'un Grand Prix sont ouverts depuis le calendrier,
+la seconde quand ils le sont depuis un championnat. C'est un écart au principe « une source
+unique par question », signalé au moment de l'écrire et documenté des deux côtés.
+
+**Ce n'était pas le choix de conception, c'était le choix de calendrier.** L'option propre
+— faire servir `pronostics_du_joueur(auth.uid(), gp)` par
+`GET /grands-prix/{id}/resultats` quand aucun `championnat_id` n'est fourni — garde un seul
+propriétaire et ne demande aucune recopie. Elle a été écartée parce qu'elle déplace le
+correctif sur Railway, où la `0.57.0` du backend n'est toujours pas déployée : la section
+serait restée exactement aussi vide qu'avant.
+
+**Le symptôme d'une divergence serait discret** : un même pronostic affichant deux
+potentiels — ou deux libellés de marché — selon la porte par laquelle on est entré. Le seul
+champ qui prête déjà à confusion est `points`, la cote de la **première** issue seulement,
+podium compris : les deux côtés le rendent ainsi, et le jour où la somme des deux cotes est
+retenue, elle se décide **en SQL** et se recopie ici.
+
+**À résorber au prochain déploiement backend**, en même temps que §3.8 quinquies : les deux
+dettes de cette version se ferment par le même geste.
 
 ## 5. Opportunités d'animation
 

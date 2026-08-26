@@ -30,7 +30,13 @@ base).
 
 **Une seule exception, et elle porte un autre nom.** `points_fia` sur l'écran de
 résultats (25, 18, 15…) est le championnat du monde, pas des points de pronostic. Il
-s'écrit « 25 pts FIA » et **jamais** via `formaterPoints`.
+s'écrit « 25 pts » et **jamais** via `formaterPoints`.
+
+> **Le mot « FIA » l'accompagnait jusqu'à la `0.63.0`, et c'est lui qui portait la
+> distinction à l'écran.** Il est parti sur demande ; ne reste que le contexte, et
+> l'interdiction de passer ce nombre par `formaterPoints` devient la seule moitié de la
+> règle qui tienne encore. La section qui l'affiche ne montre aucun point de l'application,
+> mais les deux unités cohabitent bien sur le même écran — écart signalé au CLAUDE.md.
 
 ## 2. Structure d'un pronostic
 

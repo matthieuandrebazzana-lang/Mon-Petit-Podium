@@ -196,13 +196,112 @@ Après chaque tâche terminée, mettre à jour **le document `docs/` concerné**
 
 ## 8. État d'avancement
 
-**Version `0.62.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
+**Version `0.63.0`.** Les seize maquettes sont codées, la barre de navigation est en place,
 les onze étapes de développement sont livrées. **Le backend reste à `0.57.0`** — la
-`0.62.0` ne touche que le frontend, et la route des résultats servait déjà tout ce que
-l'écran refondu affiche. **La `0.57.0` du backend reste à déployer sur Railway**, sans quoi
-le scraper réécrira l'heure que la migration 20 vient de corriger.
+`0.63.0` ne touche que le frontend. **La `0.57.0` du backend reste à déployer sur Railway**,
+sans quoi le scraper réécrira l'heure que la migration 20 vient de corriger.
 
-### Un écran de résultats qui répond aux deux questions dans l'ordre où on se les pose
+### Un pronostic n'appartient pas à un championnat, et l'écran le croyait
+
+« Mes résultats » affichait « ouvre ce Grand Prix depuis un championnat » dès qu'on arrivait
+par le calendrier — c'est-à-dire par **le chemin le plus court** vers un Grand Prix couru, la
+carte elle-même. Le message était exact et sans remède : `GET /grands-prix/{id}/resultats` ne
+sert **aucun** pronostic sans `championnat_id`, et pour une bonne raison — les pronostics
+d'un membre ne sortent qu'aux membres de ses championnats.
+
+**Mais la table `pronostics` porte `(profil_id, gp_id)` et rien d'autre.** Le joueur en a un
+seul jeu par Grand Prix, partagé par tous ses championnats ; le championnat ne décide que de
+*qui d'autre* a le droit de le voir. **Pour se le montrer à soi-même, il n'a jamais eu son
+mot à dire.** Sans championnat, les pronostics sont donc lus **directement sous RLS** — le
+second chemin de données appliqué au cas que sa politique décrit le mieux : « un joueur qui
+n'appartient encore à aucun championnat doit pouvoir relire ses propres pronostics », écrit
+noir sur blanc dans la migration de l'étape 5.
+
+**`mes_pronostics` et `membres` sont exclusifs**, et c'est le point à ne pas défaire : avec
+un championnat, la route sert déjà le jeu de l'appelant. Aller le relire serait une requête
+pour une donnée en main, et surtout **une seconde valeur pour la même question**, que deux
+caches pourraient faire diverger sur le même écran.
+
+**La ligne fabriquée hors championnat passe par le MÊME `classerLesMembres`** que les autres
+— total, jugés, réussis, « a joué ». Deux calculs écrits séparément auraient fini par
+annoncer deux totaux pour le même joueur sur le même Grand Prix. **Le rang, lui, ne suit
+pas** : il n'a de sens qu'entre membres, et la pastille disparaît plutôt que d'annoncer un
+« 1er » qu'on serait seul à disputer.
+
+> **Écart signalé (§6) : il y a maintenant DEUX propriétaires de cette mise en forme.**
+> `decrirePronostics` rend exactement les huit champs de `public.pronostics_du_joueur`, et
+> l'option propre était de faire servir la fonction SQL par la route sans `championnat_id`.
+> Elle a été écartée pour une raison de **calendrier, pas de conception** : le correctif
+> serait parti sur Railway, où la `0.57.0` n'est toujours pas déployée, et la section serait
+> restée aussi vide qu'avant. Le prix est écrit à côté des deux fonctions et dans
+> `roadmap.md` §4.8 — **toute retouche de l'une se relit sur l'autre**, à commencer par
+> `points`, qui reste la cote de la *première* issue seulement, podium compris.
+
+### Le mot « FIA » est parti, et c'est l'autre moitié de la règle qui tient maintenant
+
+« 25 points FIA » s'écrit « 25 pts ». `points_fia` reste le seul nombre de l'application qui
+ne soit pas des points au sens de la règle 3.1 — ce sont ceux du championnat du monde — et
+c'est **le mot « FIA » qui portait la distinction à l'écran**. Il n'y a plus que le contexte.
+
+> **Écart signalé (§6) : le repli est réel et il est accepté.** La section « Résultats du
+> GP » n'affiche aucun point de l'application — ni pastille de pari, ni total — donc rien
+> n'y prête à confusion ; mais les deux unités cohabitent bien sur le même écran, à deux
+> sections d'écart. Ce qui **ne** bouge pas, en revanche, c'est l'interdiction de passer ce
+> nombre par `formaterPoints` : cette fonction est le seul habilleur des points de l'app, et
+> lui confier celui-ci le ferait entrer dans le vocabulaire des pronostics.
+
+**Le pluriel est désormais porté par la valeur.** La dixième place rapporte **un** point, et
+« 1 pts FIA » se lisait sur chaque Grand Prix depuis la `0.62.0`. Mesuré contre la feuille
+compilée : la pastille passe de 72 à **50,3 px**, et la colonne du nom gagne ces 21,7 px —
+138,7 px au lieu de 117 à 320 px.
+
+### Le seizième drapeau, et le premier dont l'emblème n'est pas une bande
+
+Yuki Tsunoda ressortait **sans drapeau** au classement. `lib/nationalites.js` ne portait que
+les vingt-deux libellés relevés sur les vraies cotes Unibet du GP Pays-Bas 2026, et il n'y
+était pas — mais il figure au **classement** servi par OpenF1, et c'est ce classement que la
+table habille. Il y entre sous le numéro 22, code `JP`.
+
+`country-flag-icons` fournit le dessin comme les quinze autres : **158 octets**, le deuxième
+plus petit de la planche après Monaco. Le contrôle du lot confirme **seize** composants pays,
+pas un de plus — les 249 autres restent éliminés à la compilation.
+
+**Le disque étiré est le rendu voulu, pas un défaut.** C'est le premier drapeau de la planche
+dont l'emblème est une **charge** et non une bande : `preserveAspectRatio="none"` l'étire en
+ellipse large sur une rangée de 5,2:1. `slice` en aurait fait une barre rouge centrale — le
+recadrage exact que la `0.62.0` a écarté pour l'Allemagne et l'Espagne. Regardé à l'image, à
+320 px, contre la feuille compilée.
+
+**Le lavis à 8 % n'a pas bougé, et c'est mesuré.** Le drapeau n'a que deux couleurs, et son
+`#D80027` compose `#FCEBEE` — plus clair que le `#EBEBEB` du noir allemand sur les trois
+encres à la fois. Le pire substrat reste le pire substrat.
+
+> **Écart signalé (§6) : `nationalites.js` et `pilotes.py` ne décrivent plus la même
+> grille.** Tsunoda est ici et pas là-bas. Les deux tables ne servent pas la même question —
+> l'une habille un classement déjà publié, l'autre rapproche des libellés Unibet pour
+> **calculer des points** — et seule la seconde demande un déploiement Railway que ce commit
+> ne porte pas. **Ce que l'écart coûte est borné et connu** : si Tsunoda gagnait, le marché
+> « nationalité du vainqueur » resterait `NULL`, donc rattrapable par un rejeu, jamais `0`.
+> Le geste à faire au prochain déploiement backend est écrit dans `roadmap.md` §3.8
+> quinquies — **y compris le piège** : le code CIO du Japon est à relever sur la source, pas
+> à deviner.
+
+### Le rendu contre la feuille compilée n'a rien trouvé, et c'est un résultat
+
+Dixième fois, et la première qui ne remonte aucun défaut. Les vrais composants ont été
+rendus sous la feuille compilée dans un navigateur, mesurés à 320, 375 et 430 px par le
+protocole DevTools — aucun débordement horizontal, aucun texte tronqué, aucun repli
+inattendu sur deux lignes — puis **regardés en image**.
+
+Les trois changements de géométrie allaient tous dans le sens du confort, et c'est ce que la
+mesure confirme plutôt qu'elle ne le découvre : la pastille de points **rétrécit**, la
+pastille de rang **disparaît** hors championnat (le bloc rouge garde ses 121,4 px de haut et
+son total passe à gauche), et les quatre messages d'absence partagent désormais une seule
+composition au lieu d'être écrits chacun de leur côté. La rangée de classement reste à
+**343 × 65,5 px** à 375 px — le 5,2:1 sur lequel repose tout l'arbitrage de
+`preserveAspectRatio`.
+
+### `0.62.0` — un écran de résultats qui répond aux deux questions dans l'ordre où on se les pose
 
 L'écran des résultats d'un Grand Prix ouvrait sur le podium de la course et enterrait les
 pronostics du joueur dans un accordéon, sous le classement des membres. Il ouvre maintenant
@@ -741,7 +840,8 @@ une chronologie de déploiement — serait resté entier. Quatrième fois qu'une
 n'était pas la vraie, après le numéro sous `rotate(180)`, le tout-ou-rien du podium et le
 `gap_to_leader` jamais lu.
 
-*La version `0.59.0` avait ouvert l'écran de détail d'un Grand Prix. La `0.58.0` avait posé
+*La version `0.62.0` avait refondu l'écran de résultats en trois sections et fait entrer les
+drapeaux de nationalité. La `0.59.0` avait ouvert l'écran de détail d'un Grand Prix. La `0.58.0` avait posé
 les onze Grands Prix restants en base. La `0.57.0` avait
 retiré la règle du dimanche soir et donné deux échéances au décompte. La `0.56.0` avait fait
 juger « Autres » contre ses issues sœurs. La `0.55.0` avait
@@ -773,7 +873,12 @@ les plus urgents :
    avant ou après les quatre autres, **mais la 19 avant la 20, toujours**. Jouer la 19
    seule fait afficher des qualifications à 17h00 pour un GP d'Italie qui les court à 16h00.
    **Déployer la `0.57.0` du backend avec elles** : sans ce déploiement, le scraper
-   réécrira `date_course − 22h` par-dessus la correction au premier passage.
+   réécrira `date_course − 22h` par-dessus la correction au premier passage. **Deux dettes
+   de la `0.63.0` se ferment par ce même déploiement**, et par lui seul : ajouter Tsunoda à
+   `calcul/pilotes.py` pour que sa nationalité redevienne jugeable (`roadmap.md` §3.8
+   quinquies), et faire servir `pronostics_du_joueur` par la route des résultats sans
+   `championnat_id`, ce qui rendra son propriétaire unique à la mise en forme d'un
+   pronostic (`roadmap.md` §4.8).
 3. **Adopter chaque ligne manuelle avant son week-end**, une fois les 19 et 20 jouées :
    `select public.adopter_grand_prix('manuel-italie-2026', '<id Unibet réel>');`, le vendredi
    ou le samedi matin. **Sans ce geste, le scraper insère une seconde ligne pour la même
@@ -793,4 +898,6 @@ les plus urgents :
    l'animation d'entrée ; **le sélecteur de vingt-quatre Grands Prix** ; **la photo de
    15px dans le cockpit** ; et, depuis la `0.62.0`, **le lavis de drapeau à 8 %** — même
    jugement de plein soleil que l'opacité `0,4` — sur un écran qui dessine désormais
-   **vingt-deux voitures d'écurie** en une seule liste.
+   **vingt-deux voitures d'écurie** en une seule liste. **Le drapeau japonais de la
+   `0.63.0` s'y regarde en premier** : son disque étiré en ellipse est la seule forme de
+   la planche qui ne soit pas une bande, et à 8 % il ne reste qu'un lavis rosé.

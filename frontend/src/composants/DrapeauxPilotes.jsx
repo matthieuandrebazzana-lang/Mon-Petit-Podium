@@ -8,6 +8,7 @@ import FI from "country-flag-icons/react/3x2/FI";
 import FR from "country-flag-icons/react/3x2/FR";
 import GB from "country-flag-icons/react/3x2/GB";
 import IT from "country-flag-icons/react/3x2/IT";
+import JP from "country-flag-icons/react/3x2/JP";
 import MC from "country-flag-icons/react/3x2/MC";
 import MX from "country-flag-icons/react/3x2/MX";
 import NL from "country-flag-icons/react/3x2/NL";
@@ -15,7 +16,7 @@ import NZ from "country-flag-icons/react/3x2/NZ";
 import TH from "country-flag-icons/react/3x2/TH";
 
 /**
- * Les drapeaux de nationalité des pilotes — quinze pays, quinze SVG.
+ * Les drapeaux de nationalité des pilotes — seize pays, seize SVG.
  *
  * ## Pourquoi une bibliothèque, alors que le projet dessine ses drapeaux
  *
@@ -25,25 +26,26 @@ import TH from "country-flag-icons/react/3x2/TH";
  * Finlande sans fond en version `0.60.0` : une croix du Sud et une croix
  * nordique n'ont pas de description qu'un dégradé sache poser sans la trahir.
  *
- * La grille 2026 demande **quinze** pays, dont l'Australie, la
+ * La grille 2026 demande **seize** pays, dont l'Australie, la
  * Nouvelle-Zélande, le Brésil, le Mexique, le Canada, la Thaïlande et
  * l'Argentine — sept drapeaux qu'aucune borne de dégradé ne sait dire. La
  * règle n'est donc pas contournée ici, elle est **tenue** : plutôt que
- * d'approximer sept drapeaux, on prend quinze dessins exacts.
+ * d'approximer sept drapeaux, on prend seize dessins exacts.
  *
  * ## Ce que la bibliothèque coûte, et pourquoi c'est celle-ci
  *
  * `country-flag-icons` expose **un module par pays** en ESM pur, annoté
- * `#__PURE__` et déclaré `sideEffects: false` : les quinze imports nommés
- * ci-dessus sont les seuls drapeaux qui entrent dans le lot, les 250 autres
- * sont éliminés à la compilation. Les quinze fichiers 3×2 pèsent **7 Ko en
- * tout**, de 151 octets (Monaco) à 1,4 Ko (Australie).
+ * `#__PURE__` et déclaré `sideEffects: false` : les seize imports nommés
+ * ci-dessus sont les seuls drapeaux qui entrent dans le lot, les 249 autres
+ * sont éliminés à la compilation. Les seize fichiers 3×2 pèsent **7,0 Ko en
+ * tout**, de 151 octets (Monaco) à 1,4 Ko (Australie) ; le Japon en ajoute
+ * **158**, le deuxième plus petit de la planche — un aplat blanc et un disque.
  *
  * > **Écart signalé (CLAUDE.md §6).** La demande nommait `react-world-flags`
  * > « de préférence ». Il ne convient pas, pour deux raisons mesurées et non
  * > supposées : son `dist` est un lot **UMD de 3,6 Mo** qui embarque les 250
  * > drapeaux en data-URI, sans découpage possible — soit vingt fois le poids
- * > actuel de l'application pour quinze pays ; et son code source résout les
+ * > actuel de l'application pour seize pays ; et son code source résout les
  * > drapeaux par `require.context`, une API **propre à webpack** que Vite
  * > n'implémente pas. `country-flag-icons` répond à la demande telle qu'elle
  * > est formulée — « import SVG par code ISO 3166-1 alpha-2 » — sans ces deux
@@ -86,11 +88,17 @@ import TH from "country-flag-icons/react/3x2/TH";
  * drapeau à pleine intensité, et c'est ici l'opacité elle-même qui garantit le
  * contraste, en amont.
  *
- * **Mesuré sur les quinze drapeaux, couleur par couleur, à 8 % sur blanc.** Le
+ * **Mesuré sur les seize drapeaux, couleur par couleur, à 8 % sur blanc.** Le
  * pire substrat est le noir — la bande allemande, le champ de l'Union Jack —
  * qui compose `#EBEBEB` ; l'encre `texte` y vaut **14,60:1**, l'encre
  * `secondaire` **8,86:1** et le bordeaux `primaire` **9,13:1**. Le bleu marine
  * australien, deuxième pire, ne descend pas plus bas.
+ *
+ * > **Le Japon n'a pas déplacé ce plancher, et c'est mesuré, pas supposé.** Le
+ * > drapeau n'a que deux couleurs — le blanc, et le `#D80027` du disque, qui
+ * > compose `#FCEBEE` à 8 %. C'est **plus clair** que le `#EBEBEB` du noir
+ * > allemand sur les trois encres à la fois, donc le pire substrat reste le
+ * > pire substrat et aucune valeur ci-dessus ne bouge.
  *
  * > **`texte-doux` n'y tient PAS : 2,39:1.** C'est le défaut que le design
  * > system signale déjà deux fois (bandeau de saison, libellé des favoris), et
@@ -98,7 +106,7 @@ import TH from "country-flag-icons/react/3x2/TH";
  * > Aucun texte de ces lignes ne prend donc le gris — l'écurie et le prénom
  * > passent au marron `secondaire`.
  */
-const DRAPEAUX = { AR, AU, BR, CA, DE, ES, FI, FR, GB, IT, MC, MX, NL, NZ, TH };
+const DRAPEAUX = { AR, AU, BR, CA, DE, ES, FI, FR, GB, IT, JP, MC, MX, NL, NZ, TH };
 
 /** Ce code ISO a-t-il un dessin ? `Object.hasOwn` et non `in` : `"toString" in
  *  DRAPEAUX` vaut vrai, et une clé héritée d'`Object` rendrait un drapeau

@@ -92,10 +92,10 @@ par empreinte de l'identifiant d'un membre. Elle porte **les deux formes** de ch
 en SVG, où un `fill` n'accepte pas `bg-primaire`. Une seule question, un seul propriétaire.
 
 > **`DrapeauxPilotes` est le seul de ces modules dont les couleurs ne sont pas écrites
-> dans le dépôt** : ce sont les quinze SVG de `country-flag-icons`. Le périmètre est le
+> dans le dépôt** : ce sont les seize SVG de `country-flag-icons`. Le périmètre est le
 > même que les autres — il ne peint qu'un lavis à 8 % en fond d'une ligne de classement —
 > mais le **calcul de contraste ne pouvait pas être dérivé** comme celui de
-> `voileNecessaire` : un SVG importé n'expose pas ses bandes. Les quinze drapeaux ont donc
+> `voileNecessaire` : un SVG importé n'expose pas ses bandes. Les seize drapeaux ont donc
 > été mesurés **couleur par couleur, par script**, et c'est le noir qui décide (`#EBEBEB`
 > composé) : `texte` 14,60:1, `secondaire` 8,86:1, `primaire` 9,13:1, **`texte-doux`
 > 2,39:1 — hors de question**. Voir `composants.md` §4.

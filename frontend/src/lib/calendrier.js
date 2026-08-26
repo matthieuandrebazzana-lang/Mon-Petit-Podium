@@ -1,13 +1,14 @@
 import { appelApi } from "./api.js";
 import { etatFermeture, etatOuverture } from "./format.js";
+import { chargerMesPronosticsDuGp } from "./pronostics.js";
 
 /**
  * Calendrier d'un championnat et résultats d'un Grand Prix — étape 9.
  *
  * Les **deux chemins de données** des étapes 3, 5 et 8 restent en vigueur, et le
  * partage se fait ici encore selon la politique RLS de la donnée servie. Les
- * deux lectures de ce module passent **par l'API**, et pour la même raison
- * qu'au classement de l'étape 7 :
+ * deux lectures principales de ce module passent **par l'API**, et pour la même
+ * raison qu'au classement de l'étape 7 :
  *
  * - le calendrier agrège les `points_gagnes` de tous les membres, Grand Prix par
  *   Grand Prix. Lu depuis le client, la politique de l'étape 5 filtrerait les
@@ -16,6 +17,13 @@ import { etatFermeture, etatOuverture } from "./format.js";
  * - les résultats d'un Grand Prix mélangent du public (le classement de la
  *   course) et du protégé (les pronostics des membres). La route sait faire les
  *   deux ; la RLS seule ne saurait pas servir le premier sans session.
+ *
+ * **Une troisième lecture s'y ajoute, et elle prend l'autre chemin** : les
+ * pronostics du joueur lui-même, quand l'écran de résultats est ouvert hors
+ * championnat. Elle va directement à Supabase parce que la politique de
+ * l'étape 5 décrit exactement ce cas — un joueur relit toujours ses propres
+ * pronostics, championnat ou pas — et parce que la route, elle, ne les sert
+ * qu'avec un championnat. Voir `chargerResultatsGp`.
  *
  * Le cache *stale-while-revalidate* de `useDonnees` absorbe le réveil de
  * Railway : le calendrier précédent s'affiche pendant que le nouveau arrive.
@@ -251,21 +259,79 @@ export function etatPronostics(gp, maintenant = Date.now()) {
  * `championnatId` est facultatif, et c'est la route qui porte la distinction
  * (étape 6) : sans lui, le classement de la course seul, publiquement ; avec
  * lui, les pronostics de tous les membres, jeton exigé et appartenance
- * vérifiée. L'écran appelle toujours avec, puisqu'on y arrive depuis un
- * championnat — mais la forme sans reste possible sans changer une ligne.
+ * vérifiée.
+ *
+ * ## `mes_pronostics`, et pourquoi il ne double jamais `membres`
+ *
+ * On arrive maintenant sur cet écran par **deux portes** : depuis un
+ * championnat, et depuis la carte d'un Grand Prix couru du calendrier. La
+ * seconde n'a aucun championnat à donner, et la section « Mes résultats » y
+ * restait donc vide — elle ne pouvait qu'inviter à repasser par la première.
+ *
+ * Les pronostics du joueur sont alors lus **directement sous RLS**
+ * (`chargerMesPronosticsDuGp`), et servis à côté de la réponse de la route sous
+ * la clé `mes_pronostics`. Les deux appels partent **ensemble** : la lecture
+ * Supabase n'attend pas le réveil de Railway.
+ *
+ * > **Cette clé et `membres` sont exclusives, et c'est délibéré.** Avec un
+ * > championnat, la route sert déjà les pronostics de tout le monde, celui de
+ * > l'appelant compris : aller les relire serait une requête pour une donnée
+ * > qu'on a en main, et surtout **une seconde valeur pour la même question** —
+ * > les deux pourraient se contredire le temps d'un cache. `mes_pronostics`
+ * > vaut donc `null` dès que `championnatId` est fourni, exactement comme
+ * > `membres` vaut `null` quand il ne l'est pas.
+ *
+ * > **L'échec de la lecture Supabase n'emporte pas l'écran.** Le classement de
+ * > la course est public et reste la raison principale d'ouvrir cette page ; il
+ * > s'affiche, et seule la section « Mes résultats » dit qu'elle n'a pas pu
+ * > charger. C'est la règle déjà appliquée au bouton de l'accueil.
+ *
+ * `profilId` absent — un visiteur sans compte — ne déclenche aucune lecture :
+ * il n'y a personne dont montrer les pronostics, et la section le dit.
  */
-export function chargerResultatsGp(gpId, championnatId, signal) {
+export async function chargerResultatsGp(gpId, championnatId, profilId, signal) {
   const requete = championnatId
     ? `/grands-prix/${gpId}/resultats?championnat_id=${championnatId}`
     : `/grands-prix/${gpId}/resultats`;
-  return appelApi(requete, { signal });
+
+  const solo = !championnatId && Boolean(profilId);
+
+  const [servis, miens] = await Promise.all([
+    appelApi(requete, { signal }),
+    solo ? chargerMesPronosticsDuGp(gpId, profilId, signal) : null,
+  ]);
+
+  if (!servis.ok) return servis;
+
+  return {
+    ok: true,
+    message: null,
+    donnees: {
+      ...servis.donnees,
+      // `null` = pas demandé (un championnat le sert déjà, ou personne n'est
+      // connecté). Un tableau = ce que le joueur a validé, vide compris.
+      mes_pronostics: solo && miens.ok ? miens.donnees : null,
+      // Demandé mais raté : la section le dit au lieu d'annoncer « aucun
+      // pronostic », qui serait une affirmation qu'on n'a pas vérifiée.
+      mes_pronostics_echec: solo && !miens.ok,
+    },
+  };
 }
 
 /** Clés de cache — elles portent toujours l'identifiant du compte connecté. */
 export const cleCalendrier = (profilId, championnatId) =>
   `calendrier:${profilId}:${championnatId}`;
+/**
+ * **Le marqueur de version n'est pas décoratif**, et c'est la même leçon que
+ * `cleSaison` : depuis la version `0.63.0` cette entrée porte `mes_pronostics`
+ * en plus de ce que sert la route. Un cache d'avant ne l'a pas, et servi tel
+ * quel il aurait fait afficher « Aucun pronostic sur ce Grand Prix » — une
+ * affirmation fausse — le temps d'un aller-retour. Il est placé APRÈS
+ * l'identifiant du compte pour qu'un balayage par préfixe continue de tout
+ * emporter.
+ */
 export const cleResultats = (profilId, gpId, championnatId) =>
-  `resultats:${profilId}:${gpId}:${championnatId ?? "public"}`;
+  `resultats:${profilId}:v2:${gpId}:${championnatId ?? "public"}`;
 
 /**
  * Le classement des membres sur ce Grand Prix, tiré de leurs pronostics.

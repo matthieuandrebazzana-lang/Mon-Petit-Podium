@@ -115,8 +115,9 @@ stocke une cote.**
 Des tests vérifient qu'aucun « ×N » ne sort des écrans.
 
 **Une exception, et elle porte un autre nom** : `points_fia` (25, 18, 15…) s'écrit
-« 25 pts FIA » et **jamais** via `formaterPoints` — les confondre ferait lire le classement
-F1 comme un classement de pronostics.
+« 25 pts » et **jamais** via `formaterPoints` — les confondre ferait lire le classement
+F1 comme un classement de pronostics. Le mot « FIA » l'accompagnait jusqu'à la `0.63.0` ;
+son retrait laisse `formaterPoints` seul garant de la distinction (`metier.md` §1).
 
 *Cross-contrôle rassurant* : Unibet expose un champ `sort` valant exactement
 `round(price × 100)` — zéro écart sur 44 cotes. Il confirme l'arrondi, **pas l'échelle** :

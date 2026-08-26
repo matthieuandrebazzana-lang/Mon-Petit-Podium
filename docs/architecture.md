@@ -59,6 +59,16 @@ est portée par la route, qui vérifie l'appartenance **avant** l'appel.
 **(B) En direct à Supabase** — les lectures qu'une politique RLS décrit déjà exactement :
 prochain GP, pronostics du joueur, pseudo, drapeau `is_admin`, numéros déjà pris.
 
+> **Un même écran peut prendre les deux chemins pour la même donnée, selon qui la
+> demande** — c'est le cas de l'écran de résultats depuis la `0.63.0`, et il illustre le
+> critère mieux que n'importe quel exemple. Les pronostics **des membres d'un championnat**
+> passent par (A) : la RLS les filtrerait silencieusement pour un appelant qui ne partage
+> pas tous ses championnats avec eux. Les pronostics **de l'appelant lui-même**, quand il
+> n'y a aucun championnat dans l'URL, passent par (B) : la politique « Pronostics visibles
+> entre membres » ouvre son premier terme sur `profil_id = auth.uid()`, précisément pour
+> qu'un joueur sans championnat puisse relire ce qu'il a joué. **Ce n'est pas la donnée qui
+> décide du chemin, c'est la politique.**
+
 **Le dépôt d'une photo emprunte les DEUX chemins, et c'est le critère appliqué tel quel.**
 Le **fichier** — recadré, réduit et réencodé dans le navigateur depuis la version `0.51.0`
 (`lib/image.js`) — va directement à Supabase Storage : les politiques de `storage.objects`
