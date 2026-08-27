@@ -1061,3 +1061,72 @@ Les deux seuls appelants du frontend déposent déjà sous `dossier = profilId` 
   (`api/deps.py`).
 - **Chercher le défaut là où la donnée est écrite, pas là où elle s'affiche.** Le symptôme
   serait apparu au classement, dans un composant qui n'a jamais eu tort.
+
+---
+
+## 29. Toute la population de l'app était lisible par n'importe quel inscrit
+
+**Symptôme.** Aucun, comme au §28 : un défaut d'autorisation ne se voit qu'au moment où
+quelqu'un s'en sert, et celui-ci ne laisse pas plus de trace qu'une lecture ordinaire.
+
+Trouvé par un **audit des politiques RLS** des sept tables les plus sensibles, dans la
+foulée de l'audit IDOR du §28. Cinq défauts en sont sortis, tous de la même famille : une
+politique qui vérifie **qu'on est connecté** là où il fallait vérifier **qui on est**.
+
+### Les cinq défauts
+
+| Table | Ce que la politique disait | Ce qu'elle laissait faire |
+|---|---|---|
+| `profils` | `for select using (true)` | lire pseudo, couleurs, numéro, livrée, `avatar_url` et `is_admin` de **tous les inscrits** |
+| `profils` | `for update` sur la LIGNE | écrire son propre `is_admin` depuis un client Supabase |
+| `pronostics` | co-membre, sans condition de temps | lire les pronostics d'un co-membre **avant** la fermeture, et jouer dessus |
+| `membres_championnat` | `with check (auth.uid() is not null)` | s'ajouter à un championnat **sans son code**, ou y ajouter quelqu'un d'autre |
+| `championnats` | `with check (auth.uid() is not null)` | poser des lignes au `cree_par` d'autrui et **squatter des `code_invitation`** |
+
+### Cause réelle
+
+**`auth.uid() is not null` n'est pas une autorisation, c'est une authentification.** Les
+deux clauses `insert` fautives disent « être connecté » ; il n'y a pas de troisième
+lecture possible de ce texte. Elles ont été écrites à un moment où l'adhésion et la
+création passaient encore par le client, avant que `creer_championnat` et
+`POST /championnats/rejoindre` ne prennent le relais avec la clé de service. **Le chemin a
+changé, la politique est restée.**
+
+Pour `profils`, la cause est différente et plus instructive : le commentaire de la
+migration 1 énonce le besoin réel — « les classements et les listes de membres d'un
+championnat ont besoin des pseudos des **autres** ». Des autres **membres**. `using (true)`
+répond à la question « qui a besoin de lire ? » par « tout le monde », alors que les quatre
+lectures directes qui existent dans le frontend ne demandent, toutes les quatre, que
+soi-même ou ses co-membres. **La politique était plus large que son unique appelant.**
+
+### Correctif
+
+Migration 21, `20260827_audit_rls.sql`. Six correctifs, aucune fonction touchée :
+
+- lecture de `profils` bornée à **soi-même ou un membre d'un championnat partagé**, par la
+  forme déjà employée pour les pronostics (`est_membre`, qui casse la récursion) ;
+- `revoke update` sur la table `profils`, puis `grant update` sur les **huit colonnes**
+  que `PATCH /profils/moi` accepte — la RLS ne sait pas filtrer par colonne, le droit si ;
+- `public.pronostics_fermes(gp_id)` ajouté à la branche « co-membre » de la politique de
+  lecture des pronostics ;
+- les deux politiques `insert` retirées, et le droit de table avec elles ;
+- lecture des `cotes` réservée aux comptes connectés.
+
+### Ce qu'il ne faut pas refaire
+
+**Ne pas croire qu'un audit RLS mesure ce que l'app montre.** Il ne mesure que ce qu'un
+porteur de la clé publique peut faire **en dehors** d'elle. Toutes les écritures et la
+plupart des lectures agrégées passent par FastAPI avec la clé de service, qui contourne la
+RLS : la fenêtre de fermeture posée sur `pronostics` **ne rend pas les pronostics privés à
+l'écran**, `pronostics_du_championnat` restant `security definer`. C'est un écart signalé,
+pas un correctif à moitié.
+
+**Ne pas recréer une politique permissive à côté d'une politique resserrée.** Deux
+politiques `select` se combinent par **OU** : la seconde ne remplace pas la première, elle
+la désarme, sans erreur ni ligne manquante. C'est le conflit d'ordre du §6 de
+`database.md`, et le bloc de contrôle de la 21 existe pour le rendre bruyant.
+
+**Ne pas oublier le `grant update (…)` en ajoutant une colonne à `profils`.** Depuis la 21,
+une colonne neuve naît non-modifiable depuis un client. Sans effet sur l'app, qui écrit
+avec la clé de service — mais le jour où un écran écrira en direct, le symptôme sera un
+`42501` sur une colonne qu'on croira bien déclarée.

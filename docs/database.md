@@ -285,20 +285,58 @@ Objet `{ session, session_result, drivers, race_control, laps, starting_grid, pi
 
 | Table | Lecture | Écriture |
 |---|---|---|
-| `profils` | tout membre **connecté** | son propre profil |
-| `championnats` | ses membres (`est_membre`) | créateur seul modifie/supprime |
-| `membres_championnat` | entre membres | adhésion et départ pour soi-même |
-| `grands_prix`, `cotes`, `resultats_gp` | **tous, `anon` compris** | **aucune politique** |
+| `profils` | soi-même **ou** un membre d'un championnat partagé | son propre profil, **huit colonnes nommées** |
+| `championnats` | ses membres (`est_membre`) | créateur seul modifie/supprime, **création hors RLS** |
+| `membres_championnat` | entre membres | départ pour soi-même, **adhésion hors RLS** |
+| `grands_prix`, `resultats_gp` | **tous, `anon` compris** | **aucune politique** |
+| `cotes` | tout compte **connecté** | **aucune politique** |
 | `favoris` | **strictement privés** | soi-même |
-| `pronostics` | les siens, **ou** ceux d'un membre d'un championnat partagé | soi-même |
+| `pronostics` | les siens, **ou** ceux d'un membre d'un championnat partagé **une fois la saisie fermée** | soi-même |
 | `pronostic_podium` | via l'existence du pronostic parent | son auteur |
 | `storage.objects` (2 compartiments) | **tous, `anon` compris** | le propriétaire du dossier (§9) |
 
-> **Lecture publique des GP, cotes et résultats** : ils sont affichés tels quels chez le
-> bookmaker, et la landing doit pouvoir annoncer le prochain GP sans session.
-> **Aucune politique d'écriture n'est créée** — sous RLS, ce qu'aucune politique
-> n'autorise est refusé. Aucun droit d'écriture n'est accordé à `anon` ni
-> `authenticated` non plus : double verrou.
+> **Lecture publique des GP et des résultats** : ils sont affichés tels quels chez le
+> bookmaker, et la landing doit pouvoir annoncer le prochain GP sans session — l'écran
+> public de résultats en dépend de même. **Les cotes en ont été retirées** par la
+> migration 21 : les trois écrans qui les lisent sont tous derrière `RouteProtegee`, et la
+> grille des points d'un Grand Prix est du contenu de jeu. **Aucune politique d'écriture
+> n'est créée** — sous RLS, ce qu'aucune politique n'autorise est refusé. Aucun droit
+> d'écriture n'est accordé à `anon` ni `authenticated` non plus : double verrou.
+
+> ### Ce que la RLS garde vraiment, et ce qu'elle ne garde pas
+>
+> **Toutes les écritures de l'application passent par FastAPI avec la clé de service**,
+> qui contourne la RLS (`CLAUDE.md` §3.4) : le frontend n'appelle ni `.insert()`, ni
+> `.update()`, ni `.upsert()`, ni `.delete()`. Les politiques d'écriture restantes sont
+> donc du **second verrou**, jamais un chemin emprunté — et les politiques de LECTURE, à
+> l'inverse, sont la seule chose qui sépare deux joueurs sur les quelques lectures que le
+> frontend fait en direct.
+>
+> **Conséquence à ne jamais perdre de vue** : un audit RLS mesure ce qu'un porteur de la
+> clé publique peut faire **en dehors** de l'app, avec un client Supabase à lui. Il ne
+> mesure pas ce que l'app montre — cela, ce sont les routes et les fonctions
+> `security definer` qui le décident.
+
+> ### Deux politiques `select` sur une même table se combinent par OU
+>
+> C'est la mécanique qui rend les conflits d'ordre de la 21 silencieux (§6). Une politique
+> permissive recréée **à côté** de la politique resserrée ne la remplace pas : elle la
+> désarme. D'où la forme de chaque étape de la 21 — `drop policy if exists` sur
+> **l'ancien nom** avant de créer le nouveau — et le bloc de contrôle final, qui lève si
+> une seconde politique de lecture subsiste sur `public.profils`.
+
+> ### La fenêtre de fermeture des pronostics vit dans la politique, pas dans l'app
+>
+> Depuis la migration 21, la politique de lecture de `public.pronostics` ajoute
+> `public.pronostics_fermes(gp_id)` à la branche « co-membre » : sous RLS, on ne lit le
+> pronostic d'un autre qu'**après** la fermeture de la saisie. `pronostic_podium` suit
+> seule, sa politique ne testant que l'existence du parent.
+>
+> **Cela ne rend PAS les pronostics privés dans l'app**, et c'est un écart signalé : le
+> tableau des résultats est servi par `pronostics_du_championnat`, `security definer`
+> réservée à `service_role`, dont l'autorisation est portée par la route. La règle métier
+> « visibles dès leur saisie » (`metier.md`, samedi soir → dimanche) reste donc en vigueur
+> côté écran. Refermer vraiment demanderait de toucher à cette fonction et à sa route.
 
 > **Les favoris sont privés parce que ce sont des brouillons.** Les laisser lire
 > reviendrait à annoncer ses pronostics avant de les avoir saisis.
@@ -418,8 +456,8 @@ Trois raisons le rendent **structurellement incapable** de garder quoi que ce so
 1. `POST /scraper/declencher` ne le connaît pas — elle est fermée par `X-Admin-Secret`.
 2. **Le secret voyage en clair dans le bundle** (`architecture.md` §5).
 3. **La politique « Chacun modifie son profil » porte sur la LIGNE, pas sur la colonne** :
-   un membre peut écrire son propre `is_admin` via un client Supabase. Sans conséquence —
-   il verrait deux boutons, et rien de plus, tant qu'il n'a pas le secret.
+   un membre pouvait écrire son propre `is_admin` via un client Supabase. Sans conséquence —
+   il aurait vu deux boutons, et rien de plus, tant qu'il n'a pas le secret.
 
 Le premier administrateur se désigne **à la main** — un `update` qui promouvrait
 « le plus ancien compte » se tromperait de personne après une restauration :
@@ -428,13 +466,45 @@ Le premier administrateur se désigne **à la main** — un `update` qui promouv
 update public.profils set is_admin = true where pseudo = '<ton pseudo>';
 ```
 
-Le jour où `is_admin` doit vraiment garder quelque chose : une politique `with check` par
-colonne, ou une route backend qui exige le **jeton** du membre — **pas un contrôle
-applicatif de plus**.
+> ### La troisième raison a été refermée par la migration 21 — par le DROIT, pas par la RLS
+>
+> La RLS de PostgreSQL ne sait pas filtrer par colonne. Le **droit de colonne**, lui, le
+> sait, et il est antérieur à toute politique. Un droit `update` de TABLE valant pour
+> toutes les colonnes — **y compris celles ajoutées ensuite** —, le resserrer demande de
+> le retirer puis de le redonner colonne par colonne :
+>
+> ```sql
+> revoke insert, update, delete on public.profils from anon, authenticated;
+> grant update (pseudo, couleur1, couleur2, numero,
+>               livree_mode, livree_ecurie, avatar_url, couleur_texte)
+>   on public.profils to authenticated;
+> ```
+>
+> Ce sont exactement les huit champs que `PATCH /profils/moi` accepte. `id`, `cree_le`,
+> `modifie_le` et `is_admin` en sont exclues. **`modifie_le` reste écrite par son
+> trigger** : un droit de colonne porte sur les colonnes NOMMÉES par l'ordre `update`,
+> jamais sur ce qu'un trigger pose dans `NEW`.
+>
+> **Piège à connaître : toute colonne ajoutée à `profils` après la 21 naîtra
+> non-modifiable depuis un client.** C'est sans effet sur l'app — elle écrit avec la clé
+> de service — mais une migration qui ajoute un champ de voiture devra penser à son
+> `grant update (…)`.
+
+> ### Ce que la 21 n'a PAS refermé : `is_admin` reste LISIBLE par les co-membres
+>
+> La lecture des profils est désormais bornée à soi-même et aux membres d'un championnat
+> partagé (§2), donc un inconnu ne voit plus rien. Mais un co-membre lit toujours la
+> colonne. La fermer demanderait `revoke select (is_admin)`, qui fermerait du même coup la
+> lecture de **sa propre** ligne — donc `lib/profils.js chargerEstAdmin`, donc la section
+> Administration. Le correctif complet est une ligne de SQL et une ligne de frontend :
+> exposer son propre drapeau par une fonction `security definer` sans paramètre.
+
+Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qui exige le
+**jeton** du membre — **pas un contrôle applicatif de plus**.
 
 ---
 
-## 6. Les vingt migrations
+## 6. Les vingt-et-une migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -458,6 +528,7 @@ applicatif de plus**.
 | 18 | `20260823120000_couleur_texte_voiture` | `couleur_texte` sur `profils`, servie au classement et aux pronostics | 1, 16 |
 | 19 | `20260826120000_calendrier_2026_grands_prix` | **insère les 11 GP restants de 2026**, `slug_gp`, `adopter_grand_prix` | 3, 11 |
 | 20 | `20260826180000_qualifications_horaires_2026` | **corrige les horaires de qualifications de la 19**, qui les dérivait de `date_course` | 3, 11, **19** |
+| 21 | `20260827_audit_rls` | **audit RLS** : lecture des profils bornée, `is_admin` non modifiable, fenêtre de fermeture sur les pronostics, deux politiques `insert` retirées, cotes réservées aux connectés | 1, 2, 3, 5, 8, 12, 14 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -476,13 +547,17 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **16** après **17** | l'enregistrement de toute photo, de nouveau refusé en `2201B` | rejouer 17 |
 | **2**, **8**, **10**, **12** ou **16** après **18** | la couleur de texte au classement et aux résultats | rejouer 18 |
 | **19** après **20** | les onze horaires de qualifications, redevenus `date_course − 22h` | rejouer 20 |
+| **1**, **8** ou **12** après **21** | la lecture des profils, de nouveau ouverte à toute l'application | rejouer 21 |
+| **5** après **21** | la fenêtre de fermeture sur la lecture des pronostics | rejouer 21 |
+| **2** après **21** | l'adhésion et la création de championnat, de nouveau libres | rejouer 21 |
+| **3** après **21** | les cotes, de nouveau lisibles sans session | rejouer 21 |
 
 **La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12
 et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre les écrans
 où *quelqu'un d'autre* voit la voiture. La perdre ne casse rien — le frontend retombe sur
 l'encre calculée — mais le réglage cesse d'être visible ailleurs que sur son propre profil.
 
-**Les migrations 11, 14, 15, 17, 19 et 20 ne remplacent aucune fonction** : elles ne
+**Les migrations 11, 14, 15, 17, 19, 20 et 21 ne remplacent aucune fonction** : elles ne
 peuvent pas entrer en conflit d'ordre sur une *fonction*. La 17 ne remplace que deux
 contraintes `check`, et il faut donc la rejouer si l'on rejoue la 16 — qui reposerait les
 contraintes fautives.
@@ -497,6 +572,21 @@ contraintes fautives.
 >
 > **La 19 n'a pas été réécrite pour autant**, et c'est la règle du §7 : les migrations sont
 > historiques. La correction vit dans la 20, qui la porte seule et le dit dans son en-tête.
+
+> ### La 21 en introduit un troisième genre : sur des POLITIQUES
+> Les huit premiers pièges portent sur une fonction remplacée, celui de la 20 sur une
+> valeur. Ceux de la 21 portent sur des **politiques RLS**, et ils sont d'une nature plus
+> traître : **deux politiques `select` permissives sur une même table se combinent par
+> OU**. Une politique permissive recréée par la 1, la 8, la 12, la 2, la 3 ou la 5 ne
+> remplace donc pas celle de la 21 — elle la **désarme**, en la laissant en place. Aucune
+> erreur, aucune ligne manquante, rien à voir dans les logs : la lecture redevient
+> simplement ouverte.
+>
+> D'où deux garde-fous dans la 21. Chaque étape commence par `drop policy if exists` sur
+> **l'ancien nom** avant de créer le nouveau, ce qui rend le rejeu de la 21 réparateur. Et
+> son bloc de contrôle final **lève** si une seconde politique de lecture subsiste sur
+> `public.profils` : c'est le seul moyen de découvrir l'état, une politique de trop ne se
+> signalant par rien d'autre.
 
 > ### La 17 répare un défaut que la 16 ne pouvait pas voir
 >
@@ -576,6 +666,25 @@ passage dans le SQL Editor.**
 >   retrouvée et corrigée, ce qui était l'objet du rapprochement par slug ;
 > - les onze instants finaux **concordent au caractère près** avec
 >   `GP_2026.seances.qualifications`, croisés par script et non relus à l'œil.
+
+> ### La 21 l'a été aussi, sur PostgreSQL 16
+> Contre un harnais réduit aux neuf tables, à `est_membre`, à `pronostics_fermes` et aux
+> politiques telles qu'elles étaient **avant** elle — pas le schéma complet, ce que ce
+> contrôle ne remplace donc pas. Trois utilisateurs : Alice et Bruno dans un championnat
+> commun, Chloé seule dans le sien. Onze épreuves de comportement, toutes passées :
+>
+> - Alice lit `profils` et voit **Alice et Bruno**, jamais Chloé ; Chloé ne voit qu'elle ;
+> - Alice écrivant son propre `is_admin` est refusée (`42501`), celui de Bruno aussi ;
+> - Alice écrivant sa `couleur1` passe — le `grant` par colonne n'a rien cassé ;
+> - des deux pronostics de Bruno, Alice ne voit que celui du **GP fermé** ;
+> - Bruno relit ses deux pronostics, GP ouvert compris ;
+> - `pronostic_podium` suit la même fenêtre **sans que sa politique soit touchée** ;
+> - Alice ne peut ni s'ajouter au championnat de Chloé, ni créer un championnat en direct ;
+> - `anon` est refusé sur `cotes` et servi sur `grands_prix` ;
+> - **rejouée, la 21 ne change plus rien** ;
+> - la 12 rejouée par-dessus fait bien réapparaître **deux** politiques de lecture — le
+>   piège du genre nouveau, reproduit — et **rejouer la 21 le répare** ;
+> - une politique parasite ajoutée à la main fait bien **lever** le bloc de contrôle.
 
 ---
 
