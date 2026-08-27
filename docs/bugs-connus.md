@@ -988,3 +988,76 @@ dans l'upsert — la valeur en base survit.
   (`database.md` §7). La 20 corrige derrière elle, et l'ordre 19 → 20 devient un piège
   d'ordre à part entière — le premier qui porte sur des **données** et non sur une fonction
   remplacée.
+
+---
+
+## 28. La photo d'un autre pouvait devenir la sienne — l'URL était vérifiée, pas le dossier
+
+**Symptôme.** Aucun. C'est un défaut d'autorisation, et il ne se voit qu'au moment où
+quelqu'un s'en sert : un joueur portant le visage d'un autre membre au classement, sur la
+piste et au résumé d'un Grand Prix, sans qu'aucune trace ne dise comment.
+
+Trouvé par un **audit IDOR** de l'ensemble des vingt-et-un endpoints FastAPI, pas par un
+rapport d'utilisateur.
+
+### Les deux endpoints concernés
+
+| Endpoint | Ce qu'il acceptait |
+|---|---|
+| `PATCH /profils/moi` | `avatar_url` désignant `avatars/{id de n'importe qui}/avatar.jpg` |
+| `PATCH /championnats/{id}` | `photo_url` désignant `championnats/{tout autre championnat}/photo.jpg` |
+
+### Cause réelle
+
+**`url_de_photo_valide` répondait à une question, et il y en avait deux.** Elle vérifiait
+que l'URL désigne bien **notre projet Supabase** et **le bon compartiment** — la protection
+du « pixel espion » de la migration 16, qui marchait exactement comme prévu. Mais elle ne
+regardait pas le **premier segment du chemin**, celui qui porte l'identifiant du
+propriétaire.
+
+Or c'est précisément sur ce segment que porte l'autorisation en base :
+`(storage.foldername(name))[1] = auth.uid()` pour un avatar, et une remontée à
+`championnats.cree_par` pour une photo de championnat (`database.md` §9).
+
+**La RLS Storage ne pouvait rien y faire, et c'est le point à retenir.** Elle garde le
+**dépôt du fichier** — chemin (B) de `architecture.md` §3, où le client parle à Supabase
+sous son propre jeton. L'**écriture de l'URL en base** est le chemin (A) : elle passe par
+FastAPI, qui écrit avec la clé de service, laquelle **contourne la RLS**. Personne ne
+pouvait déposer un fichier dans le dossier d'un autre ; tout le monde pouvait enregistrer
+comme sienne l'adresse d'un fichier déjà déposé par un autre.
+
+Les deux compartiments étant **publics** (§9), il n'y avait aucune fuite de donnée : la
+photo était déjà lisible de tous. Le défaut est une **usurpation d'apparence**, pas une
+divulgation.
+
+### Correctif — backend `0.58.0`
+
+`app/api/stockage.py` prend un quatrième argument **obligatoire**, `proprietaire`, et exige
+que le premier segment du chemin lui corresponde, à la casse près (un UUID y est
+insensible). Le chemin doit en outre porter un objet après le dossier — un dossier nu n'est
+pas une image.
+
+- `PATCH /profils/moi` passe **l'identifiant du jeton**, jamais une valeur reçue ;
+- `PATCH /championnats/{id}` passe **l'identifiant du chemin**, déjà filtré par le contrôle
+  de créateur qui le précède.
+
+Les deux seuls appelants du frontend déposent déjà sous `dossier = profilId` et
+`dossier = championnatId` (`lib/stockage.js`) : rien de légitime ne change de comportement.
+
+### Ce qu'il ne faut pas refaire
+
+- **Une vérification qui porte le bon nom n'est pas pour autant complète.** « L'URL de la
+  photo est-elle valide ? » a reçu une réponse juste et partielle pendant sept versions.
+  La question utile n'était pas « d'où vient cette image ? » mais « à qui est-elle ? » —
+  deux questions dans une même fonction, dont une seule était écrite.
+- **Ne jamais déduire d'une politique RLS que le backend est couvert.** La règle du dossier
+  existait en base, correcte, testée, et documentée. Elle protégeait **l'autre chemin**. Dès
+  qu'une écriture passe par la clé de service, la RLS n'est plus un filet — c'est la route
+  qui porte l'autorisation, et elle doit redire la règle en entier.
+- **Un argument d'autorisation ne prend pas de valeur par défaut.** `proprietaire` est
+  positionnel et obligatoire : un `None` par défaut aurait rendu le contrôle silencieusement
+  facultatif, et le premier appelant qui l'oublie aurait rouvert la porte sans que rien ne
+  le signale. C'est le même sens du doute que « secret non configuré ferme la route »
+  (`api/deps.py`).
+- **Chercher le défaut là où la donnée est écrite, pas là où elle s'affiche.** Le symptôme
+  serait apparu au classement, dans un composant qui n'a jamais eu tort.

@@ -21,6 +21,26 @@ autres membres**. C'est ce dernier point qui rend la vérification nécessaire.
 > (`supabase/migrations/20260821180000` §2). Le rattachement au projet se juge
 > donc ici, où `SUPABASE_URL` est connue.
 
+> ### Le PROJET ne suffit pas, il faut aussi le DOSSIER (audit IDOR, `0.58.0`)
+>
+> Jusqu'à cette version, la vérification s'arrêtait au projet et au
+> compartiment : n'importe quelle URL commençant par
+> `…/public/avatars/` était acceptée, **quel que soit le dossier**. Or le
+> premier segment du chemin *est* l'identifiant du propriétaire — c'est sur lui
+> que porte la politique `storage.objects` (`docs/database.md` §9). Il manquait
+> donc au backend la moitié de la règle que la base applique déjà à l'écriture
+> du fichier.
+>
+> Conséquence : un joueur pouvait enregistrer `avatars/{id d'un autre}/avatar.jpg`
+> comme SA photo, et porter le visage d'un autre membre au classement, sur la
+> piste et au résumé d'un Grand Prix. Le créateur d'un championnat pouvait de
+> même accrocher la photo d'un championnat auquel il n'appartient pas. **La RLS
+> Storage n'y pouvait rien** : elle garde le dépôt du fichier, pas l'écriture de
+> l'URL en base, qui passe par la clé de service.
+>
+> Le propriétaire attendu est donc un argument **obligatoire**, jamais facultatif :
+> un défaut à `None` aurait rouvert la porte au premier appelant qui l'oublie.
+
 **Une seule question, un seul propriétaire.** Les deux domaines appellent
 `url_de_photo_valide` ; deux vérifications écrites séparément auraient divergé au
 premier ajustement, et celle qu'on aurait oublié de resserrer serait devenue la
@@ -52,17 +72,34 @@ def _prefixe_attendu(compartiment: str) -> str:
     return f"{get_settings().supabase_url.rstrip('/')}{CHEMIN_PUBLIC}{compartiment}/"
 
 
-def url_de_photo_valide(valeur: str, compartiment: str, quoi: str) -> str:
+def url_de_photo_valide(
+    valeur: str, compartiment: str, quoi: str, proprietaire: str
+) -> str:
     """Normalise et vérifie une URL de photo, ou refuse en français.
 
-    Trois conditions, et il faut les trois :
+    Quatre conditions, et il faut les quatre :
 
     1. l'URL commence par celle du **projet Supabase configuré** — c'est ce qui
        interdit d'enregistrer l'adresse d'un serveur tiers ;
     2. elle désigne le **bon compartiment** — un avatar ne s'enregistre pas
        depuis le compartiment des championnats, ni l'inverse ;
     3. elle porte bien un **chemin** après le compartiment, et tient sous le
-       plafond.
+       plafond ;
+    4. le **premier segment de ce chemin est `proprietaire`** — l'identifiant du
+       profil pour un avatar, celui du championnat pour une photo de
+       championnat.
+
+    **La quatrième est celle qui manquait, et c'est la seule qui traite d'IDOR.**
+    Les trois premières disent « cette photo vient bien de chez nous » ; seule la
+    quatrième dit « et elle est bien la tienne ». Sans elle, `avatars/{id}/…`
+    acceptait n'importe quel `{id}`, et la clé de service écrivait en base une
+    URL que la RLS Storage n'aurait jamais laissé déposer. Le rapprochement se
+    fait sans tenir compte de la casse : un UUID est insensible à la casse, et
+    refuser une majuscule ferait échouer un client parfaitement légitime.
+
+    **`proprietaire` est obligatoire.** Une valeur par défaut aurait rendu le
+    contrôle facultatif, donc absent du premier appel qui l'oublie — exactement
+    la porte qu'on vient de fermer.
 
     **Sans `SUPABASE_URL`, tout est refusé** plutôt que tout accepté. Le service
     démarre sans les clés Supabase pour garder `/health` joignable
@@ -91,6 +128,16 @@ def url_de_photo_valide(valeur: str, compartiment: str, quoi: str) -> str:
     # jamais : `..` dans une URL publique désignerait un autre compartiment.
     reste = propre[len(prefixe) :]
     if not reste or ".." in reste:
+        raise refus
+
+    # Le dossier, puis ce qu'il contient. La séparation est faite sur le PREMIER
+    # `/` seulement : le nom du fichier peut porter un `?v=…`, ce qui ne regarde
+    # pas le dossier. Un chemin réduit au seul dossier est refusé — il désigne un
+    # répertoire, jamais une image.
+    dossier, separateur, objet = reste.partition("/")
+    if not separateur or not objet:
+        raise refus
+    if dossier.lower() != str(proprietaire).strip().lower():
         raise refus
 
     return propre

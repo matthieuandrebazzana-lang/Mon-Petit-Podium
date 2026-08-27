@@ -650,3 +650,63 @@ en option aurait voulu dire que le cas ordinaire reste le mauvais cadrage.
 - **Le plafond de 5 Mo borne le DÉCODAGE, pas l'envoi.** C'est le point qui reste à
   éprouver sur un iPhone réel : une image de 8000 × 6000 occupe près de deux cents
   mégaoctets une fois décompressée, et Safari abandonne l'onglet plutôt que de la rendre.
+
+---
+
+## 21. L'autorisation d'une route se vérifie en entier, même quand la RLS dit déjà la même chose
+
+**Décision.** Toute route FastAPI qui touche une ressource appartenant à quelqu'un vérifie
+**elle-même** l'appartenance, à partir de l'identifiant du jeton vérifié — y compris quand
+une politique RLS exprime exactement la même règle. La politique n'est jamais tenue pour la
+protection de ce chemin-là.
+
+**Pourquoi.** Le backend écrit avec la **clé de service**, qui contourne la RLS
+(`architecture.md` §4). Une politique correcte, testée et documentée protège le chemin
+direct frontend → Supabase, et **rien d'autre**. Les deux couvrent des appelants
+différents ; elles ne sont pas redondantes, et l'une ne rattrape jamais l'oubli de l'autre.
+
+Ce n'est pas une précaution théorique : c'est ce qui a laissé passer le défaut §28 de
+`bugs-connus.md`. La règle « le premier segment du chemin est le propriétaire » existait en
+base depuis la migration 16 et fonctionnait ; le backend n'en appliquait que la moitié, et
+enregistrait donc en base des URL que la base elle-même n'aurait jamais laissé déposer.
+
+**Ce que l'audit IDOR d'août 2026 a établi.** Les vingt-et-un endpoints ont été parcourus
+un par un. Trois formes d'autorisation coexistent, et chacune a un propriétaire unique,
+jamais recopié :
+
+| Forme | Propriétaire | Portée |
+|---|---|---|
+| Identité de l'appelant | `deps.utilisateur_courant` | toute route protégée ; le corps ne dit jamais qui appelle |
+| Appartenance à un championnat | `pronostics.exiger_membre` | classement, calendrier, pronostics d'un championnat, résultats filtrés |
+| Championnat partagé avec une cible | `profils.exiger_lien` | `GET /profils/{id}/stats` |
+| Administration | `deps.exiger_secret` | `/scraper/declencher`, `/jobs/…` — en-tête seul, **jamais un jeton** |
+
+Deux endpoints seulement manquaient une vérification, tous deux sur le chemin des photos.
+Ils sont corrigés dans la même version.
+
+**Alternatives écartées.**
+
+| Écartée | Pourquoi |
+|---|---|
+| Faire porter l'autorisation par la RLS, en abandonnant la clé de service | Plusieurs opérations sont **impossibles** sous RLS : retrouver un championnat par son code alors qu'on n'en est pas encore membre, servir un classement complet à qui ne partage pas tous ses championnats avec tous ses membres |
+| Une dépendance FastAPI globale qui vérifierait l'appartenance | Le nom de la ressource change d'une route à l'autre — `championnat_id` ici, `profil_id` là, rien du tout sur `/profils/moi`. Une dépendance générique aurait deviné, et deviné faux en silence |
+| Vérifier le chemin Storage côté frontend | Le frontend le fait déjà, et cela ne protège rien : rien n'oblige un client à passer par lui. Même raisonnement que le format des couleurs, vérifié en base **et** dans la route |
+| Rendre les compartiments privés et signer chaque URL | Un aller-retour réseau par vignette d'un classement de douze, pour un défaut qui n'est pas une fuite : les photos sont publiques par décision (§9 de `database.md`) |
+
+**Conséquences assumées.**
+
+- **La règle du dossier est maintenant écrite à deux endroits** — la politique
+  `storage.objects` et `app/api/stockage.py`. C'est un écart à « une source unique par
+  question », et il est délibéré : les deux textes gardent **deux chemins distincts**, et
+  supprimer l'un n'allège pas l'autre. Ils doivent bouger ensemble le jour où le format
+  d'un chemin change.
+- **`GET /profils/{id}` reste ouvert à tout appelant connecté**, et ce n'est pas un oubli
+  de l'audit : la politique « Profils lisibles par les membres connectés » sert déjà ces
+  colonnes en lecture directe. Restreindre la route ne fermerait rien et empêcherait
+  d'afficher une voiture dans un classement. Les **statistiques**, elles, exigent un
+  championnat partagé — la différence suit la donnée, pas l'écran.
+- **Un corps de requête invalide est refusé avant le secret d'administration.** FastAPI
+  valide le corps avant d'entrer dans le handler : `POST /jobs/resultats/{id}/test` rend
+  donc `422` plutôt que `401` à un appelant anonyme qui envoie n'importe quoi. La route ne
+  s'exécute pas pour autant, et le schéma qu'il apprend ainsi est de toute façon public
+  dans `openapi.json`. Corriger l'ordre demanderait de lire le corps à la main.

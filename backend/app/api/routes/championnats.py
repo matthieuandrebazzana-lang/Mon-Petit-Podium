@@ -640,8 +640,16 @@ async def modifier(
     if corps.retirer_photo:
         valeurs["photo_url"] = None
     elif corps.photo_url is not None:
+        # Le dossier attendu est le championnat MODIFIÉ, pas un autre : sans ce
+        # rapprochement, un créateur pouvait accrocher ici la photo d'un
+        # championnat dont il n'est pas membre (`app/api/stockage.py`, audit
+        # IDOR `0.58.0`). L'identifiant vient du chemin déjà validé par le
+        # contrôle de créateur ci-dessus, jamais du corps de la requête.
         valeurs["photo_url"] = url_de_photo_valide(
-            corps.photo_url, COMPARTIMENT_CHAMPIONNATS, "une photo de championnat"
+            corps.photo_url,
+            COMPARTIMENT_CHAMPIONNATS,
+            "une photo de championnat",
+            str(championnat_id),
         )
 
     if not valeurs:

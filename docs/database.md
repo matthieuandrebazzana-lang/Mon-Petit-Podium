@@ -692,7 +692,13 @@ Les deux sont **publics**, plafonnés à **2 Mo**, et n'acceptent que `image/jpe
 > Le chemin d'écriture est celui de `docs/architecture.md` §3 : **le fichier va
 > directement à Supabase** (la RLS Storage décrit exactement le cas), **l'URL passe par
 > FastAPI** (c'est une écriture en base). `app/api/stockage.py` confronte alors l'URL reçue
-> à `SUPABASE_URL` : elle doit désigner **notre** projet et **le bon compartiment**.
+> à `SUPABASE_URL` : elle doit désigner **notre** projet, **le bon compartiment**, et —
+> depuis le backend `0.58.0` — **le dossier de l'appelant**.
+>
+> **Ce troisième point est celui qui manquait**, et son absence était une faille d'IDOR :
+> la règle du dossier ci-dessus garde le DÉPÔT du fichier, pas l'écriture de l'URL en base,
+> qui passe par la clé de service et contourne donc la RLS. Chacun pouvait enregistrer
+> comme sienne la photo déposée par un autre. Voir `bugs-connus.md` §28.
 >
 > Sans cette vérification, une URL libre en base deviendrait un **pixel espion posé sur
 > l'écran des autres joueurs** — sa photo s'affiche au classement, sur la piste, au résumé

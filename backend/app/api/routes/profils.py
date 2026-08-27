@@ -369,8 +369,12 @@ async def modifier_mon_profil(
     if corps.retirer_avatar:
         valeurs["avatar_url"] = None
     elif corps.avatar_url is not None:
+        # Le propriétaire attendu est l'identifiant du JETON, jamais une valeur
+        # reçue : c'est ce qui interdit d'enregistrer comme sienne la photo
+        # déposée par un autre membre, et donc de porter son visage au
+        # classement (`app/api/stockage.py`, audit IDOR `0.58.0`).
         valeurs["avatar_url"] = url_de_photo_valide(
-            corps.avatar_url, COMPARTIMENT_AVATARS, "une photo de profil"
+            corps.avatar_url, COMPARTIMENT_AVATARS, "une photo de profil", utilisateur
         )
 
     if corps.livree_ecurie is not None:
