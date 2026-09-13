@@ -89,6 +89,36 @@ def journaliser_echecs(contexte: str):
     return journal.journaliser_echecs(DOMAINE, contexte)
 
 
+async def lancer_scraping(figer: bool) -> Lancement:
+    """Lance le scraping en tâche de fond. **Le garde est chez l'appelant.**
+
+    Extraite de la route à la version `0.64.0`, quand `POST /admin/action` est
+    devenue le second chemin vers ce même travail : le premier reste
+    `POST /scraper/declencher`, fermé par `X-Admin-Secret` et réservé au `curl`.
+    Deux portes, une seule mécanique — et surtout **une seule référence forte
+    sur la tâche**, qui est le détail qu'une copie aurait perdu en silence.
+
+    Cette fonction ne vérifie aucune identité : chacune des deux routes pose son
+    propre garde **avant** de l'appeler. La signature le dit en ne prenant que
+    `figer`.
+
+    Sans base, le scraping irait interroger Unibet pour ne rien pouvoir écrire.
+    Mieux vaut le dire tout de suite que le lire dans les logs après coup — et
+    éviter d'aller solliciter Unibet en pure perte.
+    """
+    exiger_configuration()
+
+    tache = asyncio.create_task(declencher_en_tache_de_fond(figer_apres=figer))
+    _taches.add(tache)
+    tache.add_done_callback(_taches.discard)
+
+    logger.info(
+        "[scraper-api] Scraping déclenché (figeage des cotes après succès : %s).",
+        "oui" if figer else "non",
+    )
+    return Lancement(statut="lance", figera=figer)
+
+
 @router.post(
     "/scraper/declencher",
     response_model=Lancement,
@@ -127,21 +157,7 @@ async def declencher(
     # Le secret d'abord, la configuration ensuite : répondre « Supabase n'est
     # pas configuré » à un appelant qui n'a pas donné le bon secret lui
     # apprendrait quelque chose sur l'état du serveur pour rien.
-    #
-    # Sans base, le scraping irait interroger Unibet pour ne rien pouvoir
-    # écrire. Mieux vaut le dire tout de suite que le lire dans les logs après
-    # coup — et éviter d'aller solliciter Unibet en pure perte.
-    exiger_configuration()
-
-    tache = asyncio.create_task(declencher_en_tache_de_fond(figer_apres=figer))
-    _taches.add(tache)
-    tache.add_done_callback(_taches.discard)
-
-    logger.info(
-        "[scraper-api] Scraping déclenché (figeage des cotes après succès : %s).",
-        "oui" if figer else "non",
-    )
-    return Lancement(statut="lance", figera=figer)
+    return await lancer_scraping(figer)
 
 
 async def _grands_prix_servis(filtre: dict[str, str]) -> list[GrandPrixServi]:

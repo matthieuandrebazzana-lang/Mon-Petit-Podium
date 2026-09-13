@@ -316,6 +316,40 @@ async def resultats_du_grand_prix(
 # --------------------------------------------------------------------------- #
 
 
+async def traiter_grand_prix(gp_id: UUID, forcer: bool) -> RapportJob:
+    """Traite un Grand Prix et rend le compte rendu. **Le garde est chez l'appelant.**
+
+    Jumelle de `scraper.lancer_scraping`, et extraite pour la même raison à la
+    version `0.64.0` : deux routes mènent désormais ici — `POST /jobs/resultats/{id}`
+    fermée par `X-Admin-Secret` pour le `curl`, et `POST /admin/action` fermée
+    par le jeton du membre pour l'application. **Ce sont les deux traductions
+    d'erreur qui ne devaient surtout pas être recopiées** : `ValueError` vaut
+    `404` et `ResultatsIndisponibles` vaut `425 Too Early`, pas `422` — une
+    copie aurait fini par rendre « erreur serveur » sur une course pas encore
+    classée, et enverrait chercher une panne là où il n'y a qu'une attente.
+
+    Aucune identité n'est vérifiée ici : chaque route pose son garde avant.
+    """
+    exiger_configuration()
+
+    try:
+        rapport = await job.declencher_maintenant(str(gp_id), forcer=forcer)
+    except ValueError as erreur:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(erreur)
+        ) from erreur
+    except ResultatsIndisponibles as erreur:
+        # Ce n'est pas une panne : la course n'a simplement pas encore de
+        # classement publié. Un `422` la ferait passer pour un bug ; `425 Too
+        # Early` dit exactement de quoi il s'agit, et invite à réessayer.
+        raise HTTPException(
+            status_code=status.HTTP_425_TOO_EARLY,
+            detail=f"Les résultats ne sont pas encore publiés. {erreur}",
+        ) from erreur
+
+    return RapportJob(**rapport)
+
+
 @router.post("/jobs/resultats/{gp_id}", response_model=RapportJob)
 @journaliser_echecs(DOMAINE, "Déclenchement du job de résultats")
 async def declencher_resultats(
@@ -359,24 +393,7 @@ async def declencher_resultats(
     # Le secret d'abord, la configuration ensuite : répondre « Supabase n'est
     # pas configuré » à qui n'a pas donné le bon secret lui apprendrait quelque
     # chose sur l'état du serveur pour rien. Même ordre qu'au scraper.
-    exiger_configuration()
-
-    try:
-        rapport = await job.declencher_maintenant(str(gp_id), forcer=forcer)
-    except ValueError as erreur:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(erreur)
-        ) from erreur
-    except ResultatsIndisponibles as erreur:
-        # Ce n'est pas une panne : la course n'a simplement pas encore de
-        # classement publié. Un `422` la ferait passer pour un bug ; `425 Too
-        # Early` dit exactement de quoi il s'agit, et invite à réessayer.
-        raise HTTPException(
-            status_code=status.HTTP_425_TOO_EARLY,
-            detail=f"Les résultats ne sont pas encore publiés. {erreur}",
-        ) from erreur
-
-    return RapportJob(**rapport)
+    return await traiter_grand_prix(gp_id, forcer)
 
 
 # --------------------------------------------------------------------------- #

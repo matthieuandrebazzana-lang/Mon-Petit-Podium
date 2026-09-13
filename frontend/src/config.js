@@ -8,23 +8,22 @@ export const APP_VERSION = __APP_VERSION__;
 // En production, définir VITE_API_URL sur l'URL Railway.
 export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
-// Secret partagé de l'en-tête `X-Admin-Secret`, attendu par les routes
-// d'administration du backend (`POST /scraper/declencher`, `POST /jobs/...`).
+// **Aucun secret n'est exporté ici, et il ne faut pas en réintroduire.**
 //
-// **Il n'est pas secret vis-à-vis du navigateur, et c'est structurel.** Vite
+// `VITE_ADMIN_SECRET` a vécu à cette place jusqu'à la version `0.64.0`. Vite
 // remplace `import.meta.env.VITE_*` par sa valeur littérale **à la
-// construction** : la chaîne part donc en clair dans le bundle JavaScript
-// public, lisible par quiconque ouvre les outils de développement — que la
-// section d'administration lui soit affichée ou non. `is_admin` ne referme rien
-// de tout cela : il décide d'un affichage, pas d'un droit.
+// construction** : toute valeur nommée `VITE_` part donc en clair dans le
+// bundle JavaScript public, lisible par quiconque ouvre les outils de
+// développement. Ce n'était pas un réglage à durcir, c'était un secret à
+// retirer.
 //
-// Ce que cela protège encore : un passant qui ne lit pas le bundle, et les
-// autres origines (le CORS du backend n'autorise que les nôtres). Ce que cela
-// ne protège plus : un déclenchement de scraper par quelqu'un de déterminé.
-// Le vrai remède, le jour où c'est inacceptable, est une route backend qui
-// exige le JETON du membre et vérifie `is_admin` en base — le secret ne
-// quitterait alors jamais Railway.
+// Les actions d'administration passent désormais par `POST /admin/action`,
+// fermée par le **jeton Supabase** du membre et une relecture de `is_admin` en
+// base côté serveur (`lib/admin.js`). Le secret partagé existe toujours, mais
+// il ne quitte plus jamais Railway.
 //
-// Vide quand la variable n'est pas définie : l'écran le dit et n'envoie rien,
-// plutôt que de partir chercher un 401.
-export const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET ?? "";
+// Les trois variables restantes sont publiques **par conception** :
+// `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` sont faites pour être
+// exposées — c'est la RLS qui protège, jamais l'obscurité de la clé — et
+// `VITE_API_URL` est l'adresse publique du backend. Rien d'autre ne doit
+// prendre ce préfixe.

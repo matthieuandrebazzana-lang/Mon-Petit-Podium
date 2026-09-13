@@ -316,8 +316,11 @@ export function AuthProvider({ children }) {
         "",
       connecte: Boolean(session),
       // Gouverne **l'affichage** de la section d'administration du profil, et
-      // rien d'autre : ce n'est pas un droit, le seul garde des routes
-      // d'administration est le secret `X-Admin-Secret` vérifié côté backend.
+      // rien d'autre : ce n'est pas un droit. Depuis la version `0.64.0` le
+      // droit existe pour de bon, mais il vit côté serveur — `POST /admin/action`
+      // relit `is_admin` en base avec la clé de service et refuse en `403`. Ce
+      // drapeau-ci est lu côté client, donc modifiable côté client : il choisit
+      // ce qu'on montre, jamais ce qu'on autorise.
       //
       // **`estAdmin` ne se lit plus qu'à un seul endroit** — la section du
       // profil, qui reste visible quel que soit l'interrupteur, puisque c'est

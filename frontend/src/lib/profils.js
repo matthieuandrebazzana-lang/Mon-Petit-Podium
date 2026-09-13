@@ -416,9 +416,18 @@ export async function chargerIdentite(profilId, signal) {
  * l'inverse du sens du doute appliqué au pseudo — un pseudo périmé vaut mieux
  * que pas de pseudo, une section d'administration affichée à tort ne vaut rien.
  *
- * Ce drapeau ne garde d'ailleurs rien : il décide d'un affichage. Le seul garde
- * réel de `POST /scraper/declencher` est le secret `X-Admin-Secret`, vérifié
- * côté backend à temps constant.
+ * **Ce drapeau décide d'un affichage, jamais d'un droit — et le doublon est
+ * volontaire.** Depuis la version `0.64.0`, `POST /admin/action` relit la même
+ * colonne côté serveur, avec la clé de service, et refuse en `403` : les deux
+ * lectures posent la même question, mais celle-ci choisit ce qu'on montre et
+ * l'autre ce qu'on autorise. Elles peuvent diverger sans dommage — un membre
+ * qui force l'affichage depuis les outils de développement voit deux boutons et
+ * reçoit un `403` au premier appui.
+ *
+ * > Le garde serveur suppose que `is_admin` n'est plus écrit depuis un client.
+ * > C'est ce que fait la migration `20260827_audit_rls.sql` §2, en retirant le
+ * > droit `update` de table pour le redonner colonne par colonne. **Sans elle,
+ * > n'importe quel membre se promeut et franchit la porte.**
  */
 export async function chargerEstAdmin(profilId, signal) {
   if (!supabase) return { ok: false, message: NON_CONFIGURE, genre: GENRE_SESSION };

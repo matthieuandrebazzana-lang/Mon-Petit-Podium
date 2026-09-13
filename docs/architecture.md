@@ -120,7 +120,7 @@ par appel.
 | `SUPABASE_URL` | `503` sur les routes métier ; **les deux schedulers ne démarrent pas** |
 | `SUPABASE_ANON_KEY` | idem |
 | `SUPABASE_SERVICE_ROLE_KEY` | idem |
-| `ADMIN_SECRET` | les trois routes d'administration refusent **tout le monde** (`503`) |
+| `ADMIN_SECRET` | les trois routes d'administration **en `curl`** refusent tout le monde (`503`). `POST /admin/action`, elle, n'en dépend pas |
 | `ENVIRONMENT` | vaut `development`, donc `/docs` reste public |
 | `FRONTEND_URL` | non bloquante — l'origine Vercel est la valeur par défaut |
 | `CORS_ORIGINS` | origines supplémentaires, séparées par des virgules |
@@ -135,13 +135,26 @@ diagnostiquer. Il journalise un avertissement et répond `503` sur les routes co
 | `VITE_SUPABASE_URL` | écran « configuration manquante » |
 | `VITE_SUPABASE_ANON_KEY` | idem |
 | `VITE_API_URL` | retombe sur `http://localhost:8000` |
-| `VITE_ADMIN_SECRET` | la section admin s'affiche mais ses boutons refusent de partir |
 
-> **`VITE_ADMIN_SECRET` n'est pas secret vis-à-vis du navigateur, et c'est structurel.**
+> **Les trois sont PUBLIQUES PAR CONCEPTION, et c'est ce qui rend la liste vérifiable.**
 > Vite remplace `import.meta.env.VITE_*` par sa valeur littérale **à la construction** :
-> la chaîne part en clair dans le bundle public. Toute rotation demande donc un
-> redéploiement Vercel **en plus** du changement sur Railway, les deux devant rester
-> d'accord. Voir `decisions.md`.
+> tout ce qui porte ce préfixe part en clair dans le bundle JavaScript, lisible par
+> quiconque ouvre les outils de développement. La règle n'est donc pas « protéger les
+> `VITE_` », c'est **« aucune valeur secrète ne porte ce préfixe »**.
+>
+> `VITE_SUPABASE_ANON_KEY` est faite pour être exposée — c'est la **RLS** qui protège,
+> jamais l'obscurité de la clé ; `VITE_SUPABASE_URL` et `VITE_API_URL` sont deux adresses
+> publiques. Le corollaire est le seul point à retenir : **la RLS n'est pas un complément
+> de cette clé, elle en est la contrepartie.** Une table sans politique est publique.
+
+> **`VITE_ADMIN_SECRET` a existé et n'existe plus** (retirée à la version `0.64.0`). Le
+> secret partait en clair dans le bundle, ce qui vidait de sa substance le garde des trois
+> routes d'administration. Les actions déclenchées depuis l'application passent désormais
+> par **`POST /admin/action`**, fermée par le jeton du membre et une relecture de
+> `is_admin` en base ; `ADMIN_SECRET` reste sur Railway pour le `curl` et **ne quitte plus
+> jamais le serveur**. Voir `decisions.md` §22. **Ne pas la recréer** : la variable est
+> encore définie dans le projet Vercel au moment où ces lignes sont écrites, et elle y est
+> désormais sans effet — la retirer est un geste à faire à la main.
 
 ---
 
@@ -324,8 +337,9 @@ l'appelant, **verbe explicite** pour ce qui n'est pas un CRUD (`/rejoindre`, `/q
 | `POST /grands-prix/{id}/pronostics` | jeton | remplace le jeu complet. **`423`** si fermé |
 | `GET /grands-prix/{id}/pronostics/championnat/{cid}` | jeton + **membre** | `403` **vérifié avant l'existence du GP** |
 | `GET /grands-prix/{id}/resultats` | **mixte** | classement public ; `?championnat_id=` exige jeton **et** appartenance |
-| `POST /scraper/declencher` | `X-Admin-Secret` | **`202`, asynchrone**. `?figer=false` |
-| `POST /jobs/resultats/{id}` | `X-Admin-Secret` | **synchrone**, compte rendu complet. `425` si non publiés |
+| `POST /admin/action` | jeton + **`is_admin` en base** | une route pour toutes les actions de l'app. `403` si le drapeau est faux |
+| `POST /scraper/declencher` | `X-Admin-Secret` | **`202`, asynchrone**. `?figer=false`. Réservée au `curl` |
+| `POST /jobs/resultats/{id}` | `X-Admin-Secret` | **synchrone**, compte rendu complet. `425` si non publiés. Réservée au `curl` |
 | `POST /jobs/resultats/{id}/test` | `X-Admin-Secret` | **banc d'essai, n'écrit rien** |
 
 > **Trois routeurs se partagent le préfixe `/grands-prix/{id}`** — `scraper` porte
@@ -340,6 +354,30 @@ publique à quelqu'un qui se croit connecté.
 **`exiger_membre`** est réutilisée à quatre endroits, jamais recopiée. **`exiger_secret`**
 vérifie le secret **avant** la configuration Supabase — répondre « Supabase n'est pas
 configuré » à qui n'a pas le bon secret lui apprendrait quelque chose pour rien.
+
+> **`exiger_admin` est le garde des actions venues de l'application** (version `0.64.0`).
+> Il enchaîne `utilisateur_courant` puis relit `profils.is_admin` **en base**, avec la clé
+> de service : le jeton dit *qui* appelle et rien d'autre. Ligne absente, colonne absente,
+> base non migrée ⇒ **`403`** ; Supabase injoignable ⇒ **`503`**, jamais `403` — « tu n'es
+> pas administrateur » serait faux et enverrait chercher la cause du côté des droits.
+>
+> **Ce garde vaut ce que vaut le droit de colonne sur `is_admin`.** Sans la migration
+> `20260827_audit_rls.sql` §2, un membre écrit son propre drapeau depuis les outils de
+> développement et franchit la porte. La migration n'est pas un complément de la route,
+> elle en est **la moitié**.
+
+> **`POST /admin/action` porte UNE route pour toutes les actions**, et c'est délibéré : le
+> garde est la seule chose que ces actions ont en commun, et c'est justement lui qu'on ne
+> veut écrire qu'une fois. Une action s'ajoute dans le registre `_EXECUTANTS`, sans
+> nouvelle surface à protéger — donc sans risque d'oublier le garde sur la quatrième.
+> **Le travail n'y est pas réécrit** : `lancer_scraping` et `traiter_grand_prix` sont les
+> fonctions qu'appellent déjà les routes au secret. Un même déclenchement doit avoir le
+> même effet, qu'il vienne d'un bouton ou d'un `curl`.
+>
+> Le statut rendu est `200` et non `202`, y compris pour le scraper : c'est le champ
+> `statut` du corps qui distingue `lance` (accepté, compte rendu dans les logs) de
+> `traite` (fait). Un `202` sur une route dont une action sur deux est synchrone mentirait
+> une fois sur deux.
 
 > **`PATCH /championnats/{id}` refuse en `403`, jamais en `404`.** Le championnat existe,
 > l'appelant en est peut-être membre : lui répondre « il n'existe pas » serait faux. Le

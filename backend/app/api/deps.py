@@ -6,7 +6,7 @@ import secrets
 from fastapi import Depends, Header, HTTPException, status
 
 from app.config import get_settings
-from app.supabase_client import ErreurSupabase, identifiant_du_jeton
+from app.supabase_client import ErreurSupabase, identifiant_du_jeton, selectionner
 
 # Même logger que les routes : sous Railway, seul `uvicorn.error` a un handler.
 logger = logging.getLogger("uvicorn.error")
@@ -103,6 +103,79 @@ async def utilisateur_optionnel(
 
     exiger_configuration()
     return await utilisateur_courant(authorization=authorization)
+
+
+async def exiger_admin(
+    profil_id: str = Depends(utilisateur_courant),
+) -> str:
+    """Identifiant de l'appelant, à la condition qu'il soit administrateur.
+
+    C'est le garde des routes d'administration appelées **depuis l'application**,
+    et il remplace le secret partagé pour ce chemin-là (version `0.64.0`) : un
+    secret inliné par Vite dans le bundle public n'en était plus un.
+    `decisions.md` §14 annonçait cette route comme « la bonne réponse le jour où
+    ce sera nécessaire » ; c'est elle.
+
+    Trois points à ne jamais défaire :
+
+    - **le drapeau est relu en base, jamais lu dans le jeton.** Le jeton dit
+      *qui* appelle et rien d'autre ; ce qu'il porte en `app_metadata` se
+      négocie à l'inscription et se recopie dans une requête. La lecture passe
+      par la clé de service, donc hors RLS, donc sur la valeur réelle de la
+      colonne — pas sur ce qu'une politique laisse voir à l'appelant ;
+    - **le doute refuse, il n'accorde jamais.** Ligne absente, colonne absente,
+      base non migrée : tous ces cas rendent `403`. C'est le même sens du doute
+      que `chargerEstAdmin` côté frontend, où il referme la section ;
+    - **une panne de lecture rend `503`, jamais `403`.** « Tu n'es pas
+      administrateur » serait faux, et enverrait chercher la cause du côté des
+      droits alors que Supabase est simplement injoignable.
+
+    > **Ce garde vaut ce que vaut le droit de colonne sur `is_admin`.** La
+    > politique « Chacun modifie son profil » porte sur la LIGNE et est aveugle
+    > sur la COLONNE : sans la migration `20260827_audit_rls.sql` §2, qui retire
+    > `update` de table à `authenticated` pour le redonner colonne par colonne,
+    > n'importe quel membre écrit son propre `is_admin` depuis les outils de
+    > développement et franchit cette porte. **La migration n'est pas un
+    > complément de cette route, elle en est la moitié.**
+    """
+    try:
+        lignes = await selectionner(
+            "profils",
+            {"select": "is_admin", "id": f"eq.{profil_id}", "limit": "1"},
+        )
+    except ErreurSupabase as erreur:
+        # Comme dans `utilisateur_courant` : une dépendance s'exécute AVANT le
+        # handler, son échec échappe donc à l'enrobage de `journaliser_echecs`.
+        logger.exception(
+            "[admin] Lecture du drapeau is_admin impossible — %s (statut %s)",
+            erreur.message,
+            erreur.statut,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Vérification des droits impossible. Réessaie dans un instant.",
+        ) from erreur
+    except Exception as erreur:  # noqa: BLE001 — sinon la panne sort en 500 muet
+        logger.exception("[admin] Erreur inattendue à la lecture de is_admin")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Vérification des droits impossible. Réessaie dans un instant.",
+        ) from erreur
+
+    # `is not True` et non `not …` : une colonne absente rend `None`, une ligne
+    # absente rend une liste vide, et les deux valent « pas administrateur »
+    # sans que personne ait à s'en souvenir.
+    if not lignes or lignes[0].get("is_admin") is not True:
+        logger.warning(
+            "[admin] Action refusée : le profil %s n'est pas administrateur.",
+            profil_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cette action est réservée aux administrateurs.",
+        )
+
+    return profil_id
 
 
 def exiger_secret(fourni: str | None, domaine: str) -> None:

@@ -9,11 +9,11 @@ import { useAuth } from "../auth/AuthContexte.jsx";
  *
  * **Ce composant ne garde rien, et il ne faut pas le croire.** Il est monté
  * sous condition, mais un affichage conditionnel n'est pas une autorisation :
- * quiconque lit le bundle voit ces libellés, et `config.js` documente pourquoi
- * le secret lui-même y voyage en clair. Le seul garde réel de
- * `POST /scraper/declencher` est `exiger_secret` côté backend, qui compare
- * `X-Admin-Secret` à temps constant et refuse tout le monde quand
- * `ADMIN_SECRET` n'est pas défini sur Railway.
+ * quiconque lit le bundle voit ces libellés. Le garde réel est
+ * `POST /admin/action` côté backend, qui exige le jeton Supabase de l'appelant
+ * puis relit `profils.is_admin` **en base** avec la clé de service (version
+ * `0.64.0`). Ce que le bundle ne contient plus, en revanche, c'est le secret :
+ * `VITE_ADMIN_SECRET` y voyageait en clair jusque-là — voir `config.js`.
  *
  * Pas de route dédiée, pas de garde de navigation : la demande veut un
  * affichage conditionnel dans le profil, et c'est aussi le choix juste — une

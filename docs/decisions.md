@@ -395,6 +395,35 @@ porte sur la **ligne**, pas sur la colonne : un membre peut écrire son propre `
 (le CORS n'autorise que les nôtres). **Ce que cela ne protège plus** : un déclenchement de
 scraper par quelqu'un de déterminé.
 
+> ### DÉPASSÉE (version `0.65.0`) — l'alternative écartée a été retenue
+>
+> « La bonne réponse le jour où ce sera nécessaire » est écrite : `POST /admin/action`,
+> fermée par le **jeton Supabase** du membre et une relecture de `profils.is_admin` en base
+> avec la clé de service (`api/deps.py`, `exiger_admin`). `VITE_ADMIN_SECRET` a disparu du
+> frontend, et **plus rien ne doit reprendre le préfixe `VITE_`** hors des trois variables
+> publiques par conception.
+>
+> **Ce qui n'a pas changé, et qui est le cœur de la décision d'origine** : `is_admin` lu
+> côté client décide toujours d'un affichage, jamais d'un droit. Le doublon est désormais
+> volontaire — une lecture choisit ce qu'on montre, l'autre ce qu'on autorise, et elles
+> peuvent diverger sans dommage (un `403` au premier appui).
+>
+> **Ce qui a rendu la réécriture possible, et sans quoi elle ne vaudrait rien** : la
+> migration `20260827_audit_rls.sql` §2 a retiré le droit `update` de table sur `profils`
+> pour le redonner **colonne par colonne**. Sans elle, la politique « Chacun modifie son
+> profil » porte sur la ligne, un membre écrit son propre `is_admin`, et le nouveau garde
+> s'ouvre à lui. **La migration n'est pas un complément de la route, elle en est la
+> moitié.**
+>
+> **Les routes au secret ne sont pas supprimées** : elles servent le `curl`, qui n'a pas de
+> session Supabase, et le banc d'essai dont le corps n'a aucun sens dans une interface.
+> `ADMIN_SECRET` reste défini sur Railway — il ne quitte simplement plus jamais le serveur.
+>
+> *Gain non prévu par la décision d'origine* : le secret partagé ne disait jamais **qui**
+> l'avait employé. La route journalise l'identifiant de l'appelant, ce qu'aucun log ne
+> pouvait reconstituer après coup sur des actions qui écrivent en base — `?forcer=true`
+> défaisant même des points acquis.
+
 ---
 
 ## 15. Le mode admin est un état de session

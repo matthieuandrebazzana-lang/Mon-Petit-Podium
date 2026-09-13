@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    admin,
     championnats,
     health,
     profils,
@@ -24,3 +25,8 @@ api_router.include_router(profils.router)
 api_router.include_router(scraper.router)
 api_router.include_router(pronostics.router)
 api_router.include_router(resultats.router)
+# Administration (version `0.64.0`) : une seule route, `POST /admin/action`,
+# fermée par le jeton du membre et une relecture de `is_admin` en base. Montée
+# en dernier parce qu'elle importe `scraper` et `resultats` — le préfixe
+# `/admin` ne recoupe aucun autre domaine.
+api_router.include_router(admin.router)
