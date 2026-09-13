@@ -28,6 +28,19 @@ Le mécanisme, et pourquoi il est fait ainsi :
   pas passée. Figer après un échec arrêterait les cotes sur ce que la base
   contenait avant — au pire, sur rien du tout.
 
+- **Le Grand Prix visé est celui que le scraper écrit, et ce n'est plus une
+  supposition.** Ce module choisit un `gp_id` en base, puis retrouve ce même
+  `gp_id` dans le compte rendu du scraping pour décider quoi figer. Tant que le
+  scraper insérait une seconde ligne face à une ligne posée à la main
+  (`manuel-<slug>-2026`, migration 19), il rendait un **autre** UUID que celui
+  visé : le compte rendu ne contenait pas le Grand Prix attendu, rien n'était
+  figé, et la fenêtre de quatre heures s'épuisait sur cette erreur, semaine après
+  semaine. C'est `unibet._adopter` qui referme le point, en faisant porter le
+  vrai `id_unibet` à la ligne existante **sans toucher à son UUID**. Les deux
+  moitiés du mécanisme tiennent ensemble : sans l'adoption, le rapprochement par
+  `gp_id` de `_resultat_du_gp` ne peut pas aboutir sur un Grand Prix jamais
+  adopté à la main.
+
 Comme le job de résultats, ce module suppose **un seul processus**. Sur le plan
 gratuit de Railway, le service tourne en un exemplaire. Le jour où il passe à
 plusieurs instances, deux schedulers scraperaient en parallèle : la base ne
@@ -141,6 +154,13 @@ def _resultat_du_gp(rapport: dict, gp_id: str) -> dict | None:
     Le rapprochement se fait sur `gp_id`, l'identifiant interne, jamais sur le
     nom : Unibet en change l'orthographe d'une semaine à l'autre, et c'est déjà
     la raison pour laquelle la base se rapproche sur `id_unibet`.
+
+    **Il ne peut aboutir que si le scraper a écrit sur la ligne visée**, pas sur
+    un doublon de sa fabrication. C'est ce que garantit `unibet._adopter`, qui
+    reconnaît une ligne manuelle à son nom et lui fait porter le vrai
+    identifiant Unibet en lui laissant son UUID. Rendre `None` reste possible et
+    légitime — Unibet est passé au Grand Prix suivant, ou sa page a échoué — et
+    l'appelant le journalise en `error` avec les échecs du scraping.
     """
     for ligne in rapport.get("grands_prix") or []:
         if str(ligne.get("gp_id") or "") == str(gp_id):

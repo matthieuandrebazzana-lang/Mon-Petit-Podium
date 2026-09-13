@@ -136,12 +136,12 @@ export function chargerFavoris(gpId, signal) {
  * des Grands Prix restants : les trois lectures disent maintenant la même
  * chose.
  *
- * **`date_qualifications` est servie à côté du statut**, et les deux vont
- * ensemble : le bloc n'affiche son bouton de pronostics que sur un Grand Prix
- * dont les cotes sont figées ET dont les qualifications sont passées (voir
- * `cotesArretees` dans `lib/calendrier.js`). Le statut seul se laisse avancer
- * par un `POST /scraper/declencher` passé trop tôt ; l'heure des qualifications,
- * non.
+ * **`date_qualifications` est servie à côté du statut**, mais elle ne commande
+ * plus le bouton de pronostics depuis la version `0.65.0` : `cotesArretees` ne
+ * lit que le statut et l'heure de départ (`lib/calendrier.js`). Elle reste lue
+ * pour le compte à rebours d'**ouverture** du bloc, qui annonce le relevé des
+ * cotes deux heures après les qualifications — une prévision, jamais une
+ * condition.
  *
  * Lu directement sous RLS — la politique « Grands prix lisibles par tous » de
  * l'étape 4 couvre exactement ce cas, et l'accueil est l'écran qui souffrirait

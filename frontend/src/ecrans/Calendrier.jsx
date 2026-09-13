@@ -107,13 +107,15 @@ export function CarteGrandPrix({ gp, previsualisation = false }) {
   // venir n'a pas encore de cotes ; un Grand Prix fermé n'accepte plus rien.
   //
   // **« Pronostiquer » exige en plus des cotes arrêtées** — statut `cotes_figees`
-  // ET qualifications passées, la règle que `cotesArretees` porte pour les trois
-  // surfaces. Sans le premier test, un Grand Prix en `a_venir` dont quelques
-  // cotes traînent en base ouvrirait un tableau que le scraper n'a pas encore
-  // arrêté ; sans le second, un figeage manuel passé un mardi ferait pronostiquer
-  // sur une grille de départ qui n'existe pas encore (règle 4.3).
+  // ET fermeture pas encore passée, la règle que `cotesArretees` porte pour les
+  // quatre surfaces. Sans ce test, un Grand Prix en `a_venir` dont quelques cotes
+  // traînent en base ouvrirait un tableau que le scraper n'a pas encore arrêté.
   //
-  // **Le mode prévisualisation ne lève que le second test, jamais le premier.**
+  // **`date_qualifications` n'y entre plus depuis la version `0.65.0`** : elle
+  // est `NULL` sur toute ligne qu'Unibet n'a pas programmée, et elle retirait
+  // alors le bouton d'un Grand Prix pourtant scrapé et figé (`bugs-connus.md`).
+  //
+  // **Le mode prévisualisation ne lève que ce test, jamais l'état de la carte.**
   // `etat.cle` se lit dans les données — `cotes_disponibles`, les résultats,
   // l'heure de départ — et non dans le statut : c'est `cotesArretees` seule qui
   // porte la condition `cotes_figees`, donc c'est elle seule que le mode
@@ -132,8 +134,8 @@ export function CarteGrandPrix({ gp, previsualisation = false }) {
   // supplémentaire, et surtout aucune seconde source qui pourrait diverger.
   //
   // La condition d'existence du bouton, elle, ne bouge pas : des cotes arrêtées
-  // restent exigées (`cotesArretees` — statut `cotes_figees` ET qualifications
-  // passées, règle 4.3). Ce n'est pas la même question — « y a-t-il quelque
+  // restent exigées (`cotesArretees` — statut `cotes_figees` ET fermeture pas
+  // encore passée, règle 4.3). Ce n'est pas la même question — « y a-t-il quelque
   // chose à ouvrir ? » d'un côté, « quoi ouvrir ? » de l'autre.
   const aPronostique = (gp.mes_pronostics ?? 0) > 0;
 

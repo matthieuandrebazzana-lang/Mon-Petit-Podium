@@ -162,16 +162,17 @@ export function BlocProchainGp({ profilId, previsualisation = false }) {
   const versRecap = !couru && (etat.ferme || donnees?.aPronostique === true);
 
   // **Le bouton des pronostics exige DEUX conditions réunies** : des cotes
-  // figées, et des qualifications déjà courues. `cotesArretees` porte la règle
-  // pour les trois surfaces qui l'appliquent — voir `lib/calendrier.js`.
+  // figées, et une fermeture pas encore passée. `cotesArretees` porte la règle
+  // pour les quatre surfaces qui l'appliquent — voir `lib/calendrier.js`.
   //
   // Tant qu'un Grand Prix est en `a_venir`, le scraper n'a rien relevé : le
   // tableau des cotes est vide et le récapitulatif n'a rien à récapituler. Et
-  // tant que les qualifications ne sont pas courues, la grille de départ n'est
-  // pas définitive : des cotes figées trop tôt par un déclenchement manuel du
-  // scraper ne valent rien (règle 4.3). Dans les deux cas le bouton serait une
-  // promesse fausse, celle-là même que le libellé variable de ce bloc cherche à
-  // éviter depuis la version `0.5.1`.
+  // cinq minutes avant le départ, plus rien ne s'enregistre (règle 4.3). Dans
+  // les deux cas le bouton serait une promesse fausse, celle-là même que le
+  // libellé variable de ce bloc cherche à éviter depuis la version `0.5.1`.
+  //
+  // **L'heure des qualifications n'y entre plus depuis la `0.65.0`** : absente,
+  // elle retirait le bouton d'un Grand Prix pourtant scrapé (`bugs-connus.md`).
   //
   // Il est donc **retiré, pas grisé et pas remplacé** : le widget garde sa
   // place, son drapeau, son tracé, sa date et son compte à rebours — tout ce

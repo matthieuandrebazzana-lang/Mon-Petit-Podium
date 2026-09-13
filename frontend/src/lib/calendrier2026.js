@@ -296,9 +296,10 @@ export function enrichir(grandsPrix = GP_2026, enBase = null) {
       // L'heure exacte du départ n'existe qu'en base : elle seule permet de
       // savoir si les pronostics sont fermés (règle 4.3).
       date_course: trouve?.date_course ?? null,
-      // Celle des qualifications non plus, et elle est ce qui distingue des
-      // cotes vraiment arrêtées d'un figeage manuel passé trop tôt : voir
-      // `cotesArretees`, qui la lit avec le statut.
+      // Celle des qualifications non plus, et elle sert au compte à rebours
+      // d'ouverture (`etatPronostics`), qui annonce le relevé des cotes deux
+      // heures après. **Elle ne conditionne plus le bouton de pronostics** :
+      // `cotesArretees` ne la lit plus depuis la version `0.65.0`.
       date_qualifications: trouve?.date_qualifications ?? null,
       cotes_disponibles: (trouve?.marches?.length ?? 0) > 0,
       en_base: Boolean(trouve),
@@ -397,21 +398,26 @@ export function actionDuGp(gp, etat, previsualisation = false, aPronostique = fa
     };
   }
   // **Pronostiquer exige des cotes arrêtées, pas seulement des cotes visibles.**
-  // Deux conditions réunies (`cotesArretees`) : le statut `cotes_figees`, et des
-  // qualifications déjà courues. Tant que le Grand Prix est en `a_venir`, le
-  // scraper n'a rien arrêté ; et des cotes figées avant les qualifications le
-  // sont sur une grille de départ qui n'existe pas encore (règle 4.3). Dans les
-  // deux cas le bouton est retiré — ni grisé, ni remplacé par un message.
+  // Deux conditions réunies (`cotesArretees`) : le statut `cotes_figees`, et une
+  // fermeture pas encore passée. Tant que le Grand Prix est en `a_venir`, le
+  // scraper n'a rien arrêté ; passé `date_course − 5 min`, plus rien ne
+  // s'enregistre (règle 4.3). Dans les deux cas le bouton est retiré — ni grisé,
+  // ni remplacé par un message.
+  //
+  // **L'heure des qualifications n'entre plus dans ce test** depuis la version
+  // `0.65.0` : `NULL` sur toute ligne qu'Unibet n'a pas programmée, elle retirait
+  // le bouton d'un Grand Prix dont les cotes étaient pourtant en base et le
+  // statut figé (`bugs-connus.md`).
   //
   // La pastille, elle, continue de dire l'état que les données décrivent : les
   // deux calendriers la calculent sans jamais la déduire du statut, et ce n'est
   // pas un bouton qui doit renverser cette règle. Le geste proposé est donc plus
   // exigeant que le mot affiché, ce qui est le bon sens du doute.
   //
-  // **`previsualisation` lève la seconde condition, jamais la première.** Le
-  // mode montre l'application comme si les cotes étaient arrêtées ; il ne
-  // prétend pas qu'un Grand Prix sans cotes en base en ait. `etat.cle` est lu
-  // dans les données, pas dans le statut — ouvrir un tableau de cotes vide ne
+  // **`previsualisation` lève la condition de statut, jamais l'état de la
+  // carte.** Le mode montre l'application comme si les cotes étaient arrêtées ;
+  // il ne prétend pas qu'un Grand Prix sans cotes en base en ait. `etat.cle` est
+  // lu dans les données, pas dans le statut — ouvrir un tableau de cotes vide ne
   // montrerait rien de ce que le mode existe pour montrer.
   if (etat.cle === "ouvert" && (cotesArretees(gp) || previsualisation)) {
     // **Le libellé suit la destination, toujours.** Un bouton « Pronostiquer »

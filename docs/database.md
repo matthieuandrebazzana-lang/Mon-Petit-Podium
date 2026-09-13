@@ -144,18 +144,22 @@ toute la table sans lui.
 > `id_unibet` **inventé**, de la forme `manuel-<slug>-2026`, parce que l'identifiant réel
 > n'existe pas tant qu'Unibet n'a pas ouvert la page du Grand Prix.
 >
-> **Une ligne manuelle doit être ADOPTÉE avant son week-end** —
-> `select public.adopter_grand_prix('manuel-italie-2026', '<id Unibet réel>');`. Sans ce
-> geste, le scraper ne reconnaît pas la ligne (il se rapproche sur `id_unibet`, et sur
-> rien d'autre) : il en insère une **seconde**, et la base porte deux fois la même course.
-> Le symptôme serait discret — `enrichir` rapproche par slug et construit une `Map`, donc
-> la dernière ligne servie l'emporte : le calendrier pourrait s'accrocher à celle qui n'a
-> **pas** les cotes.
+> **L'adoption est automatique depuis le backend `0.61.0`** : avant d'écrire, le scraper
+> cherche une ligne au `id_unibet` en `manuel-` portant le **même nom** (slug insensible à
+> la casse et aux accents) et lui fait porter le vrai identifiant, **sans toucher à son
+> UUID** — cotes, pronostics et favoris restent attachés. Voir `scraper.md` §6.
 >
-> `adopter_grand_prix` couvre les deux cas : elle renomme le placeholder s'il est seul, et
-> résorbe le doublon si le scraper est arrivé le premier — **en refusant de supprimer une
-> ligne à laquelle quoi que ce soit pend**, `on delete cascade` emportant sinon des cotes
-> ou des pronostics sans bruit.
+> Sans ce mécanisme, le scraper ne reconnaissait pas la ligne (il se rapproche sur
+> `id_unibet`, et sur rien d'autre) : il en insérait une **seconde**, et la base portait
+> deux fois la même course. Le symptôme était discret — `enrichir` rapproche par slug et
+> construit une `Map`, donc la dernière ligne servie l'emporte : le calendrier pouvait
+> s'accrocher à celle qui n'a **pas** les cotes. Voir `bugs-connus.md` §31.
+>
+> `adopter_grand_prix` reste la voie des deux cas que l'automatique refuse — **deux lignes
+> manuelles homonymes**, et **le doublon déjà constitué**. Elle renomme le placeholder s'il
+> est seul, et résorbe le doublon si le scraper est arrivé le premier — **en refusant de
+> supprimer une ligne à laquelle quoi que ce soit pend**, `on delete cascade` emportant
+> sinon des cotes ou des pronostics sans bruit.
 >
 > **Les heures de COURSE posées par la 19 sont prévisionnelles** (15h00 locale, heure
 > habituelle pour les courses de nuit, converties au fuseau réel du circuit). Le scraper
@@ -180,7 +184,8 @@ toute la table sans lui.
 > l'upsert et la valeur de la 20 survit. `date_qualifications` reste nullable pour la
 > raison ci-dessus, mais **une ligne neuve dont Unibet ne publie pas le programme n'a plus
 > d'horaire du tout** — donc pas de figeage automatique. C'est l'écart signalé de
-> `scraper.md` §5, et une raison de plus de tenir le geste d'adoption.
+> `scraper.md` §5. Il ne touche plus les onze lignes de la 19, que l'adoption automatique
+> fait maintenant reconnaître au scraper avec l'heure que la 20 leur a posée.
 
 ### `public.cotes`
 

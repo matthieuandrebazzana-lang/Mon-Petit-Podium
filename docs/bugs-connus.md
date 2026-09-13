@@ -656,7 +656,7 @@ comme partout ailleurs.
 
 - **Une jambe non jugeable laisse le pronostic ENTIER à `NULL`**, même si l'autre est
   décidée. La ligne ne porte qu'un seul `points_gagnes`, et `attribuer_points` n'écrit que
-  les `NULL` (`scraper.md` §11) : payer la seule jambe connue figerait un total partiel que
+  les `NULL` (`scraper.md` §12) : payer la seule jambe connue figerait un total partiel que
   le rattrapage **ne corrigerait plus jamais**. Attendre est réversible, écrire ne l'est
   pas — c'est la même asymétrie que « un marché non reconnu vaut `NULL`, jamais `0` ».
 - **Le total POTENTIEL ne change pas** : il reste la somme des deux cotes (`metier.md` §9),
@@ -718,7 +718,7 @@ reconnu sur « ecart » ou « marge » + « victoire ».
 - **Aucun vrai libellé Unibet n'a encore été vu pour ce marché.** Les formes reconnues sont
   écrites d'après les tournures usuelles ; une issue non reconnue est **journalisée** et
   laisse le pronostic à `NULL`. `POST /jobs/resultats/{gp_id}/test` les confronte sans rien
-  écrire (`scraper.md` §12) — c'est par là qu'il faut passer avant le premier vrai Grand
+  écrire (`scraper.md` §13) — c'est par là qu'il faut passer avant le premier vrai Grand
   Prix, pas par la vraie route.
 - **Le commentaire qui défendait l'absence a été réécrit.** Même leçon qu'au §20 et au §22 :
   un manque qui s'explique dans une docstring cesse d'être cherché.
@@ -741,7 +741,7 @@ Ce qui l'était, c'est la **chronologie**. Le job de résultats a tourné à `d�
 avec le backend d'**avant** la `0.54.0` — le podium était encore tout-ou-rien, l'écart
 encore non reconnu. Il a écrit `0` sur le podium et laissé `NULL` sur l'écart. Le correctif
 a été livré le soir même, **après**. Et `attribuer_points` n'écrit **que** les
-`points_gagnes` encore `NULL` (`scraper.md` §11) :
+`points_gagnes` encore `NULL` (`scraper.md` §12) :
 
 | État écrit par l'ancien code | Ce que le rattrapage peut faire |
 |---|---|
@@ -1130,3 +1130,135 @@ la désarme, sans erreur ni ligne manquante. C'est le conflit d'ordre du §6 de
 une colonne neuve naît non-modifiable depuis un client. Sans effet sur l'app, qui écrit
 avec la clé de service — mais le jour où un écran écrira en direct, le symptôme sera un
 `42501` sur une colonne qu'on croira bien déclarée.
+
+---
+
+## 30. Le bouton « Pronostiquer » ne s'affichait jamais — une heure absente fermait ce qu'un statut ouvrait
+
+**Symptôme.** Un Grand Prix scrapé sans le moindre incident — cotes en base, statut
+`cotes_figees`, compte à rebours à l'écran — n'offrait **aucun bouton de pronostics**. Ni
+sur le bloc de l'accueil, ni sur le calendrier de la saison, ni sur celui d'un championnat,
+ni sur la fiche du Grand Prix. Les quatre surfaces se taisaient ensemble, et l'écran
+n'affichait aucun message : le bouton était simplement absent, comme sur un Grand Prix
+encore à venir.
+
+**Cause réelle.** Ce n'est pas le bouton qui était cassé, c'est sa condition.
+`cotesArretees` (`lib/calendrier.js`) exigeait **deux** choses : le statut `cotes_figees`,
+et une `date_qualifications` **datée et passée**. La seconde venait de la version `0.38.0`
+et visait un cas réel — `POST /scraper/declencher` lancé un mardi fige des cotes sur une
+grille de départ qui n'existe pas encore, et le statut seul ne sait pas s'en défendre.
+
+**Mais `date_qualifications` est `NULL` bien plus souvent qu'on ne le croyait.** Le repli
+`date_course − 22h` a été retiré du scraper en `0.57.0`, à juste titre : il écrasait
+l'heure relevée sur le calendrier officiel par une constante fausse sur neuf Grands Prix de
+douze. Depuis, l'heure ne peut venir que de deux endroits — la migration 20, ou le
+programme publié par Unibet. Or **Unibet n'expose aucun événement de qualification** dans
+le régime constaté sur le terrain (`scraper.md` §5, août 2026 : un seul événement
+« Course » au nœud racine, vérifié aussi dans le bloc SSR). Et la migration 20 ne couvre que
+les onze lignes qu'elle a posées.
+
+Une ligne née du scraper — un Grand Prix qu'aucune migration n'a écrit, ou une ligne
+manuelle jamais adoptée, dont le scraper avait créé le doublon (§ ci-dessous) — n'avait
+donc **jamais** d'heure de qualifications. La condition de garde ne se déclenchait pas à la
+marge : elle était le **régime normal**, et elle fermait les pronostics de tout le monde.
+
+> **`NULL` rendait `false`, et c'était écrit comme une vertu** — « on se ferme sur une
+> donnée qu'on n'a pas, jamais l'inverse ». La formule est juste quand la donnée absente est
+> ce qui **autorise**. Ici elle était ce qui **interdisait** : son absence ne laissait pas
+> le doute, elle le tranchait contre le joueur, sur un Grand Prix dont tout le reste disait
+> qu'il était prêt.
+
+**Correctif** (version `0.65.0`). `cotesArretees` ne lit plus que deux choses, et
+`date_qualifications` n'en est pas :
+
+```js
+statut === "cotes_figees"  ET  date_course − 5 min > maintenant
+```
+
+Le statut n'est pas une supposition : `jobs/scraper.py` ne le pose qu'après un scraping
+dont **au moins une cote a été écrite**. Il y a donc quelque chose à pronostiquer, ce qui
+est toute la question. La fermeture, elle, reste vérifiée — par `etatFermeture`, le calcul
+déjà partagé par les trois étages de la règle 4.3, jamais un second écrit à côté. Un Grand
+Prix dont l'heure de départ est inconnue **reste ouvert**, comme le veulent la base et le
+backend.
+
+**Ce qu'il ne faut pas refaire.**
+
+**Ne pas remettre `date_qualifications` dans une condition d'affichage.** Elle reste lue
+pour le compte à rebours d'**ouverture** (« Ouverture dans », `etatPronostics`), et c'est sa
+place : là, son absence fait taire une prévision, elle ne retire rien. Une prévision muette
+ne coûte rien ; un bouton absent coûte le week-end de course.
+
+**Ne pas confondre « se fermer sur une donnée qu'on n'a pas » avec « se fermer sur une
+donnée qu'on n'a jamais ».** La règle suppose que la donnée arrive d'ordinaire et manque par
+accident. Quand c'est l'inverse — elle manque par construction, et n'arrive que par
+exception — la garde n'est plus une précaution, c'est un interrupteur en position ouverte.
+**Le test à faire est celui-là : sur combien de lignes réelles cette colonne est-elle
+remplie aujourd'hui ?**
+
+**Le cas que la garde visait n'a pas disparu, et il se traite ailleurs.** Un figeage passé
+un mardi reste possible ; la porte de sortie est `POST /scraper/declencher?figer=false`,
+explicite et documentée (`scraper.md` §9), et le job automatique, lui, ne se déclenche
+jamais avant `date_qualifications + 2h`. Le défaut d'origine était d'avoir gardé contre un
+geste d'administration **au prix du régime normal de tous les joueurs.**
+
+---
+
+## 31. Le scraper créait un doublon plutôt que de reconnaître une ligne posée à la main
+
+**Symptôme.** Deux lignes pour le même Grand Prix dans `public.grands_prix`. Celle du
+scraper portait les cotes et un statut qui avançait ; la ligne manuelle gardait l'ancien
+UUID, ses pronostics, ses favoris — et restait éternellement `a_venir`. Selon la ligne sur
+laquelle un écran tombait, le même Grand Prix s'annonçait « à venir » ou « pronos ouverts ».
+Le job de scraping, lui, ne figeait rien : il visait un `gp_id`, le scraper en rendait un
+autre, `_resultat_du_gp` ne trouvait pas le Grand Prix attendu et la fenêtre de quatre
+heures s'épuisait sur cette erreur.
+
+**Cause réelle.** Les onze Grands Prix de la fin de saison sont posés en base par la
+migration 19, **avant** qu'Unibet n'ouvre leur page : leur `id_unibet` est donc inventé
+(`manuel-<slug>-2026`). Le scraper se rapproche sur `id_unibet` et sur rien d'autre — c'est
+délibéré, le nom change d'orthographe d'une semaine à l'autre (« GP Pays Bas », « GP
+Pays-Bas ») — donc il ne reconnaissait pas la ligne et son upsert en insérait une seconde.
+
+Le geste correctif existait : `select public.adopter_grand_prix('manuel-italie-2026', '<id
+réel>');`, à jouer dans le SQL Editor **le vendredi ou le samedi matin** de chaque week-end
+de course. C'est-à-dire douze fois dans la saison, dans une fenêtre de quelques heures,
+avec un identifiant à relever dans les logs. **Un rendez-vous manuel hebdomadaire n'est pas
+un correctif, c'est un défaut avec un mode d'emploi.**
+
+**Correctif** (version `0.65.0`). `unibet._adopter`, appelé en tête de `_enregistrer`.
+Avant toute écriture, le scraper cherche une ligne dont l'`id_unibet` commence par
+`manuel-` et dont le **nom** correspond au sien — comparaison par `slug()`, insensible à la
+casse, aux accents et aux séparateurs. S'il en trouve une, il lui fait porter le vrai
+`id_unibet` par un simple `update`. **L'UUID ne bouge pas** : tout ce qui pend à la ligne
+reste attaché, et l'upsert qui suit y écrit `date_course`, `date_qualifications` et les
+cotes comme sur n'importe quelle autre.
+
+Trois refus délibérés, chacun journalisé :
+
+- **deux lignes manuelles de même nom** → aucune adoption. Choisir la première venue
+  attacherait les pronostics d'un Grand Prix à un autre ; le doublon se voit, une adoption
+  fausse ne se voit pas. C'est la règle du rapprochement des pilotes (`scraper.md` §11) ;
+- **le doublon est déjà constitué** (une ligne porte déjà le vrai identifiant) → aucune
+  fusion, un `warning` qui écrit la commande `adopter_grand_prix` toute faite. Seule la
+  fonction SQL sait compter les quatre tables filles avant de supprimer quoi que ce soit ;
+- **zéro ligne touchée par l'`update`** → quelqu'un a adopté entre la lecture et
+  l'écriture. Le filtre porte sur le placeholder autant que sur l'identifiant, exactement
+  comme le `PATCH` de figeage : l'état voulu, atteint par un autre, n'est pas une panne.
+
+**Ce qu'il ne faut pas refaire.**
+
+**Ne pas rapprocher par le nom ailleurs que là.** Le nom reste un mauvais identifiant, et
+c'est toute la raison d'être d'`id_unibet`. Il n'est utilisé ici que parce que c'est
+littéralement la seule chose que les deux lignes partagent — s'il y avait un identifiant
+commun, il n'y aurait rien à adopter. Le rapprochement avec OpenF1 continue de se faire sur
+la **date** (`scraper.md` §10), et le job de scraping sur le `gp_id`.
+
+**Ne pas supprimer la ligne manuelle pour « nettoyer ».** Les quatre tables filles sont en
+`on delete cascade` (migrations 3 et 5) : un `delete` aveugle emporte des pronostics sans
+un mot. Mieux vaut un doublon visible qu'un pronostic effacé en silence — c'est déjà ce que
+dit `adopter_grand_prix`, et l'adoption automatique ne fait rien d'autre.
+
+**Ne pas croire que `adopter_grand_prix` est devenue inutile.** Elle reste la seule voie
+pour le cas que l'automatique refuse : le doublon déjà constitué, et les deux lignes
+manuelles homonymes.

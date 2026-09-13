@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Version de l'API, alignée sur celle du frontend.
 # À incrémenter à chaque commit qui modifie l'application.
-VERSION = "0.59.0"
+VERSION = "0.61.0"
 
 # Toujours autorisées : le serveur de dev Vite, pour ne jamais casser le local.
 ORIGINES_LOCALES = [
@@ -69,12 +69,19 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
 
-    # — Déclenchement du scraper —
+    # — Déclenchement en `curl` —
     # Secret partagé attendu dans l'en-tête `X-Admin-Secret` de
-    # POST /scraper/declencher. Vide par défaut, et c'est délibéré : sans valeur
-    # définie, la route refuse tout le monde plutôt que de s'ouvrir à tous.
-    # Le scraping écrit en base ; une route d'administration ouverte serait le
-    # moyen le plus simple de faire tourner le scraper en boucle depuis dehors.
+    # POST /scraper/declencher, POST /jobs/resultats/{id} et son banc d'essai.
+    # Vide par défaut, et c'est délibéré : sans valeur définie, ces routes
+    # refusent tout le monde plutôt que de s'ouvrir à tous. Le scraping écrit en
+    # base ; une route d'administration ouverte serait le moyen le plus simple
+    # de le faire tourner en boucle depuis dehors.
+    #
+    # **Il n'a plus d'équivalent VITE_ depuis la version `0.64.0`**, et il ne
+    # doit jamais en retrouver un : l'application passe par POST /admin/action,
+    # fermée par le jeton du membre et une relecture de `is_admin` en base. Ce
+    # secret-ci ne sert plus qu'aux appels qui n'ont pas de session Supabase,
+    # et ne quitte donc jamais Railway.
     admin_secret: str = ""
 
     @property

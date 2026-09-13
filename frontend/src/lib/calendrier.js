@@ -113,40 +113,47 @@ export const ETATS_GP = {
  * pronostiquer dessus ?
  *
  * **Deux conditions, et les deux doivent tenir** : le statut vaut
- * `cotes_figees`, ET l'heure des qualifications est passée. C'est la règle 4.3
- * lue jusqu'au bout — les cotes ne valent quelque chose que sur une grille de
- * départ définitive, donc après les qualifications.
+ * `cotes_figees`, ET la fermeture n'est pas passée — soit `date_course` moins
+ * les cinq minutes de `MARGE_FERMETURE_MS`. Rien d'autre. Le statut dit que le
+ * scraper a relevé les cotes ; l'heure de la course dit jusqu'à quand on peut
+ * jouer dessus.
  *
- * **Le statut seul ne suffit pas, et ce n'est pas une précaution en l'air.**
- * `POST /scraper/declencher` fige les cotes des Grands Prix qu'il a scrapés
- * avec succès (étape 11), et il peut être appelé n'importe quand : un essai
- * passé un mardi, sans `?figer=false`, arrête les cotes sur une grille qui
- * n'existe pas encore. C'est exactement ce qui s'est produit sur le GP des
- * Pays-Bas, constaté en base à la version `0.38.0` — statut `cotes_figees`
- * deux jours avant des qualifications annoncées au 22 août. La date des
- * qualifications, elle, ne peut pas être avancée par un `curl` : elle vient du
- * programme d'Unibet, ou de l'heure écrite explicitement en base (migrations 19
- * et 20). **Elle n'est jamais dérivée de `date_course`** — le repli
- * `date_course - 22h` a été retiré du scraper en `0.57.0`, parce qu'il écrasait
- * l'heure relevée sur le calendrier officiel par une constante fausse sur neuf
- * Grands Prix de douze.
+ * ## `date_qualifications` ne décide plus rien ici (version `0.65.0`)
  *
- * **On se ferme sur une donnée qu'on n'a pas, jamais l'inverse.** Un
- * `date_qualifications` absent — colonne nulle, cache écrit par une version
- * antérieure, backend déployé avant la migration — rend `false`. C'est la règle
- * tenue depuis la version `0.38.0`, et le *stale-while-revalidate* corrige à la
- * première réponse fraîche.
+ * La règle précédente exigeait des qualifications **datées et passées**, pour
+ * empêcher un `POST /scraper/declencher` lancé un mardi de faire pronostiquer
+ * sur une grille de départ qui n'existe pas encore. Elle se retournait contre
+ * les joueurs bien plus souvent qu'elle ne les protégeait : `date_qualifications`
+ * est `NULL` sur toute ligne qu'aucune migration n'a posée et qu'Unibet n'a pas
+ * programmée — et Unibet **n'expose aucun événement de qualification** dans le
+ * régime constaté sur le terrain (`scraper.md` §5). Un Grand Prix parfaitement
+ * scrapé, cotes en base et statut `cotes_figees`, n'affichait alors **aucun
+ * bouton de pronostics** sur les quatre surfaces à la fois, sans que rien ne le
+ * dise à l'écran. Voir `bugs-connus.md`.
  *
- * Elle sert les **trois** surfaces qui portent un bouton de pronostics : le
- * bloc de l'accueil et les deux calendriers. Écrite trois fois, elle aurait
- * divergé au premier ajustement, et le symptôme aurait été discret — un Grand
- * Prix pronostiquable d'un onglet et pas de l'autre.
+ * **Une donnée absente ne doit pas fermer ce qu'une donnée présente ouvre.** Le
+ * statut `cotes_figees` n'est pas une supposition : il n'est posé qu'après un
+ * scraping dont au moins une cote a été écrite (`jobs/scraper.py`). Il y a donc
+ * quelque chose à pronostiquer, et c'est la seule question que pose ce test.
+ *
+ * **La fermeture, elle, reste vérifiée**, et c'est `etatFermeture` qui la porte
+ * — le même calcul que les trois étages de la règle 4.3, jamais un second écrit
+ * à côté. Un Grand Prix dont l'heure de départ est inconnue **reste ouvert** :
+ * c'est le bon sens du doute, celui de la base et du backend, et il vaut ici
+ * pour `date_course` exactement comme il valait contre `date_qualifications`.
+ *
+ * Elle sert les **quatre** surfaces qui portent un bouton de pronostics : le
+ * bloc de l'accueil, les deux calendriers et la fiche d'un Grand Prix. Écrite
+ * quatre fois, elle aurait divergé au premier ajustement, et le symptôme aurait
+ * été discret — un Grand Prix pronostiquable d'un onglet et pas de l'autre.
  */
 export function cotesArretees(gp, maintenant = Date.now()) {
   if (!gp || gp.statut !== "cotes_figees") return false;
 
-  const qualifications = Date.parse(gp.date_qualifications ?? "");
-  return Number.isFinite(qualifications) && qualifications <= maintenant;
+  // `ferme` est vrai dès que `date_course − 5 min` est derrière nous, et faux
+  // quand l'heure de départ est inconnue : les deux cas voulus, sans second
+  // calcul de la marge de fermeture.
+  return !etatFermeture(gp.date_course, maintenant).ferme;
 }
 
 /**

@@ -135,9 +135,9 @@ découvrirait qu'après la course. Constantes `MARCHE_VAINQUEUR` / `MARCHE_PODIU
 >
 > **C'est `cotesArretees` qui départage les deux phases, jamais le statut brut**, et c'est
 > ce qui fait tenir l'ensemble : le bouton de pronostics du bloc d'accueil s'affiche sur
-> exactement la même condition. Un Grand Prix passé à `cotes_figees` par un
-> `POST /scraper/declencher` lancé un mardi annoncerait sinon « Fermeture dans » au-dessus
-> d'un bloc **sans bouton** — un décompte vers une fermeture que rien n'ouvrira.
+> exactement la même condition. Les deux ne peuvent donc pas se contredire — une case
+> « Fermeture dans » au-dessus d'un bloc **sans bouton** serait un décompte vers une
+> fermeture que rien n'ouvrira.
 >
 > **« Pas encore ouverts » exige les trois à la fois** : cotes non arrêtées, heure de
 > fermeture pas encore passée, et Grand Prix non `termine`. Le premier test suffit un
@@ -173,17 +173,36 @@ La marge est `MARGE_FERMETURE_MS = 5 min` (`lib/format.js`), partagée par les t
 > pas annoncé l'horaire serait le mauvais sens du doute.
 
 > ### « Cotes arrêtées » exige DEUX conditions
-> Statut `cotes_figees` **et** `date_qualifications` dans le passé. Le statut seul ne
-> suffit pas : un `POST /scraper/declencher` passé à la main sans `?figer=false` le pose
-> n'importe quand. Le second test ne se contourne pas de la même façon — un `curl`
-> avance le statut, il n'avance pas l'heure des qualifications.
+> Statut `cotes_figees` **et** fermeture pas encore passée — `date_course − 5 min` devant
+> nous. Rien d'autre, et surtout pas `date_qualifications` (v`0.65.0`).
 >
-> `cotesArretees()` vit dans `lib/calendrier.js` **et nulle part ailleurs** : trois
+> Le statut n'est pas une supposition : `jobs/scraper.py` ne le pose qu'après un scraping
+> dont **au moins une cote a été écrite**. Il y a donc quelque chose à pronostiquer, ce qui
+> est toute la question que pose ce test.
+>
+> `cotesArretees()` vit dans `lib/calendrier.js` **et nulle part ailleurs** : quatre
 > surfaces portent un bouton de pronostics (accueil, calendrier de la saison, calendrier
-> d'un championnat).
+> d'un championnat, fiche d'un Grand Prix).
 >
-> **On se ferme sur une donnée qu'on n'a pas, jamais l'inverse.** `date_qualifications`
-> absente → `false`, donc pas de bouton.
+> **Un Grand Prix dont l'heure de départ est inconnue reste OUVERT**, comme aux trois
+> étages ci-dessus : `date_course` absente → pas de fermeture à opposer.
+>
+> ### Ce que la règle exigeait en plus, et pourquoi elle ne l'exige plus
+>
+> La version `0.38.0` demandait une `date_qualifications` **datée et passée**, contre un
+> `POST /scraper/declencher` lancé un mardi : un `curl` avance le statut, il n'avance pas
+> l'heure des qualifications. Le raisonnement tenait, la donnée non. Depuis le retrait du
+> repli `date_course − 22h` (v`0.57.0`), cette heure ne vient plus que de la migration 20
+> ou du programme d'Unibet — **et Unibet n'expose aucun événement de qualification** dans
+> le régime constaté sur le terrain (`scraper.md` §5). Toute ligne née du scraper était
+> donc sans heure, et **sans bouton de pronostics sur les quatre surfaces à la fois**,
+> sans un mot à l'écran.
+>
+> **« On se ferme sur une donnée qu'on n'a pas » vaut quand la donnée absente est celle
+> qui AUTORISE.** Ici elle était celle qui interdisait, et son absence était le régime
+> normal : la garde ne protégeait plus à la marge, elle fermait l'application. Le cas
+> qu'elle visait se traite là où il naît — `?figer=false` au scraper, explicite et
+> documenté. Voir `bugs-connus.md` §30.
 
 ## 4. Validation des pronostics
 

@@ -199,7 +199,54 @@ régime normal.
 
 ---
 
-## 6. Idempotence et robustesse
+## 6. L'adoption d'une ligne posée à la main
+
+Les onze Grands Prix de la fin de saison sont en base **avant** qu'Unibet n'ouvre leur
+page — c'est ce qui fait exister le calendrier, les fiches et les horaires toute l'année.
+Leur `id_unibet` est donc **inventé** : `manuel-<slug>-2026` (migration 19).
+
+> ### Le scraper reconnaît la ligne à son NOM, et lui fait porter le vrai identifiant
+>
+> `_adopter`, appelé en tête de `_enregistrer`, avant toute écriture. Il cherche une ligne
+> dont l'`id_unibet` commence par `manuel-` et dont le nom donne le même `slug()` que celui
+> d'Unibet — **insensible à la casse, aux accents et aux séparateurs**, parce que le
+> bookmaker écrit « GP Pays Bas » une semaine et « GP Pays-Bas » la suivante. S'il en
+> trouve une, un `update` lui donne le vrai `id_unibet`.
+>
+> **L'UUID ne bouge pas.** C'est tout l'intérêt : les pronostics, les favoris et les
+> résultats rattachés à cette ligne restent valides. L'upsert qui suit la retrouve par son
+> identifiant tout neuf et y écrit `date_course`, `date_qualifications` et les cotes comme
+> sur n'importe quelle autre ligne. Le job peut ensuite la figer, puisqu'il visait
+> justement cet UUID.
+
+**C'est le seul endroit du scraper qui rapproche par le nom**, et ce n'est pas un
+relâchement de la règle : si les deux lignes avaient un identifiant commun, il n'y aurait
+rien à adopter. Le nom est littéralement la seule chose qu'elles partagent. Le
+rapprochement avec OpenF1 continue de se faire sur la **date** (§10), et celui du job sur le
+`gp_id` (§8).
+
+**Trois cas où l'adoption ne se fait pas**, chacun journalisé :
+
+| Cas | Ce qui se passe |
+|---|---|
+| **Deux lignes manuelles de même nom** | Aucune adoption. Choisir la première venue attacherait les pronostics d'un Grand Prix à un autre — c'est la règle du rapprochement des pilotes (§11), appliquée ici. |
+| **Le doublon est déjà constitué** — une ligne porte déjà le vrai `id_unibet` | Aucune fusion. Un `warning` écrit la commande `adopter_grand_prix` toute faite : seule la fonction SQL sait compter les quatre tables filles avant de supprimer quoi que ce soit. |
+| **Zéro ligne touchée par l'`update`** | Quelqu'un a adopté entre la lecture et l'écriture. Le filtre porte sur le placeholder autant que sur l'identifiant — même précaution que le `PATCH` de figeage (§8). |
+
+> **Le statut de la ligne adoptée est lu comme celui de n'importe quelle autre** : une
+> ligne figée à la main garde ses cotes, l'adoption ne rouvre rien.
+
+**`adopter_grand_prix` (migration 19) reste la voie des deux cas refusés**, et elle seule
+sait résorber un doublon déjà formé. Ce qu'elle n'est plus, c'est un rendez-vous
+hebdomadaire — le geste se faisait le vendredi ou le samedi matin, douze fois dans la
+saison, dans une fenêtre de quelques heures. Voir `bugs-connus.md` §31.
+
+**La convention `manuel-` est connue de deux endroits** : `PREFIXE_MANUEL` dans
+`unibet.py`, et la fonction SQL. Ils doivent bouger ensemble.
+
+---
+
+## 7. Idempotence et robustesse
 
 ### L'upsert
 
@@ -237,7 +284,7 @@ qu'il voulait figer. Se fier au nom ne tiendrait pas.
 
 ---
 
-## 7. Le job de scraping
+## 8. Le job de scraping
 
 `backend/app/jobs/scraper.py`, `AsyncIOScheduler` démarré dans le `lifespan`.
 
@@ -275,7 +322,7 @@ tour suivant réessaie.
 
 ---
 
-## 8. Le déclenchement manuel
+## 9. Le déclenchement manuel
 
 ```
 POST /scraper/declencher     en-tête X-Admin-Secret     202, asynchrone
@@ -317,7 +364,7 @@ configuré » à qui n'a pas le bon secret lui apprendrait quelque chose pour ri
 
 ---
 
-## 9. Les résultats — OpenF1
+## 10. Les résultats — OpenF1
 
 `https://api.openf1.org/v1/` — gratuite, sans clé.
 
@@ -379,7 +426,7 @@ attend pour réessayer.
 
 ---
 
-## 10. Le calcul des points
+## 11. Le calcul des points
 
 `backend/app/calcul/points.py` travaille **uniquement sur le JSON conservé**, jamais sur
 l'API. C'est ce qui permet de rejouer un calcul des semaines après la course.
@@ -439,7 +486,7 @@ vrai libellé** : une issue non reconnue est journalisée et laisse `NULL`. Pass
 
 **« Nationalité du vainqueur » est le seul marché dont la réponse n'est pas dans les
 données de course** (v`0.55.0`). Elle vient de `calcul/pilotes.py`, parce que
-`country_code` de `/drivers` est déprécié — le choix était déjà écrit en §9, il est
+`country_code` de `/drivers` est déprécié — le choix était déjà écrit en §10, il est
 maintenant tenu. Slug reconnu sur « nationalite », ou sur « pays » + « vainqueur/gagnant » ;
 le libellé accepte le peuple comme le pays (« Néerlandais », « Pays-Bas »), accents et casse
 indifférents. Les deux inconnues — nationalité du vainqueur, forme du libellé — sont
@@ -459,7 +506,7 @@ pas écrite : il demande de savoir *qui* a abandonné le premier, pas *si*.
 
 ---
 
-## 11. Le job de résultats
+## 12. Le job de résultats
 
 | Réglage | Valeur |
 |---|---|
@@ -493,7 +540,7 @@ rien. Les `NULL` se rattrapent par un déclenchement manuel.
 
 ---
 
-## 12. Les routes de rattrapage
+## 13. Les routes de rattrapage
 
 ```bash
 # Force le traitement d'un GP : résultats, points, clôture. SYNCHRONE.

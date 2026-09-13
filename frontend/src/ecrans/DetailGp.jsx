@@ -70,13 +70,14 @@ import { useDonnees } from "../lib/useDonnees.js";
  * > ### Écart signalé (CLAUDE.md §6)
  * >
  * > La demande dit « les GP en `cotes_figees` ». L'écran teste `cotesArretees`,
- * > pas le statut brut — et c'est la même correction que la version `0.38.0` a
- * > apportée aux trois autres surfaces qui portent un bouton de pronostics.
- * > `POST /scraper/declencher` fige les cotes des Grands Prix qu'il a scrapés,
- * > **et il peut être appelé un mardi** : le statut seul aurait posé ici un
- * > bouton « Voir les cotes » vers une grille de départ qui n'existe pas encore.
- * > Suivre la lettre de la demande aurait donc rouvert un défaut déjà corrigé
- * > ailleurs.
+ * > qui ajoute au statut la seule chose que le statut ne dit pas : la fermeture
+ * > n'est pas passée. C'est la condition des trois autres surfaces qui portent un
+ * > bouton de pronostics, et l'écart tient en une ligne — un Grand Prix figé mais
+ * > couru n'ouvre rien.
+ * >
+ * > *La version `0.38.0` exigeait en plus des qualifications datées et passées ;
+ * > la `0.65.0` l'a retirée, cette heure étant absente de toute ligne qu'Unibet
+ * > n'a pas programmée (`bugs-connus.md`).*
  *
  * Le libellé nomme sa destination (`design-system.md` §8) : on va **voir les
  * cotes**, pas pronostiquer — c'est le tableau des cotes qui, lui, mène à la
@@ -192,10 +193,10 @@ export default function DetailGp() {
   const etat = etatDuGpSaison(gp);
   const fiche = ficheCircuit(gp.slug);
 
-  // Le mode prévisualisation lève la condition des qualifications, jamais celle
-  // des cotes en base — même arbitrage que `actionDuGp` : montrer l'app comme si
-  // les cotes étaient arrêtées ne va pas jusqu'à prétendre qu'un Grand Prix sans
-  // cotes en ait. Sans `gp_id`, il n'y a de toute façon rien à ouvrir.
+  // Le mode prévisualisation lève la condition de statut, jamais celle des cotes
+  // en base — même arbitrage que `actionDuGp` : montrer l'app comme si les cotes
+  // étaient arrêtées ne va pas jusqu'à prétendre qu'un Grand Prix sans cotes en
+  // ait. Sans `gp_id`, il n'y a de toute façon rien à ouvrir.
   const versLesCotes =
     gp.gp_id && (cotesArretees(gp) || (modePrevisualisation && gp.cotes_disponibles));
 
