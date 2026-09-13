@@ -41,11 +41,38 @@ autres membres**. C'est ce dernier point qui rend la vérification nécessaire.
 > Le propriétaire attendu est donc un argument **obligatoire**, jamais facultatif :
 > un défaut à `None` aurait rouvert la porte au premier appelant qui l'oublie.
 
+> ### Le DOSSIER ne suffit pas, il faut aussi le NOM (audit des dépôts, `0.62.0`)
+>
+> Le contrôle du dossier dit « à qui est cette photo ». Il ne dit pas « est-ce
+> bien une photo ». Jusqu'à cette version, tout ce qui suivait le dossier était
+> accepté : `avatars/{son propre id}/page.html` passait les quatre contrôles.
+>
+> Le dépôt d'un tel objet est possible — la politique `storage.objects` ne
+> compare que le PREMIER segment du chemin (`docs/database.md` §9), et la liste
+> `allowed_mime_types` du compartiment porte sur l'en-tête `Content-Type`
+> annoncé, jamais sur l'extension du nom ni sur le contenu réel du fichier. Rien
+> n'empêche donc de déposer chez soi un objet nommé `.html` en l'annonçant
+> `image/jpeg`.
+>
+> Ce qui manquait ici, c'était de refuser d'en faire une photo. Le nom doit
+> désormais être un nom simple suivi d'une extension d'image : ni sous-dossier,
+> ni séquence encodée, ni `.svg`, `.html` ou `.js`. **`.svg` est exclu comme les
+> autres** — c'est la seule image qui porte du script, et les deux compartiments
+> sont publics.
+>
+> **Ce contrôle est une ceinture, pas le harnais.** Ce qui rend un objet inoffensif
+> à l'affichage, c'est le `Content-Type` sous lequel Supabase le sert, et celui-là
+> est garanti par `allowed_mime_types` du compartiment : toujours l'un des trois
+> types d'image, jamais `text/html`. Le nom, lui, ne décide de rien côté serveur —
+> il ne sert qu'à ce qu'une URL manifestement fausse n'entre pas en base.
+
 **Une seule question, un seul propriétaire.** Les deux domaines appellent
 `url_de_photo_valide` ; deux vérifications écrites séparément auraient divergé au
 premier ajustement, et celle qu'on aurait oublié de resserrer serait devenue la
 porte d'entrée.
 """
+
+import re
 
 from fastapi import HTTPException, status
 
@@ -60,6 +87,34 @@ COMPARTIMENT_CHAMPIONNATS = "championnats"
 # Préfixe d'une URL publique Supabase Storage. Le chemin est fixé par Supabase,
 # pas par nous : `/storage/v1/object/public/{compartiment}/{chemin}`.
 CHEMIN_PUBLIC = "/storage/v1/object/public/"
+
+# Les extensions sous lesquelles une photo a pu être rangée : celles des trois
+# types acceptés par les compartiments (migration `20260821180000` §3), et rien
+# d'autre. Depuis la version `0.51.0` le frontend ne dépose plus qu'en `jpg`
+# (`lib/image.js`), mais une photo posée avant porte encore la sienne — les trois
+# restent donc acceptées à l'écriture, exactement comme la liste `EXTENSIONS` du
+# frontend les garde pour pouvoir les effacer.
+EXTENSIONS_ACCEPTEES = ("jpg", "jpeg", "png", "webp")
+
+# Le nom d'objet attendu au bout du chemin. Ce qu'il INTERDIT est l'essentiel :
+# pas de `/`, donc aucun sous-dossier sous le dossier vérifié ; pas de `%`, donc
+# aucune séquence encodée qu'un intermédiaire pourrait décoder autrement que
+# nous ; pas de point ailleurs que devant l'extension, donc pas de `photo.html`
+# ni de `photo.jpg.svg`. La casse est ignorée sur l'extension : un objet déposé
+# `AVATAR.JPG` est une image, et refuser la majuscule ferait échouer un client
+# légitime — même raison que pour le dossier.
+NOM_DE_FICHIER = re.compile(
+    r"^[A-Za-z0-9_-]{1,64}\.(?:" + "|".join(EXTENSIONS_ACCEPTEES) + r")$",
+    re.IGNORECASE,
+)
+
+# Le seul paramètre de requête admis derrière le nom : le péremptoire de cache
+# que `deposerPhoto` ajoute à chaque dépôt (`?v={Date.now()}`, `lib/stockage.js`).
+# Le chemin d'une photo étant stable, c'est lui qui fait changer la colonne et
+# périmer le cache ; il fait donc partie des URL légitimes et doit être admis.
+# Rien d'autre ne l'est : le jour où sa forme changerait, l'écriture échouerait
+# franchement au lieu de laisser passer une chaîne quelconque dans un `src`.
+PARAMETRE_DE_CACHE = re.compile(r"^v=\d{1,20}$")
 
 # Plafond, doublé par la contrainte `*_url_format` en base. Un chemin
 # `{uuid}/avatar.webp` sous l'URL d'un projet Supabase pèse moins de cent
@@ -77,7 +132,7 @@ def url_de_photo_valide(
 ) -> str:
     """Normalise et vérifie une URL de photo, ou refuse en français.
 
-    Quatre conditions, et il faut les quatre :
+    Cinq conditions, et il faut les cinq :
 
     1. l'URL commence par celle du **projet Supabase configuré** — c'est ce qui
        interdit d'enregistrer l'adresse d'un serveur tiers ;
@@ -87,15 +142,23 @@ def url_de_photo_valide(
        plafond ;
     4. le **premier segment de ce chemin est `proprietaire`** — l'identifiant du
        profil pour un avatar, celui du championnat pour une photo de
-       championnat.
+       championnat ;
+    5. ce qui reste est un **nom de fichier simple portant une extension
+       d'image** — `jpg`, `jpeg`, `png` ou `webp`, et rien d'autre.
 
-    **La quatrième est celle qui manquait, et c'est la seule qui traite d'IDOR.**
-    Les trois premières disent « cette photo vient bien de chez nous » ; seule la
-    quatrième dit « et elle est bien la tienne ». Sans elle, `avatars/{id}/…`
-    acceptait n'importe quel `{id}`, et la clé de service écrivait en base une
-    URL que la RLS Storage n'aurait jamais laissé déposer. Le rapprochement se
-    fait sans tenir compte de la casse : un UUID est insensible à la casse, et
-    refuser une majuscule ferait échouer un client parfaitement légitime.
+    **La quatrième est la seule qui traite d'IDOR.** Les trois premières disent
+    « cette photo vient bien de chez nous » ; seule la quatrième dit « et elle
+    est bien la tienne ». Sans elle, `avatars/{id}/…` acceptait n'importe quel
+    `{id}`, et la clé de service écrivait en base une URL que la RLS Storage
+    n'aurait jamais laissé déposer. Le rapprochement se fait sans tenir compte de
+    la casse : un UUID est insensible à la casse, et refuser une majuscule ferait
+    échouer un client parfaitement légitime.
+
+    **La cinquième dit « et c'est bien une image ».** Le dossier qualifie le
+    propriétaire, pas le contenu : `avatars/{son propre id}/page.html` satisfait
+    les quatre premières. Elle ferme du même geste la question du chemin — un nom
+    sans `/` ni `%` ne peut désigner ni un sous-dossier, ni une séquence encodée
+    que Supabase décoderait autrement que nous.
 
     **`proprietaire` est obligatoire.** Une valeur par défaut aurait rendu le
     contrôle facultatif, donc absent du premier appel qui l'oublie — exactement
@@ -138,6 +201,17 @@ def url_de_photo_valide(
     if not separateur or not objet:
         raise refus
     if dossier.lower() != str(proprietaire).strip().lower():
+        raise refus
+
+    # Le nom du fichier, enfin, péremptoire de cache mis à part. Le dossier dit
+    # « à qui », l'extension dit « quoi » : les quatre contrôles précédents
+    # laissaient passer `{dossier}/page.html` (audit des dépôts `0.62.0`, bloc en
+    # tête de fichier). La séparation se fait sur le PREMIER `?` : le nom ne peut
+    # pas en contenir, la regex le lui interdit.
+    nom, interrogation, requete = objet.partition("?")
+    if not NOM_DE_FICHIER.match(nom):
+        raise refus
+    if interrogation and not PARAMETRE_DE_CACHE.match(requete):
         raise refus
 
     return propre

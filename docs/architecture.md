@@ -78,6 +78,29 @@ gratuit de Railway n'ajouterait qu'un cold start. L'**URL**, elle, passe par Fas
 c'est une écriture en base, et c'est là que le backend vérifie qu'elle désigne bien notre
 projet. Voir `database.md` §9.
 
+> ### « Côté serveur » ne veut pas dire « dans FastAPI » (audit des dépôts, `0.62.0`)
+>
+> **Le fichier d'une photo n'atteint jamais Railway.** Il n'existe aucune route
+> `UploadFile` dans le backend, et `python-multipart` n'est pas installé :
+> `app/api/stockage.py` ne juge que des **URL**, jamais des octets. Un contrôle de type
+> MIME ou de taille ajouté là garderait un chemin que le fichier n'emprunte pas.
+>
+> Les deux serveurs se partagent donc la garde d'un dépôt, et chaque question a **un seul**
+> propriétaire :
+>
+> | Question | Qui juge | Où |
+> |---|---|---|
+> | Type MIME du fichier | **Le compartiment Supabase** | `allowed_mime_types`, migration 16 §3 — refus `415` |
+> | Taille du fichier | **Le compartiment Supabase** | `file_size_limit` = 2 Mo, migration 16 §3 |
+> | Droit d'écrire dans ce dossier | **La RLS `storage.objects`** | `foldername(name)[1] = auth.uid()`, `database.md` §9 |
+> | Type servi à l'affichage | **Le compartiment Supabase** | conséquence d'`allowed_mime_types` : jamais `text/html`, jamais `image/svg+xml` |
+> | Droit d'enregistrer cette URL comme sienne | **FastAPI** | `url_de_photo_valide`, cinq conditions |
+> | Forme du chemin et extension | **FastAPI** | idem — `{propriétaire}/{nom}.{jpg\|jpeg\|png\|webp}` |
+>
+> Ce que le frontend vérifie avant l'envoi (5 Mo, trois types) ne garde **rien** : c'est un
+> refus immédiat pour ne pas faire monter un fichier voué au rejet sur un réseau mobile.
+> Détail de l'audit et du seul défaut trouvé : `bugs-connus.md` §32.
+
 **Le critère est la politique RLS, pas la commodité.** Si la RLS décrit le cas, on lit
 en direct — passer par Railway n'ajouterait qu'un cold start. Si la RLS ne le décrit
 pas (ou le décrirait de travers, en amputant silencieusement un classement), la route

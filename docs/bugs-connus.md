@@ -1262,3 +1262,117 @@ dit `adopter_grand_prix`, et l'adoption automatique ne fait rien d'autre.
 **Ne pas croire que `adopter_grand_prix` est devenue inutile.** Elle reste la seule voie
 pour le cas que l'automatique refuse : le doublon déjà constitué, et les deux lignes
 manuelles homonymes.
+
+---
+
+## 32. Une page HTML pouvait devenir un avatar — le dossier était vérifié, pas le nom du fichier
+
+**Symptôme.** Aucun, comme aux §28 et §29 : c'est un défaut de validation, et il ne se voit
+qu'au moment où quelqu'un s'en sert.
+
+Trouvé par un **audit des dépôts de photos** portant sur cinq questions : type MIME, taille,
+segment de dossier, traversée de chemin, et type servi à l'affichage. **Un seul défaut en
+est sorti** — les quatre autres points étaient déjà couverts, et par où ils l'étaient
+compte autant que le correctif.
+
+### Ce que l'audit a d'abord dû rétablir : il n'y a pas d'upload backend
+
+La demande visait « la validation du type MIME dans `backend/app/api/stockage.py`, avant
+l'upload vers Supabase Storage ». **Ce chemin n'existe pas.** `app/api/stockage.py` ne reçoit
+jamais de fichier : il ne valide qu'une **URL**, et FastAPI n'a aucune route `UploadFile` —
+`grep -rn "UploadFile" backend/app` ne rend rien, et `python-multipart` n'est pas installé.
+
+Le fichier va **directement du navigateur à Supabase Storage** (chemin (B) d'`architecture.md`
+§3). Conséquence pour tout audit futur : **« côté serveur » ne veut pas dire « dans FastAPI »**.
+Pour un dépôt de photo, le serveur qui garde, c'est **le compartiment Supabase** — sa liste
+`allowed_mime_types`, son `file_size_limit`, et les politiques de `storage.objects`. Un
+contrôle ajouté dans FastAPI n'aurait gardé rien du tout : il aurait été du théâtre sur un
+chemin que le fichier n'emprunte pas.
+
+### Les quatre points sans défaut, et où ils sont gardés
+
+| Point | Verdict | Ce qui garde, côté serveur |
+|---|---|---|
+| **Type MIME** | **Sain** | `allowed_mime_types = ['image/jpeg','image/png','image/webp']` sur les deux compartiments (migration 16 §3). Supabase refuse en `415` — un client modifié n'y change rien. |
+| **Taille** | **Sain** | `file_size_limit = 2 097 152` sur les deux compartiments. Le plafond de 5 Mo de `lib/stockage.js` ne juge, lui, que ce qu'on accepte de **choisir** ; les deux ne mesurent pas la même chose (voir `composants.md`, version `0.51.0`). |
+| **Traversée de chemin** | **Sain** | `url_de_photo_valide` refuse `..`, et surtout **compare le dossier par égalité stricte** : rien de smuggé dans ce segment ne peut y survivre, pas même une séquence encodée (`%2e%2e`), qui casse l'égalité au lieu de la contourner. |
+| **Type servi à l'affichage** | **Sain** | Supabase sert l'objet sous le `Content-Type` du dépôt, et ce type est **forcément** l'un des trois : c'est `allowed_mime_types` qui l'impose, pas le `contentType: TYPE_DEPOSE` du frontend. **`image/svg+xml` est absent de la liste** — c'est la seule image qui porte du script, et les deux compartiments sont publics. Ni `text/html` ni `application/javascript` ne peuvent donc être servis. |
+
+**La nuance qui vaut d'être retenue sur le type MIME** : `allowed_mime_types` porte sur
+l'**en-tête `Content-Type` annoncé**, jamais sur les octets du fichier. Un attaquant peut
+déposer du HTML en l'annonçant `image/jpeg`. Ce n'est pas une faille, précisément parce que
+c'est ce même type annoncé qui sera **servi** : le navigateur reçoit du HTML étiqueté
+`image/jpeg`, ce qu'il n'exécute pas. L'incohérence contenu / type est sans effet ; c'est le
+type servi qui décide, et il est sous clé.
+
+### Cause réelle du seul défaut : le nom du fichier n'était contrôlé nulle part
+
+Le correctif du §28 avait ajouté le contrôle du **premier segment** du chemin. Rien ne
+regardait ce qui suit — ni en base, ni dans le backend :
+
+- la politique `storage.objects` ne compare que `(storage.foldername(name))[1]` (`database.md`
+  §9) : sous son propre dossier, **n'importe quel nom est déposable** ;
+- `url_de_photo_valide` exigeait un objet **non vide** après le dossier, et rien de plus.
+
+Un joueur pouvait donc déposer `avatars/{son propre id}/page.html` — son dossier, donc la
+RLS passe ; annoncé `image/jpeg`, donc le compartiment passe — puis l'enregistrer comme son
+avatar par `PATCH /profils/moi`, où les quatre contrôles passaient aussi. L'URL partait
+ensuite dans un `src` sur l'écran de tous les autres membres.
+
+**Portée réelle : faible, et il faut le dire.** L'objet étant servi en `image/jpeg`, il ne
+s'exécute ni dans un `<img>`, ni en navigation directe. Le défaut n'était pas un XSS stocké ;
+c'était l'**absence de la ceinture** qui, seule, tenait encore si le harnais lâchait — une
+liste `allowed_mime_types` élargie un jour à `image/svg+xml` aurait suffi à transformer ce
+même trou en XSS stocké sur l'écran de tout un championnat.
+
+### Correctif — backend `0.62.0`
+
+`url_de_photo_valide` prend une **cinquième condition** : ce qui suit le dossier doit être un
+nom simple portant une extension d'image.
+
+- `NOM_DE_FICHIER` = `^[A-Za-z0-9_-]{1,64}\.(jpg|jpeg|png|webp)$`, casse ignorée sur
+  l'extension comme elle l'est déjà sur le dossier. Ce que le motif **interdit** est
+  l'essentiel : pas de `/` (donc aucun sous-dossier), pas de `%` (donc aucune séquence
+  encodée qu'un intermédiaire décoderait autrement que nous), pas de point ailleurs que
+  devant l'extension (donc ni `page.html`, ni `avatar.jpg.svg`).
+- `PARAMETRE_DE_CACHE` = `^v=\d{1,20}$` : le péremptoire de cache que `deposerPhoto` ajoute à
+  chaque dépôt est légitime et devait rester admis, mais lui seul — il finit dans un attribut
+  `src`.
+
+Vérifié sur treize variantes d'attaque (`.html`, `.svg`, `.js`, double extension,
+sous-dossier, traversée brute et encodée, dossier d'autrui, mauvais compartiment, projet
+tiers, injection dans le `src`, fragment, dossier nu) : toutes refusées en `422`. Et sur six
+URL légitimes, extensions `png` / `webp` / `jpeg` d'avant la `0.51.0` et dossier en
+majuscules compris : toutes acceptées.
+
+**Rien de légitime ne change.** Les deux seuls appelants déposent sous une `base` constante —
+`"avatar"` et `"photo"` (`MonProfil.jsx`, `CreerChampionnat.jsx`).
+
+### Résidu assumé : la RLS Storage ne contraint toujours que le dossier
+
+Un joueur peut **encore déposer** `{son propre id}/page.html` dans le compartiment. Ce qu'il
+ne peut plus, c'est en faire une photo. Le résidu est donc un objet orphelin de 2 Mo maximum,
+servi en `image/jpeg`, dans son propre dossier — un abus d'hébergement mineur, pas une prise
+sur l'app.
+
+Le refermer demanderait d'ajouter le motif du nom aux six politiques `storage.objects`, donc
+une **migration manuelle** (CLAUDE.md §3.3) que rien ne joue automatiquement : le correctif
+backend se déploie seul, la migration attendrait qu'on y pense. L'écart a été **signalé
+plutôt que tranché seul**, et il est noté ici pour qu'il ne se redécouvre pas.
+
+### Ce qu'il ne faut pas refaire
+
+- **Ne pas confondre « côté serveur » et « dans FastAPI ».** Le projet a deux serveurs
+  (`architecture.md` §3). Chercher la validation d'un dépôt dans le backend, c'est la chercher
+  sur un chemin que le fichier n'emprunte pas — et risquer d'y ajouter un contrôle décoratif
+  en croyant avoir fermé quelque chose.
+- **Ne pas déduire d'un `Content-Type` fourni qu'il a été vérifié contre le contenu.**
+  `allowed_mime_types` lit l'en-tête, pas les octets. Ce qui sauve, c'est que le type annoncé
+  est aussi le type servi ; le raisonnement doit passer par là, sinon on conclut juste par
+  hasard.
+- **Une extension n'est pas une vérification de contenu, et ce n'est pas une raison de s'en
+  passer.** Elle ne prouve rien sur les octets ; elle empêche une URL manifestement fausse
+  d'entrer en base, et c'est la couche qui reste quand la liste des types change sous nous.
+- **Un correctif d'autorisation ne couvre pas le segment voisin.** Le §28 a vérifié le
+  dossier, entièrement et correctement — et a laissé le nom tel quel pendant quatre versions.
+  Un chemin se valide par segment, pas par intention.
