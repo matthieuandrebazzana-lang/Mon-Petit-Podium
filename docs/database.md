@@ -403,6 +403,13 @@ Objet `{ session, session_result, drivers, race_control, laps, starting_grid, pi
 | `cotes_du_grand_prix(uuid)` | `security invoker` — lit sous les politiques publiques |
 | `pronostics_fermes(uuid)` | `security invoker`, `authenticated` |
 | `livree_par_indice(integer)` | `immutable`, les dix livrées initiales |
+| `nom_de_photo_valide(text)` | `immutable` — **la seule que `authenticated` doive exécuter** (migration 22) |
+
+> **`nom_de_photo_valide` est la seule fonction ouverte à `authenticated`, et c'est
+> structurel.** Toutes les autres sont révoquées pour lui. Celle-ci est appelée depuis une
+> expression de politique RLS sur `storage.objects`, et une politique est évaluée **avec les
+> droits de l'appelant** : un `revoke` pour `authenticated` ferait échouer tout dépôt de
+> photo en `42501` au lieu de le filtrer. Elle ne lit aucune table et ne rend qu'un booléen.
 
 > **`pseudo_disponible` révèle qu'un pseudo est pris, sans dire par qui.** C'est le
 > compromis normal d'un champ de pseudo, ceux-ci étant de toute façon affichés dans les
@@ -509,7 +516,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les vingt-et-une migrations
+## 6. Les vingt-deux migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -534,6 +541,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 19 | `20260826120000_calendrier_2026_grands_prix` | **insère les 11 GP restants de 2026**, `slug_gp`, `adopter_grand_prix` | 3, 11 |
 | 20 | `20260826180000_qualifications_horaires_2026` | **corrige les horaires de qualifications de la 19**, qui les dérivait de `date_course` | 3, 11, **19** |
 | 21 | `20260827_audit_rls` | **audit RLS** : lecture des profils bornée, `is_admin` non modifiable, fenêtre de fermeture sur les pronostics, deux politiques `insert` retirées, cotes réservées aux connectés | 1, 2, 3, 5, 8, 12, 14 |
+| 22 | `20260913_storage_rls_extension` | **contrainte d'extension sur les dépôts** : `nom_de_photo_valide`, et les quatre politiques `insert`/`update` de Storage amendées par `alter policy` | **16** |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -556,14 +564,16 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **5** après **21** | la fenêtre de fermeture sur la lecture des pronostics | rejouer 21 |
 | **2** après **21** | l'adhésion et la création de championnat, de nouveau libres | rejouer 21 |
 | **3** après **21** | les cotes, de nouveau lisibles sans session | rejouer 21 |
+| **16** après **22** | la contrainte d'extension sur les dépôts de photos | rejouer 22 |
 
 **La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12
 et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre les écrans
 où *quelqu'un d'autre* voit la voiture. La perdre ne casse rien — le frontend retombe sur
 l'encre calculée — mais le réglage cesse d'être visible ailleurs que sur son propre profil.
 
-**Les migrations 11, 14, 15, 17, 19, 20 et 21 ne remplacent aucune fonction** : elles ne
-peuvent pas entrer en conflit d'ordre sur une *fonction*. La 17 ne remplace que deux
+**Les migrations 11, 14, 15, 17, 19, 20, 21 et 22 ne remplacent aucune fonction** : elles ne
+peuvent pas entrer en conflit d'ordre sur une *fonction*. La 22 en **crée** une
+(`nom_de_photo_valide`), ce qui n'est pas la même chose : personne d'autre ne la remplace. La 17 ne remplace que deux
 contraintes `check`, et il faut donc la rejouer si l'on rejoue la 16 — qui reposerait les
 contraintes fautives.
 
@@ -592,6 +602,19 @@ contraintes fautives.
 > son bloc de contrôle final **lève** si une seconde politique de lecture subsiste sur
 > `public.profils` : c'est le seul moyen de découvrir l'état, une politique de trop ne se
 > signalant par rien d'autre.
+
+> ### La 22 en introduit un quatrième genre : sur une expression de POLITIQUE
+> Ceux de la 21 portent sur l'**existence** d'une politique ; celui de la 22 porte sur
+> l'**expression** de quatre politiques qu'elle ne possède pas. Elle les amende par
+> `alter policy` — ce qui préserve leur nom, leur verbe, leurs rôles et le `using` des deux
+> `update` — mais PostgreSQL **ne sait pas ajouter un terme** à une expression de politique :
+> le `with check` est réécrit en entier, les deux termes de la 16 recopiés.
+>
+> D'où le piège : **rejouer la 16 après la 22** repose les quatre politiques dans leur version
+> sans contrainte de nom. Aucune erreur, aucune ligne manquante — les dépôts redeviennent
+> simplement libres sur le nom du fichier. C'est la contrepartie assumée d'`alter policy`, et
+> le remède est celui de la 17 : rejouer la 22 derrière. Son bloc de contrôle final **lève**
+> si l'un des quatre `with check` a perdu le terme, ou si l'un des deux `using` a disparu.
 
 > ### La 17 répare un défaut que la 16 ne pouvait pas voir
 >
@@ -691,6 +714,32 @@ passage dans le SQL Editor.**
 >   piège du genre nouveau, reproduit — et **rejouer la 21 le répare** ;
 > - une politique parasite ajoutée à la main fait bien **lever** le bloc de contrôle.
 
+> ### La 22 l'a été aussi, sur PostgreSQL 16
+> Contre un harnais réduit à `storage.objects`, `storage.foldername`, `auth.uid()`,
+> `public.championnats` et **les sept politiques de la 16** — pas le schéma `storage` complet,
+> ce que ce contrôle ne remplace donc pas. Dix épreuves, toutes passées :
+>
+> - les trois noms légitimes se déposent (`avatar.jpg`, `avatar.png` d'avant la `0.51.0`,
+>   `photo.jpg`), les sept mauvais sont refusés par la RLS (`page.html`, `x.svg`, `x.js`,
+>   `avatar.jpg.svg`, dossier d'autrui, `photo.html`, championnat d'autrui) ;
+> - l'**`upsert` normal fonctionne**, ce qui prouve que le `using` a survécu à
+>   l'`alter policy` — toute la méthode repose là-dessus ;
+> - renommer sa propre photo en `.html` est refusé par le `with check` ;
+> - **réparer** un `legacy.html` en `avatar.jpg` fonctionne : c'est pourquoi le motif n'est
+>   pas dans le `using` ;
+> - écraser la photo d'un autre reste refusé — la garde du §28 est intacte ;
+> - supprimer sa propre photo fonctionne : `delete` n'est pas touchée ;
+> - **trois rejeux d'affilée** ne changent rien, dépôts compris ;
+> - le garde-fou d'absence lève un message clair si la 16 n'a pas été jouée ;
+> - l'état dégradé du piège ci-dessus est **reproduit**, détecté par le bloc de contrôle, et
+>   **réparé par un rejeu de la 22**.
+>
+> **Le harnais a d'abord menti.** Sa première version omettait les politiques `select` et
+> `delete` de la 16, et *tous* les `update` ressortaient refusés — l'`upsert` légitime
+> compris. La cause n'était pas la migration : **un `update` dont le `where` lit une colonne
+> applique aussi les politiques `select`**. Sans politique de lecture, la ligne est
+> introuvable et le `with check` n'est jamais atteint. À retenir pour le prochain harnais RLS.
+
 ---
 
 ## 7. Pièges connus
@@ -757,13 +806,16 @@ Depuis la v0.9.0 ils ne quittent plus le serveur : **il faut ouvrir les logs Rai
 
 ## 9. Supabase Storage — deux compartiments, et où vit l'autorisation
 
-Migration 16. Les images ne sont **jamais** en base : `profils.avatar_url` et
+Migrations 16 et **22**. Les images ne sont **jamais** en base : `profils.avatar_url` et
 `championnats.photo_url` ne portent que des URL publiques (§1).
 
 | Compartiment | Chemin d'un objet | Qui écrit |
 |---|---|---|
 | `avatars` | `{profil_id}/avatar.{ext}` | le profil lui-même (`auth.uid()`) |
 | `championnats` | `{championnat_id}/photo.{ext}` | le **créateur** du championnat |
+
+`{ext}` n'est pas libre depuis la migration 22 : `jpg`, `jpeg`, `png` ou `webp`, et le nom qui
+la précède est borné lui aussi (voir ci-dessous).
 
 Les deux sont **publics**, plafonnés à **2 Mo**, et n'acceptent que `image/jpeg`,
 `image/png` et `image/webp`.
@@ -784,6 +836,31 @@ Les deux sont **publics**, plafonnés à **2 Mo**, et n'acceptent que `image/jpe
 > code de l'écran. **Aucune récursion à craindre** ici : la sous-requête porte sur
 > `public.championnats`, pas sur `storage.objects` que la politique protège (§2).
 
+> ### Le dossier dit « à qui », l'extension dit « quoi » (migration 22)
+>
+> Le contrôle du dossier ci-dessus ne qualifie que le **propriétaire**. Jusqu'à la migration
+> 22, tout ce qui suivait était libre : `avatars/{son propre id}/page.html` était déposable.
+> La liste `allowed_mime_types` n'y changeait rien — **elle porte sur l'en-tête
+> `Content-Type` annoncé, jamais sur le nom ni sur les octets**.
+>
+> Les quatre politiques d'écriture — `insert` et `update` des deux compartiments — portent
+> donc un troisième terme, `public.nom_de_photo_valide(name)` : le **dernier segment** du
+> chemin doit valoir `^[A-Za-z0-9_-]{1,64}\.(jpg|jpeg|png|webp)$`, casse ignorée. Pas de `/`,
+> pas de `%`, pas de point hors extension. **`svg` est exclu comme les autres** : c'est la
+> seule image qui porte du script, et les deux compartiments sont publics.
+>
+> **Le motif a deux propriétaires par nécessité** : cette fonction et `NOM_DE_FICHIER` dans
+> `backend/app/api/stockage.py`. Deux moteurs de regex, un seul motif — ils doivent bouger
+> ensemble, et le bloc de contrôle de la 22 rejoue les échantillons du test backend pour que
+> la dérive se voie.
+>
+> **`select` et `delete` ne sont PAS filtrées, et il faut que ce soit ainsi.** Un objet déjà
+> déposé doit rester **lisible** — sinon une photo d'avant la 22 disparaîtrait des écrans — et
+> surtout **effaçable** : `delete` est le seul geste qui répare un objet mal nommé déjà en
+> place. Un contrôle de nom sur un retrait protégerait le déchet, pas les joueurs. Le motif
+> n'est pas davantage dans le `using` des `update`, pour la même raison : il aurait rendu un
+> objet mal nommé impossible à écraser. Voir `bugs-connus.md` §32.
+
 > **Trois politiques d'écriture par compartiment, et il en faut bien trois** : `insert`
 > pose la première photo, `update` écrase la suivante — le chemin est stable —, `delete`
 > sert au bouton « Supprimer la photo ». Sous RLS, ce qu'aucune politique n'autorise est
@@ -794,6 +871,14 @@ Les deux sont **publics**, plafonnés à **2 Mo**, et n'acceptent que `image/jpe
 > obligerait à signer une URL par image et par affichage, donc un aller-retour réseau par
 > vignette d'un classement de douze. Même raisonnement que la lecture publique des GP et
 > des cotes (§2).
+
+> **Ce que le compartiment garde, et ce qu'il ne garde pas.** `allowed_mime_types` et
+> `file_size_limit` sont les **seules** défenses côté serveur sur le fichier lui-même : le
+> backend ne le voit jamais passer (`architecture.md` §3). Mais `allowed_mime_types` lit
+> l'en-tête annoncé — on peut déposer du HTML étiqueté `image/jpeg`. Ce n'est pas une faille,
+> parce que **c'est ce même type annoncé qui sera servi** : le navigateur reçoit du HTML
+> étiqueté `image/jpeg`, ce qu'il n'exécute pas. Le raisonnement doit passer par là, sinon on
+> conclut juste par hasard.
 
 > **Le plafond et la liste des types vivent dans le COMPARTIMENT, pas dans le client.**
 > `frontend/src/lib/stockage.js` fait la même vérification, mais pour dire non tout de
@@ -806,8 +891,9 @@ Les deux sont **publics**, plafonnés à **2 Mo**, et n'acceptent que `image/jpe
 > Le chemin d'écriture est celui de `docs/architecture.md` §3 : **le fichier va
 > directement à Supabase** (la RLS Storage décrit exactement le cas), **l'URL passe par
 > FastAPI** (c'est une écriture en base). `app/api/stockage.py` confronte alors l'URL reçue
-> à `SUPABASE_URL` : elle doit désigner **notre** projet, **le bon compartiment**, et —
-> depuis le backend `0.58.0` — **le dossier de l'appelant**.
+> à `SUPABASE_URL` : elle doit désigner **notre** projet, **le bon compartiment**, **le
+> dossier de l'appelant** (backend `0.58.0`) et — depuis le backend `0.62.0` — **un nom de
+> fichier d'image**, le même motif que celui de la migration 22.
 >
 > **Ce troisième point est celui qui manquait**, et son absence était une faille d'IDOR :
 > la règle du dossier ci-dessus garde le DÉPÔT du fichier, pas l'écriture de l'URL en base,

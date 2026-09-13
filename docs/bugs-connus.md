@@ -1348,17 +1348,56 @@ majuscules compris : toutes acceptées.
 **Rien de légitime ne change.** Les deux seuls appelants déposent sous une `base` constante —
 `"avatar"` et `"photo"` (`MonProfil.jsx`, `CreerChampionnat.jsx`).
 
-### Résidu assumé : la RLS Storage ne contraint toujours que le dossier
+### Le résidu est fermé — migration 22 (`20260913_storage_rls_extension`)
 
-Un joueur peut **encore déposer** `{son propre id}/page.html` dans le compartiment. Ce qu'il
-ne peut plus, c'est en faire une photo. Le résidu est donc un objet orphelin de 2 Mo maximum,
-servi en `image/jpeg`, dans son propre dossier — un abus d'hébergement mineur, pas une prise
-sur l'app.
+Le correctif backend empêchait d'**enregistrer** `{son propre id}/page.html` comme photo ;
+il laissait ouverte la possibilité de le **déposer**, la politique de la 16 ne comparant que
+le premier segment du chemin. Ce résidu avait été signalé plutôt que tranché seul, faute de
+pouvoir jouer une migration automatiquement (CLAUDE.md §3.3). **La migration 22 le referme :
+le dépôt lui-même est désormais refusé.**
 
-Le refermer demanderait d'ajouter le motif du nom aux six politiques `storage.objects`, donc
-une **migration manuelle** (CLAUDE.md §3.3) que rien ne joue automatiquement : le correctif
-backend se déploie seul, la migration attendrait qu'on y pense. L'écart a été **signalé
-plutôt que tranché seul**, et il est noté ici pour qu'il ne se redécouvre pas.
+Elle amende les **quatre** politiques d'écriture — `insert` et `update` des deux
+compartiments — par un troisième terme, `public.nom_de_photo_valide(name)`, qui exige du
+dernier segment du chemin le **même motif que le backend**.
+
+Trois décisions valent d'être retenues, parce qu'elles ont chacune failli être prises à
+l'envers :
+
+- **`alter policy`, pas `drop` + `create`.** La politique garde son nom, son verbe, ses
+  rôles, et surtout la clause `using` des deux `update` — PostgreSQL laisse inchangée toute
+  clause absente d'un `alter policy`. L'expression `with check` doit néanmoins être
+  **réécrite en entier** : il n'existe aucun moyen d'ajouter un terme à une expression de
+  politique. C'est cette recopie qui crée le piège d'ordre (voir ci-dessous).
+- **Le motif ne va PAS dans le `using` des `update`.** `using` décide quelles lignes
+  **existantes** sont modifiables ; la question posée porte sur le nom de la **nouvelle**.
+  L'y ajouter aurait rendu un objet mal nommé déposé avant la migration **impossible à
+  écraser**, donc irréparable autrement qu'en le supprimant. Éprouvé : remplacer un
+  `legacy.html` par un `avatar.jpg` fonctionne, et c'était le but.
+- **Ni `select` ni `delete` ne sont touchées.** `select` est la lecture publique : un objet
+  déjà déposé doit rester lisible, sans quoi une photo d'avant la migration disparaîtrait
+  des écrans. `delete` est **le seul geste qui répare** un objet mal nommé déjà en place ; le
+  filtrer l'aurait rendu indéfiniment ineffaçable. Un contrôle de nom sur un retrait
+  protégerait le déchet, pas les joueurs.
+
+**Nouveau piège d'ordre** : rejouer la **16** après la **22** repose les quatre politiques
+sans leur contrainte de nom, sans erreur ni trace — exactement comme rejouer la 16 après la
+17 rouvrait le refus de toute photo. Remède : rejouer la 22 derrière. Entré au tableau de
+`database.md` §6.
+
+**Éprouvée sur un PostgreSQL 16 jetable**, seule migration du projet à l'avoir été
+(`database.md` §6). Le harnais rejoue les sept politiques de la 16, puis la 22, puis dépose
+sous le rôle `authenticated` : les trois noms légitimes passent, les sept mauvais sont
+refusés par la RLS, l'`upsert` normal et la réparation d'un legacy fonctionnent, l'écrasement
+de la photo d'un autre reste refusé, la suppression marche. Trois rejeux d'affilée ne
+changent rien, le garde-fou d'absence lève un message clair si la 16 n'a pas été jouée, et le
+contrôle d'état final détecte l'état dégradé du piège ci-dessus.
+
+> **Le harnais a d'abord menti, et la leçon vaut mieux que le résultat.** Sa première version
+> omettait les politiques `select` et `delete` de la 16 : **tous** les `update` ressortaient
+> refusés, y compris l'`upsert` légitime. La cause n'était pas la migration mais PostgreSQL —
+> **un `update` dont le `where` lit une colonne applique AUSSI les politiques `select`**. Sans
+> politique de lecture, la ligne est introuvable et le `with check` n'est jamais atteint. Un
+> banc d'essai incomplet accuse le code qu'il éprouve.
 
 ### Ce qu'il ne faut pas refaire
 
