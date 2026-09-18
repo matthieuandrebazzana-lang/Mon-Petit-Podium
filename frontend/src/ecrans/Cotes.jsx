@@ -7,9 +7,10 @@ import Alerte from "../composants/Alerte.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import Compteur from "../composants/Compteur.jsx";
 import EtoileFavori from "../composants/EtoileFavori.jsx";
+import IconeEtoileLogo from "../composants/icones/IconeEtoileLogo.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { Barre, Pave } from "../composants/Squelette.jsx";
-import { IconeCoche, IconeCroix, IconePlus } from "../composants/Icones.jsx";
+import { IconeCoche, IconeCroix } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { couleurMarche, encreSurBlanc, tonalites } from "../lib/couleurs.js";
 import { couleurEcurie } from "../lib/ecuries.js";
@@ -212,12 +213,18 @@ function SectionFavoris({ favoris, ferme, onRetirer }) {
 
       {favoris.length === 0 ? (
         <div className="rounded-carte bg-surface shadow-carte px-5 py-7 text-center">
-          <IconePlus
+          {/* L'ambre est celui des pastilles que cette zone vide remplacera,
+              et le seul repère « pari bonus » de l'écran. *Contraste signalé* :
+              `#E8A020` sur le blanc du bloc vaut 2,2:1, sous le plancher de
+              3:1 — mais le signe est ici **décoratif** (`aria-hidden`), la
+              phrase juste dessous portant seule le sens. L'étoile qu'on va
+              vraiment toucher, elle, est mesurée à 3,4:1 dans son widget. */}
+          <IconeEtoileLogo
             className="text-accent mx-auto size-6"
             aria-hidden="true"
           />
           <p className="text-texte-doux text-corps-sm mx-auto mt-2.5 max-w-[30ch]">
-            Ajoute des paris bonus ci-dessous avec le +, puis choisis-en 3 à
+            Ajoute des paris bonus ci-dessous avec l'étoile, puis choisis-en 3 à
             l'écran suivant.
           </p>
         </div>
@@ -257,8 +264,8 @@ function SectionFavoris({ favoris, ferme, onRetirer }) {
 function ModeEmploi() {
   const etapes = [
     <>
-      Ajoute tes paris bonus avec{" "}
-      <IconePlus
+      Ajoute tes paris bonus avec l'étoile{" "}
+      <IconeEtoileLogo
         aria-hidden="true"
         className="inline-block size-3.5 translate-y-px"
       />

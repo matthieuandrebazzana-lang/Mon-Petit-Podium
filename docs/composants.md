@@ -1053,6 +1053,29 @@ un tiers de plus que le `+` qu'elle remplace. Les 83,5 % la posent au poids opti
 l'autre étoile du projet. L'encre ne bouge pas — `text-secondaire/60`, 3,4:1 mesuré, et un
 aplat couvre plus de surface qu'un trait de 2.
 
-**Trois textes renvoient encore au `+`** et n'ont pas été changés : le mode d'emploi et la
-zone vide de `Cotes.jsx`, la zone vide de `Pronostics.jsx`. La rangée de `Pronostics.jsx`
-qui refait le même échange d'icônes en ligne montre elle aussi encore un `+`.
+**Les quatre références au `+` ont suivi en `0.68.0`.** Le mode d'emploi et la zone vide de
+`Cotes.jsx`, la zone vide de `Pronostics.jsx` portent l'étoile et disent « l'étoile ». La
+rangée de `Pronostics.jsx` ne recopie plus l'échange d'icônes : elle passe par
+`EtoileFavori`.
+
+### `EtoileFavori` — un couple étoile → coche, deux appelants
+
+Le composant possède seul la cellule `t-icon-swap` du pari bonus. Deux props le plient aux
+deux contextes, parce qu'une seconde copie du même échange est précisément ce qui a laissé
+un `+` dans `Pronostics.jsx` quand `Cotes.jsx` passait à l'étoile.
+
+| Prop | Pourquoi | Qui l'utilise |
+|---|---|---|
+| `sansBouton` | La rangée de `Pronostics.jsx` **est** le bouton : elle porte l'`onClick`, l'`aria-pressed` et le nom accessible. Un `<button>` de plus dedans serait du HTML invalide. Le signe est alors rendu nu, sans la zone tactile de 44px que la rangée donne déjà. | `Pronostics.jsx` |
+| `inverse` | La rangée retenue est **déjà ambre** : un aplat ambre y disparaîtrait. L'aplat devient `texte` et la coche `accent` — 7,9:1 dans les deux sens, l'ambre et l'encre foncée n'ayant pas d'ordre. | `Pronostics.jsx` |
+
+L'étoile ne paraît **que** sur l'état non retenu, donc toujours sur du blanc : son
+`text-secondaire/60` à 3,4:1 vaut dans les deux modes, `inverse` ne la touche pas.
+
+> ### Une encre signalée : la zone vide de `Cotes.jsx`
+>
+> L'étoile de ce bloc garde le `text-accent` que portait le `+` — 2,2:1 sur le blanc du
+> bloc, sous le plancher de 3:1. Elle est **décorative** (`aria-hidden`, la phrase juste
+> dessous porte seule le sens) et l'ambre est le repère « pari bonus » de l'écran, celui
+> des pastilles qui remplaceront ce bloc. La zone vide de `Pronostics.jsx`, elle, montre
+> l'étoile à l'encre exacte qu'on va toucher : `text-secondaire/60`, 3,4:1.

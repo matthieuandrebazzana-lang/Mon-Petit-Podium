@@ -200,4 +200,4 @@ seule ligne). Mettre à jour **uniquement le fichier `docs/` concerné** par la 
 
 ## 8. État d'avancement
 
-Version actuelle : 0.67.0
+Version actuelle : 0.68.0

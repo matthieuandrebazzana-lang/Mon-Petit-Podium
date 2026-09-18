@@ -15,11 +15,11 @@ import IconeEtoileLogo from "./icones/IconeEtoileLogo.jsx";
  * > l'app. Le couple étoile → coche garde la promesse du couple d'avant — un
  * > état à remplir, un état rempli.
  * >
- * > **Les trois textes qui renvoient au `+` n'ont pas suivi** : le mode
- * > d'emploi et la zone vide du tableau des cotes (`Cotes.jsx`), la zone vide
- * > de l'écran de saisie (`Pronostics.jsx`), et la rangée de `Pronostics.jsx`
- * > qui refait le même échange d'icônes en ligne. Ils disent encore « avec le
- * > + » devant une étoile — écart signalé, hors du périmètre demandé.
+ * > **Les quatre références au `+` ont suivi en `0.68.0`** : le mode d'emploi
+ * > et la zone vide du tableau des cotes (`Cotes.jsx`), la zone vide de
+ * > l'écran de saisie (`Pronostics.jsx`) disent maintenant « l'étoile » devant
+ * > une étoile. La rangée de `Pronostics.jsx`, qui refaisait le même échange
+ * > d'icônes en ligne, passe par ce composant — d'où `sansBouton`.
  * >
  * > Les noms de ce fichier, du composant et de sa prop **ne bougent pas** :
  * > c'est un changement de vocabulaire d'interface, et l'écriture en base
@@ -48,6 +48,27 @@ import IconeEtoileLogo from "./icones/IconeEtoileLogo.jsx";
  *
  * La zone tactile fait 44px (contrainte iOS du CLAUDE.md) pour un signe de
  * 22 : c'est à l'appelant de la caler, d'où `className`.
+ *
+ * ### `sansBouton` — le signe seul, sans son bouton
+ *
+ * La rangée « Mes paris bonus » de `Pronostics.jsx` **est déjà un bouton** : la
+ * ligne entière bascule le pari au doigt. Y monter ce composant tel quel
+ * imbriquerait un `<button>` dans un `<button>` — HTML invalide, et Safari iOS
+ * n'en tire rien de bon. `sansBouton` rend donc le signe nu : le parent garde
+ * son `onClick`, son `aria-pressed` et son nom accessible, et c'est la même
+ * cellule d'échange qui sert aux deux appelants. L'alternative — recopier les
+ * 18 lignes du `t-icon-swap` en ligne — est exactement ce que la section 6 du
+ * CLAUDE.md proscrit : une question, un propriétaire.
+ *
+ * ### `inverse` — la coche sur une rangée déjà ambre
+ *
+ * Le couple par défaut est une coche `texte` sur aplat `accent` (7,9:1), posé
+ * sur du blanc. Mais la rangée de `Pronostics.jsx` **devient ambre** quand le
+ * pari est retenu : l'aplat ambre y disparaîtrait dans le fond. `inverse`
+ * échange les deux encres — aplat `texte`, coche `accent` — ce qui tient le
+ * même 7,9:1 mesuré, l'ambre et l'encre foncée n'ayant pas d'ordre. L'étoile,
+ * elle, ne paraît **que** sur l'état non retenu, donc toujours sur du blanc :
+ * son `text-secondaire/60` à 3,4:1 vaut dans les deux modes.
  */
 export default function EtoileFavori({
   favori,
@@ -55,7 +76,38 @@ export default function EtoileFavori({
   disabled,
   nom,
   className = "",
+  sansBouton = false,
+  inverse = false,
 }) {
+  const signe = (
+    <span
+      aria-hidden="true"
+      className={`t-icon-swap size-[22px] ${sansBouton ? className : ""}`}
+      data-state={favori ? "b" : "a"}
+    >
+      <IconeEtoileLogo
+        className="t-icon text-secondaire/60 size-[22px]"
+        data-icon="a"
+      />
+      <span
+        className={`t-icon flex size-[22px] items-center justify-center rounded-full ${
+          inverse ? "bg-texte" : "bg-accent"
+        }`}
+        data-icon="b"
+      >
+        <IconeCoche
+          className={`size-3 [stroke-width:3] ${
+            inverse ? "text-accent" : "text-texte"
+          }`}
+        />
+      </span>
+    </span>
+  );
+
+  /* Le parent porte déjà le bouton : pas de second `<button>`, et pas de zone
+     tactile de 44px non plus — c'est la rangée entière qui la donne. */
+  if (sansBouton) return signe;
+
   return (
     <button
       type="button"
@@ -69,22 +121,7 @@ export default function EtoileFavori({
       }
       className={`pressable size-tactile flex shrink-0 items-center justify-center ${className}`}
     >
-      <span
-        aria-hidden="true"
-        className="t-icon-swap size-[22px]"
-        data-state={favori ? "b" : "a"}
-      >
-        <IconeEtoileLogo
-          className="t-icon text-secondaire/60 size-[22px]"
-          data-icon="a"
-        />
-        <span
-          className="t-icon bg-accent flex size-[22px] items-center justify-center rounded-full"
-          data-icon="b"
-        >
-          <IconeCoche className="text-texte size-3 [stroke-width:3]" />
-        </span>
-      </span>
+      {signe}
     </button>
   );
 }

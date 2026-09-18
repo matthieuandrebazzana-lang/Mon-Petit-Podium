@@ -11,11 +11,9 @@ import { Pave } from "../composants/Squelette.jsx";
 import Compteur from "../composants/Compteur.jsx";
 import Horloge from "../composants/Horloge.jsx";
 import Repli from "../composants/Repli.jsx";
-import {
-  IconeChevronAccordeon,
-  IconeCoche,
-  IconePlus,
-} from "../composants/Icones.jsx";
+import { IconeChevronAccordeon } from "../composants/Icones.jsx";
+import EtoileFavori from "../composants/EtoileFavori.jsx";
+import IconeEtoileLogo from "../composants/icones/IconeEtoileLogo.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { couleurBloc, tonalites } from "../lib/couleurs.js";
 import {
@@ -703,7 +701,11 @@ export default function Pronostics() {
                               dans le bloc rogné — vrai, mais fragile à relire. */}
                           <div className="pb-2">
                             <div className="rounded-carte bg-surface shadow-carte px-5 py-6 text-center">
-                              <IconePlus
+                              {/* Même encre et même taille que l'étoile de la
+                                  rangée qu'on désigne — 3,4:1 mesuré sur le
+                                  blanc. Une zone vide qui montre un autre
+                                  signe que celui à toucher ne guide pas. */}
+                              <IconeEtoileLogo
                                 aria-hidden="true"
                                 className="text-secondaire/60 mx-auto size-[22px]"
                               />
@@ -711,7 +713,8 @@ export default function Pronostics() {
                                 Ajoute jusqu'à 3 paris bonus
                               </p>
                               <p className="text-corps-sm text-texte-doux mx-auto mt-1 max-w-[30ch]">
-                                Appuie sur + à côté d'un pari pour l'ajouter
+                                Appuie sur l'étoile à côté d'un pari pour
+                                l'ajouter
                               </p>
                             </div>
                           </div>
@@ -767,35 +770,27 @@ export default function Pronostics() {
                                   >
                                     {formaterPoints(favori.points)}
                                   </span>
-                                  {/* `+` puis coche, échangés dans la même
+                                  {/* Étoile puis coche, échangées dans la même
                                     cellule (transitions-dev 09, jetons
-                                    `--icon-swap-*` déjà en place). Le cercle
-                                    vide d'avant ne disait pas qu'il y avait un
-                                    geste à faire : le `+` le nomme, et c'est
-                                    lui que la zone vide ci-dessus désigne.
+                                    `--icon-swap-*` déjà en place) — mais plus
+                                    recopiées ici : c'est `EtoileFavori` qui
+                                    possède ce couple, comme au tableau des
+                                    cotes. Deux copies de la même cellule
+                                    divergeaient au premier ajustement, et le
+                                    `+` resté ici pendant que le tableau passait
+                                    à l'étoile en est la démonstration.
 
-                                    Encres mesurées : le `+` ne paraît que sur
-                                    la rangée blanche, où `secondaire` à 60 %
-                                    vaut 3,4:1 — le `texte-doux` du cercle
-                                    d'avant n'en valait que 2,85. La coche ne
-                                    paraît que sur la rangée ambre, en encre
-                                    ambre sur l'aplat foncé : 7,9:1. */}
-                                  <span
-                                    aria-hidden="true"
-                                    className="t-icon-swap size-[22px]"
-                                    data-state={actif ? "b" : "a"}
-                                  >
-                                    <IconePlus
-                                      className="t-icon text-secondaire/60 size-[22px]"
-                                      data-icon="a"
-                                    />
-                                    <span
-                                      className="t-icon bg-texte flex size-[22px] items-center justify-center rounded-full"
-                                      data-icon="b"
-                                    >
-                                      <IconeCoche className="text-accent size-3 [stroke-width:3]" />
-                                    </span>
-                                  </span>
+                                    `sansBouton` parce que la rangée **est**
+                                    le bouton, et qu'un `<button>` n'en contient
+                                    pas un second. `inverse` parce que la
+                                    rangée retenue est déjà ambre : l'aplat de
+                                    la coche s'y fait foncé, coche ambre,
+                                    7,9:1 tenu. */}
+                                  <EtoileFavori
+                                    favori={actif}
+                                    sansBouton
+                                    inverse
+                                  />
                                 </span>
                               </button>
                             );
