@@ -9,11 +9,15 @@ import Compteur from "../composants/Compteur.jsx";
 import EtoileFavori from "../composants/EtoileFavori.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { Barre, Pave } from "../composants/Squelette.jsx";
-import { IconeCroix, IconeEtoile } from "../composants/Icones.jsx";
+import { IconeCoche, IconeCroix, IconePlus } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { couleurMarche, encreSurBlanc, tonalites } from "../lib/couleurs.js";
 import { couleurEcurie } from "../lib/ecuries.js";
-import { basculerFavori, chargerTableauCotes } from "../lib/pronostics.js";
+import {
+  basculerFavori,
+  chargerTableauCotes,
+  trierParMarche,
+} from "../lib/pronostics.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 import {
   decouperPoints,
@@ -43,9 +47,9 @@ const TEINTE_LISERE = "99";
  * un nom plus long que son voisin. Le nom est donc sur **une seule ligne**, et
  * tronqué au-delà.
  *
- * L'étoile est posée en absolu dans le coin plutôt que dans le flux : sa zone
- * tactile de 44px est plus haute que la ligne des points, et la mettre dans le
- * flux ferait grandir le widget de 20px pour rien. Elle chevauche le
+ * Le bouton d'ajout est posé en absolu dans le coin plutôt que dans le flux :
+ * sa zone tactile de 44px est plus haute que la ligne des points, et la mettre
+ * dans le flux ferait grandir le widget de 20px pour rien. Il chevauche le
  * rembourrage, jamais le texte — les points lui laissent la place à droite.
  *
  * **`min-w-0` est ce qui garantit que la grille ne déborde jamais.** Un élément
@@ -62,8 +66,8 @@ const TEINTE_LISERE = "99";
  * **par-dessus** le blanc, qui reste la base.
  *
  * Contrastes mesurés sur les onze teintes, fond compris : le nom tient au pire
- * 14,5:1, les points 9,0:1, et l'étoile au repos 3,16:1 — au-dessus du plancher
- * de 3:1 exigé d'un élément graphique porteur de sens, qu'elle est ici.
+ * 14,5:1, les points 9,0:1, et le `+` au repos 3,16:1 — au-dessus du plancher
+ * de 3:1 exigé d'un élément graphique porteur de sens, qu'il est ici.
  */
 function WidgetCote({ cote, epingle, ferme, onBasculer }) {
   const points = decouperPoints(cote.points);
@@ -130,7 +134,7 @@ function WidgetCote({ cote, epingle, ferme, onBasculer }) {
 }
 
 /**
- * Une pastille de la rangée « MES FAVORIS ».
+ * Une pastille de la rangée « MES PARIS BONUS ».
  *
  * **Les points sont un aplat ambre à encre foncée, jamais du texte ambre.**
  * `#E8A020` écrit sur le blanc de la pastille ne vaut que 2,2:1 ; le même ambre
@@ -164,7 +168,7 @@ function ChipFavori({ favori, ferme, onRetirer }) {
         <button
           type="button"
           onClick={onRetirer}
-          aria-label={`Retirer ${nom} des favoris`}
+          aria-label={`Retirer ${nom} de mes paris bonus`}
           className="pressable size-tactile text-secondaire/70 flex shrink-0 items-center justify-center"
         >
           <IconeCroix className="size-3.5" />
@@ -175,11 +179,11 @@ function ChipFavori({ favori, ferme, onRetirer }) {
 }
 
 /**
- * La section « MES FAVORIS », en tête d'écran.
+ * La section « MES PARIS BONUS », en tête d'écran.
  *
  * C'est le panier du joueur : ce qu'il a mis de côté, et ce dans quoi il
- * choisira ses trois bonus à l'écran suivant. Il est donc en haut, avant le
- * catalogue, et non relégué sous vingt-deux widgets.
+ * choisira ses trois paris bonus à l'écran suivant. Il est donc en haut, avant
+ * le catalogue, et non relégué sous vingt-deux widgets.
  *
  * **Le libellé de section quitte le gris `texte-doux` du design system.** Sur
  * le beige `#F5F0EB`, `#999999` ne vaut que 2,0:1 : c'était tenable pour une
@@ -196,22 +200,25 @@ function SectionFavoris({ favoris, ferme, onRetirer }) {
   return (
     <section className="flex flex-col gap-2.5">
       <div className="flex items-baseline justify-between gap-3 px-1">
-        <h2 className="text-label text-secondaire uppercase">Mes favoris</h2>
+        <h2 className="text-label text-secondaire uppercase">
+          Mes paris bonus
+        </h2>
         {favoris.length > 0 && (
           <span className="text-texte-doux text-[12px]">
-            {favoris.length} {favoris.length > 1 ? "cotes" : "cote"}
+            {favoris.length} {favoris.length > 1 ? "paris" : "pari"}
           </span>
         )}
       </div>
 
       {favoris.length === 0 ? (
         <div className="rounded-carte bg-surface shadow-carte px-5 py-7 text-center">
-          <IconeEtoile
+          <IconePlus
             className="text-accent mx-auto size-6"
             aria-hidden="true"
           />
           <p className="text-texte-doux text-corps-sm mx-auto mt-2.5 max-w-[30ch]">
-            Épingle tes cotes favorites ci-dessous pour construire tes bonus.
+            Ajoute des paris bonus ci-dessous avec le +, puis choisis-en 3 à
+            l'écran suivant.
           </p>
         </div>
       ) : (
@@ -231,7 +238,7 @@ function SectionFavoris({ favoris, ferme, onRetirer }) {
 }
 
 /**
- * Le mode d'emploi, entre les favoris et les marchés.
+ * Le mode d'emploi, entre les paris bonus et les marchés.
  *
  * Trois gestes, dans l'ordre où on les fait, à l'endroit exact où on passe de
  * « ce que j'ai retenu » à « ce que le bookmaker propose ». Sans lui, rien à
@@ -250,9 +257,8 @@ function SectionFavoris({ favoris, ferme, onRetirer }) {
 function ModeEmploi() {
   const etapes = [
     <>
-      Épingle tes cotes favorites avec{" "}
-      <IconeEtoile
-        pleine
+      Ajoute tes paris bonus avec{" "}
+      <IconePlus
         aria-hidden="true"
         className="inline-block size-3.5 translate-y-px"
       />
@@ -261,7 +267,7 @@ function ModeEmploi() {
       Choisis tes 2 pronostics obligatoires (Vainqueur + Podium) depuis l'écran
       suivant
     </>,
-    <>Sélectionne 3 bonus parmi tes favoris</>,
+    <>Sélectionne jusqu'à 3 paris bonus parmi eux</>,
   ];
 
   return (
@@ -297,8 +303,8 @@ function ModeEmploi() {
  * la barre d'écran (`--entete-hauteur`), sans quoi les deux se recouvriraient.
  *
  * La pastille de droite est **toujours rendue**, y compris à zéro : une pastille
- * qui apparaîtrait au premier favori ferait sauter un en-tête collant sous le
- * doigt qui vient d'épingler.
+ * qui apparaîtrait au premier pari bonus ferait sauter un en-tête collant sous
+ * le doigt qui vient de l'ajouter.
  */
 function SectionMarche({ marche, rang, epingles, ferme, onBasculer }) {
   const couleur = couleurMarche(marche.marche, rang);
@@ -337,8 +343,11 @@ function SectionMarche({ marche, rang, epingles, ferme, onBasculer }) {
         <span
           className={`relative flex shrink-0 items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[12px] font-medium ${encreCompteur}`}
         >
-          <IconeEtoile pleine aria-hidden="true" className="size-3" />
-          <span className="sr-only">Favoris épinglés dans ce marché :</span>
+          {/* La coche, et non le `+` du bouton d'ajout : cette pastille compte
+              ce qui est **déjà** ajouté, elle ne propose rien. Le `+` y
+              inviterait à appuyer sur un en-tête qui ne bascule rien. */}
+          <IconeCoche aria-hidden="true" className="size-3 [stroke-width:3]" />
+          <span className="sr-only">Paris bonus ajoutés dans ce marché :</span>
           <Compteur valeur={epinglesIci} />
         </span>
       </header>
@@ -361,7 +370,7 @@ function SectionMarche({ marche, rang, epingles, ferme, onBasculer }) {
   );
 }
 
-/** La silhouette de l'écran : la rangée de favoris, puis deux marchés. */
+/** La silhouette de l'écran : la rangée de paris bonus, puis deux marchés. */
 function SqueletteCotes() {
   return (
     <div className="flex flex-col gap-5">
@@ -397,7 +406,7 @@ function SqueletteCotes() {
   );
 }
 
-/** Maquette 08 — tableau des cotes du prochain GP, et mise en favori. */
+/** Maquette 08 — tableau des cotes du prochain GP, et ajout des paris bonus. */
 export default function Cotes() {
   const { gpId } = useParams();
   const naviguer = useNavigate();
@@ -420,7 +429,11 @@ export default function Cotes() {
   );
 
   const gp = donnees?.gp ?? null;
-  const marches = useMemo(() => gp?.marches ?? [], [gp]);
+  // Les marchés sont servis dans l'ordre de la page d'Unibet, qui n'a aucune
+  // raison d'être celui dans lequel on les joue : les deux obligatoires y
+  // tombent entre deux duels. L'ordre est celui d'`ORDRE_MARCHES`
+  // (`lib/pronostics.js`), partagé avec l'écran de saisie.
+  const marches = useMemo(() => trierParMarche(gp?.marches), [gp]);
 
   const [erreurFavori, setErreurFavori] = useState(null);
   const [tentative, setTentative] = useState(0);
@@ -442,9 +455,9 @@ export default function Cotes() {
   async function basculer(cote, marche) {
     setErreurFavori(null);
 
-    // Mise à jour optimiste : l'étoile bascule à l'appui, pas au retour du
-    // serveur. Sur le plan gratuit de Railway, attendre la réponse donnerait
-    // une étoile qui met une seconde à réagir.
+    // Mise à jour optimiste : le `+` passe à la coche à l'appui, pas au retour
+    // du serveur. Sur le plan gratuit de Railway, attendre la réponse donnerait
+    // un bouton qui met une seconde à réagir.
     const etaitEpingle = epingles.has(cote.id);
     const suivant = etaitEpingle
       ? favoris.filter((favori) => favori.id_outcome_unibet !== cote.id)
@@ -463,8 +476,8 @@ export default function Cotes() {
     const resultat = await basculerFavori(gpId, cote.id);
 
     if (!resultat.ok) {
-      // Retour à l'état d'avant : une étoile qui ment est pire qu'une étoile
-      // qui n'a pas bougé.
+      // Retour à l'état d'avant : une coche qui mente est pire qu'un `+` qui
+      // n'a pas bougé.
       setDonnees({ ...donnees, favoris });
       setTentative((n) => n + 1);
       setErreurFavori(resultat.message);
@@ -475,7 +488,7 @@ export default function Cotes() {
     if (utilisateur) oublierCache(`saisie:${utilisateur.id}:${gpId}`);
   }
 
-  // La croix d'une pastille passe par le même chemin que l'étoile du widget :
+  // La croix d'une pastille passe par le même chemin que le bouton du widget :
   // c'est la même bascule, vue de l'autre bout. Deux chemins d'écriture
   // séparés auraient fini par diverger sur la mise à jour optimiste.
   function retirerFavori(favori) {
@@ -533,9 +546,9 @@ export default function Cotes() {
             squelette={<SqueletteCotes />}
           >
             {gp && (
-              /* 20px entre les grands ensembles — favoris, mode d'emploi,
+              /* 20px entre les grands ensembles — paris bonus, mode d'emploi,
                  marchés — contre 12px à l'intérieur de chacun. C'est le « vrai
-                 espacement » que la demande réclame autour des favoris : ce qui
+                 espacement » que la demande réclame autour des paris bonus : ce qui
                  sépare deux ensembles doit être visiblement plus large que ce
                  qui sépare deux éléments d'un même ensemble. */
               <div className="flex flex-col gap-5">
@@ -594,14 +607,18 @@ export default function Cotes() {
 
         <div className="min-h-3 flex-1" />
 
-        {/* Le bouton reste actif même sans favori : la maquette 09 accepte
+        {/* Le bouton reste actif même sans pari bonus : la maquette 09 accepte
             zéro bonus, et un joueur peut vouloir n'entrer que ses deux
             pronostics obligatoires. Un bouton grisé ne dirait pas pourquoi — son
             libellé change donc plutôt que son état.
 
+            **Le décompte dit « paris », pas « paris bonus »** : le mot est déjà
+            posé par la section du haut et par le mode d'emploi, et
+            « Continuer · 12 paris bonus » passe à la ligne sur un iPhone SE.
+
             La barre est collée en bas : sur un écran qui empile trois marchés de
             vingt-deux pilotes, un bouton en fin de page obligerait à redescendre
-            toute la grille après chaque étoile épinglée. Elle rend elle-même la
+            toute la grille après chaque pari bonus ajouté. Elle rend elle-même la
             zone sûre du home indicator (voir `barre-collee` dans index.css) et
             n'est pas enveloppée dans un `Bloc` : `t-stagger-line` porte un
             `transform`, et un ancêtre transformé casse le collage. */}
@@ -621,7 +638,7 @@ export default function Cotes() {
             {ferme
               ? "Voir mes pronos"
               : favoris.length > 0
-                ? `Continuer · ${favoris.length} ${favoris.length > 1 ? "favoris" : "favori"}`
+                ? `Continuer · ${favoris.length} ${favoris.length > 1 ? "paris" : "pari"}`
                 : "Passer aux pronos"}
           </Bouton>
         </div>

@@ -65,6 +65,160 @@ export const MARCHE_VAINQUEUR = "vainqueur";
 export const MARCHE_PODIUM = "podium";
 export const BONUS_MAXIMUM = 3;
 
+/* --------------------------------------------------------------------------
+   L'ordre d'affichage des marchés — par catégorie, jamais par l'ordre
+   d'Unibet.
+
+   Le bookmaker sert ses marchés dans l'ordre de sa page, qui n'a aucune raison
+   d'être celui dans lequel on les joue : les deux obligatoires peuvent s'y
+   trouver entre deux duels. Cette liste est donc la **source unique** de
+   l'ordre, et les deux écrans du parcours de saisie la suivent — le tableau
+   des cotes pour ses sections de marché, l'écran de saisie pour la liste des
+   paris bonus. Un ordre écrit dans chacun des deux aurait divergé au premier
+   ajustement, et le symptôme serait discret : le même marché à deux places
+   différentes selon la porte d'entrée.
+
+   ### La reconnaissance porte sur le SLUG, et les tests sont mutuellement
+   exclusifs
+
+   Le slug est celui que `scraper.unibet.slug()` fabrique depuis le libellé
+   Unibet (`marche` en base) : le libellé affiché, lui, est du texte de
+   bookmaker et change de casse et de ponctuation d'un Grand Prix à l'autre.
+
+   **Aucun test ne doit pouvoir en recouvrir un autre**, sans quoi l'ordre des
+   entrées ci-dessous cesserait d'être l'ordre d'affichage pour devenir un
+   ordre de priorité — deux choses qui ne veulent pas la même chose, et dont la
+   confusion est exactement le piège que `calcul/points.py` documente côté
+   backend : « ecurie-vainqueur » contient « vainqueur », et le triplé
+   « vainqueur course + qualification + tour le plus rapide » contient à la fois
+   « vainqueur » et « tour le plus rapide ». D'où l'égalité STRICTE sur les deux
+   marchés obligatoires, et l'exclusion de « qualif » de la famille du tour le
+   plus rapide. Cette liste est **ordonnée pour l'œil**, pas pour l'algorithme.
+
+   **Un marché non reconnu part à la fin**, dans l'ordre où Unibet l'a servi :
+   les marchés varient d'un Grand Prix à l'autre (`scraper.md` §3.1), et un
+   marché inconnu doit s'afficher quand même — le taire serait pire que le mal
+   placer.
+   -------------------------------------------------------------------------- */
+
+/* « Top 6 », « Top 10 », « Dans le top 3 » — le rang est dans le nom, il ne
+   peut pas être connu d'avance. Même expression que le backend, au même
+   endroit du raisonnement. */
+function rangTop(slug) {
+  const trouve = /^(?:dans-le-)?top-?(\d+)$/.exec(slug);
+  return trouve ? Number(trouve[1]) : null;
+}
+
+/* « Tour le plus rapide », « Meilleur tour ». `qualif` est exclu ici et
+   nulle part ailleurs : c'est ce qui laisse le triplé à sa catégorie. */
+function estTourRapide(slug) {
+  return (
+    slug.includes("tour") &&
+    (slug.includes("rapide") || slug.includes("meilleur")) &&
+    !slug.includes("qualif")
+  );
+}
+
+export const ORDRE_MARCHES = [
+  // Obligatoires (règle 4.2) — égalité stricte, voir ci-dessus.
+  { cle: "vainqueur", reconnait: (slug) => slug === MARCHE_VAINQUEUR },
+  { cle: "podium", reconnait: (slug) => slug === MARCHE_PODIUM },
+
+  // Résultat de course. La famille « top N » tient en UNE entrée et s'ordonne
+  // sur son rang : « Top 6 » avant « Top 10 » n'est pas un choix éditorial,
+  // c'est l'ordre des nombres, et un « Top 3 » découvert un jour se rangera de
+  // lui-même devant les deux au lieu d'échouer à la fin de la liste.
+  { cle: "top", reconnait: (slug) => rangTop(slug) !== null, ordonne: rangTop },
+  {
+    cle: "ecart-du-gagnant",
+    reconnait: (slug) =>
+      slug.includes("ecart") ||
+      (slug.includes("marge") && slug.includes("victoire")),
+  },
+  {
+    cle: "tour-le-plus-rapide",
+    reconnait: (slug) => estTourRapide(slug) && !slug.includes("voiture"),
+  },
+  {
+    cle: "voiture-tour-le-plus-rapide",
+    reconnait: (slug) => estTourRapide(slug) && slug.includes("voiture"),
+  },
+
+  // Écurie.
+  {
+    cle: "ecurie-vainqueur",
+    reconnait: (slug) =>
+      slug.startsWith("ecurie") ||
+      slug.startsWith("equipe") ||
+      slug.startsWith("constructeur"),
+  },
+
+  // Anecdotique.
+  {
+    cle: "nationalite-du-vainqueur",
+    reconnait: (slug) =>
+      slug.includes("nationalite") ||
+      (slug.includes("pays") &&
+        (slug.includes("vainqueur") || slug.includes("gagnant"))),
+  },
+  {
+    cle: "vainqueur-course-qualification-tour",
+    reconnait: (slug) => slug.includes("qualif"),
+  },
+
+  // Duels entre coéquipiers — tous ensemble, en dernier. Il y en a jusqu'à
+  // onze, un par écurie : intercalés, ils enterreraient tout le reste.
+  {
+    cle: "duel",
+    reconnait: (slug) => slug.includes("duel") || slug.includes("coequipier"),
+  },
+];
+
+/**
+ * Le rang d'affichage d'un marché : `[catégorie, rang dans la catégorie]`.
+ *
+ * Deux nombres et non un seul, parce qu'une catégorie peut avoir un ordre
+ * interne — la famille des « top N » en a un, et c'est le seul cas.
+ */
+export function rangMarche(marche) {
+  const slug = (marche || "").trim().toLowerCase();
+  if (!slug) return [ORDRE_MARCHES.length, 0];
+
+  const rang = ORDRE_MARCHES.findIndex((categorie) =>
+    categorie.reconnait(slug),
+  );
+  if (rang === -1) return [ORDRE_MARCHES.length, 0];
+  return [rang, ORDRE_MARCHES[rang].ordonne?.(slug) ?? 0];
+}
+
+/**
+ * Trie par catégorie de marché tout ce qui porte un slug `marche`.
+ *
+ * **Les deux formes passent par ici** : un groupe de cotes du tableau des
+ * cotes (`{ marche, libelle, cotes }`) comme un pari bonus de l'écran de
+ * saisie (`{ marche, libelle, pilote, points, … }`). C'est la même question
+ * posée sur deux objets, donc la même fonction — et c'est ce qui garantit
+ * qu'un pari bonus ne remonte pas dans la liste de saisie à une place que son
+ * marché n'a pas au tableau des cotes.
+ *
+ * **Le tri est stable, et le rang d'origine est le dernier départage** : à
+ * catégorie égale, c'est l'ordre d'Unibet qui tranche, comme pour les marchés
+ * non reconnus. La liste d'entrée n'est jamais modifiée — elle vient d'un
+ * cache que deux écrans se partagent.
+ */
+export function trierParMarche(liste) {
+  return (liste ?? [])
+    .map((element, rang) => ({
+      element,
+      rang,
+      cle: rangMarche(element?.marche),
+    }))
+    .sort(
+      (a, b) => a.cle[0] - b.cle[0] || a.cle[1] - b.cle[1] || a.rang - b.rang,
+    )
+    .map((entree) => entree.element);
+}
+
 // --------------------------------------------------------------------------
 //  Écritures — par FastAPI
 // --------------------------------------------------------------------------

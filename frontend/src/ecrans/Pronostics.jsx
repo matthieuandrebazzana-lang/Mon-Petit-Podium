@@ -10,9 +10,11 @@ import BlocErreur from "../composants/BlocErreur.jsx";
 import { Pave } from "../composants/Squelette.jsx";
 import Compteur from "../composants/Compteur.jsx";
 import Horloge from "../composants/Horloge.jsx";
+import Repli from "../composants/Repli.jsx";
 import {
   IconeChevronAccordeon,
   IconeCoche,
+  IconePlus,
 } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { couleurBloc, tonalites } from "../lib/couleurs.js";
@@ -29,6 +31,7 @@ import {
   optionsDisponibles,
   organiserPronostics,
   oublierMesPronostics,
+  trierParMarche,
 } from "../lib/pronostics.js";
 import { oublierCache, useDonnees } from "../lib/useDonnees.js";
 import {
@@ -300,8 +303,8 @@ export default function Pronostics() {
   const { state } = useLocation();
   const { utilisateur } = useAuth();
 
-  // Le tableau des cotes est la destination hiérarchique : on y choisit ses
-  // favoris avant de saisir. Un appelant peut la remplacer par `retour`.
+  // Le tableau des cotes est la destination hiérarchique : on y ajoute ses
+  // paris bonus avant de saisir. Un appelant peut la remplacer par `retour`.
   const retour = origineRetour(state, {
     vers: `/grands-prix/${gpId}/cotes`,
     libelle: "Les cotes",
@@ -359,7 +362,12 @@ export default function Pronostics() {
     setPrerempli(true);
   }, [donnees, index, prerempli]);
 
-  const favoris = donnees?.favoris ?? [];
+  // Les paris bonus sont servis dans l'ordre où ils ont été ajoutés ; ils
+  // s'affichent dans l'ordre de leurs marchés — le même qu'au tableau des
+  // cotes, `ORDRE_MARCHES` (`lib/pronostics.js`). Sans cela le même marché
+  // aurait deux places selon la porte d'entrée, et deux paris d'un même marché
+  // se retrouveraient séparés par trois autres.
+  const favoris = useMemo(() => trierParMarche(donnees?.favoris), [donnees]);
   const cote = (id) => (id ? (index.get(id) ?? null) : null);
 
   // Le compteur, la saturation et l'envoi ne comptent que les bonus **encore
@@ -609,9 +617,16 @@ export default function Pronostics() {
                       ))}
                     </BlocObligatoire>
 
+                    {/* « MES PARIS BONUS », et non « BONUS — MES FAVORIS ».
+                        Le badge nommait d'abord la mécanique (« bonus ») puis
+                        le panier (« mes favoris »), soit deux mots pour une
+                        seule chose, et le second n'était pas celui du reste du
+                        parcours. Un seul nom, le même qu'au tableau des cotes,
+                        qu'au mode d'emploi et qu'au texte de la zone vide juste
+                        dessous. */}
                     <div className="mt-1 flex items-end justify-between gap-3 px-1">
                       <p className="text-label text-texte-doux uppercase">
-                        Bonus — mes favoris
+                        Mes paris bonus
                       </p>
                       <p className="text-texte-doux text-[12px]">
                         <Compteur
@@ -625,11 +640,11 @@ export default function Pronostics() {
                     {favoris.length === 0 ? (
                       <div className="rounded-carte bg-surface shadow-carte px-5 py-7 text-center">
                         <p className="text-corps text-texte font-medium">
-                          Aucun favori pour l'instant
+                          Aucun pari bonus pour l'instant
                         </p>
                         <p className="text-corps-sm text-texte-doux mx-auto mt-1 max-w-[30ch]">
-                          Les bonus se choisissent parmi les cotes que tu as
-                          épinglées dans le tableau des cotes.
+                          Les paris bonus se choisissent parmi les cotes que tu
+                          as ajoutées depuis le tableau des cotes.
                         </p>
                       </div>
                     ) : (
@@ -637,72 +652,155 @@ export default function Pronostics() {
                       // et blanc tant qu'il ne l'est pas. La demande décrit les
                       // « 3 bonus dans des blocs amber » : c'est donc la
                       // sélection que l'ambre désigne, sinon une liste de vingt
-                      // favoris serait un mur ambre où plus rien ne se
+                      // paris bonus serait un mur ambre où plus rien ne se
                       // distingue. L'encre reste `#1A1A1A` sur l'ambre, comme
                       // demandé, et pour la raison que la demande donne
                       // elle-même : le blanc y tombe à 2,2:1 de contraste.
-                      <div className="flex flex-col gap-2">
-                        {favoris.map((favori) => {
-                          const actif = bonusRetenus.includes(
-                            favori.id_outcome_unibet,
-                          );
-                          const sature =
-                            !actif && bonusRetenus.length >= BONUS_MAXIMUM;
-                          return (
-                            <button
-                              key={favori.id_outcome_unibet}
-                              type="button"
-                              onClick={() => basculerBonus(favori.id_outcome_unibet)}
-                              disabled={etat.ferme || sature}
-                              aria-pressed={actif}
-                              className={`rounded-carte-sm shadow-carte pressable min-h-tactile flex w-full items-center justify-between gap-3 px-4 py-3 text-left ${
-                                actif ? COULEUR_BONUS.fond : "bg-surface"
-                              } ${sature ? "opacity-50" : ""}`}
-                            >
-                              <span className="min-w-0">
-                                <span
-                                  className={`block truncate text-[10px] font-medium tracking-[0.4px] uppercase ${
-                                    actif ? tonBonus.texteDoux : "text-texte-doux"
-                                  }`}
-                                >
-                                  {favori.libelle ?? "Cote retirée"}
-                                </span>
-                                <span
-                                  className={`mt-0.5 block truncate text-[14px] font-medium ${
-                                    actif ? tonBonus.texte : "text-texte"
-                                  }`}
-                                >
-                                  {formaterPilote(favori.pilote) ??
-                                    favori.id_outcome_unibet}
-                                </span>
-                              </span>
+                      // Pas de `gap` sur ce conteneur : c'est le placeholder
+                      // ci-dessous qui porte l'écart, dans une boîte qui se
+                      // replie AVEC lui. Un `gap` survivrait à la hauteur nulle
+                      // et laisserait une bande de 8px qui disparaîtrait d'un
+                      // coup en fin de repli — c'est-à-dire un saut, exactement
+                      // ce que le repli est là pour éviter.
+                      <div className="flex flex-col">
+                        {/* La zone vide de la sélection, et pourquoi elle
+                            coexiste avec la liste.
 
-                              <span className="flex shrink-0 items-center gap-2">
-                                <span
-                                  className={`rounded-lg px-2 py-1 text-[12px] font-medium ${
-                                    actif
-                                      ? `${tonBonus.surfaceForte} ${tonBonus.texte}`
-                                      : "bg-fond text-texte"
-                                  }`}
-                                >
-                                  {formaterPoints(favori.points)}
+                            Les deux zones vides de cette section ne disent pas
+                            la même chose. Celle du dessus dit « il n'y a rien à
+                            choisir » ; celle-ci dit « il y a de quoi choisir et
+                            tu n'as rien choisi » — un état que rien ne
+                            signalait, le compteur « 0 sur 3 max » étant un
+                            chiffre et non une consigne. Elle reste donc
+                            AU-DESSUS de la liste, jamais à sa place : le geste
+                            qu'elle nomme se fait sur les rangées qu'elle
+                            coiffe.
+
+                            **Le `+` est le même glyphe, à la même taille et à
+                            la même encre que ceux des rangées** : la phrase
+                            renvoie à un bouton, et l'icône est ce bouton, pas
+                            son illustration. Mapping direct plutôt que légende
+                            (/apple-design §16).
+
+                            **Elle part par un repli** (`composants/Repli.jsx`,
+                            transitions-dev 21) : retirée d'un `&&`, elle
+                            emporterait sa centaine de pixels à l'image suivante
+                            et toute la liste sauterait sous le doigt qui vient
+                            d'ajouter son premier pari. C'est le seul motif
+                            d'animer ici, et il suffit. Zéro jeton nouveau —
+                            `--acc-expand` / `--acc-collapse` / `--acc-ease`.
+
+                            **Elle se tait une fois les pronostics fermés** :
+                            les rangées sont alors désactivées, et une consigne
+                            qui nomme un geste devenu impossible est pire que
+                            pas de consigne. */}
+                        <Repli visible={!etat.ferme && bonusRetenus.length === 0}>
+                          {/* L'écart avec la première rangée est un
+                              rembourrage, jamais une marge : il vit dans la
+                              boîte que `.t-repli-inner` rogne, donc il se
+                              replie avec elle. Une marge basse sur la carte
+                              dépendrait de l'absence d'effondrement des marges
+                              dans le bloc rogné — vrai, mais fragile à relire. */}
+                          <div className="pb-2">
+                            <div className="rounded-carte bg-surface shadow-carte px-5 py-6 text-center">
+                              <IconePlus
+                                aria-hidden="true"
+                                className="text-secondaire/60 mx-auto size-[22px]"
+                              />
+                              <p className="text-corps text-texte mt-2 font-medium">
+                                Ajoute jusqu'à 3 paris bonus
+                              </p>
+                              <p className="text-corps-sm text-texte-doux mx-auto mt-1 max-w-[30ch]">
+                                Appuie sur + à côté d'un pari pour l'ajouter
+                              </p>
+                            </div>
+                          </div>
+                        </Repli>
+
+                        <div className="flex flex-col gap-2">
+                          {favoris.map((favori) => {
+                            const actif = bonusRetenus.includes(
+                              favori.id_outcome_unibet,
+                            );
+                            const sature =
+                              !actif && bonusRetenus.length >= BONUS_MAXIMUM;
+                            return (
+                              <button
+                                key={favori.id_outcome_unibet}
+                                type="button"
+                                onClick={() =>
+                                  basculerBonus(favori.id_outcome_unibet)
+                                }
+                                disabled={etat.ferme || sature}
+                                aria-pressed={actif}
+                                className={`rounded-carte-sm shadow-carte pressable min-h-tactile flex w-full items-center justify-between gap-3 px-4 py-3 text-left ${
+                                  actif ? COULEUR_BONUS.fond : "bg-surface"
+                                } ${sature ? "opacity-50" : ""}`}
+                              >
+                                <span className="min-w-0">
+                                  <span
+                                    className={`block truncate text-[10px] font-medium tracking-[0.4px] uppercase ${
+                                      actif
+                                        ? tonBonus.texteDoux
+                                        : "text-texte-doux"
+                                    }`}
+                                  >
+                                    {favori.libelle ?? "Cote retirée"}
+                                  </span>
+                                  <span
+                                    className={`mt-0.5 block truncate text-[14px] font-medium ${
+                                      actif ? tonBonus.texte : "text-texte"
+                                    }`}
+                                  >
+                                    {formaterPilote(favori.pilote) ??
+                                      favori.id_outcome_unibet}
+                                  </span>
                                 </span>
-                                <span
-                                  aria-hidden="true"
-                                  className={`flex size-[22px] items-center justify-center rounded-full ${
-                                    actif
-                                      ? "bg-texte"
-                                      : "border-2 border-texte-doux/35"
-                                  }`}
-                                >
-                                  {actif && (
-                                    <IconeCoche className="text-accent size-3 [stroke-width:3]" />
-                                  )}
+
+                                <span className="flex shrink-0 items-center gap-2">
+                                  <span
+                                    className={`rounded-lg px-2 py-1 text-[12px] font-medium ${
+                                      actif
+                                        ? `${tonBonus.surfaceForte} ${tonBonus.texte}`
+                                        : "bg-fond text-texte"
+                                    }`}
+                                  >
+                                    {formaterPoints(favori.points)}
+                                  </span>
+                                  {/* `+` puis coche, échangés dans la même
+                                    cellule (transitions-dev 09, jetons
+                                    `--icon-swap-*` déjà en place). Le cercle
+                                    vide d'avant ne disait pas qu'il y avait un
+                                    geste à faire : le `+` le nomme, et c'est
+                                    lui que la zone vide ci-dessus désigne.
+
+                                    Encres mesurées : le `+` ne paraît que sur
+                                    la rangée blanche, où `secondaire` à 60 %
+                                    vaut 3,4:1 — le `texte-doux` du cercle
+                                    d'avant n'en valait que 2,85. La coche ne
+                                    paraît que sur la rangée ambre, en encre
+                                    ambre sur l'aplat foncé : 7,9:1. */}
+                                  <span
+                                    aria-hidden="true"
+                                    className="t-icon-swap size-[22px]"
+                                    data-state={actif ? "b" : "a"}
+                                  >
+                                    <IconePlus
+                                      className="t-icon text-secondaire/60 size-[22px]"
+                                      data-icon="a"
+                                    />
+                                    <span
+                                      className="t-icon bg-texte flex size-[22px] items-center justify-center rounded-full"
+                                      data-icon="b"
+                                    >
+                                      <IconeCoche className="text-accent size-3 [stroke-width:3]" />
+                                    </span>
+                                  </span>
                                 </span>
-                              </span>
-                            </button>
-                          );
-                        })}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </>
@@ -715,7 +813,7 @@ export default function Pronostics() {
         <div className="min-h-3 flex-1" />
 
         {/* La validation est collée en bas : sur un écran qui déroule trois
-            blocs et jusqu'à vingt favoris, un bouton en fin de page obligerait
+            blocs et jusqu'à vingt paris bonus, un bouton en fin de page obligerait
             à redescendre à chaque changement d'avis. La barre rend elle-même la
             zone sûre du home indicator (voir `barre-collee` dans index.css).
             Le message d'erreur voyage avec elle, sinon il resterait hors de

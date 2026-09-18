@@ -329,7 +329,7 @@ le mode personnalisé — ce qui se voit à l'écran au lieu de planter.
 | `calendrier.js` | `ETATS_GP`, `cotesArretees`, `etatPronostics` — **seule lectrice du statut `cotes_figees`** |
 | `calendrier2026.js` | **la liste des GP** — voir `calendrier.md` |
 | `navigation.js` | barre, onglets, `origineRetour` |
-| `pronostics.js` | marchés, favoris, exclusion croisée, `choixDuPronostic`, `oublierMesPronostics`, `decrirePronostics` |
+| `pronostics.js` | marchés, **`ORDRE_MARCHES` / `trierParMarche`**, favoris, exclusion croisée, `choixDuPronostic`, `oublierMesPronostics`, `decrirePronostics` |
 | `stockage.js` | **seul juge d'un fichier CHOISI** : formats, plafond de 5 Mo, dépôt, ménage |
 | `image.js` | **seul juge de ce qu'on DÉPOSE** : décodage, recadrage, 800 px, JPEG 0,85 |
 | `usePhoto.js` | l'état de chargement d'une image, cache du navigateur compris |
@@ -353,6 +353,35 @@ Trois règles ont été **sorties des écrans** vers `lib/pronostics.js` — `op
 seraient vérifiables qu'en montant un DOM que le projet n'outille pas. Sorties de là, elles
 s'éprouvent directement. Même motif pour `VueAdmin`, fonction pure de ses props, séparée de
 `SectionAdmin` qui porte l'état.
+
+### `ORDRE_MARCHES` — l'ordre des marchés a un seul propriétaire (`0.66.0`)
+
+Unibet sert ses marchés dans l'ordre de sa page : les deux obligatoires peuvent y tomber
+entre deux duels de coéquipiers. L'ordre d'affichage est donc **une décision du projet**,
+posée une fois dans `ORDRE_MARCHES` — obligatoires, résultat de course, écurie,
+anecdotique, duels en dernier — et `trierParMarche` l'applique aux **deux** surfaces qui
+montrent des marchés : les sections du tableau des cotes et la liste des paris bonus de
+l'écran de saisie. Écrit dans chacun des deux, il aurait divergé, et le symptôme aurait
+été discret — le même marché à deux places selon la porte d'entrée.
+
+> **La constante vit dans `lib/`, pas dans l'écran.** La demande la voulait dans le
+> fichier de l'écran de saisie ; elle a deux consommateurs, et la règle « une source
+> unique par question » du CLAUDE.md §6 l'emporte — c'est déjà le motif qui a fait sortir
+> `optionsDisponibles` et `bonusEpingles` des écrans (voir juste au-dessus).
+
+**Les tests de reconnaissance sont mutuellement exclusifs, et c'est la propriété à ne pas
+casser.** Sans elle, l'ordre de la liste cesserait d'être l'ordre d'affichage pour devenir
+un ordre de priorité : « ecurie-vainqueur » contient « vainqueur », et le triplé
+« vainqueur course + qualification + tour le plus rapide » contient à la fois « vainqueur »
+et « tour le plus rapide ». D'où l'**égalité stricte** sur les deux marchés obligatoires et
+l'exclusion de « qualif » de la famille du tour le plus rapide — le même piège de voisinage
+que `calcul/points.py` documente côté backend.
+
+La famille des « top N » tient en **une** entrée, ordonnée sur son rang : « Top 6 » avant
+« Top 10 » n'est pas un choix éditorial mais l'ordre des nombres, et un « Top 3 » découvert
+un jour se rangera de lui-même devant les deux au lieu d'échouer avec les inconnus. Un
+marché non reconnu part **à la fin**, dans l'ordre d'Unibet : les marchés varient d'un
+Grand Prix à l'autre, et le taire serait pire que le mal placer.
 
 ### `decrirePronostics` — la même mise en forme quelle que soit la porte (`0.63.0`)
 
@@ -499,6 +528,18 @@ ce que la première commande.
 Introduit en version `0.46.0` pour Coque et Ailerons, que le profil retire dès qu'un skin
 d'écurie est actif (`docs/decisions.md` §17). Le composant est générique : il prend
 `visible` et des enfants.
+
+**Second consommateur en version `0.66.0`** : la zone vide « Ajoute jusqu'à 3 paris
+bonus » de l'écran de saisie, qui coiffe la liste tant qu'aucun bonus n'est retenu. Même
+raison qu'au profil, et c'est la seule qui vaille ici : retirée d'un `&&`, elle
+emporterait sa centaine de pixels à l'image suivante et toute la liste sauterait sous le
+doigt qui vient d'ajouter son premier pari.
+
+> **L'écart avec ce qui suit le repli est un rembourrage porté À L'INTÉRIEUR, jamais un
+> `gap` sur le conteneur.** Un `gap` survit à une hauteur nulle : il laisserait une bande
+> résiduelle qui disparaîtrait d'un coup au démontage — c'est-à-dire par un saut, le
+> défaut même que le repli est là pour éviter. Même leçon que le rembourrage de
+> `.t-repli-inner`, qui ne doit jamais monter sur la piste.
 
 | Ce qu'il fait | Comment |
 |---|---|

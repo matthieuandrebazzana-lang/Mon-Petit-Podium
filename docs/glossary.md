@@ -41,9 +41,27 @@ court, « Grand Prix » en toutes lettres dans une phrase.
 bonus. *Le pluriel familier « pronos » est admis dans l'interface* (« Voir mes pronos »,
 « Pronos ouverts ») — c'est le registre du produit.
 
-**Favori** — une cote **épinglée** par un joueur pour un GP, en attendant d'en faire un
-bonus. Les bonus se choisissent **parmi les favoris**. Les favoris sont **strictement
-privés** : ce sont des brouillons. *Ne pas dire « sélection » ni « panier ».*
+**Pari bonus** — une cote qu'un joueur a **ajoutée** pour un GP, en attendant d'en faire
+un de ses trois bonus. Les bonus se choisissent **parmi les paris bonus** du joueur, qui
+sont **strictement privés** : ce sont des brouillons. *Ne pas dire « sélection » ni
+« panier ».*
+
+> ### Le mot a changé à l'écran, et nulle part ailleurs (version `0.66.0`)
+>
+> L'interface disait « favori », et l'étoile qui l'ajoutait disait « marque-page » : ni
+> l'un ni l'autre ne disait à quoi la chose servait, alors que **la seule raison
+> d'ajouter une cote est d'en faire un bonus**. Le nouveau nom porte cette raison, et il
+> est le même sur les deux écrans du parcours — le tableau des cotes, l'écran de saisie —
+> là où « MES FAVORIS » et « BONUS — MES FAVORIS » nommaient la même chose de deux façons.
+>
+> **Le code et la base gardent « favori » partout** : table `favoris`, route
+> `POST /grands-prix/{id}/favoris`, `basculerFavori`, `EtoileFavori`, `chargerFavoris`,
+> clé de cache. C'est un changement de **vocabulaire d'interface** ; renommer l'écriture
+> aurait demandé une migration pour un mot, et la fait courir sans bénéfice.
+>
+> Le couple d'icônes suit le mot : **`+` quand le pari n'est pas ajouté, coche quand il
+> l'est**. Un signe qui nomme l'action et un autre qui nomme son résultat, là où deux
+> étoiles ne différaient que par leur remplissage.
 
 **Cote** — l'issue d'un marché chez Unibet, et ce qu'elle rapporte. **Le mot désigne
 l'objet, jamais le nombre affiché** : on ne montre jamais « ×2,80 », on montre
@@ -51,7 +69,9 @@ l'objet, jamais le nombre affiché** : on ne montre jamais « ×2,80 », on mont
 
 **Marché** — un type de pari sur un GP : « Vainqueur », « Podium », « Ecurie Vainqueur »,
 « Top 6 »… Le **libellé** affiché est toujours celui du bookmaker
-(`cotes.libelle_marche`) ; le **slug** (`cotes.marche`) sert de clé de regroupement.
+(`cotes.libelle_marche`) ; le **slug** (`cotes.marche`) sert de clé de regroupement, et
+**de clé de tri** — l'ordre d'affichage est celui d'`ORDRE_MARCHES`
+(`lib/pronostics.js`, voir `composants.md` §5), jamais celui d'Unibet.
 
 **Points** — le nombre entier qu'un pronostic rapporte ou peut rapporter. Deux notions
 distinctes, à ne jamais confondre :
