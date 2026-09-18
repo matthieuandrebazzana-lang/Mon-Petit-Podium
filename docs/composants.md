@@ -12,7 +12,7 @@ src/
 ├── App.jsx              routeur + les trois groupes de routes
 ├── auth/AuthContexte.jsx
 ├── composants/          réutilisables (41 fichiers)
-│   └── icones/          6 icônes extraites de planches SVG
+│   └── icones/          7 icônes extraites de planches SVG
 ├── ecrans/              un fichier par écran (21)
 └── lib/                 accès aux données, formatage, hooks (24)
 ```
@@ -156,7 +156,7 @@ React et part avec le bundle en SVG inline.
 | `06.svg` | `--motif-damier` (data-URI) | vague du damier |
 | `vue_piste.svg` | `FondPiste.jsx` | **le fond de la vue piste** (`0.49.0`) |
 | `voiture.svg` | — | **ancien dessin, remplacé** |
-| `logoV2.svg` | — | inutilisé |
+| `logoV2.svg` | `icones/IconeEtoileLogo` | **l'étoile** — le 2ᵉ de ses 4 dessins (`0.67.0`) |
 
 ### `FondPiste` — la planche qui s'étire
 
@@ -1027,3 +1027,32 @@ L'entrée « Résultats par Grand Prix » porte la silhouette de la région x �
 l'onglet Profil : `IconePilote` (`Icones.jsx`) la délègue en lui passant `currentColor`.
 Deux jeux de `d` identiques dans deux fichiers, c'est exactement ce que la règle
 d'extraction interdit (§4) — la planche a un extracteur, et un seul.
+
+### `IconeEtoileLogo` — l'étoile de `logoV2.svg`
+
+L'état « pas encore ajouté » du bouton de pari bonus (`EtoileFavori.jsx`), là où la version
+`0.66.0` mettait un `+`. C'est le **deuxième des quatre dessins** de la planche, et le seul
+`<path>` enfant direct de son `<svg>` — ce qui suffit à le désigner au script d'extraction.
+
+| Ce qui a été mesuré | Valeur |
+|---|---|
+| Boîte englobante réelle, extrema des cubiques résolus | x 150,34 → 223,84 · y 13,55 → 83,89 |
+| `viewBox` retenue | `143.09 4.72 88 88` — carré **centré** sur cette boîte |
+| Part de la boîte occupée | **83,5 %**, celle que `IconeEtoile` occupe de sa boîte de 24 |
+
+> ### Le tiers arithmétique de la planche a été écarté — écart signalé
+>
+> La demande prescrivait `155 0 154.91 110.14`, le tiers du milieu d'une planche large de
+> 464,91. Ce cadrage **coupe 4,66 unités de la pointe gauche** de l'étoile, la pose 45,37
+> unités à gauche du centre et ne lui laisse que 47 % de la largeur de sa boîte. C'est la
+> règle 2 de §4 — les `viewBox` sont les vraies boîtes englobantes, jamais des tranches
+> arithmétiques — et le même arbitrage que celui déjà tenu par `IconeCreer`.
+
+Le carré de 88 n'est pas serré sur la boîte : à 22px, une étoile pleine bord à bord pèserait
+un tiers de plus que le `+` qu'elle remplace. Les 83,5 % la posent au poids optique de
+l'autre étoile du projet. L'encre ne bouge pas — `text-secondaire/60`, 3,4:1 mesuré, et un
+aplat couvre plus de surface qu'un trait de 2.
+
+**Trois textes renvoient encore au `+`** et n'ont pas été changés : le mode d'emploi et la
+zone vide de `Cotes.jsx`, la zone vide de `Pronostics.jsx`. La rangée de `Pronostics.jsx`
+qui refait le même échange d'icônes en ligne montre elle aussi encore un `+`.
