@@ -100,7 +100,7 @@ découvrirait qu'après la course. Constantes `MARCHE_VAINQUEUR` / `MARCHE_PODIU
 |---|---|
 | **Samedi, qualifications + 2h** | Scraping Unibet. Pénalités confirmées, grille définitive. **Les cotes sont figées.** |
 | Samedi soir → dimanche | Les joueurs pronostiquent librement. **Les pronostics sont visibles par les autres membres dès leur saisie.** |
-| **Dimanche, départ − 5 min** | Fermeture. Plus aucune modification. |
+| **Dimanche, au départ** | Fermeture. Plus aucune modification. |
 | **Dimanche, départ + 1h30** | Job de résultats : `/session_result` toutes les 5 min, puis calcul et attribution. Le statut passe à `termine`. |
 | **Dès `termine`** | Le widget de l'accueil bascule sur le **Grand Prix suivant**. Le Grand Prix couru se consulte sur son écran de résultats. |
 
@@ -130,7 +130,7 @@ découvrirait qu'après la course. Constantes `MARCHE_VAINQUEUR` / `MARCHE_PODIU
 > | Phase | Échéance décomptée | Ce qui est écrit |
 > |---|---|---|
 > | Avant le relevé des cotes | `date_qualifications` + 2h | « Ouverture dans » |
-> | Pronostics ouverts | `date_course` − 5 min | « Fermeture dans » |
+> | Pronostics ouverts | `date_course` | « Fermeture dans » |
 > | Après la fermeture | — | « Pronostics / Fermés » |
 >
 > **C'est `cotesArretees` qui départage les deux phases, jamais le statut brut**, et c'est
@@ -158,23 +158,32 @@ découvrirait qu'après la course. Constantes `MARCHE_VAINQUEUR` / `MARCHE_PODIU
 Figer les cotes après les qualifications garantit que **tous les joueurs pronostiquent
 avec exactement les mêmes cotes, sur une grille déjà définitive.**
 
+> ### Les pronostics se ferment au moment du départ de la course (v`0.72.0`)
+> Le seuil est `date_course`, sans marge d'avance. **Une marge de cinq minutes tenait ce
+> rôle jusqu'à la `0.71.0`** — `MARGE_FERMETURE_MS` dans `lib/format.js`,
+> `MARGE_FERMETURE` dans la route, `interval '5 minutes'` dans la fonction SQL. Les trois
+> sont retirées ensemble : c'est une seule règle à trois étages, et un étage laissé en
+> arrière aurait ouvert le formulaire sur une écriture que la base refuse.
+
 > ### La fermeture est vérifiée deux fois, et ce n'est pas une redondance
 > La route refuse en `423` avant de solliciter la base ; la fonction SQL revérifie au
 > moment d'écrire. Entre les deux, quelques dizaines de millisecondes — et c'est
-> précisément à cinq minutes du départ que la course aux dernières secondes a lieu.
-> **C'est la vérification en base qui fait foi** ; celle de la route évite un
-> aller-retour et donne le message.
+> précisément dans les dernières secondes avant le départ que la course aux derniers
+> pronostics a lieu. **C'est la vérification en base qui fait foi** ; celle de la route
+> évite un aller-retour et donne le message.
 
-La marge est `MARGE_FERMETURE_MS = 5 min` (`lib/format.js`), partagée par les trois
-étages.
+Le seuil est `date_course` lui-même, lu par `instantFermeture` (`lib/format.js`) côté
+frontend, et partagé par les trois étages. **Aucune constante ne porte plus de marge** :
+laissée en place sans emploi, elle aurait été une seconde réponse à la question « quand
+est-ce que ça ferme ? ».
 
 > ### Un GP dont l'heure de départ est INCONNUE reste OUVERT
 > Aux trois étages : base, backend, frontend. Refuser tout le monde parce qu'Unibet n'a
 > pas annoncé l'horaire serait le mauvais sens du doute.
 
 > ### « Cotes arrêtées » exige DEUX conditions
-> Statut `cotes_figees` **et** fermeture pas encore passée — `date_course − 5 min` devant
-> nous. Rien d'autre, et surtout pas `date_qualifications` (v`0.65.0`).
+> Statut `cotes_figees` **et** fermeture pas encore passée — `date_course` devant nous.
+> Rien d'autre, et surtout pas `date_qualifications` (v`0.65.0`).
 >
 > Le statut n'est pas une supposition : `jobs/scraper.py` ne le pose qu'après un scraping
 > dont **au moins une cote a été écrite**. Il y a donc quelque chose à pronostiquer, ce qui

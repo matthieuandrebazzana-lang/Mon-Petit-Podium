@@ -516,7 +516,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les vingt-deux migrations
+## 6. Les vingt-trois migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -542,6 +542,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 20 | `20260826180000_qualifications_horaires_2026` | **corrige les horaires de qualifications de la 19**, qui les dérivait de `date_course` | 3, 11, **19** |
 | 21 | `20260827_audit_rls` | **audit RLS** : lecture des profils bornée, `is_admin` non modifiable, fenêtre de fermeture sur les pronostics, deux politiques `insert` retirées, cotes réservées aux connectés | 1, 2, 3, 5, 8, 12, 14 |
 | 22 | `20260913_storage_rls_extension` | **contrainte d'extension sur les dépôts** : `nom_de_photo_valide`, et les quatre politiques `insert`/`update` de Storage amendées par `alter policy` | **16** |
+| 23 | `20260918_fermeture_au_depart` | **retire la marge de cinq minutes** : `pronostics_fermes` ferme à `date_course`, plus à `date_course − 5 min` | **5** |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -565,6 +566,7 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **2** après **21** | l'adhésion et la création de championnat, de nouveau libres | rejouer 21 |
 | **3** après **21** | les cotes, de nouveau lisibles sans session | rejouer 21 |
 | **16** après **22** | la contrainte d'extension sur les dépôts de photos | rejouer 22 |
+| **5** après **23** | la marge de cinq minutes, restaurée en base seule | rejouer 23 |
 
 **La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12
 et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre les écrans
@@ -572,7 +574,13 @@ où *quelqu'un d'autre* voit la voiture. La perdre ne casse rien — le frontend
 l'encre calculée — mais le réglage cesse d'être visible ailleurs que sur son propre profil.
 
 **Les migrations 11, 14, 15, 17, 19, 20, 21 et 22 ne remplacent aucune fonction** : elles ne
-peuvent pas entrer en conflit d'ordre sur une *fonction*. La 22 en **crée** une
+peuvent pas entrer en conflit d'ordre sur une *fonction*. **La 23, elle, en remplace une**
+— `pronostics_fermes`, celle de la 5 — et son piège est le plus discret du tableau : la 5
+rejouée derrière elle reposerait la marge de cinq minutes **en base seulement**. Le
+frontend afficherait alors les pronostics ouverts et la route les accepterait pendant les
+cinq dernières minutes, mais l'écriture serait refusée en `PT423`. D'où le bloc de
+contrôle final de la 23, qui relit le corps de la fonction et **lève** s'il y trouve
+encore un `interval`. La 22 en **crée** une
 (`nom_de_photo_valide`), ce qui n'est pas la même chose : personne d'autre ne la remplace. La 17 ne remplace que deux
 contraintes `check`, et il faut donc la rejouer si l'on rejoue la 16 — qui reposerait les
 contraintes fautives.

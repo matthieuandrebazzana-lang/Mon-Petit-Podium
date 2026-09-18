@@ -135,7 +135,7 @@ export default function Horloge({
         <p className="text-score text-primaire mt-2 text-center">
           {/* Les états sans décompte gardent l'échange en place
               (transitions-dev 04) : le passage de l'horloge à « Fermés » se
-              produit sous les yeux du joueur, à cinq minutes du départ. */}
+              produit sous les yeux du joueur, à l'instant du départ. */}
           <TexteEchange valeur={etat.substitut} />
         </p>
       )}

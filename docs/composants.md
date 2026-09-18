@@ -320,7 +320,7 @@ le mode personnalisé — ce qui se voit à l'écran au lieu de planter.
 | `useDonnees.js` | cache localStorage *stale-while-revalidate* |
 | `api.js` | seul point de traduction des échecs réseau |
 | `erreurs.js` | seul point de traduction des erreurs d'authentification |
-| `format.js` | **seul endroit qui habille un nombre de points** ; `MARGE_FERMETURE_MS`, `DELAI_OUVERTURE_MS`, les deux comptes à rebours |
+| `format.js` | **seul endroit qui habille un nombre de points** ; `instantFermeture` (à `date_course`, sans marge depuis la `0.72.0`), `DELAI_OUVERTURE_MS`, les deux comptes à rebours |
 | `useFermeture.js` | `useFermeture` (« est-ce fermé ? »), `useEtatPronostics` (le décompte du week-end) |
 | `couleurs.js` | aplats de bloc, contraste, encres |
 | `palette.js` | 20 couleurs de voiture, luminance, `livreeDuMembre` |

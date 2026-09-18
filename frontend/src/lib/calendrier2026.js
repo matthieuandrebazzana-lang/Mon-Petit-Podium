@@ -400,7 +400,7 @@ export function actionDuGp(gp, etat, previsualisation = false, aPronostique = fa
   // **Pronostiquer exige des cotes arrêtées, pas seulement des cotes visibles.**
   // Deux conditions réunies (`cotesArretees`) : le statut `cotes_figees`, et une
   // fermeture pas encore passée. Tant que le Grand Prix est en `a_venir`, le
-  // scraper n'a rien arrêté ; passé `date_course − 5 min`, plus rien ne
+  // scraper n'a rien arrêté ; passé `date_course`, plus rien ne
   // s'enregistre (règle 4.3). Dans les deux cas le bouton est retiré — ni grisé,
   // ni remplacé par un message.
   //

@@ -181,7 +181,7 @@ PREFIXE_MANUEL = "manuel-"
 #
 # Le lire en heure de Paris le convertissait une seconde fois et **avançait tout
 # de deux heures** : la base portait 11:00 UTC, l'accueil affichait 13h pour un
-# départ à 15h, et surtout la fermeture des pronostics (départ - 5 min) comme le
+# départ à 15h, et surtout la fermeture des pronostics (au départ) comme le
 # job de résultats (départ + 1h30) tombaient deux heures trop tôt. Ce n'était
 # donc pas un défaut d'affichage mais un décalage de toute la programmation.
 FUSEAU_UNIBET = ZoneInfo("UTC")

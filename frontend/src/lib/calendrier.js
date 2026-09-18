@@ -113,8 +113,8 @@ export const ETATS_GP = {
  * pronostiquer dessus ?
  *
  * **Deux conditions, et les deux doivent tenir** : le statut vaut
- * `cotes_figees`, ET la fermeture n'est pas passée — soit `date_course` moins
- * les cinq minutes de `MARGE_FERMETURE_MS`. Rien d'autre. Le statut dit que le
+ * `cotes_figees`, ET la fermeture n'est pas passée — soit `date_course`, sans
+ * marge d'avance depuis la version `0.72.0`. Rien d'autre. Le statut dit que le
  * scraper a relevé les cotes ; l'heure de la course dit jusqu'à quand on peut
  * jouer dessus.
  *
@@ -150,9 +150,9 @@ export const ETATS_GP = {
 export function cotesArretees(gp, maintenant = Date.now()) {
   if (!gp || gp.statut !== "cotes_figees") return false;
 
-  // `ferme` est vrai dès que `date_course − 5 min` est derrière nous, et faux
-  // quand l'heure de départ est inconnue : les deux cas voulus, sans second
-  // calcul de la marge de fermeture.
+  // `ferme` est vrai dès que `date_course` est derrière nous, et faux quand
+  // l'heure de départ est inconnue : les deux cas voulus, sans second calcul de
+  // l'instant de fermeture.
   return !etatFermeture(gp.date_course, maintenant).ferme;
 }
 
@@ -172,7 +172,7 @@ export function cotesArretees(gp, maintenant = Date.now()) {
  * | Phase | Échéance | Ce qui est dit |
  * |---|---|---|
  * | Avant le relevé des cotes | qualifications + 2h | « Ouverture dans » |
- * | Pronostics ouverts | départ − 5 min | « Fermeture dans » |
+ * | Pronostics ouverts | départ | « Fermeture dans » |
  *
  * **C'est `cotesArretees` qui départage, pas le statut brut**, et c'est ce qui
  * fait tenir l'ensemble : le bouton de pronostics du même bloc s'affiche sur

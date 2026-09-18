@@ -15,7 +15,7 @@ ne sort d'ici : la base ne stocke que des entiers, et rien à l'étage du fronte
 n'a à diviser par 100.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -54,17 +54,13 @@ MARCHE_PODIUM = "podium"
 # maximum, pas un quota.
 BONUS_MAXIMUM = 3
 
-# Règle 4.3 : fermeture cinq minutes avant le départ.
-MARGE_FERMETURE = timedelta(minutes=5)
-
 # Codes d'erreur levés par les fonctions de la migration de l'étape 5.
 FERMETURE_DEPASSEE = "PT423"
 TROP_DE_BONUS = "PT403"
 VIOLATION_UNICITE = "23505"
 
 PRONOSTICS_FERMES = (
-    "Les pronostics de ce Grand Prix sont fermés : le départ est dans moins de "
-    "cinq minutes."
+    "Les pronostics de ce Grand Prix sont fermés : la course est partie."
 )
 
 
@@ -206,13 +202,17 @@ async def cotes_du_gp(gp_id: UUID) -> dict[str, dict]:
 
 
 def pronostics_fermes(gp: dict) -> bool:
-    """Règle 4.3 — plus aucune modification cinq minutes avant le départ.
+    """Règle 4.3 — plus aucune modification à partir du départ de la course.
+
+    **La marge de cinq minutes est retirée depuis la version `0.72.0`** : la
+    fermeture se déclenche quand `date_course` est atteinte, pas avant. Le seuil
+    est donc l'heure de départ elle-même, aux trois étages.
 
     Un GP dont l'heure de départ n'est pas connue reste ouvert : refuser tout le
     monde parce qu'Unibet n'a pas encore annoncé l'horaire serait le mauvais sens
     du doute. La même règle, écrite de la même façon, est rejouée en base par
     `public.pronostics_fermes(uuid)` — c'est elle qui fait foi au moment de
-    l'écriture.
+    l'écriture, et **les deux doivent donc bouger ensemble** (migration 23).
     """
     brut = gp.get("date_course")
     if not brut:
@@ -222,7 +222,7 @@ def pronostics_fermes(gp: dict) -> bool:
     if depart.tzinfo is None:
         depart = depart.replace(tzinfo=UTC)
 
-    return datetime.now(UTC) >= depart - MARGE_FERMETURE
+    return datetime.now(UTC) >= depart
 
 
 def exiger_ouvert(gp: dict) -> None:
@@ -449,7 +449,8 @@ async def enregistrer(
         # Une seule transaction : le pronostic précédent n'est effacé que si le
         # nouveau s'écrit en entier. La fermeture y est revérifiée — entre le
         # contrôle ci-dessus et l'écriture, quelques dizaines de millisecondes
-        # passent, et c'est à cinq minutes du départ que cela se joue.
+        # passent, et c'est dans les dernières secondes avant le départ que cela
+        # se joue.
         rendus = await appeler_fonction(
             "enregistrer_pronostics",
             {

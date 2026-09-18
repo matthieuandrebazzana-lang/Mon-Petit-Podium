@@ -103,7 +103,7 @@ la personne qui pronostique, « membre » son rattachement à un championnat.
 refuse d'y toucher. **Attention** : le statut seul ne suffit pas à ouvrir les pronostics,
 il faut aussi que les qualifications soient passées (`metier.md` §3).
 
-**Fermé** (*pronostics fermés*) — départ − 5 minutes passé. Plus aucune modification.
+**Fermé** (*pronostics fermés*) — départ passé. Plus aucune modification.
 *Ne pas confondre avec « figé »* : figé concerne les **cotes**, fermé concerne les
 **pronostics**.
 

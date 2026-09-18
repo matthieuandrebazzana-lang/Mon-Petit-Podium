@@ -15,7 +15,7 @@ import {
  * mêmes raisons :
  *
  * - **Écritures et règles métier** (bascule d'un favori, enregistrement d'un
- *   pronostic) passent par FastAPI. La fermeture cinq minutes avant le départ,
+ *   pronostic) passent par FastAPI. La fermeture au départ de la course,
  *   le contrôle « les bonus sont bien dans les favoris » et le remplacement
  *   atomique du jeu précédent ne peuvent pas vivre côté client.
  * - **Lectures** vont directement à Supabase quand les politiques RLS

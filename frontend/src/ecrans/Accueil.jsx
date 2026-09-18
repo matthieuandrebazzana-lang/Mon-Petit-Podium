@@ -167,7 +167,7 @@ export function BlocProchainGp({ profilId, previsualisation = false }) {
   //
   // Tant qu'un Grand Prix est en `a_venir`, le scraper n'a rien relevé : le
   // tableau des cotes est vide et le récapitulatif n'a rien à récapituler. Et
-  // cinq minutes avant le départ, plus rien ne s'enregistre (règle 4.3). Dans
+  // au départ de la course, plus rien ne s'enregistre (règle 4.3). Dans
   // les deux cas le bouton serait une promesse fausse, celle-là même que le
   // libellé variable de ce bloc cherche à éviter depuis la version `0.5.1`.
   //

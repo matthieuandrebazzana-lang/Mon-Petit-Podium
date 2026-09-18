@@ -9,9 +9,6 @@
  * cote : le CLAUDE.md gagne, elles affichent « 28 pts ».
  */
 
-/** Règle 4.3 : les pronostics ferment cinq minutes avant le départ. */
-export const MARGE_FERMETURE_MS = 5 * 60 * 1000;
-
 /**
  * Règle 4.3 : les cotes sont relevées **deux heures après les qualifications**,
  * et c'est ce relevé qui ouvre les pronostics.
@@ -167,16 +164,30 @@ export function formaterJourMois(iso) {
   return { jour, mois };
 }
 
-/** Instant de fermeture des pronostics, ou `null` si l'heure est inconnue. */
+/**
+ * Instant de fermeture des pronostics, ou `null` si l'heure est inconnue.
+ *
+ * **C'est l'heure du départ elle-même, sans marge** (version `0.72.0`). Les cinq
+ * minutes d'avance de `MARGE_FERMETURE_MS` sont retirées : la fermeture se
+ * déclenche quand `date_course` est atteinte, pas avant. La constante n'existe
+ * plus — laissée exportée sans emploi, elle aurait été une seconde réponse à la
+ * question « quand est-ce que ça ferme ? », et la première retouchée aurait
+ * démenti l'autre.
+ *
+ * La fonction est conservée alors qu'elle ne fait plus que lire une date : elle
+ * reste le **seul** endroit qui répond à cette question côté frontend, et c'est
+ * ce qui a permis de retirer la marge en un point au lieu de quatre.
+ */
 export function instantFermeture(iso) {
   if (!iso) return null;
   const depart = new Date(iso).getTime();
   if (Number.isNaN(depart)) return null;
-  return depart - MARGE_FERMETURE_MS;
+  return depart;
 }
 
 /**
- * État de la fermeture à l'instant `maintenant`.
+ * État de la fermeture à l'instant `maintenant` — **au départ de la course**,
+ * sans marge d'avance.
  *
  * Un GP dont l'heure de départ n'est pas connue reste **ouvert** : c'est la
  * même règle que côté backend et côté base, et refuser tout le monde parce
