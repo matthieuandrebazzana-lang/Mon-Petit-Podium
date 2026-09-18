@@ -643,6 +643,47 @@ Il s'efface quand la voiture a touché son plancher de taille : les cellules son
 étroites qu'un nombre à trois chiffres, et vingt scores côte à côte ne feraient pas vingt
 nombres mais une bavure. La liste `sr-only` de l'écran, elle, les donne tous.
 
+### Deux régimes de répartition latérale, et non plus un seul (`0.69.0`)
+
+La `0.49.0` n'avait qu'une façon de ranger un groupe : **découper toute la largeur de la
+piste en `N` cellules égales et centrer une voiture dans chacune.** Le calcul est juste, et
+pour un peloton il est même le bon — mais appliqué à deux ex æquo il les posait chacune au
+milieu de sa demi-piste, **avec 125px de vide entre elles**. Le dessin disait « ces deux-là
+n'ont rien à voir » au moment précis où il devait dire « elles sont au coude à coude ». La
+proximité est ce qui porte le sens d'un groupe ; l'étalement la détruit.
+
+| Taille du groupe | Régime | Ce que ça dit |
+|---|---|---|
+| 1 | sur l'axe | rien à départager |
+| 2 et 3 | **serré autour de l'axe**, gouttière de 12px | ces voitures sont ensemble |
+| 4 et plus | **étalé d'un kerb à l'autre**, cellules égales | une grille de départ |
+
+`GROUPE_SERRE_MAX` (`Piste.jsx`) est le seul propriétaire du seuil.
+
+**La marche entre 3 et 4 est visible, et elle est voulue.** À trois, les voitures extérieures
+sont à 64px de l'axe ; à quatre, à 133px. Il n'y a pas de continuité à chercher : ce sont
+deux lectures différentes, pas deux réglages du même. Un trio serré se lit comme trois
+personnes à égalité, un quatuor étalé comme le début d'un peloton. Interpoler entre les deux
+rendrait des groupes intermédiaires qui ne disent ni l'un ni l'autre.
+
+**La taille de base est redevenue vraiment uniforme.** Elle l'était déjà dans l'intention —
+la `0.49.0` ne réduisait que les groupes concernés — mais le régime unique faisait réduire
+dès que la largeur d'une cellule tombait sous la voiture. Avec le régime serré, un groupe de
+deux ou trois ne consulte plus la largeur de la piste du tout : il garde ses 52px par
+construction. **La première réduction n'arrive qu'à six voitures dans le même groupe**, et
+elle ne touche que celles-là.
+
+**Ce qui n'a pas bougé d'un pixel :** la passe 1, le seuil de chevauchement, le fond SVG, le
+bandeau, les scores sous les voitures, le chargement des données. Et surtout **l'interdit de
+l'escalier** : la résolution reste purement latérale, aucune voiture n'est déplacée
+verticalement pour éviter une autre. C'est la règle qui fonde tout le §19, et le second
+régime ne l'entame pas — il ne touche qu'aux abscisses.
+
+**Aucun jeton de mouvement n'a été ajouté.** Le déplacement latéral est déjà couvert par la
+transition `translate` de `.t-place`, installée en `0.49.0` sur `--ease-in-out-fort` — la
+courbe que le design system réserve aux déplacements. Une abscisse qui change est
+exactement le cas qu'elle sert.
+
 
 ---
 

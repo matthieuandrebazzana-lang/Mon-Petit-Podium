@@ -51,14 +51,31 @@ const HAUTEUR_VOITURE = Math.round(LARGEUR_VOITURE * (288.09 / 141.12));
 // côte à côte sur une piste de 354px avant que le plancher ne morde.
 const LARGEUR_MINIMALE = 18;
 
+// Au-delà de combien de voitures un groupe cesse de se serrer autour de l'axe
+// et s'étale d'un kerb à l'autre.
+//
+// **Deux régimes, et c'est une décision de composition, pas une optimisation.**
+// À deux ou trois, les voitures se rangent côte à côte au milieu de la piste,
+// séparées de la seule gouttière : la proximité est ce qui dit qu'elles sont à
+// égalité. La version `0.49.0` n'avait qu'un régime, et posait déjà deux ex
+// æquo chacune au milieu de sa demi-piste — **125px de vide entre elles**, là
+// où le dessin voulait dire « ces deux-là sont au coude à coude ». Elles en
+// gardent 12.
+//
+// À quatre et au-delà, le serrage n'a plus rien à dire : un peloton se lit
+// comme une grille de départ, et la grille occupe la piste.
+const GROUPE_SERRE_MAX = 3;
+
 // Gouttière entre deux voitures d'un même groupe. Elle **s'ajoute** à la boîte
 // du dessin et ne l'entame jamais.
 //
-// Elle sert deux fois : les voitures étant centrées dans des cellules de
-// largeur égale, **la moitié de la gouttière tient lieu de marge aux deux
-// voitures extérieures**. À 8, la première d'un groupe de douze passait à
-// quatre pixels du kerb et paraissait le mordre ; à 12, elle en garde six, ce
-// qui se lit comme une marge.
+// Elle sert les deux régimes, et ce n'est pas la même gouttière qui est dite
+// deux fois : c'est la même distance entre deux voitures voisines, qu'elles se
+// serrent au centre ou qu'elles s'étalent en cellules. Dans le régime étalé,
+// les voitures étant centrées dans des cellules de largeur égale, **la moitié
+// de la gouttière tient lieu de marge aux deux voitures extérieures**. À 8, la
+// première d'un groupe de douze passait à quatre pixels du kerb et paraissait
+// le mordre ; à 12, elle en garde six, ce qui se lit comme une marge.
 const GOUTTIERE_HORIZONTALE = 12;
 
 // Marges au-dessus de la première voiture et au-dessous de la dernière. La zone
@@ -187,26 +204,93 @@ export function regrouperParChevauchement(hauteurs) {
 }
 
 /**
- * **Passe 2b — la taille et la place de chaque voiture, par groupe.**
+ * **Passe 2b — la répartition latérale d'un groupe, et elle seule.**
  *
- * Un groupe d'une seule voiture la garde à sa taille pleine. Un groupe de N la
- * réduit jusqu'à ce que N voitures tiennent **entre les deux kerbs**, gouttière
- * comprise, et les répartit sur des cellules de largeur égale — ce qui les
- * centre sur la piste sans qu'aucun calcul ne le demande, une cellule unique
- * ayant son milieu au milieu de la piste.
+ * Rend la taille commune aux voitures du groupe et la fonction qui donne
+ * l'abscisse de chacune, comptée depuis le milieu de la piste. **Aucune
+ * hauteur n'entre ici et aucune n'en sort** : la passe 1 les a fixées, elles ne
+ * bougent plus d'un pixel. Il n'y a donc pas d'escalier de résolution — deux
+ * voitures qui se rencontrent sont écartées **latéralement**, jamais
+ * verticalement.
+ *
+ * ### Deux régimes
+ *
+ * **Jusqu'à `GROUPE_SERRE_MAX`, le groupe se serre autour de l'axe.** Les
+ * voitures gardent leur taille pleine et se rangent côte à côte, séparées de la
+ * seule gouttière : deux se posent de part et d'autre du milieu, trois se
+ * posent à gauche, au milieu et à droite. L'expression `place - (n - 1) / 2`
+ * centre le groupe sans qu'aucun cas particulier ne soit écrit — elle vaut `0`
+ * pour une voiture seule, `-0,5` et `+0,5` pour deux, `-1`, `0` et `+1` pour
+ * trois.
+ *
+ * **Au-delà, le groupe s'étale d'un kerb à l'autre**, sur des cellules de
+ * largeur égale. Les centrer dans leur cellule centre le groupe sur la piste
+ * sans qu'aucun calcul ne le demande, une cellule unique ayant son milieu au
+ * milieu de la piste.
+ *
+ * ### La taille ne bouge que si la largeur manque
+ *
+ * La taille de base est **la même pour toute la piste**. Un groupe ne la réduit
+ * que lorsque sa cellule devient plus étroite que la voiture, gouttière
+ * comprise — et **seul ce groupe-là** est réduit ; les voitures qui ont la
+ * place gardent leurs 52px. Sur une piste de 354px, cela n'arrive qu'à partir
+ * de **six** voitures dans le même groupe : cinq tiennent encore à taille
+ * pleine (5 × 52 + 4 × 12 = 308).
  *
  * La réduction porte sur **les deux dimensions du même facteur** : une voiture
  * étirée cesserait d'être une voiture.
  *
  * **Le plancher peut faire déborder un groupe, et c'est le moindre mal.**
- * Au-delà de seize ex æquo sur une piste de téléphone, les cellules deviennent
- * plus étroites que `LARGEUR_MINIMALE` et les voitures se recouvrent d'un ou
- * deux pixels. L'alternative — descendre sans plancher — rendrait des voitures
- * de trois pixels, c'est-à-dire des taches. Un léger recouvrement se lit encore
- * comme une grille de départ ; une tache ne se lit pas.
+ * Les cellules d'une piste de 354px passent sous `LARGEUR_MINIMALE` à **vingt**
+ * voitures dans le même groupe (354 / 20 = 17,7), et les voitures se recouvrent
+ * alors de quelques dixièmes de pixel. L'alternative, descendre sans plancher,
+ * rendrait des voitures de trois pixels, c'est-à-dire des taches. Un léger
+ * recouvrement se lit encore comme une grille de départ ; une tache ne se lit
+ * pas.
  *
- * La hauteur du groupe reste celle de la passe 1 : **réduire une voiture ne la
- * déplace pas**. Sa hauteur dit ses points, et elle seule.
+ * > Le chiffre est **mesuré, pas prescrit** : la version `0.49.0` annonçait
+ * > seize, où il reste en réalité 4,1px de gouttière. Le plancher lui-même
+ * > mord plus tôt, dès **douze** (354 / 12 − 12 = 17,5), sans que rien ne se
+ * > recouvre encore.
+ *
+ * > ### Le régime serré cède si la piste est trop étroite pour lui
+ * >
+ * > Trois voitures pleines demandent 180px. Une piste de téléphone en offre
+ * > 291 au pire (un écran de 320px moins ses deux kerbs), donc le cas ne se
+ * > rencontre pas sur la cible. La condition est écrite quand même : elle coûte
+ * > une comparaison, et sans elle une fenêtre étroite ferait sortir les
+ * > voitures de la piste au lieu de les réduire.
+ */
+export function repartitionLaterale(nombre, largeur) {
+  const pas = LARGEUR_VOITURE + GOUTTIERE_HORIZONTALE;
+
+  if (nombre <= GROUPE_SERRE_MAX && nombre * pas - GOUTTIERE_HORIZONTALE <= largeur) {
+    return {
+      largeurVoiture: LARGEUR_VOITURE,
+      abscisse: (place) => (place - (nombre - 1) / 2) * pas,
+    };
+  }
+
+  const cellule = largeur / nombre;
+  const largeurVoiture = Math.max(
+    LARGEUR_MINIMALE,
+    Math.min(LARGEUR_VOITURE, cellule - GOUTTIERE_HORIZONTALE),
+  );
+
+  return {
+    largeurVoiture,
+    // Le milieu de la cellule, rapporté au milieu de la piste.
+    abscisse: (place) => (place + 0.5) * cellule - largeur / 2,
+  };
+}
+
+/**
+ * **L'enchaînement des trois passes.**
+ *
+ * Elle enchaîne le regroupement géométrique et la répartition latérale, et ne
+ * décide rien elle-même. La hauteur qu'elle recopie est celle de la passe 1,
+ * **inchangée** : réduire une voiture ne la déplace pas, l'écarter de l'axe non
+ * plus. Sa hauteur dit ses points, et elle seule.
  */
 export function dispositionDesVoitures(lignes, hauteur, largeur) {
   if (lignes.length === 0 || hauteur <= 0 || largeur <= 0) return [];
@@ -215,10 +299,9 @@ export function dispositionDesVoitures(lignes, hauteur, largeur) {
   const placements = [];
 
   regrouperParChevauchement(hauteurs).forEach(({ membres }) => {
-    const cellule = largeur / membres.length;
-    const largeurVoiture = Math.max(
-      LARGEUR_MINIMALE,
-      Math.min(LARGEUR_VOITURE, cellule - GOUTTIERE_HORIZONTALE),
+    const { largeurVoiture, abscisse } = repartitionLaterale(
+      membres.length,
+      largeur,
     );
     const echelle = largeurVoiture / LARGEUR_VOITURE;
 
@@ -239,8 +322,7 @@ export function dispositionDesVoitures(lignes, hauteur, largeur) {
         ligne: lignes[index],
         index,
         centre: hauteurs[index],
-        // Le milieu de la cellule, rapporté au milieu de la piste.
-        decalage: (place + 0.5) * cellule - largeur / 2,
+        decalage: abscisse(place),
         largeurVoiture,
         hauteurVoiture: HAUTEUR_VOITURE * echelle,
         // Le score ne rétrécit pas au même rythme que la voiture : sous 11px il
