@@ -51,31 +51,20 @@ const HAUTEUR_VOITURE = Math.round(LARGEUR_VOITURE * (288.09 / 141.12));
 // côte à côte sur une piste de 354px avant que le plancher ne morde.
 const LARGEUR_MINIMALE = 18;
 
-// Au-delà de combien de voitures un groupe cesse de se serrer autour de l'axe
-// et s'étale d'un kerb à l'autre.
+// Gouttière entre deux voitures voisines d'un même groupe. Elle **s'ajoute** à
+// la boîte du dessin et ne l'entame jamais.
 //
-// **Deux régimes, et c'est une décision de composition, pas une optimisation.**
-// À deux ou trois, les voitures se rangent côte à côte au milieu de la piste,
-// séparées de la seule gouttière : la proximité est ce qui dit qu'elles sont à
-// égalité. La version `0.49.0` n'avait qu'un régime, et posait déjà deux ex
-// æquo chacune au milieu de sa demi-piste — **125px de vide entre elles**, là
-// où le dessin voulait dire « ces deux-là sont au coude à coude ». Elles en
-// gardent 12.
+// **Elle fixe le pas des voies** : deux voies consécutives sont écartées d'une
+// voiture PLUS une gouttière, jamais de moins. C'est ce qui garde deux ex æquo
+// à douze pixels l'une de l'autre — la version `0.49.0` en posait une au milieu
+// de chaque demi-piste, **125px de vide entre elles**, là où le dessin voulait
+// dire « ces deux-là sont au coude à coude ».
 //
-// À quatre et au-delà, le serrage n'a plus rien à dire : un peloton se lit
-// comme une grille de départ, et la grille occupe la piste.
-const GROUPE_SERRE_MAX = 3;
-
-// Gouttière entre deux voitures d'un même groupe. Elle **s'ajoute** à la boîte
-// du dessin et ne l'entame jamais.
-//
-// Elle sert les deux régimes, et ce n'est pas la même gouttière qui est dite
-// deux fois : c'est la même distance entre deux voitures voisines, qu'elles se
-// serrent au centre ou qu'elles s'étalent en cellules. Dans le régime étalé,
-// les voitures étant centrées dans des cellules de largeur égale, **la moitié
-// de la gouttière tient lieu de marge aux deux voitures extérieures**. À 8, la
-// première d'un groupe de douze passait à quatre pixels du kerb et paraissait
-// le mordre ; à 12, elle en garde six, ce qui se lit comme une marge.
+// L'éventail de `repartitionLaterale` posant la voie extérieure à un demi-pas
+// au moins du bord de la piste, **la moitié de la gouttière tient lieu de marge
+// à la voiture extérieure**. À 8, la première d'un groupe de douze passait à
+// quatre pixels du kerb et paraissait le mordre ; à 12, elle en garde six, ce
+// qui se lit comme une marge.
 const GOUTTIERE_HORIZONTALE = 12;
 
 // Marges au-dessus de la première voiture et au-dessous de la dernière. La zone
@@ -240,11 +229,15 @@ export function regrouperParChevauchement(hauteurs) {
  * > ### Le cycle des voies est une contrainte de géométrie, pas un défaut
  * >
  * > Douze scores réguliers demandent trois voies, et les voitures les occupent
- * > en cycle — gauche, milieu, droite, gauche… Aucun placement n'y échappe :
- * > trois voitures qui se chevauchent mutuellement **doivent** occuper trois
- * > abscisses distinctes. Ce qui est parti, c'est la rampe unique qui traversait
- * > la piste en entier ; ce qui reste dit une vérité — ces voitures-là sont
- * > serrées.
+ * > en cycle. Aucun placement n'y échappe : trois voitures qui se chevauchent
+ * > mutuellement **doivent** occuper trois abscisses distinctes.
+ * >
+ * > **Ce que la version `0.71.0` change, c'est l'ordre de ces abscisses.** Une
+ * > numérotation de gauche à droite faisait descendre le cycle trois fois de
+ * > suite dans le même sens — gauche, milieu, droite, gauche… — soit un petit
+ * > escalier redessiné à chaque tour. L'éventail de `repartitionLaterale` le
+ * > fait tourner **milieu, gauche, droite, milieu…** : deux voitures
+ * > consécutives ne partent jamais du même côté de l'axe.
  *
  * Le seuil est celui de `regrouperParChevauchement`, et pour la même raison :
  * une voiture occupe son dessin **plus** le score écrit dessous. Il se mesure à
@@ -280,87 +273,96 @@ export function voiesDuGroupe(hauteurs) {
  * **latéralement**, jamais verticalement.
  *
  * **`nombre` est un nombre de voies, pas un nombre de membres** (version
- * `0.70.0`). Les confondre est précisément ce qui produisait l'escalier : un
- * groupe de huit peut n'ouvrir que deux voies, et il réclame alors deux
- * abscisses, pas huit. Une voie seule rend `0` — l'axe de la piste — ce qui est
- * le cas de toutes les voitures dès que les scores sont distincts **et**
- * suffisamment espacés pour que rien ne se chevauche.
+ * `0.70.0`). Les confondre est précisément ce qui produisait l'escalier
+ * diagonal : un groupe de huit peut n'ouvrir que deux voies, et il réclame
+ * alors deux abscisses, pas huit.
  *
- * ### Deux régimes
+ * ### L'éventail : la voie `0` est l'axe, les suivantes s'écartent par paires
  *
- * **Jusqu'à `GROUPE_SERRE_MAX`, les voies se serrent autour de l'axe.** Les
- * voitures gardent leur taille pleine et se rangent côte à côte, séparées de la
- * seule gouttière : deux se posent de part et d'autre du milieu, trois se
- * posent à gauche, au milieu et à droite. L'expression `place - (n - 1) / 2`
- * centre le groupe sans qu'aucun cas particulier ne soit écrit — elle vaut `0`
- * pour une voie seule, `-0,5` et `+0,5` pour deux, `-1`, `0` et `+1` pour
- * trois.
+ * C'est la correction de la version `0.71.0`. Les voies ne se numérotent plus
+ * d'un kerb à l'autre mais **depuis le milieu de la piste** : la voie `1` part
+ * à gauche, la `2` à droite, la `3` plus à gauche, la `4` plus à droite.
  *
- * **Au-delà, le groupe s'étale d'un kerb à l'autre**, sur des cellules de
- * largeur égale. Les centrer dans leur cellule centre le groupe sur la piste
- * sans qu'aucun calcul ne le demande, une cellule unique ayant son milieu au
- * milieu de la piste.
+ * ```
+ *   voie      3       1      0      2       4
+ *   x      −2 · pas  −pas    0    +pas   +2 · pas
+ * ```
  *
- * ### La taille ne bouge que si la largeur manque
+ * `voiesDuGroupe` ouvre les voies dans l'ordre d'arrivée, et les lignes
+ * arrivent triées par points décroissants : **la meilleure voiture du groupe
+ * ouvre donc toujours la voie `0`** et se pose sur l'axe. L'écran dit alors
+ * quelque chose de vrai — qui mène le groupe tient le milieu de la piste, ses
+ * poursuivants s'écartent autour de lui à mesure qu'ils sont nombreux.
  *
- * La taille de base est **la même pour toute la piste**. Un groupe ne la réduit
- * que lorsque sa cellule devient plus étroite que la voiture, gouttière
- * comprise — et **seul ce groupe-là** est réduit ; les voitures qui ont la
- * place gardent leurs 52px. Sur une piste de 354px, cela n'arrive qu'à partir
- * de **six voies** : cinq tiennent encore à taille pleine
- * (5 × 52 + 4 × 12 = 308).
+ * Les deux voitures suivantes ne sont **pas** côte à côte : la voie centrale
+ * les sépare. C'est la conséquence recherchée, pas un effet de bord — une
+ * rangée qui s'ouvre en V ne peut se lire comme une pente, quelle que soit la
+ * suite des scores.
+ *
+ * ### Le pas, et la taille qui s'en déduit
+ *
+ * Le pas vaut une voiture pleine plus une gouttière **tant que la piste le
+ * permet** : un petit groupe se serre autour de l'axe plutôt que de s'étaler,
+ * la proximité étant ce qui dit que ces voitures-là sont au coude à coude.
+ *
+ * Au-delà, le pas se réduit jusqu'à ce que le groupe tienne entre les kerbs.
+ * La contrainte est celle de la voie la plus éloignée, et elle se compte en
+ * cellules : l'éventail occupe `rangMaximal` voies **de chaque côté** de l'axe,
+ * plus l'axe lui-même, soit toujours un nombre **impair** de cellules. Six
+ * voies en réclament donc sept — la septième reste vide à droite, et c'est le
+ * prix de l'axe tenu par la meilleure voiture.
+ *
+ * La voiture occupe le pas moins la gouttière. Elle garde ses 52px tant que le
+ * pas plein tient, soit jusqu'à **cinq voies** sur une piste de 354px
+ * (5 × 64 = 320 ≤ 354), et rétrécit ensuite. La réduction porte sur **les deux
+ * dimensions du même facteur** : une voiture étirée cesserait d'être une
+ * voiture.
  *
  * > Depuis que le compte porte sur les voies et non sur les membres, la
- * > réduction est devenue **rare**. Vingt membres régulièrement espacés
- * > n'ouvrent que cinq voies sur une piste de 700px : ils tiennent tous à 52px,
- * > là où la version `0.69.0` les écrasait à 17,7. Il faut vingt voitures
- * > réellement empilées — donc vingt scores à un cheveu les uns des autres —
- * > pour retrouver ce cas.
+ * > réduction est **rare**. Vingt membres régulièrement espacés n'ouvrent que
+ * > cinq voies sur une piste de 700px : ils tiennent tous à 52px. Il faut vingt
+ * > voitures réellement empilées — donc vingt scores à un cheveu les uns des
+ * > autres — pour retrouver le cas serré.
  *
- * La réduction porte sur **les deux dimensions du même facteur** : une voiture
- * étirée cesserait d'être une voiture.
+ * **Le plancher peut faire déborder un groupe, et c'est le moindre mal.** Sur
+ * une piste de 354px le pas passe sous `LARGEUR_MINIMALE` + gouttière dès
+ * **douze voies**, sans que rien ne se recouvre encore, et les voitures se
+ * chevauchent d'environ un pixel à partir de **vingt**. L'alternative,
+ * descendre sans plancher, rendrait des voitures de trois pixels, c'est-à-dire
+ * des taches. Un léger recouvrement se lit encore comme une grille de départ ;
+ * une tache ne se lit pas.
  *
- * **Le plancher peut faire déborder un groupe, et c'est le moindre mal.**
- * Les cellules d'une piste de 354px passent sous `LARGEUR_MINIMALE` à **vingt**
- * voitures dans le même groupe (354 / 20 = 17,7), et les voitures se recouvrent
- * alors de quelques dixièmes de pixel. L'alternative, descendre sans plancher,
- * rendrait des voitures de trois pixels, c'est-à-dire des taches. Un léger
- * recouvrement se lit encore comme une grille de départ ; une tache ne se lit
- * pas.
+ * ### Deux voitures d'un même groupe peuvent finir aux deux extrêmes
  *
- * > Le chiffre est **mesuré, pas prescrit** : la version `0.49.0` annonçait
- * > seize, où il reste en réalité 4,1px de gouttière. Le plancher lui-même
- * > mord plus tôt, dès **douze** (354 / 12 − 12 = 17,5), sans que rien ne se
- * > recouvre encore.
- *
- * > ### Le régime serré cède si la piste est trop étroite pour lui
- * >
- * > Trois voitures pleines demandent 180px. Une piste de téléphone en offre
- * > 291 au pire (un écran de 320px moins ses deux kerbs), donc le cas ne se
- * > rencontre pas sur la cible. La condition est écrite quand même : elle coûte
- * > une comparaison, et sans elle une fenêtre étroite ferait sortir les
- * > voitures de la piste au lieu de les réduire.
+ * C'est voulu, et c'est la contrepartie assumée de l'éventail. Un groupe large
+ * écarte ses voies jusqu'aux kerbs, et deux voitures que la cascade du
+ * regroupement a réunies sans qu'elles se touchent peuvent se retrouver de part
+ * et d'autre de la piste. **L'abscisse ne dit rien des points** — seule la
+ * hauteur les dit ; elle ne sert qu'à ce que deux dessins ne se recouvrent pas.
  */
 export function repartitionLaterale(nombre, largeur) {
-  const pas = LARGEUR_VOITURE + GOUTTIERE_HORIZONTALE;
+  // Le rang de la voie la plus éloignée de l'axe. Les voies impaires partent à
+  // gauche, les paires à droite : la gauche est donc servie la première, et
+  // c'est elle qui fixe l'encombrement de l'éventail.
+  const rangMaximal = Math.floor(nombre / 2);
 
-  if (nombre <= GROUPE_SERRE_MAX && nombre * pas - GOUTTIERE_HORIZONTALE <= largeur) {
-    return {
-      largeurVoiture: LARGEUR_VOITURE,
-      abscisse: (place) => (place - (nombre - 1) / 2) * pas,
-    };
-  }
+  // La piste doit tenir `rangMaximal` cellules de chaque côté de la cellule
+  // centrale — la symétrie en réclame toujours un nombre impair.
+  const pas = Math.min(
+    LARGEUR_VOITURE + GOUTTIERE_HORIZONTALE,
+    largeur / (2 * rangMaximal + 1),
+  );
 
-  const cellule = largeur / nombre;
   const largeurVoiture = Math.max(
     LARGEUR_MINIMALE,
-    Math.min(LARGEUR_VOITURE, cellule - GOUTTIERE_HORIZONTALE),
+    Math.min(LARGEUR_VOITURE, pas - GOUTTIERE_HORIZONTALE),
   );
 
   return {
     largeurVoiture,
-    // Le milieu de la cellule, rapporté au milieu de la piste.
-    abscisse: (place) => (place + 0.5) * cellule - largeur / 2,
+    // Voie 0 sur l'axe ; ensuite un rang de plus tous les deux pas, à gauche
+    // pour les voies impaires, à droite pour les paires.
+    abscisse: (voie) => (voie % 2 === 0 ? 1 : -1) * Math.ceil(voie / 2) * pas,
   };
 }
 

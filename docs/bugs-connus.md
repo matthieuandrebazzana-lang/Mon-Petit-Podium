@@ -1474,3 +1474,50 @@ de voies ouvertes égale la plus grande pile de voitures en conflit **deux à de
   pas le code.
 - **Un escalier, c'est `x` ET `y` qui montent ensemble.** Une rangée d'ex æquo partage une
   hauteur et étale ses abscisses : c'est une grille de départ, et elle est voulue.
+
+### Suite — l'escalier résiduel : les voies étaient numérotées d'un kerb à l'autre (`0.71.0`)
+
+**Symptôme.** Le correctif ci-dessus avait supprimé la rampe qui traversait la piste
+entière, mais un **petit escalier** subsistait, redessiné à chaque tour du cycle des voies.
+
+**Cause réelle.** Elle n'est plus dans le comptage — `voiesDuGroupe` ouvrait bien le bon
+nombre de voies — mais dans **l'ordre des abscisses**. `repartitionLaterale` numérotait les
+voies **de gauche à droite** : voie `0` contre le kerb gauche, dernière voie contre le kerb
+droit. Or le remplissage au premier libre fait tourner les voies dans l'ordre du classement
+`0, 1, 2, 0, 1, 2…` : trois voitures consécutives descendaient donc **gauche, milieu,
+droite**, soit `x` et `y` qui montent ensemble sur trois voitures d'affilée. C'est un
+escalier, plus court que le précédent mais de même nature.
+
+**Correctif.** `repartitionLaterale` dispose les voies **en éventail autour de l'axe** : la
+voie `0` est l'axe de la piste (`x = 0`), la `1` part à gauche, la `2` à droite, la `3` plus
+à gauche, la `4` plus à droite. Les lignes arrivant triées par points décroissants, la
+**meilleure voiture de chaque groupe ouvre toujours la voie `0`** et se pose sur l'axe.
+
+Le pas entre deux voies vaut une voiture pleine plus une gouttière tant que la piste le
+permet, et se réduit ensuite pour que le groupe tienne entre les kerbs. La symétrie coûte
+un nombre **impair** de cellules : `rangMaximal` de chaque côté, plus l'axe. Six voies en
+réclament donc sept, la septième restant vide à droite.
+
+Mesuré après correctif sur les mêmes scores `280 · 255 · 231 · 204 · 180 · 150 · 120 · 90` :
+
+```
+#0 y=73  x=0     #2 y=213 x=0     #4 y=358 x=0     #6 y=529 x=0
+#1 y=144 x=-64   #3 y=290 x=-64   #5 y=444 x=-64   #7 y=615 x=-64
+```
+
+Les huit gardent leurs 52px, et la suite des abscisses n'est monotone sur aucun segment.
+Sur une piste de 354px, cinq voies tiennent encore à taille pleine (5 × 64 = 320) ; le
+plancher mord à douze voies, et le recouvrement — un pixel — n'apparaît qu'à vingt.
+
+**Ne pas refaire.**
+
+- **Compter juste ne suffit pas : l'ordre d'attribution dessine aussi.** Le nombre de voies
+  était correct depuis la `0.70.0` ; c'est leur numérotation qui continuait à produire la
+  figure. Un placement se vérifie sur la **suite** des abscisses, pas sur leur nombre.
+- **Un cycle de voies n'est pas un défaut, un cycle orienté si.** Trois voitures qui se
+  chevauchent mutuellement doivent occuper trois abscisses distinctes ; ce qui se corrige,
+  c'est qu'elles les prennent toujours dans le même sens.
+- **Tenir l'axe a un prix, et il est assumé.** Un groupe de deux voies pose la meilleure
+  voiture sur l'axe et l'autre à sa gauche : le groupe n'est plus centré sur la piste. La
+  règle « la meilleure au milieu » l'emporte sur le centrage du groupe — c'est la hauteur
+  qui dit les points, l'abscisse ne sert qu'à éviter un recouvrement.
