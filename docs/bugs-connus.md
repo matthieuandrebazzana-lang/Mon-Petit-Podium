@@ -1415,3 +1415,62 @@ contrôle d'état final détecte l'état dégradé du piège ci-dessus.
 - **Un correctif d'autorisation ne couvre pas le segment voisin.** Le §28 a vérifié le
   dossier, entièrement et correctement — et a laissé le nom tel quel pendant quatre versions.
   Un chemin se valide par segment, pas par intention.
+
+---
+
+## 33. L'escalier de la vue piste : le groupe comptait ses membres, pas ses voies
+
+**Symptôme.** Sur la vue piste, les voitures descendaient en **escalier diagonal** du coin
+haut-gauche au coin bas-droit, au lieu de se tenir sur l'axe. Elles étaient en prime
+**réduites de moitié** sans raison visible. Le correctif `0.69.0`, qui avait supprimé la
+résolution verticale des collisions, n'y avait rien changé.
+
+**Cause réelle.** Elle n'est **pas** dans `repartitionLaterale`, qui fait exactement ce
+qu'elle annonce, ni dans un résidu de l'ancienne version — la feuille de style ne décale
+aucune voiture horizontalement, `.t-place` est posée à `left-1/2` et `.t-voiture` n'anime
+qu'un `translateY`.
+
+Elle est à la jointure des deux passes. `regrouperParChevauchement` propage **en cascade** :
+si A chevauche B et B chevauche C, les trois forment un groupe **même si A et C ne se
+touchent pas**. C'est correct — le groupe dit qui doit être résolu ensemble.
+`dispositionDesVoitures` en tirait ensuite une conclusion fausse : **une place latérale par
+membre**, distribuée dans l'ordre du classement.
+
+Le seuil vaut 122px (`HAUTEUR_VOITURE` 106 + `HAUTEUR_LEGENDE` 16). Sur une piste de 700px
+la zone de jeu en fait 542 : **à partir de sept membres**, l'écart moyen passe sous le
+seuil et la cascade réunit **tout le plateau en un seul groupe**. Huit membres recevaient
+donc huit abscisses réparties d'un kerb à l'autre, attribuées par rang — l'abscisse montait
+avec le rang exactement comme la hauteur. C'est la définition d'un escalier. Et huit
+cellules sur 354px font 44px, d'où les voitures à 32px.
+
+Mesuré avant correctif, scores `280 · 255 · 231 · 204 · 180 · 150 · 120 · 90` :
+
+```
+#0 y=73  x=-154.9   #2 y=213 x=-66.4   #4 y=358 x=+22.1   #6 y=529 x=+110.6
+#1 y=144 x=-110.6   #3 y=290 x=-22.1   #5 y=444 x=+66.4   #7 y=615 x=+154.9
+```
+
+**Correctif — frontend `0.70.0`.** Une passe s'intercale, `voiesDuGroupe`, qui place chaque
+voiture **dans la première voie dont la dernière occupante est à plus d'un seuil**.
+`repartitionLaterale` reçoit alors un **nombre de voies** et non un nombre de membres. Les
+huit voitures ci-dessus n'ouvrent que **deux** voies, à ±32px, et gardent leurs 52px.
+
+Le placement au premier libre est **optimal** ici, et pas seulement raisonnable : les
+hauteurs arrivent triées, le graphe des conflits est donc un graphe d'intervalles, dont le
+nombre chromatique égale la plus grande clique. Vérifié sur le module compilé — le nombre
+de voies ouvertes égale la plus grande pile de voitures en conflit **deux à deux**.
+
+**Ne pas refaire.**
+
+- **Un groupe dit qui se résout ensemble, jamais combien de places il faut.** La cascade
+  réunit par construction des voitures qui ne se touchent pas ; leur compter une abscisse
+  chacune est le défaut lui-même.
+- **Ne pas chercher un résidu quand la géométrie suffit à expliquer.** Le symptôme
+  ressemblait à de l'ancien code oublié. Il n'y en avait pas : deux passes justes prises
+  séparément se contredisaient à la jointure.
+- **Compter les voisines d'un élément n'est pas compter une clique.** Le premier jeu de
+  tests a rejeté le bon correctif pour cette raison : `#2` et `#4` sont chacune en conflit
+  avec `#3` sans l'être entre elles, et deux voies leur suffisent. La mesure était fausse,
+  pas le code.
+- **Un escalier, c'est `x` ET `y` qui montent ensemble.** Une rangée d'ex æquo partage une
+  hauteur et étale ses abscisses : c'est une grille de départ, et elle est voulue.

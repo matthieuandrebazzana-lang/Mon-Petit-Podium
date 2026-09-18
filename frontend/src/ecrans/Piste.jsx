@@ -165,6 +165,22 @@ export function hauteursParScore(lignes, hauteur) {
  * se touchent pas**. C'est pour cela que la comparaison porte sur la voiture
  * précédente et non sur la première du groupe.
  *
+ * > ### Un groupe dit qui se résout ensemble, **jamais combien de voies**
+ * >
+ * > C'est la correction de la version `0.70.0`, et la cascade en est la raison
+ * > même. Jusqu'à la `0.69.0`, `dispositionDesVoitures` donnait **une place
+ * > latérale par membre** du groupe, distribuée dans l'ordre du classement.
+ * > Or la cascade réunit tout le plateau dès que les écarts consécutifs
+ * > passent sous le seuil — ce qui arrive à partir de **sept membres** sur une
+ * > piste de 700px, où l'écart moyen tombe à 85px pour un seuil de 122. Le
+ * > premier partait alors à l'extrême gauche, le dernier à l'extrême droite, et
+ * > l'abscisse montait avec le rang exactement comme la hauteur : **l'escalier
+ * > diagonal signalé**. Huit membres se retrouvaient en prime réduits à 32px
+ * > alors que la piste avait la place de les tenir tous à 52.
+ * >
+ * > A et C, que la cascade réunit sans qu'elles se touchent, peuvent partager
+ * > la même abscisse. C'est `voiesDuGroupe` qui le voit.
+ *
  * **Rien ici ne regarde les scores.** Deux scores voisins mais distincts sont
  * regroupés si et seulement si leurs voitures se rencontrent à l'écran, et deux
  * ex æquo le sont toujours, puisque la passe 1 leur rend la même hauteur au
@@ -204,23 +220,80 @@ export function regrouperParChevauchement(hauteurs) {
 }
 
 /**
- * **Passe 2b — la répartition latérale d'un groupe, et elle seule.**
+ * **Passe 2b — les voies d'un groupe : qui peut partager une abscisse.**
+ *
+ * Reçoit les hauteurs d'un groupe, dans l'ordre du classement, et rend pour
+ * chacune l'indice de la voie où sa voiture se pose. Deux voitures d'une même
+ * voie sont écartées d'au moins l'empreinte d'une voiture : elles peuvent donc
+ * partager une abscisse sans se toucher.
+ *
+ * **C'est ici que l'escalier se défait.** Un groupe de huit voitures que la
+ * cascade a réunies n'a pas besoin de huit abscisses : si chacune ne chevauche
+ * que sa voisine immédiate, **deux voies suffisent**, et les voitures gardent
+ * leur taille pleine au lieu d'être réduites au huitième de la piste.
+ *
+ * L'algorithme est le placement au premier libre, et il est **optimal** ici :
+ * les hauteurs arrivant triées, le nombre de voies ouvertes à un instant donné
+ * est exactement le nombre de voitures qui se chevauchent à cet endroit. Aucune
+ * voie n'est ouverte sans qu'une voiture ne l'exige.
+ *
+ * > ### Le cycle des voies est une contrainte de géométrie, pas un défaut
+ * >
+ * > Douze scores réguliers demandent trois voies, et les voitures les occupent
+ * > en cycle — gauche, milieu, droite, gauche… Aucun placement n'y échappe :
+ * > trois voitures qui se chevauchent mutuellement **doivent** occuper trois
+ * > abscisses distinctes. Ce qui est parti, c'est la rampe unique qui traversait
+ * > la piste en entier ; ce qui reste dit une vérité — ces voitures-là sont
+ * > serrées.
+ *
+ * Le seuil est celui de `regrouperParChevauchement`, et pour la même raison :
+ * une voiture occupe son dessin **plus** le score écrit dessous. Il se mesure à
+ * la hauteur PLEINE, la seule connue à ce stade — une voiture réduite occupe
+ * moins, jamais plus, donc la voie reste libre à bon droit.
+ */
+export function voiesDuGroupe(hauteurs) {
+  const seuil = HAUTEUR_VOITURE + HAUTEUR_LEGENDE;
+  // La hauteur de la dernière voiture posée sur chaque voie. Les hauteurs étant
+  // croissantes, c'est la seule dont l'écart puisse manquer.
+  const dernieres = [];
+
+  return hauteurs.map((centre) => {
+    const voie = dernieres.findIndex((derniere) => centre - derniere >= seuil);
+
+    if (voie === -1) {
+      dernieres.push(centre);
+      return dernieres.length - 1;
+    }
+
+    dernieres[voie] = centre;
+    return voie;
+  });
+}
+
+/**
+ * **Passe 2c — la répartition latérale d'un groupe, et elle seule.**
  *
  * Rend la taille commune aux voitures du groupe et la fonction qui donne
- * l'abscisse de chacune, comptée depuis le milieu de la piste. **Aucune
+ * l'abscisse d'une **voie**, comptée depuis le milieu de la piste. **Aucune
  * hauteur n'entre ici et aucune n'en sort** : la passe 1 les a fixées, elles ne
- * bougent plus d'un pixel. Il n'y a donc pas d'escalier de résolution — deux
- * voitures qui se rencontrent sont écartées **latéralement**, jamais
- * verticalement.
+ * bougent plus d'un pixel. Deux voitures qui se rencontrent sont écartées
+ * **latéralement**, jamais verticalement.
+ *
+ * **`nombre` est un nombre de voies, pas un nombre de membres** (version
+ * `0.70.0`). Les confondre est précisément ce qui produisait l'escalier : un
+ * groupe de huit peut n'ouvrir que deux voies, et il réclame alors deux
+ * abscisses, pas huit. Une voie seule rend `0` — l'axe de la piste — ce qui est
+ * le cas de toutes les voitures dès que les scores sont distincts **et**
+ * suffisamment espacés pour que rien ne se chevauche.
  *
  * ### Deux régimes
  *
- * **Jusqu'à `GROUPE_SERRE_MAX`, le groupe se serre autour de l'axe.** Les
+ * **Jusqu'à `GROUPE_SERRE_MAX`, les voies se serrent autour de l'axe.** Les
  * voitures gardent leur taille pleine et se rangent côte à côte, séparées de la
  * seule gouttière : deux se posent de part et d'autre du milieu, trois se
  * posent à gauche, au milieu et à droite. L'expression `place - (n - 1) / 2`
  * centre le groupe sans qu'aucun cas particulier ne soit écrit — elle vaut `0`
- * pour une voiture seule, `-0,5` et `+0,5` pour deux, `-1`, `0` et `+1` pour
+ * pour une voie seule, `-0,5` et `+0,5` pour deux, `-1`, `0` et `+1` pour
  * trois.
  *
  * **Au-delà, le groupe s'étale d'un kerb à l'autre**, sur des cellules de
@@ -234,8 +307,15 @@ export function regrouperParChevauchement(hauteurs) {
  * que lorsque sa cellule devient plus étroite que la voiture, gouttière
  * comprise — et **seul ce groupe-là** est réduit ; les voitures qui ont la
  * place gardent leurs 52px. Sur une piste de 354px, cela n'arrive qu'à partir
- * de **six** voitures dans le même groupe : cinq tiennent encore à taille
- * pleine (5 × 52 + 4 × 12 = 308).
+ * de **six voies** : cinq tiennent encore à taille pleine
+ * (5 × 52 + 4 × 12 = 308).
+ *
+ * > Depuis que le compte porte sur les voies et non sur les membres, la
+ * > réduction est devenue **rare**. Vingt membres régulièrement espacés
+ * > n'ouvrent que cinq voies sur une piste de 700px : ils tiennent tous à 52px,
+ * > là où la version `0.69.0` les écrasait à 17,7. Il faut vingt voitures
+ * > réellement empilées — donc vingt scores à un cheveu les uns des autres —
+ * > pour retrouver ce cas.
  *
  * La réduction porte sur **les deux dimensions du même facteur** : une voiture
  * étirée cesserait d'être une voiture.
@@ -285,12 +365,19 @@ export function repartitionLaterale(nombre, largeur) {
 }
 
 /**
- * **L'enchaînement des trois passes.**
+ * **L'enchaînement des passes.**
  *
- * Elle enchaîne le regroupement géométrique et la répartition latérale, et ne
- * décide rien elle-même. La hauteur qu'elle recopie est celle de la passe 1,
- * **inchangée** : réduire une voiture ne la déplace pas, l'écarter de l'axe non
- * plus. Sa hauteur dit ses points, et elle seule.
+ * Elle enchaîne le regroupement géométrique, l'ouverture des voies et la
+ * répartition latérale, et ne décide rien elle-même. La hauteur qu'elle recopie
+ * est celle de la passe 1, **inchangée** : réduire une voiture ne la déplace
+ * pas, l'écarter de l'axe non plus. Sa hauteur dit ses points, et elle seule.
+ *
+ * **Le décalage latéral n'a qu'une source, et c'est `repartitionLaterale`.**
+ * Rien d'autre dans le fichier ni dans la feuille de style ne déplace une
+ * voiture horizontalement : `.t-place` est posée à `left-1/2` et ne porte que
+ * le `translate` calculé ici, `.t-voiture` n'anime qu'un `translateY`. Une
+ * voiture dont la voie vaut `0` dans un groupe d'une seule voie est donc sur
+ * l'axe, au pixel près.
  */
 export function dispositionDesVoitures(lignes, hauteur, largeur) {
   if (lignes.length === 0 || hauteur <= 0 || largeur <= 0) return [];
@@ -299,8 +386,12 @@ export function dispositionDesVoitures(lignes, hauteur, largeur) {
   const placements = [];
 
   regrouperParChevauchement(hauteurs).forEach(({ membres }) => {
+    // **Le groupe compte ses voies, jamais ses membres.** La cascade du
+    // regroupement réunit des voitures qui ne se touchent pas deux à deux ;
+    // leur donner une abscisse chacune est ce qui dessinait l'escalier.
+    const voies = voiesDuGroupe(membres.map((index) => hauteurs[index]));
     const { largeurVoiture, abscisse } = repartitionLaterale(
-      membres.length,
+      Math.max(...voies) + 1,
       largeur,
     );
     const echelle = largeurVoiture / LARGEUR_VOITURE;
@@ -322,7 +413,7 @@ export function dispositionDesVoitures(lignes, hauteur, largeur) {
         ligne: lignes[index],
         index,
         centre: hauteurs[index],
-        decalage: abscisse(place),
+        decalage: abscisse(voies[place]),
         largeurVoiture,
         hauteurVoiture: HAUTEUR_VOITURE * echelle,
         // Le score ne rétrécit pas au même rythme que la voiture : sous 11px il
