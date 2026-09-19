@@ -70,6 +70,11 @@ laisserait une bande beige au-dessus d'un aplat coloré).
 4. **`--entete-hauteur` est la source unique du décalage.** Les en-têtes de marché
    collants s'y accrochent ; écrite en dur à deux endroits, elle divergerait.
 
+**`photo` n'existe qu'en mode teinté**, et `onPhoto` en fait un bouton (version `0.75.0`) —
+même règle que `HeroProfil` : sans ce rappel, rien n'y est modifiable, et un bouton qui
+n'agit pas serait un bouton de trop dans l'ordre de tabulation. **C'est l'écran qui juge
+qui a le droit de le voir**, jamais ce composant. Détail en §8.
+
 **`EnTete.jsx`** (l'ancien, non collant) reste en service sur les douze autres écrans.
 L'étendre est une substitution d'import.
 
@@ -331,7 +336,7 @@ le mode personnalisé — ce qui se voit à l'écran au lieu de planter.
 | `navigation.js` | barre, onglets, `origineRetour` |
 | `pronostics.js` | marchés, **`ORDRE_MARCHES` / `trierParMarche`**, favoris, exclusion croisée, `choixDuPronostic`, `oublierMesPronostics`, `decrirePronostics` |
 | `stockage.js` | **seul juge d'un fichier CHOISI** : formats, plafond de 5 Mo, dépôt, ménage |
-| `image.js` | **seul juge de ce qu'on DÉPOSE** : décodage, recadrage, 800 px, JPEG 0,85 |
+| `image.js` | **seul juge de ce qu'on DÉPOSE** : décodage (fichier **ou** URL), recadrage, 800 px, JPEG 0,85 |
 | `usePhoto.js` | l'état de chargement d'une image, cache du navigateur compris |
 
 **Deux ajouts en version `0.53.0`, et tous deux pour la même raison : un second consommateur.**
@@ -488,6 +493,40 @@ rond n'est qu'un masque posé dessus, il ne change rien au calcul.
 | **Le zoom est ancré sur le milieu des doigts** | Ancré au centre du cadre, l'image glisserait sous les doigts dès que le milieu de la pince n'y est pas. C'est le défaut qui fait qu'un zoom « ne suit pas » |
 | **Deuxième doigt ignoré au-delà de deux** | Sans cette protection, changer de doigt en cours de geste ferait bondir l'image à la nouvelle position |
 | **Les bornes sont appliquées EN CONTINU** | Une image qu'on laisserait sortir puis qu'on ramènerait d'un coup ferait apparaître un trou dans le masque — exactement ce que le recadrage promet de ne jamais montrer. Pas de caoutchouc : le rebond d'iOS a sa place sur un défilement, pas sur une découpe dont le résultat serait faux |
+
+#### La source est un fichier **ou** une URL (version `0.75.0`)
+
+`RecadragePhoto` prend une prop **`source`** — un `File` sorti de la photothèque, ou
+l'**URL d'une photo déjà déposée**. Tout ce qui suit le décodage est identique (le cadre,
+les gestes, l'export) : la seule chose qui change est *d'où vient le pixel*, et c'est
+`lib/image.js` qui porte les deux chemins.
+
+| Source | Fonction | Ce qu'elle doit gérer en plus |
+|---|---|---|
+| `File` | `chargerImage` | la révocation de l'URL d'objet, échec compris |
+| `string` | `chargerImageDepuisUrl` | **le CORS** — voir ci-dessous |
+
+> ### Deux pièges, et le second est invisible à la lecture
+>
+> 1. **`crossOrigin = "anonymous"` se pose AVANT `src`.** Sans lui, l'image *altère* le
+>    canvas où on la dessine : `toBlob` lève une `SecurityError`, et le recadrage échoue
+>    **au moment de confirmer**, pas au chargement — donc après que le joueur a composé son
+>    cadrage. Le compartiment répond bien `Access-Control-Allow-Origin: *` ; l'attribut est
+>    la moitié de l'accord que le navigateur exige, le serveur en porte l'autre.
+> 2. **L'URL reçoit un paramètre jetable** (`&cors={horodatage}`). La même photo vient
+>    d'être affichée par l'en-tête, donc elle est dans le cache **sans** en-tête CORS, et
+>    Safari sert cette réponse sans rejouer la requête : le canvas serait altéré par une
+>    image pourtant servie par notre propre projet. Le coût est un téléchargement de moins
+>    de deux cents kilo-octets, sur un geste explicite.
+
+**`onChoisirAutre` n'est offert que lorsque la source est une URL.** Quand elle est le
+fichier qu'on vient de choisir, « choisir une autre photo » ne remplacerait rien qui ait
+été enregistré — le bouton « Annuler » dit déjà cela.
+
+> **Les locales `source` du composant ont été renommées `pixels`.** `dessiner` et
+> `recadrer` nommaient ainsi l'image déjà décodée ; la prop du même nom désigne son
+> ORIGINE. Deux choses différentes sous un même nom dans un même fichier, c'est une
+> confusion qui finit par produire un bug qu'on ne relit pas.
 
 > **La géométrie est sortie du composant.** `echelleMinimale`, `bornerDecalage` et
 > `carreVisible` vivent dans `lib/image.js` : ce sont des fonctions pures de quelques
@@ -757,6 +796,70 @@ Version `0.50.0`. Trois fichiers, et chacun répond à **une** question.
 | `composants/PhotoChampionnat.jsx` | comment montre-t-on la photo d'un **championnat** ? |
 | `lib/stockage.js` | ce fichier est-il acceptable, et où va-t-il ? |
 | `lib/usePhoto.js` | cette image est-elle chargée ? |
+
+### Modifier la photo d'un championnat (version `0.75.0`)
+
+Jusque-là une photo de championnat se posait **à la création, et jamais plus**. Elle se
+change et se retire désormais depuis l'écran du championnat, **par son créateur seul**.
+
+| Question | Propriétaire |
+|---|---|
+| Qui a le droit d'écrire cette photo | **`PATCH /championnats/{id}`** — relit `cree_par` à partir du jeton, `403` sinon |
+| Qui voit le contrôle | `ecrans/Championnat.jsx` — `estCreateur`, un affichage, **jamais une autorisation** |
+| À quoi ressemble le contrôle | `composants/EnTeteEcran.jsx` — `onPhoto` fait de la photo un bouton |
+| D'où vient le pixel à recadrer | `lib/image.js` — fichier **ou** URL déjà déposée |
+| Où va le fichier, et où va l'URL | `lib/stockage.js` puis l'API — les deux chemins d'`architecture.md` §3 |
+
+**Le geste d'entrée dépend de ce qui existe déjà**, et c'est le seul point de conception
+de cette version : sans photo, il n'y a rien à recadrer et la photothèque s'ouvre ; avec
+une photo, le recadrage s'ouvre **sur elle** — refaire son cadrage est le geste le plus
+fréquent une fois la photo posée, et la photothèque reste à un doigt dans le recadrage
+lui-même. Ouvrir la photothèque d'abord obligerait à choisir un fichier pour découvrir
+qu'on voulait seulement recadrer celui qui est déjà là.
+
+> **Le cadre porte le voile, la pastille porte le sens.** Le bouton est un carré de 72 px
+> teinté `ton.surfaceForte` sur lequel la photo se pose, plus une pastille blanche à encre
+> bordeaux portant l'appareil photo — **la même qu'au profil**, un geste ne s'apprenant pas
+> deux fois.
+>
+> **Le voile est sur le bouton, pas sur une doublure conditionnelle**, et ce n'est pas une
+> économie de balise : `PhotoChampionnat` s'efface aussi quand l'objet a disparu du
+> stockage (`cassee`). Écrit en `photo ? … : …`, le cadre se viderait alors entièrement et
+> le bouton perdrait toute silhouette — exactement le cas où le créateur en a le plus
+> besoin, puisque c'est celui où il doit reposer une photo.
+>
+> **Le contraste se mesure.** La pastille blanche vaut **10,88:1** sur les six aplats de
+> championnat. Le voile, lui, ne descend jamais sous le plancher de 3:1 mais n'y arrive
+> qu'à **3,03:1** sur le vert sauge (et 3,24 sur le terracotta) : trop juste pour un
+> élément qui dirait à lui seul ce que fait le bouton. D'où la répartition ci-dessus — le
+> cadre est une silhouette, la pastille est le message.
+
+**L'ordre des opérations ne s'invente pas, il est déjà écrit au profil** : dépôt puis
+enregistrement de l'URL pour poser (l'inverse laisserait en base l'adresse d'un objet
+inexistant) ; enregistrement puis effacement du stockage pour retirer (c'est la colonne
+qui décide de ce qui s'affiche, et un objet orphelin ne se voit nulle part).
+
+#### Trois écrans montrent cette photo, et aucun ne se recharge
+
+L'en-tête du championnat, la carte de l'accueil et la liste des championnats. Les deux
+derniers **partagent une seule entrée de cache** (`championnats:{profil}`) : c'est le même
+chargement, donc la même clé, et il n'y a qu'un endroit à retoucher pour les deux.
+
+> **On retouche, on ne périme pas.** `oublierCache` marcherait, mais l'accueil repartirait
+> alors **sans rien à montrer** et attendrait le réveil de Railway pour une photo de
+> soixante-douze pixels — exactement ce que le cache *stale-while-revalidate*
+> d'`architecture.md` §9 existe pour éviter. D'où **`modifierCache(cle, transformation)`**
+> dans `lib/useDonnees.js` : seule la colonne qui a changé est réécrite, sur la seule ligne
+> concernée. Une clé absente ne crée rien — une liste inventée à partir de rien serait lue
+> au montage suivant comme si elle venait du serveur.
+>
+> Sur l'écran lui-même, c'est **`remplacer`** et non `setDonnees` : ce dernier ne touche que
+> l'état React, et le cache relu au montage suivant ressortirait l'ancienne photo (§5).
+
+> **Un seul état porte tous les échecs de photo de cet écran** — celui transmis par la
+> création, et ceux de la modification faite ici. C'est la même phrase, au même
+> emplacement, pour la même chose ; deux états auraient fini par s'afficher l'un sous
+> l'autre.
 
 > **La photo est entrée DANS `Pastille`, pas dans un `Avatar` posé à côté.** Cinq écrans
 > posent la même question — accueil, classement, les deux profils, résumé d'un GP. Un

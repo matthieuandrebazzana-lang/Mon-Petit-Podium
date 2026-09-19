@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { IconeChevronGauche } from "./Icones.jsx";
+import { IconeAppareilPhoto, IconeChevronGauche } from "./Icones.jsx";
 import PhotoChampionnat from "./PhotoChampionnat.jsx";
 
 /**
@@ -27,6 +27,12 @@ import PhotoChampionnat from "./PhotoChampionnat.jsx";
  * l'écran d'un championnat a une photo à montrer. En mode ordinaire elle serait
  * une image posée à côté d'un grand titre beige, sans rien à quoi se rattacher.
  *
+ * **`onPhoto` fait de cette photo un bouton, et c'est le seul écart** — même
+ * règle que `HeroProfil` (`ecrans/MonProfil.jsx`), et pour la même raison : sans
+ * lui, rien n'y est modifiable, et un bouton qui n'agit pas serait un bouton de
+ * trop dans l'ordre de tabulation. Il n'est passé que par le créateur du
+ * championnat ; c'est l'écran qui juge, jamais ce composant.
+ *
  * **`teinte` bascule l'en-tête en mode coloré** (l'écran d'un championnat).
  * La barre porte alors sa couleur en permanence et le grand titre devient un
  * aplat pleine largeur qui la prolonge : les deux se lisent comme un seul bloc,
@@ -47,6 +53,8 @@ export default function EnTeteEcran({
   action = null,
   teinte = null,
   photo = null,
+  onPhoto = null,
+  envoiPhoto = false,
   children,
 }) {
   const naviguer = useNavigate();
@@ -152,12 +160,66 @@ export default function EnTeteEcran({
                 s'efface tout seul quand il n'y a pas de photo : l'en-tête
                 retrouve alors exactement sa composition d'avant, le titre
                 occupant toute la largeur. */}
-            <PhotoChampionnat
-              url={photo}
-              nom={titre}
-              taille={72}
-              arrondi="rounded-widget"
-            />
+            {onPhoto ? (
+              <button
+                type="button"
+                onClick={onPhoto}
+                disabled={envoiPhoto}
+                /* Le libellé porte l'action ET son état courant : la photo est
+                   `aria-hidden`, c'est donc la seule chose annoncée. « Changer »
+                   plutôt que « Ajouter » quand il y en a déjà une — un libellé
+                   qui décrit mal ce qui va se passer est pire qu'un libellé
+                   générique. */
+                aria-label={
+                  photo
+                    ? "Changer la photo du championnat"
+                    : "Ajouter une photo au championnat"
+                }
+                /* **Le voile est porté par le BOUTON, pas par une doublure
+                   conditionnelle**, et ce n'est pas qu'une économie de balise :
+                   `PhotoChampionnat` s'efface aussi quand l'objet a disparu du
+                   stockage (`cassee`). Posé à côté d'un `photo ? … : …`, le
+                   cadre se viderait alors complètement et le bouton perdrait
+                   toute silhouette — exactement le cas où le créateur en a le
+                   plus besoin, puisque c'est celui où il doit reposer une
+                   photo. Le voile est donc toujours là, la photo se pose
+                   dessus. Il prend l'encre de l'aplat (`surfaceForte`) et non
+                   un gris écrit de mémoire : `bg-black/15` sur l'amber,
+                   `bg-white/25` sur le bordeaux, et jamais l'inverse. */
+                className={`rounded-widget pressable relative size-[72px] shrink-0 ${teinte.ton.surfaceForte}`}
+              >
+                <span className={envoiPhoto ? "t-photo-envoi block" : "block"}>
+                  <PhotoChampionnat
+                    url={photo}
+                    nom={titre}
+                    taille={72}
+                    arrondi="rounded-widget"
+                  />
+                </span>
+
+                {/* **C'est cette pastille qui porte le sens, pas le cadre.**
+                    Blanche à encre bordeaux, elle vaut 10,88:1 sur les six
+                    aplats — le voile du cadre vide, lui, ne descend jamais sous
+                    3:1 mais n'y arrive qu'à 3,03 sur le vert sauge, trop juste
+                    pour un élément qui devrait dire à lui seul ce que fait le
+                    bouton. Le cadre est donc une silhouette, la pastille est le
+                    message. Même dessin et même taille qu'au profil : le geste
+                    « changer ma photo » ne doit pas s'apprendre deux fois. */}
+                <span
+                  aria-hidden="true"
+                  className="bg-surface text-primaire shadow-carte absolute -right-1 -bottom-1 flex size-[22px] items-center justify-center rounded-full"
+                >
+                  <IconeAppareilPhoto className="size-[13px]" />
+                </span>
+              </button>
+            ) : (
+              <PhotoChampionnat
+                url={photo}
+                nom={titre}
+                taille={72}
+                arrondi="rounded-widget"
+              />
+            )}
           </div>
         </div>
       ) : (

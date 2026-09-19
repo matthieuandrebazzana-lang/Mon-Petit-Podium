@@ -647,7 +647,7 @@ export default function MonProfil() {
           rendu ailleurs pour échapper au `transform` d'`Ecran`. */}
       {aRecadrer && (
         <RecadragePhoto
-          fichier={aRecadrer}
+          source={aRecadrer}
           forme="cercle"
           titre="Ta photo de profil"
           occupe={envoiPhoto}

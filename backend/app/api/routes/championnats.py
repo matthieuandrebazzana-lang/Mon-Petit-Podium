@@ -95,8 +95,7 @@ class ModificationChampionnat(BaseModel):
     """Modification partielle d'un championnat : aujourd'hui, sa photo seule.
 
     Le nom n'y figure PAS, et c'est un choix de portée, pas un oubli : le
-    renommer changerait ce que lisent tous ses membres, et cette route n'existe
-    que pour poser une photo au moment de la création. Le jour où le nom devient
+    renommer changerait ce que lisent tous ses membres. Le jour où il devient
     modifiable, il prendra sa place ici — avec la même validation de longueur que
     `creer`, tirée d'un helper commun plutôt que recopiée.
 
@@ -610,6 +609,14 @@ async def modifier(
     **Son échec n'annule pas la création** : l'écran d'arrivée affiche le
     championnat sans sa photo plutôt que de perdre le championnat. C'est le même
     arbitrage que pour le rang d'une carte et le prochain Grand Prix.
+
+    **Elle sert aussi APRÈS la création**, depuis la version `0.75.0` : l'écran
+    du championnat y remplace et y retire la photo. Rien n'a changé ici pour
+    cela — le contrôle de créateur, le rapprochement du dossier avec
+    l'identifiant du chemin et le drapeau `retirer_photo` répondaient déjà à ce
+    cas. C'est la conséquence voulue d'une route qui décrit une RESSOURCE et non
+    un écran : « modifier ce championnat » se pose une fois, quel que soit
+    l'endroit d'où la demande vient.
     """
     try:
         trouves = await selectionner(

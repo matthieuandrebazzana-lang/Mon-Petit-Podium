@@ -20,8 +20,10 @@
  * > DÉPOSE. Le second n'est plus jamais atteint, et c'est ce qui permet au premier
  * > d'être si large.
  *
- * **Rien ici ne touche au réseau.** Le module travaille sur un `File` et rend un
- * `Blob` ; c'est `lib/stockage.js` qui dépose, et lui seul.
+ * **Rien ici ne DÉPOSE.** Le module travaille sur un `File` — ou, depuis la
+ * version `0.75.0`, sur l'URL d'une photo déjà déposée, qu'il relit pour la
+ * donner à recadrer — et rend un `Blob` ; c'est `lib/stockage.js` qui envoie,
+ * et lui seul.
  */
 
 /** Côté maximum de l'image déposée, en pixels. */
@@ -104,6 +106,60 @@ export function chargerImage(fichier) {
     };
 
     image.src = url;
+  });
+}
+
+/**
+ * Décode une image **déjà déposée**, désignée par son URL publique.
+ *
+ * > ### Pourquoi une seconde fonction, et pas un argument de plus
+ * >
+ * > `chargerImage` travaille sur un `File` et fabrique son `blob:` de même
+ * > origine ; ici il n'y a pas de fichier, seulement une adresse chez Supabase
+ * > Storage. Les deux chemins ne partagent ni la révocation d'URL, ni la
+ * > question du CORS — les fondre aurait donné une fonction dont la moitié du
+ * > corps ne sert jamais à l'appelant qui l'invoque.
+ *
+ * **`crossOrigin` est posé AVANT `src`, et ce n'est pas un détail de style.**
+ * Une image chargée sans cet attribut *altère* le canvas où on la dessine :
+ * `toBlob` lève alors une `SecurityError` et le recadrage échouerait au moment
+ * de confirmer, pas au chargement. Le compartiment répond bien
+ * `Access-Control-Allow-Origin: *` — l'attribut est la moitié de l'accord que
+ * le navigateur exige, le serveur en porte l'autre.
+ *
+ * **L'URL reçoit un paramètre jetable**, et c'est la conséquence directe de ce
+ * qui précède : la même photo vient très probablement d'être affichée par
+ * l'en-tête, donc elle est dans le cache **sans** en-tête CORS, Safari servant
+ * une réponse mise en cache sans rejouer la requête. Le canvas serait alors
+ * altéré par une image pourtant servie par notre propre projet. Un paramètre
+ * différent à chaque ouverture force une requête neuve, faite cette fois en
+ * mode CORS. Le coût est un téléchargement de moins de deux cents kilo-octets
+ * (`COTE_MAXIMUM`, qualité 0,85), sur un geste explicite du joueur.
+ */
+export function chargerImageDepuisUrl(url) {
+  return new Promise((resoudre, rejeter) => {
+    const image = new Image();
+    // Avant `src`. Voir le bloc ci-dessus.
+    image.crossOrigin = "anonymous";
+    image.decoding = "async";
+
+    image.onerror = () => rejeter(new ErreurImage(DECODAGE_IMPOSSIBLE));
+
+    image.onload = () => {
+      const pret = image.decode
+        ? image.decode().catch(() => undefined)
+        : Promise.resolve();
+      pret.then(() => {
+        if (!image.naturalWidth || !image.naturalHeight) {
+          rejeter(new ErreurImage(DECODAGE_IMPOSSIBLE));
+          return;
+        }
+        resoudre(image);
+      });
+    };
+
+    const separateur = url.includes("?") ? "&" : "?";
+    image.src = `${url}${separateur}cors=${Date.now()}`;
   });
 }
 

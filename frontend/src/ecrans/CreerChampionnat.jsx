@@ -198,7 +198,7 @@ export default function CreerChampionnat() {
     <Ecran direction="avant">
       {aRecadrer && (
         <RecadragePhoto
-          fichier={aRecadrer}
+          source={aRecadrer}
           forme="carre"
           titre="La photo du championnat"
           onConfirmer={adopterPhoto}

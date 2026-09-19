@@ -47,6 +47,36 @@ export function oublierCache(cle) {
 }
 
 /**
+ * Réécrit une entrée de cache SANS la périmer — la retouche, plutôt que l'effacer.
+ *
+ * > ### Pourquoi ce n'est pas `oublierCache`
+ * >
+ * > Effacer la liste des championnats après un changement de photo marcherait,
+ * > mais l'écran qui la relit repartirait alors **sans rien à montrer** : le
+ * > cache *stale-while-revalidate* n'a plus d'état d'avant, donc squelette, puis
+ * > attente du réveil de Railway, pour une photo de soixante-douze pixels.
+ * > L'accueil est le premier écran de l'app et c'est précisément ce qu'il évite
+ * > (`docs/architecture.md` §9). Ici, on ne change qu'une colonne d'une seule
+ * > ligne : la liste reste juste, et la prochaine revalidation confirmera.
+ *
+ * **La transformation rend la valeur à écrire, ou `undefined` pour ne rien
+ * faire** — une clé absente du cache est le cas ordinaire (l'écran n'a jamais
+ * été ouvert sur cet appareil) et ne doit rien créer : une liste inventée à
+ * partir de rien serait lue au montage suivant comme si elle venait du serveur.
+ *
+ * @param {string|null} cle
+ * @param {(valeur: unknown) => unknown} transformation
+ */
+export function modifierCache(cle, transformation) {
+  if (!cle) return;
+  const courant = lireCache(cle);
+  if (courant === undefined) return;
+  const suivant = transformation(courant);
+  if (suivant === undefined) return;
+  ecrireCache(cle, suivant);
+}
+
+/**
  * Oublie toutes les clés commençant par un préfixe.
  *
  * Sert au profil (étape 8) : changer les couleurs de sa voiture périme le

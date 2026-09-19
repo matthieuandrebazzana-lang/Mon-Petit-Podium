@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import EnTeteEcran from "../composants/EnTeteEcran.jsx";
@@ -8,6 +8,7 @@ import BlocErreur from "../composants/BlocErreur.jsx";
 import Pastille from "../composants/Pastille.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
+import RecadragePhoto from "../composants/RecadragePhoto.jsx";
 import { Pave } from "../composants/Squelette.jsx";
 import {
   IconeChevronDroit,
@@ -17,7 +18,19 @@ import {
   IconeSortie,
 } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
-import { chargerChampionnat, quitterChampionnat } from "../lib/championnats.js";
+import {
+  chargerChampionnat,
+  enregistrerPhotoChampionnat,
+  quitterChampionnat,
+} from "../lib/championnats.js";
+import { enFichier } from "../lib/image.js";
+import {
+  COMPARTIMENT_CHAMPIONNATS,
+  deposerPhoto,
+  refusDuFichier,
+  supprimerPhoto,
+  TYPES_ACCEPTES_ATTRIBUT,
+} from "../lib/stockage.js";
 import {
   chargerClassement,
   cleClassement,
@@ -26,7 +39,7 @@ import {
 import { formaterPoints } from "../lib/format.js";
 import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
 import { couleurLisible, encreSur } from "../lib/palette.js";
-import { oublierCache, useDonnees } from "../lib/useDonnees.js";
+import { modifierCache, oublierCache, useDonnees } from "../lib/useDonnees.js";
 
 const DUREE_CONFIRMATION = 2000;
 
@@ -259,15 +272,19 @@ export default function Championnat() {
 
   const nouveau = Boolean(emplacement.state?.nouveau);
   /**
-   * L'échec de la photo, transmis par l'écran de création.
+   * Tout ce qui peut mal tourner avec la photo — **un seul état, deux sources**.
    *
-   * **Il arrive ici parce que la création n'attend pas la photo** : le joueur est
+   * Il naît de l'écran de création, qui n'attend pas la photo : le joueur est
    * envoyé sur son championnat quoi qu'il arrive (`CreerChampionnat`), et cet
-   * écran est donc le premier endroit où le lui dire. L'annoncer sur le
-   * formulaire aurait voulu dire l'y retenir pour un ornement.
+   * écran est le premier endroit où le lui dire. Depuis la version `0.75.0` il
+   * porte aussi les échecs de la modification faite ICI — refus du fichier,
+   * dépôt impossible, enregistrement refusé.
    *
-   * Il est effacé au premier appui : c'est un message d'arrivée, pas un état du
-   * championnat, et il ne doit pas revenir à chaque retour sur l'écran.
+   * **Deux états auraient été deux messages au même endroit**, et le second
+   * aurait fini par s'afficher sous le premier : c'est la même phrase, au même
+   * emplacement, pour la même chose. Il est effacé au premier appui — un message
+   * d'échec n'est pas un état du championnat et ne doit pas revenir à chaque
+   * retour sur l'écran.
    */
   const [echecPhoto, setEchecPhoto] = useState(
     emplacement.state?.echecPhoto ?? null,
@@ -277,7 +294,10 @@ export default function Championnat() {
   // par quelqu'un d'autre sur le même appareil ne doit pas ressortir ici.
   const cle = utilisateur ? `championnat:${utilisateur.id}:${id}` : null;
   const chargeur = useCallback((signal) => chargerChampionnat(id, signal), [id]);
-  const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
+  const { donnees, chargement, echec, recharger, remplacer } = useDonnees(
+    cle,
+    chargeur,
+  );
 
   // Le classement suit son propre chemin : il passe par l'API, là où le détail
   // du championnat se lit directement dans Supabase. Les deux chargements sont
@@ -294,6 +314,164 @@ export default function Championnat() {
     echec: echecRang,
     recharger: rechargerRang,
   } = useDonnees(cleRang, chargeurRang);
+
+  // ---- Photo du championnat -----------------------------------------------
+  // Réservée au créateur, et c'est la ROUTE qui le vérifie : `PATCH
+  // /championnats/{id}` relit `cree_par` à partir de l'identifiant du jeton et
+  // refuse en `403` (`docs/architecture.md` §12). Ce que l'écran décide ici
+  // n'est donc pas une autorisation, c'est l'affichage d'un contrôle qui
+  // n'aboutirait pour personne d'autre.
+  const champFichier = useRef(null);
+  const [envoiPhoto, setEnvoiPhoto] = useState(false);
+  const [tentativePhoto, setTentativePhoto] = useState(0);
+  /**
+   * Ce que le recadrage doit ouvrir : un fichier tout juste choisi, ou l'URL de
+   * la photo en place. `null` quand le recadrage est fermé.
+   */
+  const [aRecadrer, setARecadrer] = useState(null);
+
+  /**
+   * Écrit la nouvelle photo partout où elle s'affiche, **sans recharger quoi que
+   * ce soit**.
+   *
+   * Trois endroits la montrent : l'en-tête de cet écran, la carte de l'accueil
+   * et la liste des championnats. Les deux derniers partagent une seule entrée
+   * de cache (`championnats:{profil}`) — c'est le même chargement, donc la même
+   * clé, et il n'y a qu'un endroit à retoucher pour les deux.
+   *
+   * **On retouche, on ne périme pas.** `oublierCache` marcherait, mais l'accueil
+   * repartirait alors sans rien à montrer et attendrait le réveil de Railway
+   * pour une photo de soixante-douze pixels (`lib/useDonnees.js`). Seule la
+   * colonne qui a changé est réécrite, sur la seule ligne concernée : le reste
+   * de la liste — rangs, effectifs, prochain Grand Prix — reste ce qu'il était,
+   * et la prochaine revalidation confirmera.
+   */
+  const adopterPhoto = useCallback(
+    (url) => {
+      // `remplacer` et non `setDonnees` : ce dernier ne touche que l'état React,
+      // et le cache relu au montage suivant ressortirait l'ancienne photo.
+      if (donnees) remplacer({ ...donnees, photo_url: url });
+      if (!utilisateur) return;
+      modifierCache(`championnats:${utilisateur.id}`, (liste) =>
+        Array.isArray(liste)
+          ? liste.map((championnat) =>
+              championnat.id === id
+                ? { ...championnat, photo_url: url }
+                : championnat,
+            )
+          : undefined,
+      );
+    },
+    [donnees, id, remplacer, utilisateur],
+  );
+
+  /**
+   * Le geste d'entrée dans le flux, et **il dépend de ce qui existe déjà**.
+   *
+   * Sans photo, il n'y a rien à recadrer : on ouvre la photothèque. Avec une
+   * photo, le recadrage s'ouvre sur **elle** — c'est son point de départ naturel,
+   * et refaire son cadrage est le geste le plus fréquent une fois la photo
+   * posée. La photothèque reste à un doigt, dans le recadrage lui-même.
+   */
+  function ouvrirPhoto() {
+    setTentativePhoto((n) => n + 1);
+    setEchecPhoto(null);
+    if (donnees?.photo_url) {
+      setARecadrer(donnees.photo_url);
+      return;
+    }
+    champFichier.current?.click();
+  }
+
+  function choisirPhoto(evenement) {
+    const fichier = evenement.target.files?.[0];
+    // Le champ est vidé tout de suite : sans cela, rechoisir LE MÊME fichier
+    // après un refus ne déclencherait aucun `change`, et l'écran resterait muet
+    // sur un geste que le joueur vient pourtant de refaire.
+    evenement.target.value = "";
+    if (!fichier) return;
+
+    setTentativePhoto((n) => n + 1);
+
+    // Le refus local d'abord : une image que le navigateur ne saura pas décoder
+    // n'a rien à faire dans un recadrage qui n'aurait alors rien à montrer.
+    const refus = refusDuFichier(fichier);
+    if (refus) {
+      setARecadrer(null);
+      setEchecPhoto(refus);
+      return;
+    }
+
+    setEchecPhoto(null);
+    setARecadrer(fichier);
+  }
+
+  /**
+   * Dépose la photo recadrée, puis attache son URL au championnat.
+   *
+   * Elle reçoit un `Blob` sorti du canvas, jamais le fichier de la photothèque :
+   * la taille, le format et la qualité ont un propriétaire (`lib/image.js`), et
+   * ce n'est pas cet écran. Même enchaînement qu'au profil, dans le même ordre.
+   */
+  async function envoyerPhoto(blob) {
+    setARecadrer(null);
+    setTentativePhoto((n) => n + 1);
+    setEnvoiPhoto(true);
+    setEchecPhoto(null);
+
+    const depot = await deposerPhoto({
+      compartiment: COMPARTIMENT_CHAMPIONNATS,
+      dossier: id,
+      base: "photo",
+      fichier: enFichier(blob, "photo"),
+    });
+
+    if (!depot.ok) {
+      setEnvoiPhoto(false);
+      setEchecPhoto(depot.message);
+      return;
+    }
+
+    // L'URL n'est enregistrée qu'APRÈS un dépôt réussi : l'inverse laisserait en
+    // base l'adresse d'un objet qui n'existe pas, donc une image cassée sur
+    // l'écran de tous les membres du championnat.
+    const enregistrement = await enregistrerPhotoChampionnat(id, depot.donnees);
+    setEnvoiPhoto(false);
+
+    if (!enregistrement.ok) {
+      setEchecPhoto(enregistrement.message);
+      return;
+    }
+
+    adopterPhoto(enregistrement.donnees.photo_url ?? depot.donnees);
+  }
+
+  async function retirerPhoto() {
+    setTentativePhoto((n) => n + 1);
+    setEnvoiPhoto(true);
+    setEchecPhoto(null);
+
+    // La base d'abord, le stockage ensuite : c'est la colonne qui décide de ce
+    // qui s'affiche. Un objet resté en stockage sans être référencé n'est plus
+    // visible nulle part ; une colonne qui garderait l'URL d'un objet supprimé
+    // afficherait une image cassée partout (`lib/stockage.js`).
+    const enregistrement = await enregistrerPhotoChampionnat(id, null);
+
+    if (!enregistrement.ok) {
+      setEnvoiPhoto(false);
+      setEchecPhoto(enregistrement.message);
+      return;
+    }
+
+    await supprimerPhoto({
+      compartiment: COMPARTIMENT_CHAMPIONNATS,
+      dossier: id,
+      base: "photo",
+    });
+
+    setEnvoiPhoto(false);
+    adopterPhoto(null);
+  }
 
   const [confirmation, setConfirmation] = useState(false);
   const [depart, setDepart] = useState(false);
@@ -368,9 +546,57 @@ export default function Championnat() {
   // ligne, elle donnerait une liste ébréchée, certaines rangées portant une
   // pastille et d'autres non.
   const avecPhotos = lignes.some((ligne) => Boolean(ligne.avatar_url));
+  // **La photo ne se modifie que par son créateur**, et c'est la seule question
+  // que l'écran pose ici. Tant que le championnat n'est pas lu, la réponse est
+  // « non » : afficher le contrôle sur la foi de rien le ferait apparaître puis
+  // disparaître chez un membre ordinaire.
+  const estCreateur = Boolean(
+    donnees?.cree_par && utilisateur?.id && donnees.cree_par === utilisateur.id,
+  );
 
   return (
     <Ecran direction="avant">
+      {/* Le recadrage est un portail vers `document.body` : monté ici dans le
+          JSX pour que sa place dans le code dise à quel geste il appartient,
+          rendu ailleurs pour échapper au `transform` d'`Ecran`.
+
+          `onChoisirAutre` n'est offert que lorsque la source EST la photo en
+          place : quand elle est le fichier qu'on vient de choisir, « choisir une
+          autre photo » ne remplacerait rien qui ait été enregistré. */}
+      {aRecadrer && (
+        <RecadragePhoto
+          source={aRecadrer}
+          forme="carre"
+          titre="La photo du championnat"
+          occupe={envoiPhoto}
+          onConfirmer={envoyerPhoto}
+          onAnnuler={() => setARecadrer(null)}
+          onChoisirAutre={
+            typeof aRecadrer === "string"
+              ? () => champFichier.current?.click()
+              : null
+          }
+        />
+      )}
+
+      {/* Le sélecteur de fichier natif, invisible mais dans le DOM : c'est la
+          photo de l'en-tête qui l'ouvre. `hidden` et non un parent en
+          `display:none` — un `<input type="file">` réellement retiré du rendu ne
+          s'ouvre plus sur iOS. Ni `capture` ni `multiple` : le premier forcerait
+          l'appareil photo et retirerait l'accès à la photothèque, le second
+          n'aurait aucun sens pour une image qui en remplace une autre. */}
+      {estCreateur && (
+        <input
+          ref={champFichier}
+          type="file"
+          accept={TYPES_ACCEPTES_ATTRIBUT}
+          onChange={choisirPhoto}
+          className="hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+      )}
+
       <EnTeteEcran
         titre={donnees?.nom ?? "Championnat"}
         sousTitre={
@@ -382,15 +608,19 @@ export default function Championnat() {
         libelleRetour="Accueil"
         teinte={teinte}
         photo={donnees?.photo_url}
+        onPhoto={estCreateur ? ouvrirPhoto : null}
+        envoiPhoto={envoiPhoto}
       />
 
       <div className="mt-3 flex flex-1 flex-col gap-3">
-        {/* Le message d'échec de la photo, annoncé une fois à l'arrivée.
-            Il se masque d'un appui — c'est un message d'arrivée, pas un état du
-            championnat. Le bouton porte son propre libellé accessible : le
-            `role="alert"` du bloc annonce déjà le texte, le répéter en nom de
-            bouton le ferait entendre deux fois. La cible fait toute la largeur
-            du bloc, donc bien au-delà des 44 px de la règle iOS. */}
+        {/* Le message d'échec de la photo — celui rapporté de la création, et
+            ceux de la modification faite ici. Il se masque d'un appui : un
+            échec n'est pas un état du championnat et ne doit pas revenir à
+            chaque retour sur l'écran. Le bouton porte son propre libellé
+            accessible : le `role="alert"` du bloc annonce déjà le texte, le
+            répéter en nom de bouton le ferait entendre deux fois. La cible fait
+            toute la largeur du bloc, donc bien au-delà des 44 px de la règle
+            iOS. */}
         {echecPhoto && (
           <Bloc rang={1}>
             <button
@@ -399,8 +629,36 @@ export default function Championnat() {
               aria-label="Masquer ce message"
               className="pressable-large block w-full text-left"
             >
-              <Alerte ton="erreur">{echecPhoto}</Alerte>
+              <Alerte ton="erreur" tentative={tentativePhoto}>
+                {echecPhoto}
+              </Alerte>
             </button>
+          </Bloc>
+        )}
+
+        {/* **Le retrait n'existe que quand il y a quelque chose à retirer** — un
+            « Supprimer la photo » toujours présent laisserait croire qu'il en
+            existe une. Il est posé sous l'en-tête, juste sous la photo qu'il
+            efface : un contrôle se place à côté de ce qu'il modifie
+            (/apple-design §16).
+
+            En texte et non en bouton plein : l'action principale de cet écran
+            n'est pas la photo, et un bouton de plein poids l'aurait fait passer
+            devant le code d'invitation. Marron `secondaire` et non
+            `texte-doux`, qui ne vaut que 2,0:1 sur le beige — c'est une phrase
+            qu'on vient lire, et de plus une action qui efface. */}
+        {estCreateur && donnees?.photo_url && (
+          <Bloc rang={1}>
+            <div className="-mt-1 flex">
+              <button
+                type="button"
+                onClick={retirerPhoto}
+                disabled={envoiPhoto}
+                className="text-secondaire min-h-tactile pressable -my-2 px-1 py-2 text-[13px] font-medium disabled:opacity-50"
+              >
+                Supprimer la photo
+              </button>
+            </div>
           </Bloc>
         )}
 

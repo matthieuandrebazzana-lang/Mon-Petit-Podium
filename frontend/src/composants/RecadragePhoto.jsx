@@ -6,6 +6,7 @@ import { dureeCss } from "../lib/secousse.js";
 import {
   bornerDecalage,
   chargerImage,
+  chargerImageDepuisUrl,
   echelleMinimale,
   ErreurImage,
   recadrerImage,
@@ -46,20 +47,34 @@ import {
  * un écran à 120 Hz ; dessiner à chacun ferait deux à trois copies pour un seul
  * affichage.
  *
- * @param {File}     fichier      le fichier choisi, jamais encore envoyé
+ * > ### La source est un FICHIER ou une URL, et le composant n'en sait rien
+ * >
+ * > Depuis la version `0.75.0`, une photo de championnat déjà déposée se
+ * > **re-recadre** sans repasser par la photothèque : le recadrage s'ouvre alors
+ * > sur l'image en place, qui est son point de départ naturel. Tout ce qui suit
+ * > le décodage est identique — le cadre, les gestes, l'export — parce que la
+ * > seule chose qui change est *d'où vient le pixel*. C'est `lib/image.js` qui
+ * > porte les deux décodages et la question du CORS que le second pose ; ici, on
+ * > choisit une fonction, et rien de plus.
+ *
+ * @param {File|string} source   le fichier choisi, ou l'URL d'une photo déposée
  * @param {"cercle"|"carre"} forme le masque, et lui seul
  * @param {string}   titre        ce que le joueur est en train de faire
  * @param {boolean}  occupe       un envoi est déjà parti — verrouille « Confirmer »
  * @param {(blob: Blob) => void} onConfirmer  reçoit le JPEG recadré
  * @param {() => void}           onAnnuler    referme sans rien envoyer
+ * @param {(() => void)|null}    onChoisirAutre ouvre la photothèque, si l'appelant
+ *   en offre la possibilité — il n'y a rien à remplacer quand la source EST le
+ *   fichier qu'on vient de choisir
  */
 export default function RecadragePhoto({
-  fichier,
+  source,
   forme = "cercle",
   titre = "Recadrer la photo",
   occupe = false,
   onConfirmer,
   onAnnuler,
+  onChoisirAutre = null,
 }) {
   const scene = useRef(null);
   const canvas = useRef(null);
@@ -117,8 +132,10 @@ export default function RecadragePhoto({
   const dessiner = useCallback(() => {
     trame.current = 0;
     const surface = canvas.current;
-    const source = image.current;
-    if (!surface || !source) return;
+    // `pixels` et non `source` : la prop du même nom désigne l'ORIGINE de
+    // l'image (un fichier ou une URL), celle-ci l'image déjà décodée.
+    const pixels = image.current;
+    if (!surface || !pixels) return;
 
     const contexte = surface.getContext("2d");
     if (!contexte) return;
@@ -131,8 +148,8 @@ export default function RecadragePhoto({
     contexte.clearRect(0, 0, largeur, hauteur);
 
     const affichee = {
-      largeur: source.naturalWidth * echelle,
-      hauteur: source.naturalHeight * echelle,
+      largeur: pixels.naturalWidth * echelle,
+      hauteur: pixels.naturalHeight * echelle,
     };
     const gauche = largeur / 2 + decalageX - affichee.largeur / 2;
     const haut = hauteur / 2 + decalageY - affichee.hauteur / 2;
@@ -142,7 +159,7 @@ export default function RecadragePhoto({
     // geste de placement devient un geste de composition. L'opacité est basse
     // pour que la frontière du masque reste franche.
     contexte.globalAlpha = 0.28;
-    contexte.drawImage(source, gauche, haut, affichee.largeur, affichee.hauteur);
+    contexte.drawImage(pixels, gauche, haut, affichee.largeur, affichee.hauteur);
     contexte.globalAlpha = 1;
 
     // Puis le même dessin, à pleine lumière, découpé par le masque final.
@@ -155,7 +172,7 @@ export default function RecadragePhoto({
       forme,
     });
     contexte.clip();
-    contexte.drawImage(source, gauche, haut, affichee.largeur, affichee.hauteur);
+    contexte.drawImage(pixels, gauche, haut, affichee.largeur, affichee.hauteur);
     contexte.restore();
   }, [forme]);
 
@@ -167,13 +184,13 @@ export default function RecadragePhoto({
   /** Applique les bornes de couverture, puis demande une image. */
   const recadrer = useCallback(
     (suivante) => {
-      const source = image.current;
-      if (!source) return;
+      const pixels = image.current;
+      if (!pixels) return;
 
       const { cote } = vue.current;
       const minimale = echelleMinimale(
-        source.naturalWidth,
-        source.naturalHeight,
+        pixels.naturalWidth,
+        pixels.naturalHeight,
         cote,
       );
       const echelle = Math.min(
@@ -186,11 +203,11 @@ export default function RecadragePhoto({
         echelle,
         decalageX: bornerDecalage(
           suivante.decalageX,
-          source.naturalWidth * echelle - cote,
+          pixels.naturalWidth * echelle - cote,
         ),
         decalageY: bornerDecalage(
           suivante.decalageY,
-          source.naturalHeight * echelle - cote,
+          pixels.naturalHeight * echelle - cote,
         ),
       };
       redessiner();
@@ -258,7 +275,14 @@ export default function RecadragePhoto({
     setPret(false);
     setEchec(null);
 
-    chargerImage(fichier)
+    // Une chaîne est une URL déjà déposée, tout le reste est un fichier de la
+    // photothèque. Le test porte sur le TYPE et non sur un drapeau que
+    // l'appelant passerait à côté : deux sources et un booléen finissent
+    // toujours par se contredire.
+    const decodage =
+      typeof source === "string" ? chargerImageDepuisUrl(source) : chargerImage(source);
+
+    decodage
       .then((chargee) => {
         if (!vivant) return;
         image.current = chargee;
@@ -291,7 +315,7 @@ export default function RecadragePhoto({
       vivant = false;
       image.current = null;
     };
-  }, [fichier, mesurer, recadrer]);
+  }, [source, mesurer, recadrer]);
 
   useEffect(() => {
     window.addEventListener("resize", mesurer);
@@ -519,6 +543,24 @@ export default function RecadragePhoto({
         >
           Confirmer
         </Bouton>
+        {/* **Le remplacement vit DANS le recadrage, pas avant lui.** Ouvrir la
+            photothèque d'abord obligerait à choisir un fichier pour découvrir
+            qu'on voulait seulement recadrer celui qui est déjà là ; ouvert sur
+            la photo en place, le recadrage montre le point de départ et laisse
+            la photothèque à un doigt. Le bouton est en texte et non en
+            `Bouton` : trois boutons pleins à la suite auraient donné trois
+            actions de même poids là où il n'y en a qu'une principale. */}
+        {onChoisirAutre && (
+          <button
+            type="button"
+            onClick={onChoisirAutre}
+            disabled={verrouille}
+            className="pressable min-h-tactile text-corps-sm py-2 text-center font-medium text-white/70 disabled:opacity-50"
+          >
+            Choisir une autre photo
+          </button>
+        )}
+
         <Bouton variante="secondaire" onClick={annuler} disabled={verrouille}>
           Annuler
         </Bouton>
