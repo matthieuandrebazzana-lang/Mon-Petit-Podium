@@ -132,7 +132,8 @@ class Course:
         et c'est la seule lecture qui ne se trompe pas : les baquets bougent en
         cours de saison. Au GP d'Espagne 2026, OpenF1 place Lawson chez Red Bull
         Racing et Tsunoda chez Racing Bulls — deux affectations que la grille de
-        `calcul/pilotes.py` ne connaît pas. Juger « Red Bull : les 2 voitures
+        `calcul/pilotes.py` a fini par enregistrer, mais toujours **après** la
+        course qui les a révélées. Juger « Red Bull : les 2 voitures
         dans le top 10 » sur la grille aurait répondu « Non » là où la course dit
         « Oui », et un pronostic raté à tort vaut `0`, qui ne se rattrape jamais
         (§4 de `metier.md`).

@@ -32,6 +32,13 @@ Deux usages, et le second est celui qui a motivé le module :
 > absent laisse simplement le pronostic non validé (`points_gagnes = NULL`) au
 > lieu d'être attribué au mauvais.
 
+> **Et à revérifier à CHAQUE Grand Prix, pas seulement à chaque saison.** Les
+> numéros ne bougent qu'entre deux saisons, les baquets bougent en cours de
+> route. Deux baquets le sont aujourd'hui, ce qui touche trois lignes (numéros
+> 6, 22 et 30) : le titulaire remplacé
+> **reste dans la table**, à son écurie de contrat, marqué en commentaire. Voir
+> la note de `GRILLE`.
+
 Les libellés Unibet ci-dessous ont été relevés sur les vraies cotes du GP Pays
 Bas 2026 (22 pilotes, marchés « Vainqueur » et « Podium »), les numéros et
 écuries sur `/drivers` d'OpenF1 pour la même saison.
@@ -74,10 +81,28 @@ class Pilote:
 # Racing », « Haas F1 Team ») : c'est cette forme que le marché « Ecurie
 # Vainqueur » doit retrouver, et `points.equipe_du_libelle` sait déjà ramener
 # « Red Bull » et « Haas » sur elle.
+#
+# **Elle décrit la grille EFFECTIVE, pas les contrats.** Deux baquets sont tenus
+# par un remplaçant — relevé sur les données OpenF1 du GP d'Espagne 2026, où
+# Lawson court chez Red Bull Racing et Tsunoda chez Racing Bulls. L'écurie écrite
+# ici est celle où le pilote court **réellement**, parce que c'est elle que le
+# banc d'essai (`index_pilotes`) doit reproduire.
+#
+# **Le titulaire remplacé reste dans la table**, à son écurie de contrat, marqué
+# en commentaire. Il n'y court pas aujourd'hui, donc OpenF1 ne sert jamais son
+# numéro, donc aucune de ses réponses n'est sollicitée : ni `alias_unibet` ni
+# `nationalite_du_pilote` ne répondent sur un numéro absent du classement, et
+# `points.voitures_de` ne compte que les pilotes **ayant une ligne de
+# classement** — Red Bull porte donc bien deux voitures, jamais trois. Son
+# retour ne coûte qu'un commentaire à retirer.
 GRILLE: tuple[Pilote, ...] = (
     Pilote(1, "Lando", "Norris", "NOR", "McLaren", "GBR"),
     Pilote(3, "Max", "Verstappen", "VER", "Red Bull Racing", "NED"),
     Pilote(5, "Gabriel", "Bortoleto", "BOR", "Audi", "BRA"),
+    # **PROVISOIRE — remplacé chez Red Bull par Liam Lawson (30).** Il garde sa
+    # ligne, à son écurie de contrat : il ne prend pas le départ, donc le numéro
+    # 6 n'apparaît dans aucun classement et rien ici n'est interrogé. Le jour où
+    # il reprend le baquet, il n'y a que ce commentaire à retirer.
     Pilote(6, "Isack", "Hadjar", "HAD", "Red Bull Racing", "FRA"),
     Pilote(10, "Pierre", "Gasly", "GAS", "Alpine", "FRA"),
     Pilote(11, "Sergio", "Perez", "PER", "Cadillac", "MEX"),
@@ -91,9 +116,23 @@ GRILLE: tuple[Pilote, ...] = (
     Pilote(14, "Fernando", "Alonso", "ALO", "Aston Martin", "ESP"),
     Pilote(16, "Charles", "Leclerc", "LEC", "Ferrari", "MON"),
     Pilote(18, "Lance", "Stroll", "STR", "Aston Martin", "CAN"),
+    # **PROVISOIRE — remplaçant de Liam Lawson (30) chez Racing Bulls.** Il ne
+    # figurait pas dans les vingt-deux libellés du GP Pays Bas 2026, d'où son
+    # absence jusqu'ici — mais il COURT, et c'est le marché « nationalité du
+    # vainqueur » qui en dépendait : sans cette ligne, une victoire Tsunoda
+    # laissait `nationalite_du_pilote` muette et le pronostic à `NULL`.
+    #
+    # Aucun alias : Unibet écrit « Y.Tsunoda », et la clé « initiale + nom »
+    # dérivée par `points._indexer_pilotes` donne déjà « ytsunoda » des deux
+    # côtés. N'y mettre que ce qui manque réellement (voir `Pilote.alias`).
+    Pilote(22, "Yuki", "Tsunoda", "TSU", "Racing Bulls", "JPN"),
     Pilote(23, "Alexander", "Albon", "ALB", "Williams", "THA"),
     Pilote(27, "Nico", "Hulkenberg", "HUL", "Audi", "GER"),
-    Pilote(30, "Liam", "Lawson", "LAW", "Racing Bulls", "NZL"),
+    # **PROVISOIRE — remplaçant d'Isack Hadjar (6) chez Red Bull.** Son écurie de
+    # CONTRAT reste Racing Bulls ; c'est son baquet là-bas que tient Yuki
+    # Tsunoda (22). L'écurie écrite est celle où il court, pas celle qui le
+    # paie — le retour de Hadjar la ramènera à « Racing Bulls ».
+    Pilote(30, "Liam", "Lawson", "LAW", "Red Bull Racing", "NZL"),
     Pilote(31, "Esteban", "Ocon", "OCO", "Haas F1 Team", "FRA"),
     Pilote(41, "Arvid", "Lindblad", "LIN", "Racing Bulls", "GBR"),
     Pilote(43, "Franco", "Colapinto", "COL", "Alpine", "ARG"),
@@ -136,6 +175,9 @@ NATIONALITES: dict[str, tuple[str, ...]] = {
     "ESP": ("Espagnol", "Espagnole", "Espagne"),
     "MON": ("Monégasque", "Monaco"),
     "CAN": ("Canadien", "Canadienne", "Canada"),
+    # « Japonais » vaut singulier ET pluriel : rien à ajouter pour la forme
+    # plurielle, contrairement à « Britannique » / « Britanniques ».
+    "JPN": ("Japonais", "Japonaise", "Japon"),
     "THA": ("Thaïlandais", "Thaïlandaise", "Thaïlande", "Thaï"),
     "GER": ("Allemand", "Allemande", "Allemagne"),
     "NZL": ("Néo-Zélandais", "Néo-Zélandaise", "Nouvelle-Zélande"),

@@ -99,17 +99,63 @@ Le liseré à 60 % les écarte de 34 à 42 niveaux.
 |---|---|
 | Mercedes | `AK.Antonelli` / `A.Antonelli`, `G.Russell` |
 | Ferrari | `L.Hamilton`, `C.Leclerc` |
-| Red Bull | `M.Verstappen`, `I.Hadjar` |
+| Red Bull | `M.Verstappen`, **`L.Lawson`** *(remplace `I.Hadjar`)* |
 | McLaren | `L.Norris`, `O.Piastri` |
 | Alpine | `F.Colapinto`, `P.Gasly` |
 | Audi | `G.Bortoleto`, `N.Hulkenberg` |
-| Racing Bulls | `A.Lindblad`, `L.Lawson` |
+| Racing Bulls | `A.Lindblad`, **`Y.Tsunoda`** *(remplace `L.Lawson`)* |
 | Aston Martin | `F.Alonso`, `L.Stroll` |
 | Haas | `E.Ocon`, `O.Bearman` |
 | Williams | `A.Albon`, `C.Sainz Jr` |
 | Cadillac | `S.Perez`, `V.Bottas` |
 
-### Le désaccord frontend / backend — historique, RÉSOLU, et gardé par un test
+### Deux remplacements temporaires — la grille EFFECTIVE, pas les contrats
+
+Depuis la version `0.66.0`, `pilotes.py` décrit **qui court**, pas qui est sous contrat.
+Deux baquets sont tenus par un remplaçant, ce qui touche **trois** lignes de la table :
+
+| N° | Pilote | Écurie de contrat | Écurie où il court | État |
+|---|---|---|---|---|
+| 6 | Isack Hadjar | Red Bull | — | **remplacé**, ne prend pas le départ |
+| 30 | Liam Lawson | Racing Bulls | **Red Bull** | remplace Hadjar |
+| 22 | Yuki Tsunoda | — | **Racing Bulls** | remplace Lawson |
+
+> **Le titulaire remplacé RESTE dans la table**, à son écurie de contrat, marqué
+> `PROVISOIRE` en commentaire. Son retour ne coûte alors qu'un commentaire à retirer —
+> alors que le supprimer obligerait à réécrire sa ligne de mémoire, numéro, acronyme et
+> nationalité compris.
+
+**Le garder ne fait porter aucune troisième voiture à Red Bull**, et c'est vérifié, pas
+supposé : `points.voitures_de` ne compte que les pilotes **ayant une ligne de classement**
+(`docs/metier.md`), et Hadjar n'en a pas. `alias_unibet` et `nationalite_du_pilote` ne
+répondent, de même, que sur un numéro qu'OpenF1 a réellement servi. Seul `index_pilotes`
+— le banc d'essai — le voit, et c'est précisément ce qu'on veut : il peut simuler son
+retour sans qu'une ligne soit réécrite.
+
+> **`equipe` ne sert JAMAIS au calcul des points.** L'écurie qui juge le marché
+> « Ecurie Vainqueur » et les marchés « les 2 voitures » est celle qu'**OpenF1** sert
+> dans le classement, jamais celle de cette table. C'est ce qui rend le remplacement
+> sans danger : `pilotes.py` peut avoir un Grand Prix de retard sans qu'un seul point
+> soit mal attribué. Voir le commentaire de `points.voitures_de`.
+
+**Tsunoda apporte une seizième nationalité, `JPN`** — il manquait à `NATIONALITES`.
+C'était le vrai défaut fonctionnel : le marché « nationalité du vainqueur » lit la
+nationalité dans cette table statique et nulle part ailleurs (`country_code` d'OpenF1 est
+déprécié, `scraper.md` §9), donc **une victoire Tsunoda laissait le pronostic à `NULL`**.
+Rattrapable, jamais `0` — mais rattrapable à la main.
+
+**Les alias couvrent les deux configurations, et rien n'a eu à être ajouté.** Unibet écrit
+`Y.Tsunoda` ; la clé « initiale + nom » que `points._indexer_pilotes` dérive donne
+`ytsunoda` des deux côtés, comme `ihadjar` et `llawson` avant elle. Vérifié en rejouant
+l'index sur les deux grilles possibles — titulaires et remplaçants — et non déduit :
+les quatre libellés retombent sur leur numéro et sur leur nationalité. **Un alias qui ne
+manque pas ne s'ajoute pas** : la liste qui grossit sans raison finit par créer des
+ambiguïtés, et une clé ambiguë est *retirée* de l'index, donc coûte un rapprochement.
+
+> **À revérifier à chaque Grand Prix**, et plus seulement à chaque saison. Les numéros ne
+> bougent qu'entre deux saisons ; les baquets bougent en cours de route.
+
+### Le désaccord frontend / backend — historique, et ce qui reste ouvert
 
 > **Un désaccord a existé sur HUIT pilotes**, et l'enjeu n'était pas cosmétique : si
 > `pilotes.py` avait eu tort, **le calcul des points du marché « Ecurie Vainqueur » aurait
@@ -129,14 +175,33 @@ Le liseré à 60 % les écarte de 34 à 42 niveaux.
 | S.Perez | Red Bull | **Cadillac** |
 | I.Hadjar | Racing Bulls | **Red Bull** |
 
-> ### Le garde-fou
-> Un test **lit `backend/app/calcul/pilotes.py`** et compare les vingt-deux pilotes ligne à
-> ligne. Les deux fichiers **ne peuvent plus diverger en silence**. Il est écrit en noms
-> d'écuries et non en hexadécimaux : il survit donc à tout changement de palette.
+> ### Le garde-fou — À ÉCRIRE, il n'existe pas
+> Ce document décrivait un test qui **lit `backend/app/calcul/pilotes.py`** et compare les
+> pilotes ligne à ligne. **Le dépôt ne porte aucun test**, ni côté frontend (pas de
+> `vitest`) ni côté backend (pas de `pytest`) — vérifié sur l'arbre et sur l'historique.
+> La concordance des deux fichiers est donc tenue **à la main**, et rien ne l'annonce
+> quand elle casse. `roadmap.md`.
 
-**Les deux fichiers sont à mettre à jour chaque saison, ensemble.** Une table périmée ne
-fait aucun dégât silencieux : un pilote absent ressort **sans teinte**, ce qui se voit à
-l'écran, et `alias_unibet()` refuse de servir un alias dont le numéro ne concorde plus.
+**Les deux fichiers sont à mettre à jour ensemble** — chaque saison, et désormais à chaque
+remplacement en cours de saison. Une table périmée ne fait aucun dégât silencieux : un
+pilote absent ressort **sans teinte**, ce qui se voit à l'écran, et `alias_unibet()` refuse
+de servir un alias dont le numéro ne concorde plus.
+
+> ### Écart OUVERT (CLAUDE.md §6) : `ecuries.js` ignore les remplacements
+> La version `0.66.0` n'a corrigé que le **backend**, parce que c'est lui seul qui calcule
+> des points et qu'il seul demande un déploiement Railway. `frontend/src/lib/ecuries.js`
+> range donc encore `I.Hadjar` chez Red Bull, `L.Lawson` chez Racing Bulls, et **ne connaît
+> pas `Y.Tsunoda` du tout**.
+>
+> **Conséquence, bornée et connue — elle est cosmétique, jamais un point.** Le widget de
+> cote peindra Lawson au cyan Racing Bulls au lieu du bleu Red Bull (une teinte *fausse*,
+> pas absente : c'est le cas le moins bon), et Tsunoda ressortira **sans teinte**, ce qui
+> est le repli prévu par `couleurEcurie` et se voit à l'écran. Le classement de course
+> n'est pas touché : il tire son écurie d'OpenF1 via `ecurieDuLibelle`.
+>
+> `lib/nationalites.js` connaît déjà Tsunoda (n° 22, `JP`) — c'est `pilotes.py` qui avait
+> du retard sur lui, et cet écart-là est refermé. Reste sa ligne de commentaire à retirer
+> quand le frontend sera repris. `roadmap.md`.
 
 ### Les alias
 

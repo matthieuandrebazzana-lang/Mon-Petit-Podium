@@ -469,6 +469,18 @@ toucher qu'un écran.
 
 ### 3.8 quinquies `nationalites.js` et `pilotes.py` ne décrivent plus la même grille (`0.63.0`)
 
+> ✅ **Réglé côté backend en version `0.66.0`.** `Pilote(22, "Yuki", "Tsunoda", "TSU",
+> "Racing Bulls", "JPN")` est entré dans `GRILLE`, et `"JPN": ("Japonais", "Japonaise",
+> "Japon")` dans `NATIONALITES` — **`JPN`, pas `JAP`**, comme l'avertissement ci-dessous le
+> demandait. Une victoire Tsunoda se juge désormais. **Il reste à déployer sur Railway**
+> (§1.4) : tant que ce n'est pas fait, le paragraphe ci-dessous décrit encore la
+> production.
+>
+> **Un écart de sens inverse s'est ouvert au même moment** : `lib/ecuries.js`, lui, ne
+> connaît toujours pas Tsunoda et range encore Lawson chez Racing Bulls — voir §3.8 sexies.
+> Et la note d'écart en tête de `lib/nationalites.js` est à retirer quand le frontend sera
+> repris.
+
 Yuki Tsunoda a été ajouté à `lib/nationalites.js` — numéro 22, `JP`, Japon — parce qu'il
 figurait au **classement** d'un Grand Prix sans y porter de drapeau. Il n'est **pas** dans
 `backend/app/calcul/pilotes.py`, dont la grille tient les vingt-deux libellés relevés sur
@@ -494,6 +506,47 @@ touche que la nationalité.
 `/drivers` d'OpenF1, elle n'est pas devinable ici. Le code CIO du Japon est `JPN` et non
 `JAP` : **à vérifier sur la source avant de l'écrire**, c'est exactement le genre de
 correspondance que §3.15 dit de ne pas deviner.
+
+### 3.8 sexies `ecuries.js` ignore les remplacements Lawson / Tsunoda (`0.66.0`)
+
+La version `0.66.0` a porté les deux remplacements temporaires dans
+`backend/app/calcul/pilotes.py` — Lawson (30) chez Red Bull à la place de Hadjar (6),
+Tsunoda (22) chez Racing Bulls à la place de Lawson. **Le commit est backend seul**, parce
+que c'est le backend qui calcule des points et lui seul qui demande un déploiement Railway.
+
+`frontend/src/lib/ecuries.js` range donc encore `I.Hadjar` chez Red Bull, `L.Lawson` chez
+Racing Bulls, et **ne connaît pas `Y.Tsunoda` du tout**.
+
+**Ce que l'écart coûte, précisément — il est cosmétique, jamais un point.** Aucune couleur
+n'entre dans le calcul : le marché « Ecurie Vainqueur » et les marchés « les 2 voitures »
+lisent l'écurie **dans le classement OpenF1**, pas dans une table statique. Reste l'écran :
+
+- le widget de cote peindra Lawson au **cyan Racing Bulls** au lieu du bleu Red Bull —
+  c'est le cas le moins bon, une teinte *fausse* plutôt qu'absente ;
+- Tsunoda ressortira **sans teinte**, ce qui est le repli prévu par `couleurEcurie` et se
+  voit à l'écran ;
+- le classement de course n'est pas touché (il passe par `ecurieDuLibelle` sur la forme
+  OpenF1), ni les drapeaux (`nationalites.js` connaît Tsunoda depuis la `0.63.0`).
+
+**Ce qu'il faut faire :** dans `GRILLE` de `lib/ecuries.js`, `"Red Bull": ["M.Verstappen",
+"L.Lawson"]` et `"Racing Bulls": ["A.Lindblad", "Y.Tsunoda"]`, en gardant les titulaires en
+commentaire comme le fait `pilotes.py`. Et **retirer la note d'écart** en tête de
+`lib/nationalites.js`, qui décrit un désaccord désormais refermé.
+
+### 3.8 quater bis Aucun test ne garde la concordance des grilles
+
+`docs/ecuries.md` décrivait un test qui lit `backend/app/calcul/pilotes.py` et compare les
+pilotes ligne à ligne. **Il n'existe pas** : le dépôt ne porte aucune infrastructure de
+test — ni `vitest` ni `pytest` dans les dépendances, aucun fichier de test dans l'arbre ni
+dans l'historique. Vérifié, pas supposé.
+
+C'est précisément ce trou qui a laissé §3.8 quinquies s'ouvrir, puis §3.8 sexies. Les
+trois tables — `pilotes.py`, `lib/ecuries.js`, `lib/nationalites.js` — décrivent les mêmes
+pilotes et sont tenues à la main, sans que rien n'annonce leur divergence.
+
+> **Le test utile est celui qui LIT `pilotes.py`**, la seule des trois qui attribue des
+> points, et qui compare écurie et nationalité pilote par pilote. Écrit en noms d'écuries
+> et non en hexadécimaux, il survit à tout changement de palette.
 
 ### 3.8 ter Deux rangées horizontales calent leur première carte hors de l'alignement
 
@@ -598,11 +651,11 @@ plein soleil autant qu'un rapport de contraste.
 
 ---
 
-### 3.15 Aucun libellé de nationalité n'a été vu en vrai — quinze pays écrits à l'aveugle
+### 3.15 Aucun libellé de nationalité n'a été vu en vrai — seize pays écrits à l'aveugle
 
 `NATIONALITES` accepte le peuple et le pays (« Néerlandais », « Pays-Bas ») parce que **rien
-ne dit lequel des deux Unibet écrit**. Les quinze entrées couvrent la grille de
-`pilotes.py` — **le Japon n'en fait pas partie**, voir §3.8 quinquies ; aucune
+ne dit lequel des deux Unibet écrit**. Les seize entrées couvrent la grille de
+`pilotes.py` — **le Japon en fait partie depuis la `0.66.0`** (§3.8 quinquies) ; aucune
 n'a été confrontée à un vrai marché. Une issue inconnue est journalisée en toutes lettres et
 laisse `NULL` — **c'est cette ligne qu'il faut chercher** après le premier vrai marché de
 nationalité, comme pour « écart du gagnant ».
