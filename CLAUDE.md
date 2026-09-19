@@ -133,6 +133,7 @@ Sans cette règle, cette structure ne sert à rien.
 | [`bugs-connus.md`](docs/bugs-connus.md) | Symptôme, cause **réelle**, correctif, ce qu'il ne faut pas refaire |
 | [`decisions.md`](docs/decisions.md) | Pourquoi les choix ont été faits, alternatives écartées, conséquences |
 | [`roadmap.md`](docs/roadmap.md) | Ce qui reste à faire |
+| [`swift-app.md`](docs/swift-app.md) | Spec de l'app native Swift/SwiftUI : endpoints, auth, design system, assets |
 
 **Autres ressources** : `maquettes/` (16 écrans HTML de la v1 — **ouvrir la maquette avant
 de coder un écran**) et `assets/` (planches SVG source, extraites **par script**, jamais
