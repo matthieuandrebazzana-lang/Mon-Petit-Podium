@@ -218,9 +218,10 @@ est-ce que ça ferme ? ».
 Tous les marchés se valident **automatiquement**, sans intervention humaine.
 
 **Via `session_result`** : vainqueur (`position == 1`), podium (`position <= 3`), top 6 et
-top 10, duels, écurie gagnante, double podium d'écurie, les deux pilotes dans les points,
-abandon (`dnf == true`), nombre de classés, dernier, **écart du gagnant**, classement
-exact, trio gagnant, mieux classé d'un groupe.
+top 10, **les 2 voitures d'une écurie dans le top 10**, duels, écurie gagnante, double
+podium d'écurie, les deux pilotes dans les points, abandon (`dnf == true`), nombre de
+classés, dernier, **écart du gagnant**, classement exact, trio gagnant, mieux classé d'un
+groupe.
 
 > ### L'écart du gagnant — le seul marché dont l'issue est un intervalle
 > Tous les autres marchés proposent un pilote, une écurie, ou un oui/non. Celui-ci propose
@@ -263,6 +264,27 @@ exact, trio gagnant, mieux classé d'un groupe.
 > ne l'empêche pas de **perdre** : si la nationalité du vainqueur figure parmi les options
 > comprises, le verdict est acquis. Détail dans `bugs-connus.md` §25.
 
+> ### « Les 2 voitures dans le top 10 » — une famille de marchés, un par écurie
+> Le slug porte **le sujet du pari** : `ferrari-les-2-voitures-dans-le-top-10` nomme
+> l'écurie *et* le rang, là où tous les autres marchés se nomment d'un slug fixe et
+> laissent l'issue désigner le sujet. L'issue, elle, n'est qu'un « Oui » ou un « Non ».
+> Les deux sont exactement complémentaires — « Oui » si les deux voitures sont classées au
+> rang demandé ou mieux, « Non » dans tous les autres cas — et se jugent donc d'une seule
+> comparaison. Onze marchés au GP Italie 2026, six au GP Espagne : c'est le tiers des
+> marchés d'un Grand Prix.
+>
+> **La paire de pilotes se lit dans les résultats, jamais dans la grille statique.** Les
+> baquets bougent en cours de saison et `calcul/pilotes.py` ne le sait pas : au GP
+> d'Espagne, la grille aurait opposé Hadjar à Red Bull là où Lawson y a fini sixième, et
+> répondu « Non » à un marché que la course gagne. Un pronostic déclaré raté vaut `0`, qui
+> **ne se rattrape jamais** — l'erreur aurait été définitive. `Course.voitures_de` compte
+> donc les voitures de l'écurie **parmi les pilotes ayant une ligne de classement**, et
+> laisse le pronostic non jugé si elles ne sont pas exactement deux.
+>
+> Le nom d'écurie du slug se rapproche par la même inclusion que « écurie vainqueur », qui
+> couvre les onze variantes d'Unibet sans qu'aucune soit écrite en dur. Implémenté en
+> v`0.73.0` ; détail et commandes de rattrapage dans `bugs-connus.md` §34.
+
 **Via `race_control`** : safety car, drapeau rouge.
 **Via `laps`** : meilleur tour (minimum de `lap_duration`).
 
@@ -283,9 +305,9 @@ abandonnent, celui qui a parcouru le plus de tours l'emporte.
 
 > ### Un marché non reconnu laisse `NULL`, jamais `0`
 > Les marchés Unibet varient d'un GP à l'autre : ce cas n'est pas une hypothèse d'école.
-> Seuls **vainqueur, podium et ecurie-vainqueur** ont été confrontés à de vrais libellés ;
-> les sept autres familles — **écart du gagnant** compris — sont écrites d'après cette
-> section et **restent à vérifier**.
+> Seuls **vainqueur, podium, ecurie-vainqueur** et **les 2 voitures dans le top 10** ont
+> été confrontés à de vrais libellés ; les sept autres familles — **écart du gagnant**
+> compris — sont écrites d'après cette section et **restent à vérifier**.
 >
 > **C'est ce filet qui a caché l'écart du gagnant pendant six versions** : le marché
 > n'était pas reconnu, donc il laissait `NULL`, donc il ne criait pas. Le filet a fait

@@ -1521,3 +1521,89 @@ plancher mord à douze voies, et le recouvrement — un pixel — n'apparaît qu
   voiture sur l'axe et l'autre à sa gauche : le groupe n'est plus centré sur la piste. La
   règle « la meilleure au milieu » l'emporte sur le centrage du groupe — c'est la hauteur
   qui dit les points, l'abscisse ne sert qu'à éviter un recouvrement.
+
+---
+
+## 34. Onze marchés par Grand Prix n'étaient pas reconnus — et la grille statique aurait mal jugé deux d'entre eux
+
+**Symptôme.** Après les GP Italie et Espagne 2026, les pronostics posés sur
+« *{écurie}* / Les 2 voitures dans le top 10 » restaient **sans points**, avec une ligne
+`[points] … laissé(s) sans points` par pronostic. Onze marchés de cette famille au GP
+Italie, six au GP Espagne : c'est le tiers des marchés ouverts.
+
+**Cause réelle.** Le filet a fait son travail — `validateur()` ne reconnaissait pas le slug,
+le pronostic restait à `NULL`, rien n'était mal jugé. Mais la famille est la **première dont
+le slug porte le sujet du pari** : `ferrari-les-2-voitures-dans-le-top-10` nomme l'écurie
+*et* le rang, là où tous les autres marchés se nomment d'un slug fixe et laissent l'issue
+désigner le sujet. Aucun des tests de `validateur()` ne pouvait la prendre : le `fullmatch`
+du « top N » exige que le slug ne soit **qu'**un rang, et le préfixe `ecurie` du bas ne
+regarde que le début du slug.
+
+**Correctif** (version `0.73.0`, backend `0.65.0`). `_DEUX_VOITURES` lit le nom de l'écurie et le rang dans le
+slug ; `_les_deux_voitures_dans_le_top` juge un oui/non sur « les deux voitures sont-elles
+classées à ce rang ou mieux ? ». Le rapprochement du nom d'écurie passe par
+`equipe_du_libelle`, déjà en place pour « écurie vainqueur » : il couvre les **onze
+variantes** relevées sur les vrais marchés — `alpine`, `aston-martin`, `audi-f1-team`,
+`cadillac`, `ferrari`, `haas`, `mclaren`, `mercedes-amg`, `racing-bulls-team`, `red-bull`,
+`williams` — sans qu'aucune soit écrite en dur.
+
+Le test est placé **entre** le « top N » et le préfixe `ecurie`, et le préfixe d'écurie est
+**obligatoire** dans le motif : `les-2-voitures-sur-le-podium` est un autre marché, dont les
+issues sont des noms d'écurie et non un oui/non. Il reste non reconnu, donc à `NULL`.
+
+### Ce que les vraies données ont démenti : la paire de pilotes ne vient PAS de la grille
+
+Le réflexe est de demander ses deux pilotes à `calcul/pilotes.py`, qui tient la grille de la
+saison. **Sur les deux Grands Prix à rattraper, cette lecture se serait trompée deux fois :**
+
+| Marché | Grille statique | Ce qu'OpenF1 a enregistré | Verdict |
+|---|---|---|---|
+| Espagne, `red-bull` | Verstappen + **Hadjar** | Verstappen P2 + **Lawson P6** | grille « Non » · course **« Oui »** |
+| Italie, `racing-bulls-team` | **Lawson** + Lindblad | **Tsunoda P10** + Lindblad P8 | grille « Non » · course **« Oui »** |
+
+Les baquets ont bougé en cours de saison ; la grille ne le sait pas. Et un pronostic déclaré
+raté vaut **`0`, qui ne se rattrape jamais** (`metier.md` §4) : l'erreur aurait été
+définitive, sur le marché même qu'on venait réparer.
+
+`Course.voitures_de(equipe)` lit donc la paire **dans les résultats du Grand Prix**, parmi
+les seuls pilotes ayant une ligne de classement. Une écurie qui n'en compte pas exactement
+deux laisse le pronostic non jugé, avec un avertissement nommant l'écurie.
+
+**Ne pas refaire.**
+
+- **Un marché non reconnu ne crie pas.** Onze marchés sur trente-quatre sont passés à
+  travers deux Grands Prix sans autre trace que les avertissements de fin de calcul. La
+  consigne de `metier.md` §4 — *relire les `[points] … laissé(s) sans points` après chaque
+  Grand Prix* — est la seule chose qui les rende visibles.
+- **Ne jamais dériver la composition d'une écurie d'une table écrite à la main** quand la
+  donnée de course la porte. La table dit qui *devait* courir, les résultats disent qui a
+  couru — et c'est la seconde question que pose le marché.
+- **La grille de `calcul/pilotes.py` est périmée sur 2026** : Lawson y court pour Racing
+  Bulls et Tsunoda (#22) en est absent. Rien de ce qui précède n'en dépend, mais les alias
+  Unibet et le marché « nationalité du vainqueur », eux, en dépendent — un vainqueur Tsunoda
+  laisserait tous ses pronostics de nationalité à `NULL`. **À corriger séparément**, en
+  relevant la grille réelle, pas en recopiant ce tableau.
+
+### Rattrapage : les deux Grands Prix à recalculer
+
+À lancer **à la main après le déploiement Railway**, une commande après l'autre. `forcer=true`
+remet les `points_gagnes` du Grand Prix à `NULL` avant de recalculer — c'est la seule
+écriture du système qui efface un point, et le scheduler ne l'appelle jamais.
+
+```bash
+# GP Italie — 2026-09-06
+curl -X POST "https://mon-petit-podium-production.up.railway.app/jobs/resultats/e4e6f2ab-9ea6-4191-ab6c-d61a61f1ef4f?forcer=true" \
+  -H "X-Admin-Secret: monpetitpodium2026"
+
+# GP Espagne — 2026-09-13
+curl -X POST "https://mon-petit-podium-production.up.railway.app/jobs/resultats/b327866c-9479-4e59-bdde-5f0e6ec513aa?forcer=true" \
+  -H "X-Admin-Secret: monpetitpodium2026"
+```
+
+**`forcer=true` est ici indispensable et ne suffit pas à tout réparer.** Il rend leurs points
+aux pronostics de cette famille, restés à `NULL` ; il **ne corrige pas** un pronostic que le
+code aurait noté `0` à tort — ceux-là n'existent pas dans ce cas précis, justement parce que
+le marché n'était pas reconnu.
+
+Vérification attendue dans les logs Railway : plus aucune ligne
+`marché « …-les-2-voitures-dans-le-top-10 » non reconnu`.

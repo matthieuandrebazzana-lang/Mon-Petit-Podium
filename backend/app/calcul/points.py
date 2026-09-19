@@ -125,6 +125,33 @@ class Course:
                 return ligne
         return None
 
+    def voitures_de(self, equipe: str) -> tuple[int, ...]:
+        """Les numéros qu'une écurie a engagés à CE Grand Prix.
+
+        **La paire se lit dans les résultats, jamais dans une table statique**,
+        et c'est la seule lecture qui ne se trompe pas : les baquets bougent en
+        cours de saison. Au GP d'Espagne 2026, OpenF1 place Lawson chez Red Bull
+        Racing et Tsunoda chez Racing Bulls — deux affectations que la grille de
+        `calcul/pilotes.py` ne connaît pas. Juger « Red Bull : les 2 voitures
+        dans le top 10 » sur la grille aurait répondu « Non » là où la course dit
+        « Oui », et un pronostic raté à tort vaut `0`, qui ne se rattrape jamais
+        (§4 de `metier.md`).
+
+        Seuls les pilotes **ayant une ligne de classement** sont comptés : c'est
+        la liste des voitures qui ont pris part à la course, la seule dont un
+        marché « les 2 voitures » parle.
+        """
+        cle = normaliser(equipe)
+        if not cle:
+            return ()
+        return tuple(
+            sorted(
+                numero
+                for numero in self.lignes
+                if normaliser((self.pilotes.get(numero) or {}).get("equipe")) == cle
+            )
+        )
+
     def ecart_du_vainqueur(self) -> float | None:
         """L'écart entre le vainqueur et son dauphin, en secondes.
 
@@ -405,16 +432,26 @@ def _reponse_binaire(libelle: str) -> bool | None:
     return None
 
 
-def _position_au_plus(course: Course, libelle: str, rang: int) -> bool | None:
-    numero = course.pilote_du_libelle(libelle)
-    if numero is None:
-        return None
+def _numero_au_plus(course: Course, numero: int, rang: int) -> bool:
+    """Ce numéro de voiture finit-il au rang demandé, ou mieux ?
+
+    Le test se fait sur un **numéro** et non sur un libellé : les marchés
+    d'écurie désignent leurs voitures par l'engagement, pas par le nom que le
+    bookmaker en écrit. `_position_au_plus` n'est plus que l'entrée par nom.
+    """
     ligne = course.lignes.get(numero)
     if ligne is None:
         # Le pilote existe chez OpenF1 mais n'a aucune ligne de résultat : il
         # n'a pas pris part à la course. Le pari est perdu, pas indécidable.
         return False
     return ligne.classe and ligne.position <= rang
+
+
+def _position_au_plus(course: Course, libelle: str, rang: int) -> bool | None:
+    numero = course.pilote_du_libelle(libelle)
+    if numero is None:
+        return None
+    return _numero_au_plus(course, numero, rang)
 
 
 def _vainqueur(course: Course, libelle: str) -> bool | None:
@@ -692,6 +729,82 @@ def _top(rang: int):
     return valider
 
 
+# « Ferrari / Les 2 voitures dans le top 10 » — une FAMILLE de marchés, un par
+# écurie, dont le slug porte à la fois le nom de l'écurie et le rang. C'est le
+# seul de ce genre : partout ailleurs le slug nomme le marché et l'issue nomme
+# le sujet. Les deux sont donc lus ici, et rien n'est écrit en dur —
+# « mercedes-amg-… » et « audi-f1-team-… » se rapprochent de « Mercedes » et
+# « Audi » par la même inclusion que le marché « écurie vainqueur », qui couvre
+# les onze variantes relevées sur les vrais marchés des GP Italie et Espagne
+# 2026 (alpine, aston-martin, audi-f1-team, cadillac, ferrari, haas, mclaren,
+# mercedes-amg, racing-bulls-team, red-bull, williams).
+#
+# **Le préfixe d'écurie est obligatoire** : « les-2-voitures-sur-le-podium » est
+# un autre marché, dont les issues sont des noms d'écurie et non un oui/non.
+_DEUX_VOITURES = re.compile(
+    r"(?P<ecurie>.+?)-les-(?:2|deux)-voitures-dans-le-top-?(?P<rang>\d+)"
+)
+
+
+def _les_deux_voitures_dans_le_top(ecurie: str, rang: int):
+    """Rend le validateur d'un « {écurie} / les 2 voitures dans le top N ».
+
+    L'issue est un oui/non, mais la question porte sur **deux pilotes à la
+    fois** : les deux voitures de l'écurie sont-elles classées au rang demandé
+    ou mieux ? « Oui » gagne si les deux y sont, « Non » gagne dans tous les
+    autres cas — les deux issues sont exactement complémentaires, et c'est ce
+    qui permet de les juger d'une seule comparaison.
+
+    **Les deux voitures viennent des résultats, pas de la grille statique**
+    (`Course.voitures_de`) : c'est la seule source qui suive les changements de
+    baquet en cours de saison, et se tromper ici écrirait un `0` irréversible.
+
+    Trois inconnues, chacune rendant `None` pour son propre compte et
+    journalisée séparément — l'issue illisible, l'écurie non rapprochée, et le
+    nombre de voitures classées différent de deux. Les distinguer est ce qui
+    dira, en relisant les logs, s'il faut corriger la lecture du slug ou
+    constater qu'une écurie n'a engagé qu'une voiture.
+    """
+
+    def valider(course: Course, libelle: str) -> bool | None:
+        reponse = _reponse_binaire(libelle)
+        if reponse is None:
+            logger.warning(
+                "[points] Les 2 voitures dans le top %d (%s) : l'issue « %s » "
+                "n'est ni « Oui » ni « Non ». Pronostic laissé non jugé.",
+                rang,
+                ecurie,
+                libelle,
+            )
+            return None
+
+        equipe = course.equipe_du_libelle(ecurie)
+        if equipe is None:
+            logger.warning(
+                "[points] Les 2 voitures dans le top %d : « %s » n'a été rapprochée "
+                "d'aucune écurie de la course. Pronostic laissé non jugé.",
+                rang,
+                ecurie,
+            )
+            return None
+
+        numeros = course.voitures_de(equipe)
+        if len(numeros) != 2:
+            logger.warning(
+                "[points] Les 2 voitures dans le top %d : « %s » compte %d voiture(s) "
+                "au classement, pas deux. Pronostic laissé non jugé.",
+                rang,
+                equipe,
+                len(numeros),
+            )
+            return None
+
+        les_deux = all(_numero_au_plus(course, numero, rang) for numero in numeros)
+        return les_deux == reponse
+
+    return valider
+
+
 def validateur(marche: str, options: Sequence[str] = ()):
     """Rend le validateur d'un marché, ou `None` si le marché n'est pas reconnu.
 
@@ -711,7 +824,13 @@ def validateur(marche: str, options: Sequence[str] = ()):
     exactement pour cela qu'un marché non reconnu laisse le pronostic à NULL au
     lieu de le déclarer perdu.
 
-    « écart du gagnant » entre dans la liste en version `0.54.0`. Il n'y était
+    « {écurie} / les 2 voitures dans le top 10 » entre dans la liste en version
+    `0.73.0`, avec les GP Italie et Espagne 2026 pour premiers vrais marchés —
+    onze par Grand Prix, et aucun n'était reconnu. C'est la **première famille
+    dont le slug porte le sujet du pari** : le nom de l'écurie et le rang y sont
+    lus, là où tous les autres marchés se nomment d'un slug fixe.
+
+        « écart du gagnant » entre dans la liste en version `0.54.0`. Il n'y était
     **pas** : ses pronostics ne tombaient pas d'une comparaison ratée, ils
     n'étaient jamais comparés du tout — le marché sortait d'ici en `None` et
     restait à NULL (`bugs-connus.md` §20). C'est aussi le premier marché dont
@@ -738,6 +857,17 @@ def validateur(marche: str, options: Sequence[str] = ()):
     top = re.fullmatch(r"(?:dans-le-)?top-?(\d+)", slug)
     if top:
         return _top(int(top.group(1)))
+
+    # « {écurie} / Les 2 voitures dans le top 10 ». Le test vient ICI, entre le
+    # « top N » et le préfixe « ecurie » du bas : le premier ne le prend pas —
+    # son `fullmatch` exige que le slug ne soit QU'un rang — et le second le
+    # prendrait pour « écurie vainqueur » le jour où Unibet écrirait
+    # « Ecurie Ferrari / Les 2 voitures dans le top 10 ».
+    deux_voitures = _DEUX_VOITURES.fullmatch(slug)
+    if deux_voitures:
+        return _les_deux_voitures_dans_le_top(
+            deux_voitures.group("ecurie"), int(deux_voitures.group("rang"))
+        )
 
     # « écart du gagnant », « écart du vainqueur », « marge de victoire » — le
     # même marché sous trois noms possibles, et c'est bien un seul : l'écart
