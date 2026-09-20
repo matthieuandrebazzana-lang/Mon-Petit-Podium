@@ -1,0 +1,19 @@
+// Config.xcconfig.example — modèle versionné.
+//
+// Copier ce fichier en `Config.xcconfig` (ignoré par git) et renseigner la clé anonyme.
+// Xcode injecte ces valeurs dans Info.plist ; `SupabaseConfig` les relit depuis le bundle.
+// Aucune de ces valeurs n'est écrite en dur dans le code Swift.
+//
+// Valeurs : docs/swift-app.md §1. Elles sont publiques par conception — c'est la RLS qui
+// protège les données. La clé `service_role` ne quitte jamais Railway et ne doit sous
+// aucun prétexte être embarquée dans l'app.
+//
+// SLASH : dans un .xcconfig, `//` ouvre un commentaire, y compris au milieu d'une URL.
+// Le retrait des commentaires est LEXICAL et précède la substitution des variables :
+// l'astuce répandue `https:$()//hôte` ne suffit donc pas — elle laisse `https:`.
+// Passer les deux barres par une variable est la seule forme qui survive.
+SLASH = /
+
+SUPABASE_URL = https:$(SLASH)$(SLASH)ycsxcythvtcruiomrgvv.supabase.co
+SUPABASE_ANON_KEY =
+API_BASE_URL = https:$(SLASH)$(SLASH)mon-petit-podium-production.up.railway.app

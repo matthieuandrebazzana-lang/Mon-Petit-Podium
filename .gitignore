@@ -41,5 +41,21 @@ pnpm-debug.log*
 !.vscode/extensions.json
 *.swp
 
+# --- iOS / Xcode ---
+ios/**/Config.xcconfig
+!ios/**/Config.xcconfig.example
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
 # --- Déploiement ---
 .vercel/

@@ -39,6 +39,72 @@ le dépôt de fichiers dans Storage. Les appels à Railway se font au `URLSessio
 > trois statuts sont des **erreurs réseau**, pas des pannes serveur : le bon message est
 > « Connexion au serveur en cours… », et réessayer marche. Voir §7.
 
+### 1.1 Le projet Xcode
+
+Le projet vit dans **`ios/`**, à la racine du monorepo, séparé du code web.
+
+```
+ios/
+├── Greed F1.xcodeproj/
+└── Greed F1/
+    ├── App/          GreedF1App.swift
+    ├── Config/       SupabaseConfig.swift · Couleurs.swift · Config.xcconfig
+    ├── Services/     SupabaseManager.swift
+    ├── Views/        ContentView.swift
+    ├── Models/
+    └── Resources/    Info.plist · Assets.xcassets
+```
+
+| Réglage | Valeur |
+|---|---|
+| Bundle identifier | `com.bazzana.greedf1` |
+| Cible de déploiement | iOS 17.0 |
+| Familles d'appareils | iPhone seulement (`TARGETED_DEVICE_FAMILY = 1`) |
+| Orientation | Portrait seulement |
+| `supabase-swift` | `2.55.2`, épinglé dans `Package.resolved` (produits `Supabase` et `Auth`) |
+
+Le dossier `Greed F1/` est un **groupe synchronisé** (`PBXFileSystemSynchronizedRootGroup`,
+Xcode 16+) : un fichier ajouté sur le disque entre dans la cible sans toucher au
+`.pbxproj`. Trois fichiers en sont exclus explicitement — les deux `.xcconfig` et
+`Info.plist` — pour qu'ils ne partent pas dans le bundle.
+
+### 1.2 Configuration : `Config.xcconfig`
+
+**Aucune valeur de connexion n'est écrite en dur dans le code.** Le chemin est :
+
+```
+Config.xcconfig  →  réglages de build  →  Info.plist  →  SupabaseConfig  →  SupabaseManager
+```
+
+`Config.xcconfig` n'est **pas versionné** (`.gitignore` racine). Au premier clone :
+
+```sh
+cd "ios/Greed F1/Config" && cp Config.xcconfig.example Config.xcconfig
+# puis renseigner SUPABASE_ANON_KEY (tableau de bord Supabase, ou frontend/.env.local)
+```
+
+Une valeur manquante arrête l'app au démarrage sur un message qui nomme la clé absente,
+plutôt que de la laisser échouer plus tard sur un appel réseau incompréhensible.
+
+> **Les deux barres d'une URL dans un `.xcconfig`.** `//` y ouvre un commentaire, y compris
+> au milieu d'une URL. Le retrait des commentaires est **lexical et précède la substitution
+> des variables** : l'astuce répandue `https:$()//hôte` ne suffit donc pas — elle laisse
+> `https:` tout court, et le défaut ne se voit qu'en lisant l'`Info.plist` du bundle
+> **construit**. La seule forme qui survive passe les barres par une variable :
+> ```
+> SLASH = /
+> SUPABASE_URL = https:$(SLASH)$(SLASH)ycsxcythvtcruiomrgvv.supabase.co
+> ```
+
+### 1.3 Client partagé
+
+`SupabaseManager.partage` est le **point d'entrée unique** vers Supabase et vers Railway.
+Le client Supabase n'est construit qu'une fois : il persiste la session dans le Keychain et
+rafraîchit le jeton tout seul, mais un second client ferait travailler deux rafraîchisseurs
+sur le même Keychain.
+
+---
+
 ---
 
 ## 2. Authentification
