@@ -6,18 +6,29 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		088E00CB305F9171000E15DE /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00CA305F9170000E15DE /* AuthViewModel.swift */; };
+		088E00CD305F917E000E15DE /* ConnexionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00CC305F917E000E15DE /* ConnexionView.swift */; };
+		088E00CF305F918D000E15DE /* InscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00CE305F918D000E15DE /* InscriptionView.swift */; };
+		A1000000000000000000022 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000021 /* Supabase */; };
+		A1000000000000000000024 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000023 /* Auth */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
+		088E00CA305F9170000E15DE /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
+		088E00CC305F917E000E15DE /* ConnexionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnexionView.swift; sourceTree = "<group>"; };
+		088E00CE305F918D000E15DE /* InscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InscriptionView.swift; sourceTree = "<group>"; };
 		A1000000000000000000001 /* Greed F1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Greed F1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000002 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Config.xcconfig; path = "Greed F1/Config/Config.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A1000000000000000000010 /* Exceptions */ = {
+		A1000000000000000000010 /* Exceptions for "Greed F1" folder in "Greed F1" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				"Config/Config.xcconfig",
-				"Config/Config.xcconfig.example",
-				"Resources/Info.plist",
+				Config/Config.xcconfig,
+				Config/Config.xcconfig.example,
+				Resources/Info.plist,
 			);
 			target = A1000000000000000000030 /* Greed F1 */;
 		};
@@ -27,7 +38,7 @@
 		A1000000000000000000011 /* Greed F1 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A1000000000000000000010 /* Exceptions */,
+				A1000000000000000000010 /* Exceptions for "Greed F1" folder in "Greed F1" target */,
 			);
 			path = "Greed F1";
 			sourceTree = "<group>";
@@ -46,11 +57,6 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
-/* Begin PBXBuildFile section */
-		A1000000000000000000022 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000021 /* Supabase */; };
-		A1000000000000000000024 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000023 /* Auth */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXGroup section */
 		A1000000000000000000025 = {
 			isa = PBXGroup;
@@ -58,6 +64,9 @@
 				A1000000000000000000002 /* Config.xcconfig */,
 				A1000000000000000000011 /* Greed F1 */,
 				A1000000000000000000026 /* Products */,
+				088E00CA305F9170000E15DE /* AuthViewModel.swift */,
+				088E00CC305F917E000E15DE /* ConnexionView.swift */,
+				088E00CE305F918D000E15DE /* InscriptionView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -148,6 +157,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				088E00CB305F9171000E15DE /* AuthViewModel.swift in Sources */,
+				088E00CF305F918D000E15DE /* InscriptionView.swift in Sources */,
+				088E00CD305F917E000E15DE /* ConnexionView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -202,7 +214,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				EXCLUDED_SOURCE_FILE_NAMES = (
+					"*/Ressources/*",
+					"*/Ressources/*/*",
+				);
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -225,7 +241,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				EXCLUDED_SOURCE_FILE_NAMES = (
+					"*/Ressources/*",
+					"*/Ressources/*/*",
+				);
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

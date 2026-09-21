@@ -135,6 +135,9 @@ Sans cette règle, cette structure ne sert à rien.
 | [`roadmap.md`](docs/roadmap.md) | Ce qui reste à faire |
 | [`swift-app.md`](docs/swift-app.md) | Spec de l'app native Swift/SwiftUI : endpoints, auth, design system, assets |
 
+**App iOS** : contexte natif dans [`ios/CLAUDE.md`](ios/CLAUDE.md), à lire avant
+toute session Swift.
+
 **Autres ressources** : `maquettes/` (16 écrans HTML de la v1 — **ouvrir la maquette avant
 de coder un écran**) et `assets/` (planches SVG source, extraites **par script**, jamais
 recopiées à la main).

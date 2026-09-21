@@ -1,0 +1,135 @@
+import SwiftUI
+
+/// Écran d'accueil (landing) — premier écran vu par un utilisateur non connecté.
+///
+/// Référence visuelle : `Ressources/Screenshots/screen-01-landing.PNG`.
+/// Le bloc bandeau + titre + sous-titre + boutons est centré verticalement d'un seul
+/// tenant ; seul le numéro de version est ancré en bas.
+struct LandingView: View {
+
+    @ObservedObject var viewModel: AuthViewModel
+
+    /// Marge latérale commune au bandeau et aux boutons — ils s'alignent sur la capture.
+    private let margeLaterale: CGFloat = 16
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.fondPrincipal
+                    .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    Spacer(minLength: 24)
+
+                    bandeau
+                    Spacer().frame(height: 20)
+
+                    titre
+                    Spacer().frame(height: 12)
+
+                    sousTitre
+                    Spacer().frame(height: 32)
+
+                    boutons
+
+                    Spacer(minLength: 24)
+
+                    version
+                }
+                .padding(.horizontal, margeLaterale)
+            }
+            .navigationBarHidden(true)
+        }
+    }
+
+    // MARK: - Bandeau
+
+    /// `logo-bandeau` est `logo-05.svg` à viewBox rognée (`0 215 894.21 243`) : le
+    /// rectangle rouge seul, sans l'icône carrée qui le surmonte dans le logo complet.
+    /// Le SVG porte déjà ses coins arrondis — aucun `cornerRadius` ici.
+    private var bandeau: some View {
+        Image("logo-bandeau")
+            .resizable()
+            .scaledToFit()
+            .accessibilityLabel("Greed F1")
+    }
+
+    // MARK: - Textes
+
+    private var titre: some View {
+        Text("Pronostique chaque\nGrand Prix entre amis.")
+            .font(.custom("HelveticaNeue-Medium", size: 32))
+            .tracking(-0.8)          // −0,025em, cf. docs/design-system.md §2
+            .foregroundColor(.texte)
+            .multilineTextAlignment(.center)
+            .lineSpacing(4)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var sousTitre: some View {
+        Text("Mise sur chaque GP. Grimpe dans le classement devant tes amis.")
+            .font(.custom("HelveticaNeue", size: 17))
+            .foregroundColor(.secondaire)
+            .multilineTextAlignment(.center)
+            .lineSpacing(4)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 8)
+    }
+
+    private var version: some View {
+        Text("Greed F1 · v\(Bundle.main.versionAffichee)")
+            .font(.custom("HelveticaNeue", size: 12))
+            .foregroundColor(.secondaire.opacity(0.75))   // 4,72:1 mesuré sur le fond
+            .padding(.bottom, 8)
+    }
+
+    // MARK: - Boutons
+
+    private var boutons: some View {
+        VStack(spacing: 12) {
+            NavigationLink {
+                InscriptionView(viewModel: viewModel)
+            } label: {
+                LibelleBouton(texte: "Créer un compte", encre: .white)
+                    .background(Color.primaire)
+                    .clipShape(Capsule())
+            }
+
+            NavigationLink {
+                ConnexionView(viewModel: viewModel)
+            } label: {
+                LibelleBouton(texte: "J'ai déjà un compte", encre: .primaire)
+                    .background(Color.white)
+                    .clipShape(Capsule())
+            }
+        }
+    }
+
+    /// Un seul propriétaire pour la forme des deux boutons : ils ne divergent pas.
+    private struct LibelleBouton: View {
+        let texte: String
+        let encre: Color
+
+        var body: some View {
+            Text(texte)
+                .font(.custom("HelveticaNeue-Medium", size: 18))
+                .foregroundColor(encre)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)      // > 44 pt, contrainte tactile iOS
+        }
+    }
+}
+
+// MARK: - Version
+
+extension Bundle {
+    /// `CFBundleShortVersionString`, c'est-à-dire `MARKETING_VERSION` du projet Xcode :
+    /// **la seule source** du numéro de version de l'app iOS.
+    var versionAffichee: String {
+        object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    }
+}
+
+#Preview {
+    LandingView(viewModel: AuthViewModel())
+}

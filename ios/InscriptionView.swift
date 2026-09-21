@@ -1,9 +1,12 @@
 import SwiftUI
 
-/// Écran d'inscription : champs pseudo, email, mot de passe, bouton principal.
+/// Écran d'inscription — reproduit exactement screen-02-inscription.png.
+///
+/// Bouton retour, titre "Créer un compte", card blanche avec labels et champs
+/// (pseudo, email, mot de passe), bouton principal, lien connexion.
 struct InscriptionView: View {
     
-    @StateObject private var viewModel = AuthViewModel()
+    @ObservedObject var viewModel: AuthViewModel
     @State private var pseudo = ""
     @State private var email = ""
     @State private var motDePasse = ""
@@ -12,59 +15,114 @@ struct InscriptionView: View {
     var body: some View {
         ZStack {
             // Fond beige clair
-            Color(red: 0xF5 / 255, green: 0xF0 / 255, blue: 0xEB / 255)
+            Color.fondPrincipal
                 .ignoresSafeArea()
             
-            VStack(spacing: 24) {
-                Spacer()
-                
-                // Logo ou titre
-                Text("Greed F1")
-                    .font(.custom("Helvetica Neue", size: 40))
-                    .fontWeight(.bold)
+            VStack(alignment: .leading, spacing: 0) {
+                // Bouton retour en haut à gauche
+                Button {
+                    dismiss()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Retour")
+                            .font(.custom("Helvetica Neue", size: 16))
+                            .fontWeight(.medium)
+                    }
                     .foregroundColor(.primaire)
+                }
+                .padding(.leading, 32)
+                .padding(.top, 16)
                 
-                Text("Inscription")
-                    .font(.custom("Helvetica Neue", size: 24))
-                    .foregroundColor(.primary)
+                Spacer()
+                    .frame(height: 40)
                 
-                // Champ pseudo
-                TextField("Pseudo", text: $pseudo)
-                    .textContentType(.username)
-                    .autocapitalization(.none)
-                    .textInputAutocapitalization(.never)
-                    .padding()
-                    .background(Color.white)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
+                // Titre "Créer un compte"
+                Text("Créer un compte")
+                    .font(.custom("Helvetica Neue", size: 36))
+                    .fontWeight(.bold)
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 32)
                 
-                // Champ email
-                TextField("Email", text: $email)
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .autocapitalization(.none)
-                    .textInputAutocapitalization(.never)
-                    .padding()
-                    .background(Color.white)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
+                Spacer()
+                    .frame(height: 32)
                 
-                // Champ mot de passe
-                SecureField("Mot de passe", text: $motDePasse)
-                    .textContentType(.newPassword)
-                    .padding()
-                    .background(Color.white)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
+                // Card blanche avec les champs
+                VStack(alignment: .leading, spacing: 20) {
+                    // Champ PSEUDO
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("PSEUDO")
+                            .font(.custom("Helvetica Neue", size: 12))
+                            .fontWeight(.semibold)
+                            .foregroundColor(.grisSecondaire)
+                            .tracking(1)
+                        
+                        TextField("", text: $pseudo)
+                            .textContentType(.username)
+                            .autocapitalization(.none)
+                            .textInputAutocapitalization(.never)
+                            .font(.custom("Helvetica Neue", size: 16))
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 0)
+                            .overlay(
+                                Rectangle()
+                                    .frame(height: 1)
+                                    .foregroundColor(.gray.opacity(0.3)),
+                                alignment: .bottom
+                            )
+                    }
+                    
+                    // Champ EMAIL
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("EMAIL")
+                            .font(.custom("Helvetica Neue", size: 12))
+                            .fontWeight(.semibold)
+                            .foregroundColor(.grisSecondaire)
+                            .tracking(1)
+                        
+                        TextField("", text: $email)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .autocapitalization(.none)
+                            .textInputAutocapitalization(.never)
+                            .font(.custom("Helvetica Neue", size: 16))
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 0)
+                            .overlay(
+                                Rectangle()
+                                    .frame(height: 1)
+                                    .foregroundColor(.gray.opacity(0.3)),
+                                alignment: .bottom
+                            )
+                    }
+                    
+                    // Champ MOT DE PASSE
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("MOT DE PASSE")
+                            .font(.custom("Helvetica Neue", size: 12))
+                            .fontWeight(.semibold)
+                            .foregroundColor(.grisSecondaire)
+                            .tracking(1)
+                        
+                        SecureField("8 caractères minimum", text: $motDePasse)
+                            .textContentType(.newPassword)
+                            .font(.custom("Helvetica Neue", size: 16))
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 0)
+                            .overlay(
+                                Rectangle()
+                                    .frame(height: 1)
+                                    .foregroundColor(.gray.opacity(0.3)),
+                                alignment: .bottom
+                            )
+                    }
+                }
+                .padding(24)
+                .background(Color.white)
+                .cornerRadius(16)
+                .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 2)
+                .padding(.horizontal, 32)
                 
                 // Message d'erreur
                 if let erreur = viewModel.messageErreur {
@@ -72,14 +130,18 @@ struct InscriptionView: View {
                         .font(.custom("Helvetica Neue", size: 14))
                         .foregroundColor(.red)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+                        .padding(.horizontal, 32)
+                        .padding(.top, 16)
                 }
                 
-                // Bouton d'inscription
+                Spacer()
+                    .frame(height: 32)
+                
+                // Bouton "Créer mon compte"
                 Button {
                     Task {
                         await viewModel.inscription(email: email, motDePasse: motDePasse, pseudo: pseudo)
-                        // Si l'inscription réussit, revenir à l'écran de connexion
+                        // Si l'inscription réussit, revenir à l'écran précédent
                         if viewModel.estConnecte {
                             dismiss()
                         }
@@ -89,37 +151,39 @@ struct InscriptionView: View {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .frame(maxWidth: .infinity)
-                            .frame(height: 50)
+                            .frame(height: 56)
                     } else {
                         Text("Créer mon compte")
                             .font(.custom("Helvetica Neue", size: 18))
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 50)
+                            .frame(height: 56)
                     }
                 }
                 .background(Color.primaire)
                 .cornerRadius(24)
                 .disabled(viewModel.estEnChargement || pseudo.isEmpty || email.isEmpty || motDePasse.isEmpty)
+                .padding(.horizontal, 32)
                 
-                // Lien de retour
-                Button {
-                    dismiss()
+                Spacer()
+                
+                // Lien "Déjà un compte ? Se connecter"
+                NavigationLink {
+                    ConnexionView(viewModel: viewModel)
                 } label: {
                     Text("Déjà un compte ? **Se connecter**")
                         .font(.custom("Helvetica Neue", size: 16))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
                 }
-                
-                Spacer()
+                .padding(.bottom, 32)
             }
-            .padding(.horizontal, 32)
         }
         .navigationBarHidden(true)
     }
 }
 
 #Preview {
-    InscriptionView()
+    InscriptionView(viewModel: AuthViewModel())
 }
