@@ -75,6 +75,12 @@ reconnaît pas — dont `membershipExceptions`. Toute exclusion passe donc par u
 build** (`EXCLUDED_SOURCE_FILE_NAMES`), qu'il conserve. Son glob **ne franchit pas un `/`** :
 un motif par niveau de profondeur.
 
+**Sous iOS 26, la barre d'onglets n'obéit plus.** Le « Liquid Glass » reprend la main sur
+tout `UITabBarAppearance` — fond, encre inactive, police, et `unselectedItemTintColor` avec.
+Mesuré au simulateur : fond `#FEFAF7`, inactif `#1C1815` (17:1). Seul `.tint()` passe. Le
+bloc d'apparence de `BarreNavigation` ne sert donc **qu'à iOS 17 et 18**, où le gris système
+par défaut tombe à 2,5:1 sur ce fond clair. Ne pas s'acharner à le forcer sur 26.
+
 **Couleurs et typographie** viennent de `Config/Couleurs.swift`, seul propriétaire de la
 palette (`docs/design-system.md`). Helvetica Neue, **graisses 400 et 500 uniquement**.
 Le contraste se mesure : texte ordinaire **4,5:1**, grand texte **3:1**. Zones tactiles
@@ -122,7 +128,14 @@ ios/
     ├── Services/
     │   └── SupabaseManager.swift
     ├── Views/
-    │   └── ContentView.swift
+    │   ├── ContentView.swift
+    │   ├── Navigation/
+    │   │   ├── BarreNavigation.swift  TabView à 4 onglets + apparence de la barre
+    │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
+    │   ├── Accueil/AccueilView.swift
+    │   ├── Championnats/ChampionnatsView.swift
+    │   ├── Calendrier/CalendrierView.swift
+    │   └── Profil/ProfilView.swift
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)
     │   └── Assets.xcassets/

@@ -208,17 +208,17 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
+				EXCLUDED_SOURCE_FILE_NAMES = (
+					"*/Ressources/*",
+					"*/Ressources/*/*",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Greed F1/Resources/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				EXCLUDED_SOURCE_FILE_NAMES = (
-					"*/Ressources/*",
-					"*/Ressources/*/*",
-				);
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -235,17 +235,17 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
+				EXCLUDED_SOURCE_FILE_NAMES = (
+					"*/Ressources/*",
+					"*/Ressources/*/*",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Greed F1/Resources/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				EXCLUDED_SOURCE_FILE_NAMES = (
-					"*/Ressources/*",
-					"*/Ressources/*/*",
-				);
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

@@ -3,13 +3,15 @@ import SwiftUI
 @main
 struct GreedF1App: App {
     @StateObject private var authViewModel = AuthViewModel()
-    
+
+    init() {
+        BarreNavigation.appliquerApparence()
+    }
+
     var body: some Scene {
         WindowGroup {
             if authViewModel.estConnecte {
-                Text("Accueil — à venir")
-                    .font(.custom("Helvetica Neue", size: 24))
-                    .foregroundColor(.primaire)
+                BarreNavigation()
             } else {
                 LandingView(viewModel: authViewModel)
             }
