@@ -46,6 +46,18 @@ bundle** — elle ne quitte jamais Railway.
 tracé recomposé à la main diverge du logo au premier ajustement. `ios/scripts/ajouter-assets.sh`
 les installe dans `Assets.xcassets` avec « Preserve Vector Data », puis on écrit `Image("nom")`.
 
+**Avant de créer une icône ou un élément graphique en SwiftUI, vérifier si un asset existe
+déjà dans `Assets.xcassets`.** Si oui, l'utiliser via `Image("nom-asset")`. Ne jamais
+recréer en SwiftUI ce qui existe déjà en SVG. La liste complète est en §6.
+
+**Une planche ne s'utilise pas telle quelle.** `logo-02.svg`, `logo.svg` et `logoV2.svg`
+portent plusieurs icônes côte à côte dans un seul tracé. `ios/scripts/decouper-icones.sh`
+en découpe une par une, d'après `ios/scripts/icones.txt` : chaque icône est la planche
+entière derrière une fenêtre `viewBox`, jamais un tracé recopié. Le script pose aussi la
+taille naturelle en points — sans elle la barre d'onglets afficherait l'icône à la hauteur
+du `viewBox` — et le rendu `template`, sans lequel l'icône reste noire, active comme
+inactive. Ajouter une icône = ajouter **une ligne au manifeste**, puis rejouer le script.
+
 **Les captures de `Greed F1/Ressources/Screenshots/` sont la référence visuelle exacte.**
 Ouvrir la capture de l'écran **avant** de le coder, et vérifier le rendu contre elle après.
 Elles portent l'extension **`.PNG` en majuscules**.
@@ -111,7 +123,9 @@ ios/
 ├── CLAUDE.md                    ce fichier
 ├── Greed F1.xcodeproj/
 ├── scripts/
-│   └── ajouter-assets.sh        SVG de Ressources/ → Assets.xcassets, en ligne de commande
+│   ├── ajouter-assets.sh        SVG de Ressources/ → Assets.xcassets, en ligne de commande
+│   ├── decouper-icones.sh       planches → icônes individuelles, d'après le manifeste
+│   └── icones.txt               manifeste des découpes : planche, nom, fenêtre, hauteur
 ├── AuthViewModel.swift          ┐
 ├── ConnexionView.swift          ├ hors du groupe synchronisé, référencés un à un
 ├── InscriptionView.swift        ┘
@@ -138,14 +152,13 @@ ios/
     │   └── Profil/ProfilView.swift
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)
-    │   └── Assets.xcassets/
-    │       ├── AccentColor.colorset/
-    │       ├── AppIcon.appiconset/
-    │       ├── logo-05.imageset/        logo complet (icône carrée + bandeau)
-    │       └── logo-bandeau.imageset/   bandeau seul
+    │   └── Assets.xcassets/      les huit assets de §6
     └── Ressources/              ← RÉFÉRENCE, exclue du bundle
         ├── logo-05.svg              source, viewBox « 0 0 894.21 520.39 »
         ├── logo-bandeau.svg         idem à viewBox rognée « 0 215 894.21 243 »
+        ├── logo.svg                 ┐
+        ├── logo-02.svg              ├ planches d'icônes, à découper par script
+        ├── logoV2.svg               ┘
         └── Screenshots/             28 captures de la version web
 ```
 
@@ -153,7 +166,50 @@ ios/
 > l'app embarque. `Ressources/` (deux s) est de la matière de travail : elle est retirée du
 > bundle par `EXCLUDED_SOURCE_FILE_NAMES` — sans quoi les 28 captures y ajoutaient **17 Mo**.
 
-## 6. Captures de référence
+## 6. Assets disponibles
+
+**Vérifier ici avant de dessiner quoi que ce soit en SwiftUI.**
+
+### Embarqués — `Greed F1/Resources/Assets.xcassets/`
+
+Tous en « Preserve Vector Data », appelés par `Image("nom")`.
+
+| Asset | Usage |
+|---|---|
+| `AccentColor` | Couleur d'accent du système |
+| `AppIcon` | Icône de l'app |
+| `logo-05` | Logo complet — icône carrée + bandeau, viewBox « 0 0 894.21 520.39 » |
+| `logo-bandeau` | Bandeau seul, en-tête de `LandingView` |
+| `icone-accueil` | Garage — onglet **Accueil**, 25,67 × 28 pt, *template* |
+| `icone-championnats` | Coupe — onglet **Championnats**, 17,86 × 28 pt, *template* |
+| `icone-calendrier` | Calendrier — onglet **Calendrier**, 22,20 × 28 pt, *template* |
+| `icone-profil` | Pilote casqué — onglet **Profil**, 22,42 × 28 pt, *template* |
+
+> Les quatre icônes d'onglet sont découpées de `logo-02.svg` sur une **bande verticale
+> commune** (`y 24`, hauteur `78`) : c'est ce qui conserve leurs tailles relatives telles
+> que dessinées, comme sur la version web. Elles ne se modifient pas à la main — on corrige
+> `scripts/icones.txt` et on rejoue `scripts/decouper-icones.sh`.
+
+### Sources et planches — `Greed F1/Ressources/`
+
+Matière de travail, **exclue du bundle**. Une planche porte plusieurs icônes dans un seul
+tracé : elle ne s'utilise jamais telle quelle, elle se découpe.
+
+| Fichier | Contenu |
+|---|---|
+| `logo-05.svg` | Source du logo complet |
+| `logo-bandeau.svg` | Le même à viewBox rognée « 0 215 894.21 243 » |
+| `logo-02.svg` | **Planche** — les 4 icônes de la barre : garage, coupe, calendrier, pilote |
+| `logo.svg` | **Planche** — croix + coupe (créer un championnat), deux casques (membres) |
+| `logoV2.svg` | **Planche** — chronomètre, étoile, deux pilotes, drapeau à damier |
+| `Screenshots/` | 28 captures de la version web — voir §7 |
+
+Les icônes de `logo.svg` et `logoV2.svg` **ne sont pas encore découpées** : aucun écran ne
+les monte. Le jour où l'un d'eux en a besoin, une ligne au manifeste suffit.
+
+---
+
+## 7. Captures de référence
 
 `Greed F1/Ressources/Screenshots/` — la version web **v0.75.0**, écran par écran.
 

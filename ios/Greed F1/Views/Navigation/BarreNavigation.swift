@@ -6,21 +6,26 @@ import UIKit
 /// La barre est un **matériau translucide** posé par-dessus le contenu plutôt qu'un bandeau
 /// opaque, et le contenu défile dessous. ``appliquerApparence()`` est le seul endroit qui
 /// l'habille.
+///
+/// > **Les quatre icônes sont les assets de la version web**, pas des SF Symbols : garage,
+/// > coupe, calendrier et pilote casqué, découpés de la planche `logo-02.svg` par
+/// > `ios/scripts/decouper-icones.sh`. Elles sont en rendu *template*, donc teintes par
+/// > `.tint()` et par l'apparence ci-dessous comme le serait un symbole système.
 struct BarreNavigation: View {
 
     var body: some View {
         TabView {
             AccueilView()
-                .tabItem { Label("Accueil", systemImage: "house") }
+                .tabItem { Label("Accueil", image: "icone-accueil") }
 
             ChampionnatsView()
-                .tabItem { Label("Championnats", systemImage: "trophy") }
+                .tabItem { Label("Championnats", image: "icone-championnats") }
 
             CalendrierView()
-                .tabItem { Label("Calendrier", systemImage: "calendar") }
+                .tabItem { Label("Calendrier", image: "icone-calendrier") }
 
             ProfilView()
-                .tabItem { Label("Profil", systemImage: "person") }
+                .tabItem { Label("Profil", image: "icone-profil") }
         }
         .tint(.primaire)
     }

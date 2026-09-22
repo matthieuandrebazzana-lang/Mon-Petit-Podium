@@ -1,0 +1,15 @@
+# Découpe des planches SVG en icônes individuelles.
+#
+# Une planche porte plusieurs icônes côte à côte dans un même tracé ; on n'en recopie
+# aucune à la main. Chaque ligne décrit une fenêtre (viewBox) ouverte dans la planche :
+# le reste du dessin est hors cadre, donc rogné.
+#
+# Les quatre icônes de la barre partagent la même bande verticale (y 24, hauteur 78) :
+# c'est ce qui conserve leurs tailles relatives telles que dessinées, exactement comme
+# sur la version web.
+#
+# planche   nom-asset          x       y    largeur  hauteur  hauteurPt
+logo-02     icone-accueil      23.18   24   71.52    78       28
+logo-02     icone-championnats 156.79  24   49.76    78       28
+logo-02     icone-calendrier   272.86  24   61.85    78       28
+logo-02     icone-profil       394.98  24   62.45    78       28
