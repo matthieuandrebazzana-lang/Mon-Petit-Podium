@@ -93,8 +93,12 @@ Mesuré au simulateur : fond `#FEFAF7`, inactif `#1C1815` (17:1). Seul `.tint()`
 bloc d'apparence de `BarreNavigation` ne sert donc **qu'à iOS 17 et 18**, où le gris système
 par défaut tombe à 2,5:1 sur ce fond clair. Ne pas s'acharner à le forcer sur 26.
 
-**Couleurs et typographie** viennent de `Config/Couleurs.swift`, seul propriétaire de la
-palette (`docs/design-system.md`). Helvetica Neue, **graisses 400 et 500 uniquement**.
+**Le design system a trois propriétaires, un par sujet** — `Config/Couleurs.swift`
+(palette et typographie : `Font.titre`, `Tracking.label`…), `Config/Formes.swift`
+(`Rayon`, les quatre `ombre*()`), `Config/Mouvement.swift` (courbes, durées, `StyleAppui`).
+Un écran ne déclare **jamais** sa propre couleur, son rayon, sa courbe ni son ombre : il
+étend le vocabulaire (`docs/swift-app.md` §4). Helvetica Neue, **graisses 400 et 500
+uniquement**.
 Le contraste se mesure : texte ordinaire **4,5:1**, grand texte **3:1**. Zones tactiles
 **44 × 44 pt** minimum.
 
@@ -136,7 +140,9 @@ ios/
     │   ├── Config.xcconfig          valeurs de connexion — NON VERSIONNÉ, hors bundle
     │   ├── Config.xcconfig.example  gabarit à copier — hors bundle
     │   ├── SupabaseConfig.swift     lecture d'Info.plist, rien en dur
-    │   ├── Couleurs.swift           palette du design system
+    │   ├── Couleurs.swift           palette + typographie du design system
+    │   ├── Formes.swift             rayons + les quatre ombres
+    │   ├── Mouvement.swift          courbes, durées, StyleAppui (retour d'appui)
     │   └── LandingView.swift        écran d'accueil (non connecté)
     ├── Models/                  (vide)
     ├── Services/
@@ -146,7 +152,7 @@ ios/
     │   ├── Navigation/
     │   │   ├── BarreNavigation.swift  TabView à 4 onglets + apparence de la barre
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
-    │   ├── Accueil/AccueilView.swift
+    │   ├── Accueil/AccueilView.swift   construit — données mockées
     │   ├── Championnats/ChampionnatsView.swift
     │   ├── Calendrier/CalendrierView.swift
     │   └── Profil/ProfilView.swift

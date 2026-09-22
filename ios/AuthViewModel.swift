@@ -15,6 +15,10 @@ final class AuthViewModel: ObservableObject {
     /// `true` pendant une opération réseau (connexion, inscription, déconnexion).
     @Published var estEnChargement = false
     
+    /// Pseudo de l'utilisateur connecté — celui posé dans les métadonnées Supabase à
+    /// l'inscription. Vide tant qu'aucune session n'est ouverte.
+    @Published var pseudo = ""
+    
     /// Message d'erreur à afficher sous le formulaire, ou `nil` si aucune erreur.
     @Published var messageErreur: String?
     
@@ -30,9 +34,11 @@ final class AuthViewModel: ObservableObject {
     func verifierSession() async {
         do {
             let session = try await supabase.auth.session
+            retenir(session.user)
             estConnecte = true
         } catch {
             // Pas de session valide — l'utilisateur verra l'écran de connexion.
+            pseudo = ""
             estConnecte = false
         }
     }
@@ -64,16 +70,29 @@ final class AuthViewModel: ObservableObject {
         messageErreur = nil
         
         do {
-            let _ = try await supabase.auth.signIn(
+            let session = try await supabase.auth.signIn(
                 email: email,
                 password: motDePasse
             )
+            retenir(session.user)
             estConnecte = true
         } catch {
             messageErreur = "Erreur de connexion : \(error.localizedDescription)"
         }
         
         estEnChargement = false
+    }
+    
+    /// Lit le pseudo d'un utilisateur Supabase. **Seul endroit qui le compose** : la
+    /// connexion et la vérification de session en avaient besoin toutes les deux, et
+    /// deux lectures écrites séparément auraient divergé au premier ajustement.
+    ///
+    /// Le repli sur la partie locale de l'adresse couvre les comptes créés avant que
+    /// l'inscription ne pose la métadonnée `pseudo`.
+    private func retenir(_ utilisateur: User) {
+        pseudo = utilisateur.userMetadata["pseudo"]?.stringValue
+            ?? utilisateur.email?.split(separator: "@").first.map(String.init)
+            ?? ""
     }
     
     /// Déconnecte l'utilisateur actuel.
@@ -83,6 +102,7 @@ final class AuthViewModel: ObservableObject {
         
         do {
             try await supabase.auth.signOut()
+            pseudo = ""
             estConnecte = false
         } catch {
             messageErreur = "Erreur lors de la déconnexion : \(error.localizedDescription)"

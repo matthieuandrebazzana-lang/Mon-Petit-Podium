@@ -13,9 +13,13 @@ import UIKit
 /// > `.tint()` et par l'apparence ci-dessous comme le serait un symbole système.
 struct BarreNavigation: View {
 
+    /// Le view model d'authentification descend explicitement, comme sur `LandingView` :
+    /// c'est lui qui porte le pseudo affiché par l'accueil.
+    @ObservedObject var viewModel: AuthViewModel
+
     var body: some View {
         TabView {
-            AccueilView()
+            AccueilView(viewModel: viewModel)
                 .tabItem { Label("Accueil", image: "icone-accueil") }
 
             ChampionnatsView()
@@ -90,5 +94,5 @@ struct BarreNavigation: View {
 }
 
 #Preview {
-    BarreNavigation()
+    BarreNavigation(viewModel: AuthViewModel())
 }

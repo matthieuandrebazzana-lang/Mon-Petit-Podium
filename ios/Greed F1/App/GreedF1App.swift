@@ -11,7 +11,7 @@ struct GreedF1App: App {
     var body: some Scene {
         WindowGroup {
             if authViewModel.estConnecte {
-                BarreNavigation()
+                BarreNavigation(viewModel: authViewModel)
             } else {
                 LandingView(viewModel: authViewModel)
             }
