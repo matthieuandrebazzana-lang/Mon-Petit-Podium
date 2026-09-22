@@ -19,6 +19,11 @@ final class AuthViewModel: ObservableObject {
     /// l'inscription. Vide tant qu'aucune session n'est ouverte.
     @Published var pseudo = ""
     
+    /// Photo de profil du compte connecté — l'URL publique de son objet dans Supabase
+    /// Storage, telle que la métadonnée `avatar_url` la porte. `nil` quand le compte n'en a
+    /// pas : l'écran retombe alors sur l'initiale, jamais sur un disque vide.
+    @Published var photoProfil: URL?
+
     /// Message d'erreur à afficher sous le formulaire, ou `nil` si aucune erreur.
     @Published var messageErreur: String?
     
@@ -39,6 +44,7 @@ final class AuthViewModel: ObservableObject {
         } catch {
             // Pas de session valide — l'utilisateur verra l'écran de connexion.
             pseudo = ""
+            photoProfil = nil
             estConnecte = false
         }
     }
@@ -93,6 +99,7 @@ final class AuthViewModel: ObservableObject {
         pseudo = utilisateur.userMetadata["pseudo"]?.stringValue
             ?? utilisateur.email?.split(separator: "@").first.map(String.init)
             ?? ""
+        photoProfil = utilisateur.userMetadata["avatar_url"]?.stringValue.flatMap(URL.init(string:))
     }
     
     /// Déconnecte l'utilisateur actuel.
@@ -103,6 +110,7 @@ final class AuthViewModel: ObservableObject {
         do {
             try await supabase.auth.signOut()
             pseudo = ""
+            photoProfil = nil
             estConnecte = false
         } catch {
             messageErreur = "Erreur lors de la déconnexion : \(error.localizedDescription)"

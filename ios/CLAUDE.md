@@ -127,9 +127,10 @@ ios/
 ├── CLAUDE.md                    ce fichier
 ├── Greed F1.xcodeproj/
 ├── scripts/
-│   ├── ajouter-assets.sh        SVG de Ressources/ → Assets.xcassets, en ligne de commande
+│   ├── ajouter-assets.sh        SVG de Ressources/ → Assets.xcassets, récursif, hors planches
 │   ├── decouper-icones.sh       planches → icônes individuelles, d'après le manifeste
-│   └── icones.txt               manifeste des découpes : planche, nom, fenêtre, hauteur
+│   ├── icones.txt               manifeste des découpes : planche, nom, fenêtre, hauteur
+│   └── extraire-gp.mjs          drapeaux + tracés + table des teintes, DEPUIS LA VERSION WEB
 ├── AuthViewModel.swift          ┐
 ├── ConnexionView.swift          ├ hors du groupe synchronisé, référencés un à un
 ├── InscriptionView.swift        ┘
@@ -142,6 +143,7 @@ ios/
     │   ├── SupabaseConfig.swift     lecture d'Info.plist, rien en dur
     │   ├── Couleurs.swift           palette + typographie du design system
     │   ├── Formes.swift             rayons + les quatre ombres
+    │   ├── Materiaux.swift          damier et lumière spéculaire (les deux calques décoratifs)
     │   ├── Mouvement.swift          courbes, durées, StyleAppui (retour d'appui)
     │   └── LandingView.swift        écran d'accueil (non connecté)
     ├── Models/                  (vide)
@@ -152,19 +154,25 @@ ios/
     │   ├── Navigation/
     │   │   ├── BarreNavigation.swift  TabView à 4 onglets + apparence de la barre
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
-    │   ├── Accueil/AccueilView.swift   construit — données mockées
+    │   ├── Accueil/
+    │   │   ├── AccueilView.swift       construit — données mockées
+    │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
+    │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Championnats/ChampionnatsView.swift
     │   ├── Calendrier/CalendrierView.swift
     │   └── Profil/ProfilView.swift
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)
-    │   └── Assets.xcassets/      les huit assets de §6
+    │   └── Assets.xcassets/      les assets de §6
     └── Ressources/              ← RÉFÉRENCE, exclue du bundle
         ├── logo-05.svg              source, viewBox « 0 0 894.21 520.39 »
         ├── logo-bandeau.svg         idem à viewBox rognée « 0 215 894.21 243 »
         ├── logo.svg                 ┐
         ├── logo-02.svg              ├ planches d'icônes, à découper par script
         ├── logoV2.svg               ┘
+        ├── texture-hexa.svg         damier des cartes (assets/06.svg)
+        ├── flags/                   flag-<slug>.svg — un drapeau par Grand Prix
+        ├── traces/                  trace-<slug>.svg — un circuit par Grand Prix
         └── Screenshots/             28 captures de la version web
 ```
 
@@ -190,6 +198,25 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 | `icone-championnats` | Coupe — onglet **Championnats**, 17,86 × 28 pt, *template* |
 | `icone-calendrier` | Calendrier — onglet **Calendrier**, 22,20 × 28 pt, *template* |
 | `icone-profil` | Pilote casqué — onglet **Profil**, 22,42 × 28 pt, *template* |
+| `icone-creer` | Croix + coupe — carte « Créer un championnat », 40 × 40 pt, *template* |
+| `icone-rejoindre` | Deux casques — carte « Rejoindre un championnat », 40 × 40 pt, *template* |
+| `texture-hexa` | Damier en filigrane des cartes — monté par ``Damier``, jamais en direct |
+| `flag-<slug>` | Les 12 drapeaux des pays hôtes. **Pas de rendu *template*** : ils gardent leurs couleurs |
+| `trace-<slug>` | Les 12 tracés de circuits, *template* — ils prennent l'encre de l'écran |
+
+> **Les drapeaux et les tracés viennent de la version web, pas d'une recopie.**
+> `scripts/extraire-gp.mjs` lit les trois tables de `frontend/src/composants/`
+> (`DRAPEAUX`, `DRAPEAUX_SVG`, `TRACES`) et en écrit les fichiers de `Ressources/flags/`
+> et `Ressources/traces/`, plus la table des teintes de `DrapeauxGP.swift`. Un cadrage ou
+> un chemin recopié à la main divergerait de la source au premier ajustement. **Cinq
+> drapeaux sont des bandes** (Pays-Bas, Italie, Espagne, Azerbaïdjan, Singapour) : c'est
+> ce que la planche `assets/flags.svg` ne dessine pas, et ce que le web rend en dégradé.
+> Ajouter un Grand Prix = l'ajouter **côté web**, puis rejouer le script.
+>
+> **L'épaisseur du trait d'un circuit est calculée**, pas choisie : un SVG de catalogue
+> n'a pas de `non-scaling-stroke`, donc le script l'écrit en unités de la `viewBox` à la
+> valeur qui donne 3 pt dans la bande de 343 × 160 du widget. Sans ce calcul, Bakou (481
+> unités de large) rendrait un cheveu là où Zandvoort (395) rendrait un câble.
 
 > Les quatre icônes d'onglet sont découpées de `logo-02.svg` sur une **bande verticale
 > commune** (`y 24`, hauteur `78`) : c'est ce qui conserve leurs tailles relatives telles
@@ -203,6 +230,8 @@ tracé : elle ne s'utilise jamais telle quelle, elle se découpe.
 
 | Fichier | Contenu |
 |---|---|
+| `texture-hexa.svg` | Damier des cartes, copie d'`assets/06.svg` |
+| `flags/`, `traces/` | Un fichier par Grand Prix — **écrits par `extraire-gp.mjs`** |
 | `logo-05.svg` | Source du logo complet |
 | `logo-bandeau.svg` | Le même à viewBox rognée « 0 215 894.21 243 » |
 | `logo-02.svg` | **Planche** — les 4 icônes de la barre : garage, coupe, calendrier, pilote |
@@ -210,8 +239,13 @@ tracé : elle ne s'utilise jamais telle quelle, elle se découpe.
 | `logoV2.svg` | **Planche** — chronomètre, étoile, deux pilotes, drapeau à damier |
 | `Screenshots/` | 28 captures de la version web — voir §7 |
 
-Les icônes de `logo.svg` et `logoV2.svg` **ne sont pas encore découpées** : aucun écran ne
-les monte. Le jour où l'un d'eux en a besoin, une ligne au manifeste suffit.
+Les deux logos du haut de `logo.svg` sont découpés (`icone-creer`, `icone-rejoindre`) ;
+ceux de `logoV2.svg` ne le sont pas encore. Le jour où un écran en a besoin, une ligne au
+manifeste suffit.
+
+**Les trois planches ne sont jamais installées telles quelles** : `ajouter-assets.sh` les
+saute, et c'est délibéré — posées dans le catalogue elles n'affichent rien d'utilisable et
+pèsent pour rien dans le bundle.
 
 ---
 

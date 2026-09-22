@@ -13,3 +13,9 @@ logo-02     icone-accueil      23.18   24   71.52    78       28
 logo-02     icone-championnats 156.79  24   49.76    78       28
 logo-02     icone-calendrier   272.86  24   61.85    78       28
 logo-02     icone-profil       394.98  24   62.45    78       28
+
+# Les deux logos des cartes d'action, découpés de `logo.svg` : un carré de 106 unités
+# centré sur chaque boîte englobante. Le côté est le MÊME pour les deux — ils vivent dans
+# le même système de coordonnées, donc leurs tailles relatives sont celles du dessin.
+logo        icone-creer        11.02   1.85    106      106      40
+logo        icone-rejoindre    14.02   137.93  106      106      40

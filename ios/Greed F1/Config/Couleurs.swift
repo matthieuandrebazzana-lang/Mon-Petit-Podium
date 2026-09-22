@@ -30,6 +30,15 @@ extension Color {
 
     /// Gris des labels de formulaire (connexion, inscription).
     static let grisSecondaire = Color(hexadecimal: 0x6B6B6B)
+
+    /// Ambre du logo « Rejoindre un championnat » — `#E8A020`, la teinte du dessin dans
+    /// `assets/logo.svg`.
+    ///
+    /// **Elle ne peint QUE ce logo.** Sur le blanc elle ne vaut que **2,2:1**, sous le
+    /// plancher de 3:1 d'un élément graphique porteur de sens : elle n'est tenable que
+    /// parce que le logo y est décoratif et que c'est le titre de la carte qui porte le
+    /// sens. Elle ne doit donc jamais devenir une encre de texte ni un fond.
+    static let ambreLogo = Color(hexadecimal: 0xE8A020)
 }
 
 // MARK: - Teintes de championnat
