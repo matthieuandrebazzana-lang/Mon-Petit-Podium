@@ -1,9 +1,133 @@
 import SwiftUI
 
-/// Onglet **Championnats** — écran à construire (captures de référence : `screen-06 / screen-07`).
+/// Onglet **Championnats** — la liste de tous les championnats du joueur, et les deux
+/// façons d'en avoir un de plus.
+///
+/// Référence visuelle : `Ressources/Screenshots/screen-06-championnats-haut.PNG` et
+/// `screen-07-championnats-bas.PNG`.
+///
+/// > **Les données sont mockées.** Aucun appel réseau : ``ChampionnatMock`` porte des
+/// > valeurs en dur, reprises des captures pour que le rendu se compare à elles.
+///
+/// **La carte est celle de l'accueil, pas une copie** : ``CarteChampionnat`` et
+/// ``ActionsChampionnat`` vivent dans `Views/Composants/`, et les deux écrans montent la
+/// même. C'est la règle « une source unique par question » du `CLAUDE.md` de la racine.
 struct ChampionnatsView: View {
+
+    /// Marge latérale commune à tous les écrans — la même que `AccueilView`, sans quoi les
+    /// deux onglets ne s'aligneraient pas au passage de l'un à l'autre.
+    private let margeLaterale: CGFloat = 16
+
+    // MARK: - Données mockées
+
+    /// Trois championnats d'effectifs distincts : c'est ce qui permet de **vérifier le
+    /// tri** à l'œil, une liste de trois valeurs égales ne prouvant rien.
+    ///
+    /// Les identifiants sont **stables** : c'est d'eux que se tire la teinte de la carte
+    /// (`Color.teinteChampionnat(pour:)`), et un `UUID()` neuf à chaque lancement aurait
+    /// fait changer la couleur d'un championnat d'une ouverture de l'app à la suivante.
+    private let championnats: [ChampionnatMock] = [
+        ChampionnatMock(id: "team-f1", nom: "Team F1", membres: 3, rang: 1, fraction: 1),
+        ChampionnatMock(id: "team-bazzana", nom: "Team Bazzana", membres: 8, rang: 2, fraction: 0.55),
+        ChampionnatMock(id: "les-potes-f1", nom: "Les Potes F1", membres: 6, rang: 4, fraction: 0.72)
+    ]
+
+    /// Grands Prix restants — une **constante**, comme sur la version web : la base ne
+    /// contient que les Grands Prix déjà relevés par le scraper, et les compter annoncerait
+    /// « 1 Grand Prix restant » au milieu d'une saison qui en compte douze.
+    private let grandsPrixRestants = 12
+
+    /// **Le tri est l'effectif décroissant, jamais le rang du joueur.** Un championnat de
+    /// huit membres est l'affaire principale même quand on y est huitième ; trier par rang
+    /// remonterait en tête le championnat d'essai à un seul membre, où l'on est toujours
+    /// premier.
+    ///
+    /// À effectif égal, le nom départage — sans quoi deux championnats de même taille
+    /// échangeraient leur place au gré de l'ordre d'arrivée des données.
+    private var championnatsTries: [ChampionnatMock] {
+        championnats.sorted {
+            $0.membres == $1.membres ? $0.nom < $1.nom : $0.membres > $1.membres
+        }
+    }
+
     var body: some View {
-        EcranProvisoire(titre: "Championnats")
+        NavigationStack {
+            ZStack {
+                Color.fondPrincipal
+                    .ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        entete
+
+                        Spacer().frame(height: 16)
+                        liste
+
+                        Spacer().frame(height: 10)
+                        ActionsChampionnat()
+
+                        Spacer().frame(height: 20)
+                        blocSaison
+                    }
+                    .padding(.horizontal, margeLaterale)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
+                }
+            }
+            // Le titre de l'écran est dans le contenu, à 28 pt : la barre système ferait
+            // doublon. Elle reste néanmoins **titrée**, parce que c'est ce titre que le
+            // détail affiche à côté de son chevron de retour.
+            .navigationTitle("Championnats")
+            .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    // MARK: - En-tête
+
+    private var entete: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Championnats")
+                .font(.titre)
+                .tracking(Tracking.titre)
+                .foregroundColor(.texte)        // 15,37:1 sur le beige
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+
+            // **`grisSecondaire` et non `texteDoux`.** La version web pose ici son
+            // `#999999`, qui ne vaut que 2,52:1 sur le beige — sous le plancher de 4,5:1
+            // d'un texte ordinaire. `#6B6B6B` y tient 4,71:1 pour un gris que l'œil ne
+            // distingue pas du premier. Le contraste se mesure (`ios/CLAUDE.md` §3).
+            Text("\(championnats.count) \(championnats.count > 1 ? "championnats" : "championnat") · Saison 2026")
+                .font(.custom("HelveticaNeue", size: 13))
+                .foregroundColor(.grisSecondaire)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - La liste
+
+    /// `NavigationLink` et non `Button` : c'est lui qui porte le glissement d'écran natif
+    /// et le geste de retour par le bord, qu'un `Button` poussant un état ne donne pas.
+    private var liste: some View {
+        VStack(spacing: 10) {
+            ForEach(championnatsTries) { championnat in
+                NavigationLink {
+                    ChampionnatDetailView(championnat: championnat)
+                } label: {
+                    CarteChampionnat(championnat: championnat)
+                }
+                .buttonStyle(StyleAppui(.grandeSurface))
+            }
+        }
+    }
+
+    /// La ligne qui ferme l'écran, identique à celle de l'accueil.
+    private var blocSaison: some View {
+        Text("Saison 2026 · \(grandsPrixRestants) Grands Prix restants")
+            .font(.custom("HelveticaNeue-Medium", size: 13))
+            .foregroundColor(.secondaire)       // 9,32:1 sur le beige
+            .frame(maxWidth: .infinity)
     }
 }
 

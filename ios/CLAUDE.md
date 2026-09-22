@@ -158,7 +158,11 @@ ios/
     │   │   ├── AccueilView.swift       construit — données mockées
     │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
-    │   ├── Championnats/ChampionnatsView.swift
+    │   ├── Composants/
+    │   │   └── CartesChampionnat.swift  carte de championnat + cartes d'action, PARTAGÉES
+    │   ├── Championnats/
+    │   │   ├── ChampionnatsView.swift       liste — données mockées
+    │   │   └── ChampionnatDetailView.swift  classement + vue piste — données mockées
     │   ├── Calendrier/CalendrierView.swift
     │   └── Profil/ProfilView.swift
     ├── Resources/               ← EMBARQUÉ dans l'app

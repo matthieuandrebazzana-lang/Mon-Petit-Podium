@@ -66,16 +66,37 @@ extension Color {
     /// Teinte d'un championnat. **Tirée d'une empreinte de son identifiant, jamais de son
     /// rang dans une liste** — sinon la couleur d'un championnat changerait dès qu'un
     /// autre est rejoint ou quitté.
-    ///
-    /// L'empreinte est un FNV-1a écrit ici plutôt que le `hashValue` de Swift : celui-ci
-    /// est salé à chaque lancement, et la teinte d'un championnat changerait d'une
-    /// ouverture de l'app à la suivante.
     static func teinteChampionnat(pour identifiant: String) -> Color {
-        var empreinte: UInt64 = 0xcbf2_9ce4_8422_2325
+        teintesChampionnat[Int(empreinte(identifiant) % UInt64(teintesChampionnat.count))]
+    }
+
+    /// Teinte de l'avatar d'un membre, tirée de **son identifiant** par la même empreinte.
+    ///
+    /// Elle est donc **stable d'un écran à l'autre et d'un lancement au suivant** : un
+    /// membre garde sa couleur dans le classement d'un championnat comme dans celui du
+    /// voisin, ce qui est exactement ce qui permet de le repérer d'un coup d'œil.
+    ///
+    /// **Le décalage de l'empreinte n'est pas cosmétique** : sans lui, un championnat et
+    /// son créateur — qui partagent souvent un identifiant proche — tomberaient sur la même
+    /// teinte, et l'avatar disparaîtrait dans l'en-tête de sa propre carte.
+    ///
+    /// Le blanc tient de **10,35:1** à **18,12:1** sur les six teintes : une initiale y est
+    /// lisible sans exception.
+    static func teinteAvatar(pour identifiant: String) -> Color {
+        let decale = empreinte(identifiant) &* 0x27d4_eb2f_1651_8000
+        return teintesChampionnat[Int(decale % UInt64(teintesChampionnat.count))]
+    }
+
+    /// L'empreinte FNV-1a des deux fonctions ci-dessus, **écrite ici plutôt que reprise du
+    /// `hashValue` de Swift** : celui-ci est salé à chaque lancement, et la teinte d'un
+    /// championnat comme celle d'un avatar changeraient d'une ouverture de l'app à la
+    /// suivante.
+    private static func empreinte(_ identifiant: String) -> UInt64 {
+        var valeur: UInt64 = 0xcbf2_9ce4_8422_2325
         for octet in identifiant.utf8 {
-            empreinte = (empreinte ^ UInt64(octet)) &* 0x100_0000_01b3
+            valeur = (valeur ^ UInt64(octet)) &* 0x100_0000_01b3
         }
-        return teintesChampionnat[Int(empreinte % UInt64(teintesChampionnat.count))]
+        return valeur
     }
 
     /// Encre de second rang posée **sur un aplat de couleur** : blanc à **70 %**
