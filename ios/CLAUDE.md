@@ -159,15 +159,18 @@ ios/
     │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Composants/
-    │   │   └── CartesChampionnat.swift  carte de championnat + cartes d'action, PARTAGÉES
+    │   │   ├── CartesChampionnat.swift  carte de championnat + cartes d'action, PARTAGÉES
+    │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
+    │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données mockées
     │   │   └── ChampionnatDetailView.swift  classement + vue piste — données mockées
     │   ├── Calendrier/CalendrierView.swift
-    │   └── Profil/ProfilView.swift
+    │   └── Profil/ProfilView.swift      construit — données mockées
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)
-    │   └── Assets.xcassets/      les assets de §6
+    │   ├── Assets.xcassets/      les assets de §6
+    │   └── Vecteurs/             les 5 planches LUES AU RUNTIME — voir §6
     └── Ressources/              ← RÉFÉRENCE, exclue du bundle
         ├── logo-05.svg              source, viewBox « 0 0 894.21 520.39 »
         ├── logo-bandeau.svg         idem à viewBox rognée « 0 215 894.21 243 »
@@ -226,6 +229,38 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 > commune** (`y 24`, hauteur `78`) : c'est ce qui conserve leurs tailles relatives telles
 > que dessinées, comme sur la version web. Elles ne se modifient pas à la main — on corrige
 > `scripts/icones.txt` et on rejoue `scripts/decouper-icones.sh`.
+
+### Planches lues au runtime — `Greed F1/Resources/Vecteurs/`
+
+**Cinq SVG embarqués comme fichiers**, pas comme `imageset`, et lus par ``PlancheSVG``.
+
+| Fichier | Contenu |
+|---|---|
+| `voitures_perso.svg` | La voiture personnalisable — fenêtre « 55.08 57.74 141.12 288.09 » |
+| `voitures_ecuries.svg` | Neuf livrées d'écurie |
+| `VOITUREs_am.svg` | Alpine et Mercedes |
+| `matti.svg` | Neuf vignettes de casque |
+| `matt.svg` | Racing Bulls et Red Bull — les deux casques **corrigés** |
+
+> **Pourquoi pas le catalogue d'assets.** Une image du catalogue se teinte d'une seule
+> encre (`template`) ou d'aucune. La voiture personnalisée demande **deux** aplats
+> remplacés indépendamment (`#be1622` → coque, `#ededed` → ailerons) sur une trentaine de
+> formes entrelacées avec les gris mécaniques — pneus, suspensions, fond plat, casque — qui
+> ne bougent pas. Le fichier est donc lu tel quel et ses `fill` sont substitués, exactement
+> comme la version web remplace `cls-6` et `cls-14`.
+>
+> **`PlancheSVG` n'est pas un moteur SVG** : il couvre ce que ces cinq fichiers emploient,
+> et rien de plus. Aucun arc — les cinq n'en contiennent pas un, vérifié fichier par
+> fichier.
+>
+> **Les fenêtres sont mesurées, jamais des tranches arithmétiques.** Les planches empilent
+> leurs voitures en zigzag, ni jointives ni régulièrement espacées. Les valeurs de
+> `LivreeEcurie.toutes` sont les vraies boîtes englobantes, les mêmes que
+> `frontend/src/composants/VoituresEcuries.jsx`, coordonnée pour coordonnée.
+>
+> **`matti.svg` porte bien onze casques, mais deux sont périmés** : Red Bull et Racing
+> Bulls y gardent une visière orange `#ec6408` que la livrée 2026 n'a plus. `matt.svg`
+> porte les deux corrigés, et ce sont ceux-là que la table désigne.
 
 ### Sources et planches — `Greed F1/Ressources/`
 
