@@ -244,7 +244,7 @@ struct ActionsChampionnat: View {
             } label: {
                 CarteAction(
                     logo: "icone-rejoindre",
-                    encreLogo: .ambreLogo,
+                    encreLogo: .accent,
                     titre: "Rejoindre un championnat",
                     sousTitre: "Entre un code à 6 caractères"
                 )

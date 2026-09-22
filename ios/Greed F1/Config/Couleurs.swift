@@ -31,14 +31,27 @@ extension Color {
     /// Gris des labels de formulaire (connexion, inscription).
     static let grisSecondaire = Color(hexadecimal: 0x6B6B6B)
 
-    /// Ambre du logo « Rejoindre un championnat » — `#E8A020`, la teinte du dessin dans
-    /// `assets/logo.svg`.
+    /// Accent ambre — `#E8A020`, le `--color-accent` de la version web et la teinte du
+    /// dessin de `assets/logo.svg`.
     ///
-    /// **Elle ne peint QUE ce logo.** Sur le blanc elle ne vaut que **2,2:1**, sous le
-    /// plancher de 3:1 d'un élément graphique porteur de sens : elle n'est tenable que
-    /// parce que le logo y est décoratif et que c'est le titre de la carte qui porte le
-    /// sens. Elle ne doit donc jamais devenir une encre de texte ni un fond.
-    static let ambreLogo = Color(hexadecimal: 0xE8A020)
+    /// **Elle ne devient JAMAIS une encre.** Sur le blanc elle ne vaut que **2,2:1**,
+    /// sous le plancher de 3:1 d'un élément graphique porteur de sens : elle n'est
+    /// tenable en dessin que parce que le logo « Rejoindre un championnat » y est
+    /// décoratif et que c'est le titre de la carte qui porte le sens.
+    ///
+    /// **En aplat, elle n'accepte qu'une encre : `texte`**, où elle tient **7,86:1**.
+    /// C'est ce qui fait de la pastille « Pronos ouverts » la seule des quatre à garder
+    /// sa couleur de fond sur un drapeau — les trois autres passent par du blanc, parce
+    /// que leur mot ne tient pas en ambre.
+    static let accent = Color(hexadecimal: 0xE8A020)
+
+    /// Vert sauge — `#4A7C59`. L'encre de ce qui est **consultable et derrière nous** :
+    /// la pastille « Terminé » et la bande « Voir les résultats ».
+    ///
+    /// **Sur du blanc seulement**, où elle tient **4,86:1** — le plus serré des quatre
+    /// états, et c'est lui qui a fixé l'opacité de la bande. Sur le beige de l'app elle
+    /// tombe à 4,34:1 et ne passe plus le plancher d'un texte ordinaire.
+    static let vertSauge = Color(hexadecimal: 0x4A7C59)
 }
 
 // MARK: - Teintes de championnat

@@ -1090,6 +1090,23 @@ static let violet       = Color(hex: "#5C3D7A")
 > le texte posé dessus. **Jamais un fond d'écran, jamais un texte sur le beige, jamais une
 > bordure.** Les huit couleurs de base gardent tous leurs rôles.
 
+#### `vertSauge` en encre — extension bornée au blanc
+
+`CalendrierView` lui ajoute un second rôle, et un seul : **l'encre de ce qui est
+consultable et derrière nous**, la pastille « Terminé » et la bande « Voir les résultats ».
+Les deux sont posées **sur du blanc**, où elle tient **4,86:1** — le plus serré des quatre
+états de Grand Prix, et c'est lui qui a fixé l'opacité de la bande.
+
+**Sur le beige de l'app, elle tombe à 4,34:1** et ne passe plus le plancher d'un texte
+ordinaire : l'interdiction d'écrire sur le beige tient, elle est mesurée, pas de principe.
+
+#### `accent` en aplat — une seule encre l'accompagne
+
+La pastille « Pronos ouverts » est la seule des quatre à garder un fond coloré sur un
+drapeau, parce qu'**une encre ambre ne tient pas sur du blanc** (2,2:1). L'inverse, lui,
+passe : `texte` sur `accent` vaut **7,86:1**. C'est la seule encre que cet aplat accepte —
+du blanc dessus retomberait à 2,2:1.
+
 ### 4.4 Les six teintes de championnat — palette Pantone sombre
 
 ```swift
