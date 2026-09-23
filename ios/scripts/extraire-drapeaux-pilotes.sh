@@ -42,6 +42,13 @@ CIBLE="$RACINE_IOS/Greed F1/Ressources/flags-pilotes"
 
 # Les codes ISO employés par la grille, relevés sur les lignes « code: "XX" » de la table.
 codes="$(grep -o 'code: "[A-Z][A-Z]"' "$TABLE" | grep -o '"[A-Z][A-Z]"' | tr -d '"' | sort -u)"
+
+# **Plus les nationalités du palmarès que la grille 2026 ne compte pas.** Les cartes
+# « Derniers vainqueurs » de la fiche d'un GP portent le drapeau du vainqueur en fond, et
+# `NATIONALITES` (DrapeauxGP.jsx) y cite des pilotes retraités : Lauda (Autriche). Un code
+# de plus ici quand un palmarès en cite un nouveau — le reste de la table vient du web.
+PALMARES='AT'
+codes="$(printf '%s\n' $codes $PALMARES | sort -u)"
 [ -n "$codes" ] || { echo "✗ Aucun code ISO relevé dans $TABLE" >&2; exit 1; }
 
 mkdir -p "$CIBLE"

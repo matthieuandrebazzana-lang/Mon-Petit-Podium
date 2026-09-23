@@ -108,8 +108,12 @@ enum FichesGrandPrix {
         let numero: Int
         let ecurie: String
         let pays: String
-        let emoji: String
+        /// Code ISO 3166-1 alpha-2, en minuscules — il nomme l'asset `drapeau-<code>`.
+        let code: String
         var id: Int { annee }
+
+        /// Le drapeau de nationalité, le même catalogue que le classement des résultats.
+        var drapeau: String { "drapeau-\(code)" }
 
         /// Le premier mot est le prénom, le reste le nom — la dérivation du web.
         var prenom: String { pilote.split(separator: " ").dropLast().joined(separator: " ") }
@@ -124,17 +128,18 @@ enum FichesGrandPrix {
         let vainqueurs: [Vainqueur]
     }
 
-    /// Les nationalités de `NATIONALITES` (`DrapeauxGP.jsx`) — libellé et drapeau emoji.
-    private static let nl = ("Pays-Bas", "🇳🇱"), au = ("Australie", "🇦🇺"),
-                        gb = ("Royaume-Uni", "🇬🇧"), at = ("Autriche", "🇦🇹"),
-                        mc = ("Monaco", "🇲🇨"), fr = ("France", "🇫🇷"),
-                        mx = ("Mexique", "🇲🇽"), fi = ("Finlande", "🇫🇮"),
-                        de = ("Allemagne", "🇩🇪"), es = ("Espagne", "🇪🇸")
+    /// Les nationalités de `NATIONALITES` (`DrapeauxGP.jsx`) — libellé et code ISO. Chaque
+    /// code a son asset `drapeau-<code>`, écrit par `extraire-drapeaux-pilotes.sh`.
+    private static let nl = ("Pays-Bas", "nl"), au = ("Australie", "au"),
+                        gb = ("Royaume-Uni", "gb"), at = ("Autriche", "at"),
+                        mc = ("Monaco", "mc"), fr = ("France", "fr"),
+                        mx = ("Mexique", "mx"), fi = ("Finlande", "fi"),
+                        de = ("Allemagne", "de"), es = ("Espagne", "es")
 
     private static func v(_ annee: Int, _ pilote: String, _ numero: Int, _ ecurie: String,
                           _ nat: (String, String)) -> Vainqueur {
         Vainqueur(annee: annee, pilote: pilote, numero: numero, ecurie: ecurie,
-                  pays: nat.0, emoji: nat.1)
+                  pays: nat.0, code: nat.1)
     }
 
     /// `CIRCUITS`, transcrit. **Les palmarès incomplets le restent** : Las Vegas n'a couru

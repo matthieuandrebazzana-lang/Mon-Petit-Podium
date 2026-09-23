@@ -132,7 +132,7 @@ ios/
 │   ├── icones.txt               manifeste des découpes : planche, nom, fenêtre, hauteur
 │   ├── extraire-gp.mjs          drapeaux + tracés + table des teintes, DEPUIS LA VERSION WEB
 │   ├── extraire-fond-piste.sh   assets/vue_piste.svg → la planche du sol de la piste
-│   └── extraire-drapeaux-pilotes.sh  les 16 drapeaux de NATIONALITÉ, DEPUIS LA VERSION WEB
+│   └── extraire-drapeaux-pilotes.sh  les 17 drapeaux de NATIONALITÉ, DEPUIS LA VERSION WEB
 ├── AuthViewModel.swift          ┐
 ├── ConnexionView.swift          ├ hors du groupe synchronisé, référencés un à un
 ├── InscriptionView.swift        ┘
@@ -229,7 +229,7 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 | `icone-etoile` | Étoile — bouton « pari bonus » de `CotesView`, 22 × 22 pt, *template* |
 | `texture-hexa` | Damier en filigrane des cartes — monté par ``Damier``, jamais en direct |
 | `flag-<slug>` | Les 12 drapeaux des pays hôtes. **Pas de rendu *template*** : ils gardent leurs couleurs |
-| `drapeau-<code>` | Les 16 drapeaux de **nationalité** des pilotes, en ISO alpha-2 — `drapeau-gb`, `drapeau-nl`… Pas *template* non plus |
+| `drapeau-<code>` | Les 17 drapeaux de **nationalité** — les 16 de la grille 2026, plus l'Autriche du palmarès —, en ISO alpha-2 — `drapeau-gb`, `drapeau-nl`… Fond des lignes de résultats **et des cartes « Derniers vainqueurs »**. Pas *template* non plus |
 | `trace-<slug>` | Les 12 tracés de circuits, *template* — ils prennent l'encre de l'écran |
 
 > **Les drapeaux et les tracés viennent de la version web, pas d'une recopie.**
@@ -252,6 +252,10 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 > codes que `frontend/src/lib/nationalites.js` déclare. Ajouter un pilote = l'ajouter
 > **côté web**, puis rejouer le script — et relire `NationalitesPilotes.swift`, qui est la
 > transcription de la même table.
+>
+> **Le palmarès en ajoute un.** Les cartes « Derniers vainqueurs » de `DetailGPView`
+> citent des retraités hors grille — Lauda (Autriche). Leurs codes sont la liste
+> `PALMARES` du même script ; un palmarès qui cite un nouveau pays = un code de plus là.
 >
 > **Un drapeau de nationalité s'étire, il ne se recadre pas.** Une ligne de classement fait
 > 361 × 62 pt, soit 5,8:1 là où un drapeau en fait 1,5:1 : un `scaledToFill` recadrerait sur

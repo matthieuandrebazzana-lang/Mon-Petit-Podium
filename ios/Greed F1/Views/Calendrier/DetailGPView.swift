@@ -32,6 +32,8 @@ struct DetailGPView: View {
 
     let grandPrix: GrandPrixSaisonMock
 
+    @Environment(\.dismiss) private var fermer
+
     /// Marge latérale commune à tous les écrans — la même que ``CalendrierView``.
     private let margeLaterale: CGFloat = 16
 
@@ -50,6 +52,7 @@ struct DetailGPView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    retour
                     entete
 
                     Spacer().frame(height: 20)
@@ -74,15 +77,37 @@ struct DetailGPView: View {
                     }
                 }
                 .padding(.horizontal, margeLaterale)
-                .padding(.top, 8)
                 .padding(.bottom, 24)
             }
         }
-        // Le nom du Grand Prix est déjà dans le contenu, à 28 pt : la barre ne garde que le
-        // chevron de retour natif, qui porte « Calendrier ». Même choix que les résultats.
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        // `CalendrierView` masque la barre de sa pile : le chevron natif n'existe donc pas
+        // ici, et c'est ``retour`` qui le remplace — le même que ``VuePisteView``.
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    // MARK: - Retour
+
+    /// **Un chevron et le nom de sa destination** — « d'où je viens », la promesse du bouton
+    /// natif, dans le style discret du retour de ``VuePisteView``. Encre `secondaire`
+    /// (10,55:1 sur le beige). Le chevron s'aligne sur la marge ; la cible fait 44 pt de
+    /// haut et déborde à droite, jamais à gauche du bord.
+    private var retour: some View {
+        Button {
+            fermer()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Calendrier")
+                    .font(.custom("HelveticaNeue-Medium", size: 13))
+            }
+            .foregroundColor(.secondaire)
+            .padding(.trailing, 16)
+            .frame(height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(StyleAppui(.bouton))
+        .accessibilityLabel("Retour au calendrier")
     }
 
     // MARK: - En-tête
@@ -347,11 +372,13 @@ private struct CaseStat: View {
 // MARK: - Une carte de vainqueur
 
 /// Le millésime, la **vraie livrée** de l'écurie avec le numéro et le nom peints dessus, le
-/// prénom, le nom, puis le pays précédé de son drapeau emoji.
+/// prénom, le nom, puis le pays.
 ///
-/// **Fond blanc sur les six** (web `0.76.0`) : un palmarès est une liste d'égaux, et un fond
-/// par nationalité y lisait une hiérarchie que la donnée ne porte pas. Les cartes ne sont
-/// pas tapables — il n'y a rien derrière un palmarès.
+/// **Le drapeau de nationalité est en fond, à 15 %** — l'asset `drapeau-<code>`, le même
+/// lavis que les lignes de ``ResultatsGPView`` et donc les mêmes encres : sur le pire
+/// substrat (le noir, `#D9D9D9` composé) `texte` vaut 12,30:1 et `secondaire` 7,46:1.
+/// Aucun gris ici. **Étiré, jamais recadré** (`.resizable()` seul) : toutes les bandes
+/// survivent. Les cartes ne sont pas tapables — il n'y a rien derrière un palmarès.
 private struct CarteVainqueur: View {
 
     let vainqueur: FichesGrandPrix.Vainqueur
@@ -390,25 +417,29 @@ private struct CarteVainqueur: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
 
-            // Le glyphe hors de portée de la troncature : c'est la moitié de l'information.
-            HStack(spacing: 4) {
-                Text(vainqueur.emoji)
-                    .font(.system(size: 13))
-                    .fixedSize()
-                    .accessibilityHidden(true)
-                Text(vainqueur.pays)
-                    .font(.custom("HelveticaNeue", size: 12))
-                    .foregroundColor(.secondaire)
-                    .lineLimit(1)
-            }
-            .padding(.top, 6)
+            // Le mot porte le sens ; le drapeau du fond n'est qu'une texture.
+            Text(vainqueur.pays)
+                .font(.custom("HelveticaNeue", size: 12))
+                .foregroundColor(.secondaire)
+                .lineLimit(1)
+                .padding(.top, 6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color.surface)
+        .background(fond)
         .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
         .ombreCarte()
         .accessibilityElement(children: .combine)
+    }
+
+    private var fond: some View {
+        ZStack {
+            Color.surface
+            Image(vainqueur.drapeau)
+                .resizable()                            // étiré, jamais recadré
+                .opacity(0.15)
+        }
+        .accessibilityHidden(true)
     }
 }
 
