@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Le détail d'un championnat : son classement, et la vue piste.
+/// Le détail d'un championnat : son classement, et la porte de la vue piste.
 ///
 /// Références visuelles : `maquettes/maquette-07-championnat.html` pour la composition,
 /// `Ressources/Screenshots/screen-13-classement-championnat.PNG` pour ce que la version web
@@ -17,17 +17,6 @@ struct ChampionnatDetailView: View {
 
     /// Marge latérale commune à tous les écrans.
     private let margeLaterale: CGFloat = 16
-
-    @State private var onglet: Onglet = .classement
-
-    /// Les deux onglets. **Un `enum`, pas un `Int`** : l'index d'un segment ne dit pas ce
-    /// qu'il montre, et l'écran finirait par comparer `== 1` quelque part.
-    private enum Onglet: String, CaseIterable, Identifiable {
-        case classement = "Classement"
-        case piste = "Piste"
-
-        var id: Self { self }
-    }
 
     // MARK: - Données mockées
 
@@ -46,42 +35,25 @@ struct ChampionnatDetailView: View {
             Color.fondPrincipal
                 .ignoresSafeArea()
 
-            // **L'en-tête et le sélecteur ne défilent plus.** La vue piste occupe toute la
-            // hauteur restante : la mettre dans un `ScrollView` reviendrait à lui demander
-            // sa taille intrinsèque, qu'elle n'a pas — un `ZStack` de positions absolues
-            // s'y réduirait à la boîte englobante de ses voitures. Les deux onglets
-            // partagent donc un en-tête fixe, et seul le contenu du classement défile.
-            //
-            // Le sélecteur y gagne au passage : un onglet qui disparaît en haut de course
-            // n'est plus là quand on veut revenir à l'autre.
+            // **L'en-tête ne défile pas**, le reste oui. La vue piste n'est plus un onglet
+            // de cet écran depuis la version `0.17.0` : elle est un écran à part entière, et
+            // c'est ``lienPiste`` qui y mène.
             VStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    entete
-
-                    Spacer().frame(height: 16)
-                    selecteur
-                }
-                .padding(.horizontal, margeLaterale)
-                .padding(.top, 8)
+                entete
+                    .padding(.horizontal, margeLaterale)
+                    .padding(.top, 8)
 
                 Spacer().frame(height: 12)
 
-                switch onglet {
-                case .classement:
-                    ScrollView {
-                        VStack(spacing: 12) {
-                            classement
-                            WidgetGrandPrixSuivant(nom: "GP Pays-Bas", slug: "pays-bas",
-                                                   echeance: "Fermeture dans 3 jours")
-                        }
-                        .padding(.horizontal, margeLaterale)
-                        .padding(.bottom, 24)
+                ScrollView {
+                    VStack(spacing: 12) {
+                        classement
+                        WidgetGrandPrixSuivant(nom: "GP Pays-Bas", slug: "pays-bas",
+                                               echeance: "Fermeture dans 3 jours")
+                        lienPiste
                     }
-
-                case .piste:
-                    piste
-                        .padding(.horizontal, margeLaterale)
-                        .padding(.bottom, 24)
+                    .padding(.horizontal, margeLaterale)
+                    .padding(.bottom, 24)
                 }
             }
         }
@@ -100,7 +72,7 @@ struct ChampionnatDetailView: View {
         // > main sur la barre d'onglets (`ios/CLAUDE.md` §3). Le titre reste posé pour
         // > **iOS 17 et 18**, la cible de déploiement, où le bouton l'affiche ; sans
         // > l'élément principal vide, ces deux versions gagneraient le libellé mais iOS 26
-        // > hériterait d'un « Classement » centré en doublon du sélecteur juste dessous.
+        // > hériterait d'un « Classement » centré en doublon du nom juste dessous.
         .navigationTitle("Classement")
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -157,56 +129,46 @@ struct ChampionnatDetailView: View {
         .padding(.top, -6)
     }
 
-    // MARK: - Le sélecteur
+    // MARK: - Le lien vers la piste
 
-    /// Toggle segmenté. La pastille active **glisse** d'un segment à l'autre plutôt que
-    /// d'apparaître à sa nouvelle place : c'est le seul indice qui dit *où* l'état est
-    /// parti, et sans lui les deux onglets clignotent l'un dans l'autre.
+    /// **Un bouton pleine largeur, et non plus un segment de bascule.** La piste est
+    /// devenue un écran plein (``VuePisteView``) : un segment l'aurait ouverte en
+    /// remplaçant le contenu *sous* un en-tête resté là, ce que « plein écran » exclut.
     ///
-    /// `Mouvement.deplacement` — la courbe des déplacements du design system, 0,22 s, sous
-    /// le plafond de 300 ms. **Aucun ressort** : rien ici n'a été lancé au doigt, et un
-    /// dépassement se lirait comme une erreur de calage.
+    /// C'est l'arbitrage de la version web, au même endroit et pour la même raison — les
+    /// deux ensemble auraient offert **deux chemins vers le même écran**, à trois
+    /// centimètres l'un de l'autre. L'aller-retour reste symétrique : l'écran de piste
+    /// ramène ici par son propre bouton de retour.
     ///
-    /// Sous `accessibilityReduceMotion`, la pastille change de place sans transition — le
-    /// glissement est un déplacement, et c'est exactement ce que le réglage retire.
-    private var selecteur: some View {
-        HStack(spacing: 4) {
-            ForEach(Onglet.allCases) { valeur in
-                Button {
-                    if mouvementReduit {
-                        onglet = valeur
-                    } else {
-                        withAnimation(Mouvement.deplacement(0.22)) { onglet = valeur }
+    /// **Aucune icône.** Le libellé nomme sa destination, ce que le wayfinding demande.
+    /// Le damier reste, à ses 15 % habituels : sur le bordeaux `primaire` il ramène le fond
+    /// à `#7B0F1D`, où le blanc tient encore **10,89:1**.
+    ///
+    /// `NavigationLink` et non `Button` : c'est lui qui porte le glissement d'écran natif
+    /// et le geste de retour par le bord, qu'un `Button` poussant un état ne donne pas.
+    private var lienPiste: some View {
+        NavigationLink {
+            VuePisteView(championnat: championnat, membres: membres)
+        } label: {
+            Text("Vue piste")
+                .font(.custom("HelveticaNeue-Medium", size: 18))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)              // > 44 pt, contrainte tactile iOS
+                .background {
+                    ZStack {
+                        Color.primaire
+                        Damier(opacite: Materiau.damier)
+                        LueurHaute()
                     }
-                } label: {
-                    Text(valeur.rawValue)
-                        .font(.custom("HelveticaNeue-Medium", size: 13))
-                        .foregroundColor(onglet == valeur ? .white : .grisSecondaire)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 36)
-                        .background {
-                            if onglet == valeur {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.primaire)
-                                    .matchedGeometryEffect(id: "pastille", in: pastille)
-                            }
-                        }
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(onglet == valeur ? [.isSelected, .isButton] : .isButton)
-            }
+                .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
+                .ombreAplat()
         }
-        .padding(4)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: Rayon.widget, style: .continuous))
-        .ombreCarte()
+        .buttonStyle(StyleAppui(.bouton))
     }
 
-    @Namespace private var pastille
-    @Environment(\.accessibilityReduceMotion) private var mouvementReduit
-
-    // MARK: - Onglet Classement
+    // MARK: - Le classement
 
     /// Un seul bloc blanc, une ligne par membre.
     ///
@@ -235,21 +197,6 @@ struct ChampionnatDetailView: View {
         .ombreBloc()
     }
 
-    // MARK: - Onglet Piste
-
-    /// La piste (`screen-14`), qui prend toute la hauteur restante.
-    ///
-    /// **Elle reçoit les membres, elle ne les cherche pas.** C'est le même tableau que le
-    /// classement affiche, déjà trié : deux jeux de valeurs mockées auraient fait dire deux
-    /// choses différentes du même championnat selon l'onglet regardé.
-    ///
-    /// L'identité du membre bascule d'un onglet à l'autre : la ``VuePisteView`` est
-    /// remontée à chaque retour sur l'onglet, donc son entrée se rejoue. C'est voulu — la
-    /// grille de départ est ce que cet écran montre.
-    private var piste: some View {
-        VuePisteView(championnat: championnat, membres: membres)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 // MARK: - Une ligne du classement
@@ -507,6 +454,18 @@ struct MembreMock: Identifiable {
     /// pour le premier (33 %, 31, 25, 46), `screen-22` pour le second (40 %, 33, 22, 41) —
     /// et elles tombent juste parce que les chiffres bruts les redonnent : 66 points en
     /// 2 Grands Prix font bien 33, et 4 réussis sur 10 tentés font bien 40 %.
+    ///
+    /// > ### Les huit scores sont le jeu d'essai de la vue piste
+    /// >
+    /// > **168, 93, 66, 50, 47, 26, 24, 0** — ceux de `maquettes_V2/screen-14-vue-piste.PNG`,
+    /// > posés ici pour que le simulateur montre exactement ce que la maquette montre. Les
+    /// > deux derniers ont changé en même temps que l'échelle de la piste : il fallait un
+    /// > membre à **zéro** pour voir la ligne du bas, et deux scores **voisins** (26 et 24)
+    /// > pour voir l'éventail les écarter.
+    /// >
+    /// > Les statistiques suivent le score, elles ne le contredisent jamais : Julie n'a
+    /// > **aucun** pronostic réussi, donc aucun meilleur coup — `0` veut dire « raté », et
+    /// > `CLAUDE.md` §3.1 interdit de le confondre avec « pas encore jugé ».
     static let exemples: [MembreMock] = [
         MembreMock(id: "nicolas", pseudo: "Nicolas", points: 168, rang: 1,
                    reussis: 9, tentes: 25, meilleurCoup: 42,
@@ -540,13 +499,13 @@ struct MembreMock: Identifiable {
                    grandsPrixJoues: 2, moyenneTentee: 22,
                    livree: Livree(mode: .ecurie, ecurie: "mclaren"),
                    numero: "7"),
-        MembreMock(id: "lucas", pseudo: "Lucas", points: 18, rang: 7,
-                   reussis: 1, tentes: 5, meilleurCoup: 18,
+        MembreMock(id: "lucas", pseudo: "Lucas", points: 24, rang: 7,
+                   reussis: 1, tentes: 5, meilleurCoup: 24,
                    grandsPrixJoues: 1, moyenneTentee: 26,
                    livree: Livree(mode: .perso, coque: "#FF8000", ailerons: "#000000"),
                    numero: "81"),
-        MembreMock(id: "julie", pseudo: "Julie", points: 12, rang: 8,
-                   reussis: 1, tentes: 5, meilleurCoup: 12,
+        MembreMock(id: "julie", pseudo: "Julie", points: 0, rang: 8,
+                   reussis: 0, tentes: 5, meilleurCoup: 0,
                    grandsPrixJoues: 1, moyenneTentee: 19,
                    livree: Livree(mode: .perso, coque: "#960064", ailerons: "#C0C0C0"),
                    numero: "22")

@@ -1,18 +1,36 @@
 import SwiftUI
 
-/// **La vue piste** — l'écran signature, ici en onglet de ``ChampionnatDetailView``.
+/// **La vue piste** — l'écran signature, et depuis la version `0.17.0` un **écran plein**,
+/// poussé par ``ChampionnatDetailView`` au lieu d'être l'onglet d'une bascule segmentée.
 ///
-/// Référence visuelle : `Ressources/Screenshots/screen-14-vue-piste.PNG`. L'algorithme est
-/// la transposition de `frontend/src/ecrans/Piste.jsx`, **passe pour passe** : c'est lui la
-/// source unique de la question « où se pose une voiture », et deux placements écrits
-/// séparément divergeraient au premier ajustement (`CLAUDE.md` §6).
+/// Référence visuelle : `maquettes_V2/screen-14-vue-piste.PNG`, la version web sur iPhone.
+/// L'algorithme est la transposition de `frontend/src/ecrans/Piste.jsx`, **passe pour
+/// passe** : c'est lui la source unique de la question « où se pose une voiture », et deux
+/// placements écrits séparément divergeraient au premier ajustement (`CLAUDE.md` §6).
 ///
 /// Trois calques, dans cet ordre de peinture :
 ///
-/// 1. **Le sol**, la planche `vue_piste.svg` lue au runtime et **étirée** aux deux axes.
+/// 1. **Le sol**, la planche `vue_piste.svg` lue au runtime, **étirée** aux deux axes et
+///    poussée sous les deux zones sûres : une piste qui s'arrêterait à la Dynamic Island
+///    se lirait comme un bandeau posé de travers.
 /// 2. **Le bandeau**, à la couleur Pantone du championnat — celle de sa carte d'accueil et
-///    de l'en-tête de son écran, jamais une couleur choisie ici.
+///    de l'en-tête de son écran, jamais une couleur choisie ici. Il porte le **retour**,
+///    seul chemin hors de l'écran, et le nom du championnat.
 /// 3. **Les voitures**, en coordonnées absolues dans la zone bornée aux deux kerbs.
+///
+/// > ### Ce que « plein écran » retire, et ce qu'il garde
+/// >
+/// > La barre de navigation et la barre d'onglets sont **masquées** : la piste est un
+/// > dessin, et tout chrome posé dessus en rogne la hauteur, donc l'échelle des scores.
+/// > Le bandeau, lui, **n'est pas du chrome** — il porte la teinte du championnat, son nom
+/// > et le retour. C'est le même arbitrage que la version web, où l'écran de piste est en
+/// > `fixed inset-0` mais garde son `<header>`.
+/// >
+/// > **Seul le sol franchit les zones sûres.** Le contenu les respecte : la couleur passe
+/// > sous la barre d'état, le texte jamais — la règle de `coiffe-ecran`. En bas, la même
+/// > règle sort le score de la dernière voiture de sous l'indicateur d'accueil, et c'est
+/// > mesuré ainsi sur la maquette : la piste y occupe 667 pt de haut sur un iPhone 15 Pro,
+/// > pas 701.
 ///
 /// > **Les données sont mockées** : elles arrivent de ``ChampionnatDetailView``. L'appel à
 /// > `classement_du_championnat` viendra à la passe réseau.
@@ -28,6 +46,7 @@ struct VuePisteView: View {
     /// Vrai une fois la piste montée. C'est lui qui lance l'entrée des voitures.
     @State private var enPiste = false
 
+    @Environment(\.dismiss) private var fermer
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
     /// La `viewBox` de la planche, telle quelle.
@@ -39,10 +58,12 @@ struct VuePisteView: View {
     private static let margeGauche: CGFloat = 24.88 / 589.5
     private static let margeDroite: CGFloat = (589.5 - 561.17) / 589.5
 
-    /// Le bandeau vaut **10,94 % de la planche** (140,13 sur 1 280,4). Il est posé en points
-    /// plutôt qu'en fraction parce qu'il porte du texte : à 10,94 % d'un onglet court, un
-    /// nom de championnat de 20 pt n'aurait plus de quoi respirer.
-    private static let hauteurBandeau: CGFloat = 64
+    /// La rangée du retour, puis celle du nom. **Deux rangées, et c'est mesuré côté web**
+    /// (`--piste-retour-h`, `--piste-bandeau-h`) : partagées en une seule, il faudrait
+    /// réserver la largeur du bouton **des deux côtés** pour que le nom reste centré sur la
+    /// piste, et il ne resterait plus de quoi écrire un nom de championnat.
+    private static let hauteurRetour: CGFloat = 38
+    private static let hauteurNom: CGFloat = 54
 
     /// Les quatre segments de la ligne médiane. **La planche les peint à 11 %**, et
     /// ``PlancheSVG`` ne lit que `fill` : l'opacité passe donc par la substitution d'encre,
@@ -58,12 +79,13 @@ struct VuePisteView: View {
         // passe de mise en page.
         GeometryReader { bloc in
             ZStack(alignment: .top) {
-                // Le sol, sous tout le reste. `etiree` — l'équivalent de
-                // `preserveAspectRatio="none"` : la piste couvre l'onglet entier quel que
-                // soit son rapport de forme, et ses kerbs gardent une largeur
-                // proportionnelle à celle de la piste.
+                // Le sol, sous tout le reste et **sur l'écran entier**, zones sûres
+                // comprises. `etiree` — l'équivalent de `preserveAspectRatio="none"` : la
+                // piste couvre l'écran quel que soit son rapport de forme, et ses kerbs
+                // gardent une largeur proportionnelle à celle de la piste.
                 VuePlanche(planche: "vue_piste", fenetre: Self.planche,
                            substitutions: Self.substitutions, etiree: true)
+                    .ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     bandeau
@@ -74,8 +96,13 @@ struct VuePisteView: View {
             }
             .frame(width: bloc.size.width, height: bloc.size.height)
         }
-        .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
-        .ombreBloc()
+        // Sous les coins arrondis que la planche dessine. Le beige de l'app est à un
+        // point de celui du sol (`#F5F0EB` contre `#F4EFEA`) : c'est lui qu'on pose, plutôt
+        // qu'une septième teinte déclarée par un écran, ce que le design system proscrit.
+        .background(Color.fondPrincipal.ignoresSafeArea())
+        // **Le chrome disparaît, les deux barres avec.** Le retour du bandeau est le seul
+        // chemin sortant, et le geste de bord continue de fonctionner.
+        .toolbar(.hidden, for: .navigationBar, .tabBar)
         // L'entrée part au montage de la piste, pas à celui d'une voiture : les huit
         // partagent une seule bascule, et c'est le retard de chacune qui les échelonne.
         .onAppear {
@@ -89,38 +116,77 @@ struct VuePisteView: View {
 
     // MARK: - Le bandeau
 
-    /// L'aplat de la teinte du championnat, son damier, son nom.
+    /// L'aplat de la teinte du championnat, son damier, le retour, le nom.
     ///
     /// Ordre de peinture : l'aplat, le damier, puis le texte — le même que les cartes de
     /// championnat, et pour la même raison : un SVG comme un empilement de calques n'a pas
     /// d'autre `z-index` que celui-là.
     ///
-    /// **Le rayon ne porte que sur le bas** (`Rayon.bloc`) : le haut du bandeau suit déjà
-    /// la découpe du bloc entier, et l'arrondir deux fois laisserait voir le sol dans les
-    /// deux coins hauts.
+    /// **Le rayon ne porte que sur le bas.** Le haut du bandeau passe sous la barre d'état
+    /// — `ignoresSafeArea(edges: .top)` est posé **après** la découpe, donc la forme est
+    /// dessinée dans le cadre déjà étendu : les deux coins hauts sortent de l'écran au lieu
+    /// de laisser voir le sol beige de part et d'autre de l'heure.
     private var bandeau: some View {
-        Text(championnat.nom)
-            .font(.custom("HelveticaNeue-Medium", size: 20))
-            .tracking(-0.40)                                  // −0,02em × 20
-            .foregroundColor(.white)                          // ≥ 10,35:1 sur les six teintes
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .padding(.horizontal, 24)
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.hauteurBandeau)
-            .background {
-                ZStack {
-                    Color.teinteChampionnat(pour: championnat.id)
-                    Damier(opacite: Materiau.damier)
-                    LueurHaute()
-                }
+        VStack(spacing: 0) {
+            retour
+                .frame(height: Self.hauteurRetour, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(championnat.nom)
+                .font(.titre)
+                .tracking(Tracking.titre)
+                .foregroundColor(.white)                  // ≥ 10,35:1 sur les six teintes
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity)
+                .frame(height: Self.hauteurNom)
+                .accessibilityAddTraits(.isHeader)
+        }
+        .background {
+            // **L'aplat porte les deux calques en `overlay`, jamais en `ZStack`.** Le
+            // damier est un `scaledToFill` : dans une pile il impose sa *taille de
+            // remplissage* — 402 de large proposés à un dessin de 542 × 420 en réclament
+            // 311 de haut — et le fond débordait de 104 pt sous le bandeau, par-dessus le
+            // haut de la piste. Mesuré au simulateur, invisible à la lecture du code.
+            // Une couleur, elle, prend exactement la place qu'on lui propose ; un
+            // `overlay` ne change pas la taille de son hôte.
+            Color.teinteChampionnat(pour: championnat.id)
+                .overlay { Damier(opacite: Materiau.damier) }
+                .overlay { LueurHaute() }
+                .clipShape(
+                    UnevenRoundedRectangle(bottomLeadingRadius: Rayon.bloc,
+                                           bottomTrailingRadius: Rayon.bloc,
+                                           style: .continuous)
+                )
+                .ignoresSafeArea(edges: .top)
+        }
+    }
+
+    /// Le retour, et rien d'autre. **Un chevron et le nom de sa destination** — « d'où je
+    /// viens », pas « reculer » : c'est ce que fait le bouton natif d'iOS, et l'écran qui
+    /// le remplace lui doit la même promesse.
+    ///
+    /// La rangée fait 38 pt, la cible tactile 44 : le dépassement est repris par un
+    /// `padding` négatif pour ne pas pousser le nom du championnat de six points.
+    private var retour: some View {
+        Button {
+            fermer()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Classement")
+                    .font(.custom("HelveticaNeue-Medium", size: 13))
             }
-            .clipShape(
-                UnevenRoundedRectangle(bottomLeadingRadius: Rayon.bloc,
-                                       bottomTrailingRadius: Rayon.bloc,
-                                       style: .continuous)
-            )
-            .accessibilityAddTraits(.isHeader)
+            .foregroundColor(.white)                      // ≥ 10,35:1 sur les six teintes
+            .padding(.horizontal, 16)
+            .frame(height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(StyleAppui(.bouton))
+        .padding(.vertical, -3)
+        .accessibilityLabel("Retour au classement")
     }
 
     // MARK: - La zone de jeu
@@ -162,29 +228,30 @@ struct VuePisteView: View {
     /// ferait converger toutes les voitures vers zéro avant de sauter à leur position.
     private func voiture(_ placement: DispositionPiste.Placement,
                          rang: Int, hauteur: CGFloat, largeur: CGFloat) -> some View {
+        let largeurVoiture = DispositionPiste.largeurVoiture
+        let hauteurVoiture = DispositionPiste.hauteurVoiture
+
         // Chaque voiture part du bas de la piste : la distance dépend de son point
         // d'arrivée, une valeur commune ferait démarrer le leader du milieu de l'écran.
-        let depart = hauteur - placement.centre + placement.hauteurVoiture
+        let depart = hauteur - placement.centre + hauteurVoiture
 
         return VStack(spacing: 3) {
             VueVoiture(livree: placement.membre.livree,
                        numero: placement.membre.numero,
                        nom: placement.membre.pseudo,
                        teintePilote: .teinteAvatar(pour: placement.membre.id))
-                .frame(width: placement.largeurVoiture, height: placement.hauteurVoiture)
+                .frame(width: largeurVoiture, height: hauteurVoiture)
 
-            if placement.tailleScore > 0 {
-                Text(String(placement.membre.points))
-                    .font(.custom("HelveticaNeue", size: placement.tailleScore))
-                    .foregroundColor(.texte)              // 15,23:1 sur le beige de la piste
-                    .monospacedDigit()
-                    .lineLimit(1)
-            }
+            Text(String(placement.membre.points))
+                .font(.custom("HelveticaNeue", size: DispositionPiste.tailleScore))
+                .foregroundColor(.texte)                  // 15,23:1 sur le beige de la piste
+                .monospacedDigit()
+                .lineLimit(1)
         }
-        .frame(width: placement.largeurVoiture)
+        .frame(width: largeurVoiture)
         .accessibilityHidden(true)
-        .offset(x: largeur / 2 + placement.decalage - placement.largeurVoiture / 2,
-                y: placement.centre - placement.hauteurVoiture / 2)
+        .offset(x: largeur / 2 + placement.decalage - largeurVoiture / 2,
+                y: placement.centre - hauteurVoiture / 2)
         // L'entrée, et elle seule : `offset` s'ajoute au précédent, il ne le remplace pas.
         .offset(y: enPiste ? 0 : depart)
         .opacity(enPiste ? 1 : 0)
@@ -219,31 +286,29 @@ struct VuePisteView: View {
 ///
 /// Deux passes, et l'ordre compte :
 ///
-/// - **Passe 1**, ``hauteurs(pour:dans:)`` : le score donne la hauteur, et elle seule. Le
-///   meilleur en haut, le moins bon en bas, tout le monde à égalité au milieu.
+/// - **Passe 1**, ``hauteurs(pour:dans:)`` : le score donne la hauteur, et elle seule.
 /// - **Passe 2**, le reste : deux voitures qui se rencontrent sont écartées
-///   **latéralement**. **Aucune hauteur ne bouge en passe 2** — la réduire ou l'écarter de
-///   l'axe ne la déplace pas verticalement. Sa hauteur dit ses points, et elle seule.
+///   **latéralement**. **Aucune hauteur ne bouge en passe 2** — l'écarter de l'axe ne la
+///   déplace pas verticalement. Sa hauteur dit ses points, et elle seule.
 ///
-/// > ### Écart assumé par rapport à la demande
+/// > ### Toutes les voitures ont la même taille
 /// >
-/// > La demande donne des ordres de grandeur — « hauteur voiture ≈ 70 pt », « marge ≈ 8 pt ».
-/// > Ce sont les **valeurs de la version web qui font foi** : la voiture fait 52 × 106 (son
-/// > `viewBox` de 141,12 × 288,09 impose la hauteur, elle ne se choisit pas), et la
-/// > gouttière vaut **12** depuis la version `0.71.0` — à 8, la voiture extérieure d'un
-/// > groupe large passait à quatre pixels du kerb et paraissait le mordre. Une seconde
-/// > table de valeurs ferait diverger les deux applications au premier ajustement.
+/// > **52 × 106, sans exception** — ni le score, ni le rang, ni l'encombrement de son
+/// > groupe ne change la taille d'une voiture. Jusqu'à la version `0.16.0` un groupe large
+/// > rétrécissait les siennes pour tenir entre les kerbs : deux voitures voisines
+/// > sortaient alors à deux tailles différentes, et l'écran laissait croire que la taille
+/// > voulait dire quelque chose. C'est le **pas** de l'éventail qui se resserre désormais,
+/// > jamais le dessin.
 enum DispositionPiste {
 
-    /// La voiture à sa taille pleine, celle d'un groupe d'une seule. La hauteur **se
-    /// déduit** du rapport du dessin (141,12 × 288,09), partagé par les douze livrées.
+    /// La voiture, à la seule taille qu'elle ait. La hauteur **se déduit** du rapport du
+    /// dessin (141,12 × 288,09), partagé par les douze livrées.
     static let largeurVoiture: CGFloat = 52
     static let hauteurVoiture: CGFloat = (largeurVoiture * 288.09 / 141.12).rounded()
 
-    /// Le plancher de réduction. En deçà, la voiture cesse de se lire comme une voiture.
-    /// Il est **bas exprès** : à 18 pt de large, seize voitures tiennent côte à côte sur
-    /// une piste de 354 pt avant qu'il ne morde.
-    static let largeurMinimale: CGFloat = 18
+    /// Le corps du score posé sous une voiture. Fixe lui aussi — c'est `52 × 0,26` arrondi,
+    /// la valeur que la version web donne à une voiture pleine.
+    static let tailleScore: CGFloat = 14
 
     /// Gouttière entre deux voitures voisines d'un même groupe. Elle **s'ajoute** à la
     /// boîte du dessin et ne l'entame jamais : c'est elle qui fixe le pas des voies.
@@ -258,48 +323,63 @@ enum DispositionPiste {
     /// de celle-ci — voir le seuil de ``groupes(de:)``.
     static let hauteurLegende: CGFloat = 16
 
-    /// Où se pose une voiture, et à quelle taille.
+    /// Deux voitures se rencontrent en deçà de cet écart de hauteurs. **La voiture ET sa
+    /// légende** : chacune porte son score sous elle, donc son empreinte à l'écran est
+    /// celle du dessin **plus** celle du chiffre. Au seuil du seul dessin, la légende du
+    /// groupe du dessus se poserait sur le museau de la voiture du dessous.
+    static let seuil: CGFloat = hauteurVoiture + hauteurLegende
+
+    /// Où se pose une voiture. **Rien sur sa taille** : elles l'ont toutes la même, et un
+    /// champ par placement inviterait à en faire varier une.
     struct Placement: Identifiable {
         let membre: MembreMock
         /// Le centre vertical du **dessin**, en points depuis le haut de la piste.
         let centre: CGFloat
         /// L'écart à l'axe de la piste, en points. Négatif à gauche.
         let decalage: CGFloat
-        let largeurVoiture: CGFloat
-        let hauteurVoiture: CGFloat
-        /// Corps du score, ou `0` quand il cesse d'être lisible.
-        let tailleScore: CGFloat
 
         var id: String { membre.id }
     }
 
     // MARK: Passe 1 — l'échelle verticale
 
-    /// Le meilleur score en haut de la zone de jeu, le moins bon en bas, chaque score
-    /// intermédiaire proportionnellement entre les deux. L'échelle est **tendue sur les
-    /// scores réels** : la piste est intégralement utilisée, qu'elle sépare 0 et 28 points
-    /// ou 1 240 et 1 260.
+    /// **La hauteur est proportionnelle au score, et le bas de la piste vaut zéro point.**
     ///
-    /// **Tout le monde à égalité se pose à mi-hauteur** — c'est le cas d'avant le premier
-    /// Grand Prix. Il n'y a pas d'échelle à tendre, et coller la grille en haut ou en bas
-    /// dirait quelque chose de faux.
+    /// ```
+    /// y = (1 − points / meilleur score) × hauteur disponible
+    /// ```
+    ///
+    /// Le meilleur score tient donc toujours le haut de la piste, et un membre à `0` point
+    /// toujours le bas. Entre les deux, la distance à la ligne du leader se lit directement
+    /// comme la fraction de points qui manque : à mi-piste, la moitié de ses points.
+    ///
+    /// > ### Ce que cette échelle-ci ne fait pas
+    /// >
+    /// > Elle **ne se tend pas sur le minimum**. Un championnat dont le dernier a 24 points
+    /// > sur 168 pose sa voiture aux sept huitièmes de la piste, pas tout en bas : le bas
+    /// > de la piste est le zéro absolu, pas « le dernier ». C'est ce qui rend deux
+    /// > captures d'un même championnat comparables d'un Grand Prix à l'autre — une échelle
+    /// > tendue sur le minimum redistribue tout le monde dès que le dernier marque un point.
+    ///
+    /// **Personne n'a encore marqué** — le cas d'avant le premier Grand Prix — et la
+    /// formule n'a pas de diviseur : toute la grille se pose alors sur la ligne du bas, qui
+    /// est sa place exacte. La passe 2 en fait une grille de départ sur plusieurs voies.
     ///
     /// Les hauteurs sortent d'ici **exactes**, sans correction d'écart : deux scores
     /// identiques rendent exactement la même valeur, et c'est ce qui garantit que deux
     /// ex æquo forment toujours un groupe à la passe 2.
     ///
-    /// Les bornes se calculent à la taille **pleine**, la seule connue à ce stade — la
-    /// taille se déduit des groupes, qui se déduisent des hauteurs. La légende compte dans
-    /// la borne basse, sinon le score du dernier sortirait sous la piste.
+    /// La légende compte dans la borne basse, sinon le score du dernier sortirait sous la
+    /// piste.
     static func hauteurs(pour points: [Int], dans hauteur: CGFloat) -> [CGFloat] {
         let haut = margeHaute + hauteurVoiture / 2
         let bas = max(haut, hauteur - margeBasse - hauteurLegende - hauteurVoiture / 2)
 
-        guard let maximum = points.max(), let minimum = points.min() else { return [] }
-        guard maximum != minimum else { return points.map { _ in (haut + bas) / 2 } }
+        guard let meilleur = points.max() else { return [] }
+        guard meilleur > 0 else { return points.map { _ in bas } }
 
         return points.map { valeur in
-            haut + CGFloat(maximum - valeur) / CGFloat(maximum - minimum) * (bas - haut)
+            haut + (1 - CGFloat(valeur) / CGFloat(meilleur)) * (bas - haut)
         }
     }
 
@@ -314,17 +394,9 @@ enum DispositionPiste {
     /// **Rien ici ne regarde les scores.** Deux scores voisins mais distincts sont regroupés
     /// si et seulement si leurs voitures se rencontrent à l'écran.
     ///
-    /// > ### Le seuil vaut la voiture **et sa légende**
-    /// >
-    /// > La demande écrit « hauteur voiture + hauteur score », et c'est bien ce seuil :
-    /// > chaque voiture porte son score sous elle, donc son empreinte à l'écran est celle
-    /// > du dessin **plus** celle du chiffre. Au seuil du seul dessin, la légende du groupe
-    /// > du dessus se poserait sur le museau de la voiture du dessous.
-    ///
     /// Un groupe dit **qui se résout ensemble, jamais combien de voies** : c'est
     /// ``voies(de:)`` qui compte les abscisses.
     static func groupes(de hauteurs: [CGFloat]) -> [[Int]] {
-        let seuil = hauteurVoiture + hauteurLegende
         var groupes: [[Int]] = []
 
         for (index, centre) in hauteurs.enumerated() {
@@ -346,14 +418,12 @@ enum DispositionPiste {
     ///
     /// **C'est ici que l'escalier diagonal se défait.** Un groupe de huit voitures que la
     /// cascade a réunies n'a pas besoin de huit abscisses : si chacune ne chevauche que sa
-    /// voisine immédiate, **deux voies suffisent**, et les voitures gardent leur taille
-    /// pleine au lieu d'être réduites au huitième de la piste.
+    /// voisine immédiate, **deux voies suffisent**.
     ///
     /// Le placement au premier libre est **optimal** ici : les hauteurs arrivant triées, le
     /// nombre de voies ouvertes à un instant donné est exactement le nombre de voitures qui
     /// se chevauchent à cet endroit.
     static func voies(de hauteurs: [CGFloat]) -> [Int] {
-        let seuil = hauteurVoiture + hauteurLegende
         // La hauteur de la dernière voiture posée sur chaque voie. Les hauteurs étant
         // croissantes, c'est la seule dont l'écart puisse manquer.
         var dernieres: [CGFloat] = []
@@ -370,8 +440,8 @@ enum DispositionPiste {
 
     // MARK: Passe 2c — la répartition latérale
 
-    /// La taille commune aux voitures d'un groupe, et l'abscisse d'une **voie**, comptée
-    /// depuis le milieu de la piste. **Aucune hauteur n'entre ici et aucune n'en sort.**
+    /// L'abscisse d'une **voie**, comptée depuis le milieu de la piste. **Aucune hauteur
+    /// n'entre ici et aucune n'en sort, et aucune taille non plus.**
     ///
     /// ### L'éventail : la voie `0` est l'axe, les suivantes s'écartent par paires
     ///
@@ -390,31 +460,31 @@ enum DispositionPiste {
     /// fait tourner **milieu, gauche, droite, milieu…** : deux voitures consécutives ne
     /// partent jamais du même côté de l'axe.
     ///
-    /// ### Le pas, et la taille qui s'en déduit
+    /// ### Le pas
     ///
-    /// Le pas vaut une voiture pleine plus une gouttière **tant que la piste le permet** :
-    /// un petit groupe se serre autour de l'axe plutôt que de s'étaler, la proximité étant
-    /// ce qui dit que ces voitures-là sont au coude à coude.
+    /// Il vaut une voiture pleine plus une gouttière **tant que la piste le permet** : un
+    /// petit groupe se serre autour de l'axe plutôt que de s'étaler, la proximité étant ce
+    /// qui dit que ces voitures-là sont au coude à coude.
     ///
-    /// Au-delà il se réduit jusqu'à ce que le groupe tienne entre les kerbs. L'éventail
+    /// Au-delà il se resserre jusqu'à ce que l'éventail tienne entre les kerbs. Celui-ci
     /// occupe `rangMaximal` voies **de chaque côté** de l'axe, plus l'axe : toujours un
-    /// nombre **impair** de cellules. La réduction ne commence donc qu'à **six voies** sur
-    /// une piste de 354 pt (cinq voies : 5 × 64 = 320 ≤ 354), et elle porte sur **les deux
-    /// dimensions du même facteur** — une voiture étirée cesserait d'être une voiture.
-    static func repartition(voies nombre: Int, largeur: CGFloat)
-        -> (largeurVoiture: CGFloat, abscisse: (Int) -> CGFloat) {
-
+    /// nombre **impair** de cellules. Le resserrement ne commence donc qu'à **six voies**
+    /// sur une piste de 354 pt (cinq voies : 5 × 64 = 320 ≤ 354) — six voitures qui se
+    /// chevauchent toutes, ce qu'un championnat de huit ne produit pas.
+    ///
+    /// > **Et la voiture, elle, ne rétrécit pas.** Passé six voies les dessins commencent à
+    /// > se recouvrir par les bords ; c'est assumé, parce que l'alternative — une taille
+    /// > qui dépend de l'encombrement — faisait cohabiter deux échelles sur le même écran.
+    static func abscisse(voies nombre: Int, largeur: CGFloat) -> (Int) -> CGFloat {
         // Les voies impaires partent à gauche, les paires à droite : la gauche est servie
         // la première, et c'est elle qui fixe l'encombrement de l'éventail.
         let rangMaximal = nombre / 2
         let pas = min(largeurVoiture + gouttiere, largeur / CGFloat(2 * rangMaximal + 1))
 
-        let taille = max(largeurMinimale, min(largeurVoiture, pas - gouttiere))
-
-        return (taille, { voie in
+        return { voie in
             let sens: CGFloat = voie % 2 == 0 ? 1 : -1
             return sens * (CGFloat(voie) / 2).rounded(.up) * pas
-        })
+        }
     }
 
     // MARK: L'enchaînement
@@ -433,29 +503,13 @@ enum DispositionPiste {
             // voitures qui ne se touchent pas deux à deux ; leur donner une abscisse
             // chacune est ce qui dessinait l'escalier.
             let voiesDuGroupe = voies(de: groupe.map { centres[$0] })
-            let (taille, abscisse) = repartition(voies: (voiesDuGroupe.max() ?? 0) + 1,
-                                                 largeur: largeur)
-            let echelle = taille / largeurVoiture
-
-            // **Le score s'efface quand la voiture a touché son plancher**, et seulement
-            // là : les cellules sont alors plus étroites que la voiture, donc plus étroites
-            // qu'un nombre à trois chiffres. Vingt scores écrits côte à côte dans dix-sept
-            // points chacun ne font pas vingt nombres, ils font une bavure — et le
-            // classement les donne déjà.
-            let scoreLisible = taille > largeurMinimale
+            let abscisseDeVoie = abscisse(voies: (voiesDuGroupe.max() ?? 0) + 1,
+                                          largeur: largeur)
 
             for (place, index) in groupe.enumerated() {
-                resultat.append(Placement(
-                    membre: membres[index],
-                    centre: centres[index],
-                    decalage: abscisse(voiesDuGroupe[place]),
-                    largeurVoiture: taille,
-                    hauteurVoiture: hauteurVoiture * echelle,
-                    // Le score ne rétrécit pas au même rythme que la voiture : sous 11 pt
-                    // il cesse d'être lisible, et un chiffre illisible ne vaut pas mieux
-                    // qu'un chiffre absent.
-                    tailleScore: scoreLisible ? max(11, (taille * 0.26).rounded()) : 0
-                ))
+                resultat.append(Placement(membre: membres[index],
+                                          centre: centres[index],
+                                          decalage: abscisseDeVoie(voiesDuGroupe[place])))
             }
         }
         return resultat
@@ -463,27 +517,27 @@ enum DispositionPiste {
 }
 
 #Preview("Huit membres") {
-    VuePisteView(championnat: ChampionnatMock(id: "team-bazzana", nom: "Team Bazzana",
-                                              membres: 8, rang: 2, fraction: 0.55),
-                 membres: MembreMock.exemples)
-        .padding(16)
-        .background(Color.fondPrincipal)
+    NavigationStack {
+        VuePisteView(championnat: ChampionnatMock(id: "team-bazzana", nom: "Team Bazzana",
+                                                  membres: 8, rang: 2, fraction: 0.55),
+                     membres: MembreMock.exemples)
+    }
 }
 
 #Preview("Trois ex æquo") {
     // Le cas que la passe 2 doit résoudre : trois scores identiques, donc trois hauteurs
     // identiques, donc trois voies — centre, gauche, droite.
-    VuePisteView(championnat: ChampionnatMock(id: "serres-chevalier", nom: "Les Bleus",
-                                              membres: 5, rang: 1, fraction: 1),
-                 membres: MembreMock.exemples.prefix(5).enumerated().map { rang, membre in
-                     MembreMock(id: membre.id, pseudo: membre.pseudo,
-                                points: rang < 3 ? 80 : membre.points, rang: membre.rang,
-                                reussis: membre.reussis, tentes: membre.tentes,
-                                meilleurCoup: membre.meilleurCoup,
-                                grandsPrixJoues: membre.grandsPrixJoues,
-                                moyenneTentee: membre.moyenneTentee,
-                                livree: membre.livree, numero: membre.numero)
-                 })
-        .padding(16)
-        .background(Color.fondPrincipal)
+    NavigationStack {
+        VuePisteView(championnat: ChampionnatMock(id: "serres-chevalier", nom: "Les Bleus",
+                                                  membres: 5, rang: 1, fraction: 1),
+                     membres: MembreMock.exemples.prefix(5).enumerated().map { rang, membre in
+                         MembreMock(id: membre.id, pseudo: membre.pseudo,
+                                    points: rang < 3 ? 80 : membre.points, rang: membre.rang,
+                                    reussis: membre.reussis, tentes: membre.tentes,
+                                    meilleurCoup: membre.meilleurCoup,
+                                    grandsPrixJoues: membre.grandsPrixJoues,
+                                    moyenneTentee: membre.moyenneTentee,
+                                    livree: membre.livree, numero: membre.numero)
+                     })
+    }
 }

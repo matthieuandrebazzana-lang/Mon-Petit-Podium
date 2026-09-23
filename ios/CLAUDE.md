@@ -166,8 +166,8 @@ ios/
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données mockées
-    │   │   ├── ChampionnatDetailView.swift  classement + onglet piste — données mockées
-    │   │   ├── VuePisteView.swift           la piste, ses voitures et leur placement — MOCKÉ
+    │   │   ├── ChampionnatDetailView.swift  classement + porte de la piste — données mockées
+    │   │   ├── VuePisteView.swift           la piste en ÉCRAN PLEIN, placement des voitures — MOCKÉ
     │   │   ├── CreerChampionnatView.swift   nom, photo, code à venir — alerte mockée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases — alerte mockée
     │   ├── Calendrier/CalendrierView.swift  liste de la saison + lien vers les résultats

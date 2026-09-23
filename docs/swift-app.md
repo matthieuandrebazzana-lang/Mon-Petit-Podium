@@ -1535,6 +1535,60 @@ médiane, **deux kerbs en chemins** (pas en dégradés répétés).
 - **La zone de jeu est bornée par des pourcentages mesurés** : 4,2205 % à gauche, 4,8058 % à
   droite (bords intérieurs des kerbs, non symétriques).
 
+#### La piste est un **écran plein**, pas un onglet
+
+Elle a sa propre route (`VuePisteView`, poussée par `ChampionnatDetailView`), et elle
+**masque la barre de navigation et la barre d'onglets** : la piste est un dessin, et tout
+chrome posé dessus en rogne la hauteur, donc l'échelle des scores. Le bandeau, lui, reste —
+il porte la teinte du championnat, son nom, et le **seul chemin sortant** : « ‹ Classement »,
+en haut à gauche, dans sa première rangée. C'est ce que fait la version web, où l'écran est
+en `fixed inset-0` mais garde son `<header>`.
+
+**Le chemin d'entrée est un bouton pleine largeur**, jamais un segment de bascule : les deux
+offriraient deux chemins vers le même écran à trois centimètres l'un de l'autre.
+
+**Seul le sol franchit les zones sûres** — la couleur passe sous la barre d'état, le texte
+jamais. En bas, la zone de jeu s'arrête au-dessus de l'indicateur d'accueil : sans cela le
+score de la dernière voiture passerait dessous. La piste mesure alors **686 pt** de haut sur
+un iPhone 17 Pro, pas 778.
+
+> **Le damier ne se pose pas dans une pile.** `scaledToFill` y impose sa *taille de
+> remplissage* : proposé 402 pt de large, un dessin de 542 × 420 en réclame 311 de haut, et
+> le fond du bandeau débordait de 104 pt par-dessus le haut de la piste. L'aplat de couleur
+> porte donc ses deux calques décoratifs en `overlay`, qui ne change pas la taille de son
+> hôte. Défaut mesuré au simulateur, invisible à la lecture du code.
+
+#### Toutes les voitures ont la même taille
+
+**52 × 106, sans exception** — ni le score, ni le rang, ni l'encombrement de son groupe ne
+change la taille d'une voiture, et le score sous elle fait toujours 14 pt. Ce qui se resserre
+quand un groupe s'élargit, c'est le **pas** de l'éventail, jamais le dessin : deux voitures
+voisines à deux tailles différentes laissaient croire que la taille voulait dire quelque
+chose.
+
+#### La hauteur est proportionnelle au score, et le bas de la piste vaut zéro
+
+```
+y = (1 − points / meilleur score) × hauteur disponible
+```
+
+Le meilleur tient toujours le haut de la piste, un membre à `0` point toujours le bas, et la
+distance à la ligne du leader se lit directement comme la fraction de points qui manque.
+
+**L'échelle ne se tend pas sur le minimum.** Un championnat dont le dernier a 24 points sur
+168 pose sa voiture aux sept huitièmes de la piste, pas tout en bas. C'est ce qui rend deux
+captures d'un même championnat comparables d'un Grand Prix à l'autre — une échelle tendue sur
+le minimum redistribue tout le monde dès que le dernier marque un point.
+
+**Personne n'a encore marqué** et la formule n'a pas de diviseur : toute la grille se pose
+alors sur la ligne du bas, qui est sa place exacte, et la résolution des chevauchements en
+fait une grille de départ sur plusieurs voies.
+
+> **Jeu d'essai** : `168, 93, 66, 50, 47, 26, 24, 0`, les scores de
+> `maquettes_V2/screen-14-vue-piste.PNG`. Ils sont en dur dans `MembreMock.exemples` tant que
+> la passe réseau n'est pas faite, et ils couvrent les trois cas qui comptent — un écart
+> énorme en tête, un peloton qui se chevauche, un membre à zéro.
+
 **La vue piste identifie chacun par sa livrée, son numéro, et le pseudo peint sur l'aileron
 arrière.** La légende de droite n'affiche que le score, sans libellé — c'est pour cela que
 les pastilles carrées (`matti.svg`) **ne remplacent pas** les voitures : une pastille n'a
