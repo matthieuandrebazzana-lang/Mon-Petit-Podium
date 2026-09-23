@@ -155,11 +155,14 @@ struct AccueilView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// `NavigationLink` et non `Button`, comme dans ``ChampionnatsView`` : la carte
+    /// tombait auparavant sur un `Button` à l'action vide — elle s'enfonçait sous le doigt
+    /// et rien ne s'ouvrait.
     private var listeChampionnats: some View {
         VStack(spacing: 10) {
             ForEach(championnats) { championnat in
-                Button {
-                    // Destination à câbler : classement du championnat (`screen-13`).
+                NavigationLink {
+                    ChampionnatDetailView(championnat: championnat)
                 } label: {
                     CarteChampionnat(championnat: championnat)
                 }

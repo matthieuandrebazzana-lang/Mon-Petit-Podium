@@ -157,7 +157,7 @@ ios/
     │   │   ├── BarreNavigation.swift  TabView à 4 onglets + apparence de la barre
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
     │   ├── Accueil/
-    │   │   ├── AccueilView.swift       construit — données mockées
+    │   │   ├── AccueilView.swift       construit — données mockées, cartes → `ChampionnatDetailView`
     │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Composants/
