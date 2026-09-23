@@ -156,26 +156,20 @@ struct CalendrierView: View {
                     .frame(height: rang == 0 ? 0 : espacement)
                     .id(ancreDefilement(gp))
 
-                // **Un `NavigationLink` seulement là où il mène quelque part.** Un Grand
-                // Prix couru ouvre ses résultats ; les trois autres états n'ont pas encore
-                // d'écran, et un lien vers rien se serait enfoncé sous le doigt pour ne
-                // rien faire — ce qui se lit comme une panne. La bande « Voir les
-                // résultats » de la carte est déjà la promesse que ce lien tient.
-                if gp.etat == .termine {
-                    NavigationLink {
+                // **Deux destinations, un seul départage** : un Grand Prix couru ouvre ses
+                // résultats, les trois autres états ouvrent la fiche du week-end. Ces
+                // trois-là tombaient auparavant sur un `Button` à l'action vide — la carte
+                // s'enfonçait sous le doigt et rien ne s'ouvrait.
+                NavigationLink {
+                    if gp.etat == .termine {
                         ResultatsGPView(resultat: .pour(slug: gp.slug, nom: gp.nom, date: gp.date))
-                    } label: {
-                        CarteGrandPrixSaison(grandPrix: gp)
+                    } else {
+                        DetailGPView(grandPrix: gp)
                     }
-                    .buttonStyle(StyleAppui(.grandeSurface))
-                } else {
-                    Button {
-                        // Destination à câbler : la fiche de week-end (`screen-18`).
-                    } label: {
-                        CarteGrandPrixSaison(grandPrix: gp)
-                    }
-                    .buttonStyle(StyleAppui(.grandeSurface))
+                } label: {
+                    CarteGrandPrixSaison(grandPrix: gp)
                 }
+                .buttonStyle(StyleAppui(.grandeSurface))
             }
         }
     }
@@ -518,7 +512,7 @@ private extension View {
 /// `ferme` n'apparaît sur aucune des trois captures, mais il existe dès que l'heure de
 /// départ est passée sans que les résultats soient tombés : l'omettre laisserait un trou
 /// d'une heure et demie par week-end.
-private enum EtatGp {
+enum EtatGp {
     case termine
     case ferme
     case ouvert
@@ -566,7 +560,7 @@ private enum EtatGp {
 ///
 /// Le jour et le mois sont des **chaînes**, pas une `Date` : voir l'en-tête de
 /// ``CalendrierView``.
-private struct GrandPrixSaisonMock {
+struct GrandPrixSaisonMock {
     let slug: String
     let pays: String
     let nom: String

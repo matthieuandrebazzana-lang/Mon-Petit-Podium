@@ -170,7 +170,10 @@ ios/
     │   │   ├── VuePisteView.swift           la piste en ÉCRAN PLEIN, placement des voitures — MOCKÉ
     │   │   ├── CreerChampionnatView.swift   nom, photo, code à venir — alerte mockée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases — alerte mockée
-    │   ├── Calendrier/CalendrierView.swift  liste de la saison + lien vers les résultats
+    │   ├── Calendrier/
+    │   │   ├── CalendrierView.swift   liste de la saison — terminé → résultats, sinon → fiche
+    │   │   ├── DetailGPView.swift     fiche d'un GP à venir : séances, circuit, vainqueurs — MOCKÉE
+    │   │   └── FichesGrandPrix.swift  séances + fiches circuit, transcrites de `GP_2026` et `CIRCUITS`
     │   ├── Resultats/
     │   │   ├── ResultatsGPView.swift       mes résultats + classement officiel — MOCKÉS
     │   │   └── NationalitesPilotes.swift   pilote → pays, contrepartie de `lib/nationalites.js`
