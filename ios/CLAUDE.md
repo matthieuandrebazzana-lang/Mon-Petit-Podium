@@ -33,7 +33,7 @@ protège les données. La clé **`service_role` ne doit sous aucun prétexte ent
 bundle** — elle ne quitte jamais Railway.
 
 **Rien n'est écrit en dur.** Le chemin est
-`Config.xcconfig → réglages de build → Info.plist → SupabaseConfig → SupabaseManager`.
+`Config.xcconfig → réglages de build → Info.plist → SupabaseConfig → SupabaseManager / APIClient`.
 `Config.xcconfig` n'est pas versionné : au premier clone, copier `Config.xcconfig.example`.
 
 > **Cold start Railway.** Le plan gratuit met le service en veille. `502`/`503`/`504` sont
@@ -148,9 +148,15 @@ ios/
     │   ├── Materiaux.swift          damier et lumière spéculaire (les deux calques décoratifs)
     │   ├── Mouvement.swift          courbes, durées, StyleAppui (retour d'appui)
     │   └── LandingView.swift        écran d'accueil (non connecté)
-    ├── Models/                  (vide)
+    ├── Models/
+    │   ├── DecodageJSON.swift   `JSONDecoder.api` — le décodeur unique, dates ISO 8601
+    │   ├── Profil.swift         `Profil` + `ModeLivree`
+    │   ├── Championnat.swift    `Championnat`, `ProchainGP`, `PositionMembre`
+    │   └── Membre.swift         une ligne de classement
     ├── Services/
-    │   └── SupabaseManager.swift
+    │   ├── SupabaseManager.swift  chemin direct, sous RLS
+    │   ├── APIClient.swift        chemin Railway : Bearer, décodage, réessais, réveil
+    │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
     │   ├── ContentView.swift
     │   ├── Navigation/

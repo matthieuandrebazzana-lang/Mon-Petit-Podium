@@ -15,14 +15,22 @@ final class AuthViewModel: ObservableObject {
     /// `true` pendant une opération réseau (connexion, inscription, déconnexion).
     @Published var estEnChargement = false
     
-    /// Pseudo de l'utilisateur connecté — celui posé dans les métadonnées Supabase à
-    /// l'inscription. Vide tant qu'aucune session n'est ouverte.
-    @Published var pseudo = ""
-    
-    /// Photo de profil du compte connecté — l'URL publique de son objet dans Supabase
-    /// Storage, telle que la métadonnée `avatar_url` la porte. `nil` quand le compte n'en a
-    /// pas : l'écran retombe alors sur l'initiale, jamais sur un disque vide.
-    @Published var photoProfil: URL?
+    /// Le profil du compte connecté, lu **dans `public.profils`** — jamais dans les
+    /// métadonnées du jeton, figées à l'inscription (`docs/swift-app.md` §3.9).
+    /// `nil` tant qu'il n'a pas été lu, ou quand personne n'est connecté.
+    @Published private(set) var profil: Profil?
+
+    /// Pseudo du compte connecté. Vide tant que le profil n'a pas été lu.
+    var pseudo: String { profil?.pseudo ?? "" }
+
+    /// Photo de profil du compte connecté. `nil` quand le compte n'en a pas : l'écran
+    /// retombe alors sur l'initiale, jamais sur un disque vide.
+    var photoProfil: URL? { profil?.avatarUrl }
+
+    /// Faut-il afficher la section d'administration ? **Relu à chaque chargement du
+    /// profil, `false` à tout échec** : une section affichée à tort ne vaut rien, et ce
+    /// drapeau décide d'un affichage, jamais d'un droit (`POST /admin/action` autorise).
+    @Published private(set) var estAdmin = false
 
     /// Message d'erreur à afficher sous le formulaire, ou `nil` si aucune erreur.
     @Published var messageErreur: String?
@@ -33,19 +41,31 @@ final class AuthViewModel: ObservableObject {
         Task {
             await verifierSession()
         }
+        Task { [weak self] in
+            await self?.suivreDeconnexions()
+        }
+    }
+
+    /// Une session peut se perdre ailleurs que par le bouton de déconnexion : un `401`
+    /// de Railway la purge (``APIClient``), un rafraîchissement de jeton peut échouer.
+    /// Supabase publie alors `signedOut`, et c'est ici — un seul propriétaire — que
+    /// l'app revient à l'écran d'accueil non connecté.
+    private func suivreDeconnexions() async {
+        for await (evenement, _) in supabase.auth.authStateChanges
+        where evenement == .signedOut {
+            oublierCompte()
+        }
     }
     
     /// Vérifie si une session existe déjà au lancement de l'app.
     func verifierSession() async {
         do {
             let session = try await supabase.auth.session
-            retenir(session.user)
             estConnecte = true
+            await chargerProfil(id: session.user.id)
         } catch {
             // Pas de session valide — l'utilisateur verra l'écran de connexion.
-            pseudo = ""
-            photoProfil = nil
-            estConnecte = false
+            oublierCompte()
         }
     }
     
@@ -80,8 +100,8 @@ final class AuthViewModel: ObservableObject {
                 email: email,
                 password: motDePasse
             )
-            retenir(session.user)
             estConnecte = true
+            await chargerProfil(id: session.user.id)
         } catch {
             messageErreur = "Erreur de connexion : \(error.localizedDescription)"
         }
@@ -89,17 +109,43 @@ final class AuthViewModel: ObservableObject {
         estEnChargement = false
     }
     
-    /// Lit le pseudo d'un utilisateur Supabase. **Seul endroit qui le compose** : la
-    /// connexion et la vérification de session en avaient besoin toutes les deux, et
-    /// deux lectures écrites séparément auraient divergé au premier ajustement.
+    /// (Re)lit le profil du compte connecté, en direct sous RLS — lecture que la
+    /// politique « soi-même » décrit exactement, donc sans passer par Railway ni
+    /// attendre son réveil. **Seul endroit qui le lit** : connexion, inscription et
+    /// session au lancement passent toutes par ici.
     ///
-    /// Le repli sur la partie locale de l'adresse couvre les comptes créés avant que
-    /// l'inscription ne pose la métadonnée `pseudo`.
-    private func retenir(_ utilisateur: User) {
-        pseudo = utilisateur.userMetadata["pseudo"]?.stringValue
-            ?? utilisateur.email?.split(separator: "@").first.map(String.init)
-            ?? ""
-        photoProfil = utilisateur.userMetadata["avatar_url"]?.stringValue.flatMap(URL.init(string:))
+    /// Deux sens du doute (§3.9) : un pseudo ou une photo **périmés** valent mieux que
+    /// rien, donc un échec garde le profil déjà connu ; `is_admin`, lui, retombe
+    /// **toujours** à `false`.
+    func chargerProfil(id: UUID) async {
+        do {
+            let reponse = try await supabase
+                .from("profils")
+                .select(Profil.colonnes)
+                .eq("id", value: id)
+                .single()
+                .execute()
+            let lu = try JSONDecoder.api.decode(Profil.self, from: reponse.data)
+            profil = lu
+            estAdmin = lu.isAdmin
+        } catch {
+            estAdmin = false
+        }
+    }
+
+    /// Relit le profil du compte connecté, s'il y en a un — après un changement de
+    /// pseudo, de photo ou de voiture.
+    func rechargerProfil() async {
+        guard let id = try? await supabase.auth.session.user.id else { return }
+        await chargerProfil(id: id)
+    }
+
+    /// Efface tout ce qui appartient au compte (§2.6) : deux personnes qui se relaient
+    /// sur le même téléphone ne voient jamais les données de l'autre.
+    private func oublierCompte() {
+        profil = nil
+        estAdmin = false
+        estConnecte = false
     }
     
     /// Déconnecte l'utilisateur actuel.
@@ -109,9 +155,7 @@ final class AuthViewModel: ObservableObject {
         
         do {
             try await supabase.auth.signOut()
-            pseudo = ""
-            photoProfil = nil
-            estConnecte = false
+            oublierCompte()
         } catch {
             messageErreur = "Erreur lors de la déconnexion : \(error.localizedDescription)"
         }

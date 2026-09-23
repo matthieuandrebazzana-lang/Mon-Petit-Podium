@@ -96,12 +96,63 @@ plutôt que de la laisser échouer plus tard sur un appel réseau incompréhensi
 > SUPABASE_URL = https:$(SLASH)$(SLASH)ycsxcythvtcruiomrgvv.supabase.co
 > ```
 
-### 1.3 Client partagé
+### 1.3 Clients partagés
 
-`SupabaseManager.partage` est le **point d'entrée unique** vers Supabase et vers Railway.
+Deux points d'entrée, un par chemin de données (§3.9) — **aucun écran n'ouvre de
+`URLSession` ni de requête PostgREST de lui-même.**
+
+| Singleton | Chemin | Ce qu'il porte |
+|---|---|---|
+| `SupabaseManager.partage` (`Services/`) | **(B)** Supabase direct, sous RLS | Le client `supabase-swift` · `jetonAcces()`, relu à chaque appel |
+| `APIClient.partage` (`Services/`) | **(A)** Railway | `Bearer`, décodage, classement des erreurs, réveil |
+
 Le client Supabase n'est construit qu'une fois : il persiste la session dans le Keychain et
 rafraîchit le jeton tout seul, mais un second client ferait travailler deux rafraîchisseurs
 sur le même Keychain.
+
+**`APIClient`** — `requete<T>(_ chemin:, methode:, corps:, parametres:)` rend un modèle
+décodé ou lève une **`ErreurAPI`** dont le `message` est déjà affichable (§7.2) ;
+`envoyer(…)` pour une route dont la réponse ne sert à rien. Quatre comportements à
+connaître :
+
+- **Les lectures (`GET`) sont rejouées deux fois** sur un échec réseau (1,5 s puis 3 s) :
+  c'est le cold start Railway, et il se résorbe seul. **Les écritures ne le sont jamais** :
+  rejouer un `POST` dont on ignore s'il a abouti n'est pas une décision de la couche réseau.
+- **Un `401` purge la session** (`signOut`, §7.3). `AuthViewModel` écoute `signedOut` sur
+  `authStateChanges` et revient à l'accueil non connecté — un seul propriétaire, quelle que
+  soit l'origine de la déconnexion. Un `503` ne déconnecte jamais.
+- **Une annulation n'est pas un échec** : un écran quitté en cours d'appel reçoit
+  `CancellationError`, et rien ne doit s'afficher.
+- **`reveiller()`** tire `GET /health` sans attendre la réponse. Appelé au `onAppear` de la
+  racine (`GreedF1App`).
+
+**`JSONDecoder.api`** (`Models/DecodageJSON.swift`) est le **décodeur unique**, pour Railway
+**et** pour les lectures directes (`execute().data` puis `JSONDecoder.api`) : dates ISO 8601
+avec ou sans fraction (§7.4 — les six décimales de PostgreSQL passent). Les clés ne sont
+**pas** converties : chaque modèle déclare ses `CodingKeys` en `snake_case`.
+
+**Règles des modèles `Codable`** (`Models/`) :
+
+- **Un champ qui a une valeur par défaut côté backend en a une ici** (`decodeIfPresent ??`).
+  C'est le corollaire de la règle Pydantic de la racine : un backend déployé avant sa
+  migration perd un champ, il ne fait pas échouer le décodage de toute la réponse.
+- **Un sous-objet secondaire se décode en `try?`** (`prochain_gp`, `position` d'un
+  `Championnat`) : il fait perdre son rang à une carte, jamais la liste.
+- **Les énumérations ont un repli** : `ModeLivree` inconnu ⇒ `.perso`.
+- **Les URL d'image sont des `URL?`** ; une chaîne vide vaut `nil`.
+- **`is_admin` retombe sur `false`** à l'absence comme à l'échec.
+
+| Modèle | Route | Nom backend |
+|---|---|---|
+| `Profil` | `GET /profils/{id}`, `PATCH /profils/moi`, lecture directe de `profils` | `ProfilServi` |
+| `Championnat` (+ `ProchainGP`, `PositionMembre`) | `GET /championnats/moi`, `POST /championnats`, `/rejoindre`, `PATCH` | `Championnat` |
+| `Membre` | `GET /championnats/{id}/classement` | `LigneClassement` |
+
+**Le profil du compte connecté** se lit **en direct dans `public.profils`**
+(`AuthViewModel.chargerProfil`, colonnes nommées par `Profil.colonnes`), **jamais dans les
+métadonnées du jeton**, figées à l'inscription. Au lancement, à la connexion et à
+l'inscription. En cas d'échec, le profil déjà connu est gardé (un pseudo périmé vaut mieux
+que rien) et `estAdmin` retombe à `false`.
 
 ---
 
@@ -2012,6 +2063,53 @@ suite.*
 - **Aucun écran ne doit inventer de donnée absente** : pas de tracé de repli pour un circuit
   inconnu, pas de couleur de repli pour un drapeau absent, pas de zéro à la place d'un `nil`.
   C'est la règle la plus constante du projet.
+
+### 7.6 Branchement des données — état et ordre
+
+L'app a été construite écran par écran sur des **mocks**. Leur remplacement suit l'ordre
+ci-dessous ; chaque étape ne dépend que des précédentes.
+
+| Étape | Contenu | État |
+|---|---|---|
+| **0** | Fondations : `APIClient`, `ErreurAPI`, `JSONDecoder.api`, réveil, `Profil` / `Championnat` / `Membre`, profil courant en direct | **Fait** (iOS 0.20.0) |
+| **1** | `GET /championnats/moi` — **un seul propriétaire** pour l'accueil et l'onglet Championnats. L'`id` devient un UUID : la teinte Pantone, tirée de l'id, changera une fois | |
+| **2** | Créer / rejoindre, puis la photo (Storage + `PATCH`). Navigation vers le championnat obtenu, liste de l'étape 1 invalidée | |
+| **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | |
+| **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | |
+| **5** | Calendrier : liste statique **croisée** avec `GET /scraper/cotes` → états réels **et `gp_id`** · GP suivant de l'accueil en lecture directe · **un seul calcul d'échéance** (§6.4) | |
+| **6** | Résultats : `GET /grands-prix/{id}/resultats` + mes pronostics en direct, puis `?championnat_id=` | |
+| **7** | Pronostics : `EtapePronos` porte le `gp_id` · cotes réelles · bonus = favoris serveur · `POST …/pronostics` avec `423` · destination du widget d'accueil | |
+
+**Pourquoi cet ordre.** Les championnats d'abord : les écrans les plus vus, une seule route,
+de quoi éprouver la couche réseau sur un cas simple. Le calendrier avant résultats et
+pronostics : **c'est lui qui fournit le `gp_id`**, sans lequel aucun écran de course ne sait
+quel GP demander. Les pronostics en dernier : trois écrans, deux changements de modèle et le
+`423`.
+
+**Écarts de modèle déjà repérés entre les mocks et le contrat serveur :**
+
+- **`EtapePronos` ne transporte pas l'identifiant du GP** (nom, slug, sous-titre seulement).
+- **Le calendrier n'a pas de `gp_id`** : seul le slug existe. Le rattacher par le nom du GP
+  depuis `GET /scraper/cotes`. Les 12 cartes s'affichent **quoi qu'il arrive** — l'échec de
+  l'appel fait perdre les états, jamais la liste.
+- **`MarcheCote` ne connaît que vainqueur et podium** : les bonus portent les marchés
+  **découverts par le scraper** (`marche` + `libelle`), le modèle doit devenir dynamique.
+- **Le panier local de paris bonus doit devenir les favoris serveur** : le serveur exige
+  que les bonus soient parmi les favoris.
+- **Les statistiques d'un membre ne se dérivent plus du classement** : `GET /profils/{id}/stats`.
+- **L'écurie d'un pilote n'est pas servie** : table pilote → écurie côté client (pendant de
+  `lib/ecuries.js`).
+- **Le bandeau « Pronos enregistrés ! »** ne s'affiche qu'après un `200`.
+- **`GET /grands-prix/{id}/resultats` avec `disponible: false`** ⇒ « résultats en attente »,
+  jamais un classement vide.
+
+**Ce qui reste statique — ne pas brancher** : `FichesGrandPrix` (séances hors qualifs et
+course, circuits, palmarès), la liste des 12 GP, `NationalitesPilotes`, `DrapeauxGP`,
+`LivreeEcurie`, la table pilote → écurie.
+
+**Encore à trancher** : « 12 Grands Prix restants » en constante ou compté en base (possible
+depuis la migration 19) · cache des réponses le temps de la session, ou rechargement à
+chaque apparition · le hors ligne (§7.2) dans ce chantier ou après.
 
 ---
 
