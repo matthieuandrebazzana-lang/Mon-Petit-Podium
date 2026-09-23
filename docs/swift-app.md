@@ -1815,6 +1815,16 @@ qu'est cet écran*, *comment j'en sors*, *où mène ce bouton*.
 > récapitulatif est une promesse fausse. **Quand un même bouton mène à deux écrans, son
 > libellé suit sa destination.**
 
+> **Le bouton de retour natif échappe à cette règle sous iOS 26.** Mesuré au simulateur :
+> le Liquid Glass le rend en pastille de verre, **chevron seul**, quel que soit le titre de
+> l'écran précédent — comme il reprend la main sur la barre d'onglets (`ios/CLAUDE.md` §3).
+> Le titre reste posé sur l'écran d'origine, parce qu'iOS 17 et 18, la cible de
+> déploiement, l'affichent bien ; et il se masque sur place par un `ToolbarItem(placement:
+> .principal)` vide, `navigationTitle("")` retirant du même coup le titre **et** le libellé
+> du retour. Un retour qui doit se nommer sur les trois versions se pose donc **dans le
+> contenu**, la barre masquée — c'est ce que fait `RecapView`, et c'est ce qui préserve en
+> prime le retour par glissement.
+
 > **Un bouton reste ACTIF même quand la saisie est incomplète.** Un bouton grisé ne dit pas
 > ce qui manque ; l'appui pose le message à l'endroit exact à corriger.
 

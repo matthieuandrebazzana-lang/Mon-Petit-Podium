@@ -75,7 +75,25 @@ struct ChampionnatDetailView: View {
         // Le nom du championnat est déjà dans le contenu, à 28 pt : le répéter dans la
         // barre ferait doublon. Elle ne garde donc que le chevron de retour natif, qui
         // porte le titre de l'écran précédent — « Championnats ».
-        .navigationTitle("")
+        //
+        // **Le titre est néanmoins posé, et masqué.** Un bouton de retour natif prend son
+        // libellé du titre de l'écran d'où il vient : sans lui, le profil d'un membre
+        // n'afficherait qu'un chevron nu. L'élément principal vide retire le texte de la
+        // barre sans retirer le titre, là où `navigationTitle("")` aurait retiré les deux.
+        //
+        // > *Écart mesuré au simulateur (`CLAUDE.md` §6).* **Sous iOS 26, le libellé ne
+        // > s'affiche de toute façon pas** : le Liquid Glass rend le bouton de retour en
+        // > pastille de verre, chevron seul, quel que soit le titre — comme il reprend la
+        // > main sur la barre d'onglets (`ios/CLAUDE.md` §3). Le titre reste posé pour
+        // > **iOS 17 et 18**, la cible de déploiement, où le bouton l'affiche ; sans
+        // > l'élément principal vide, ces deux versions gagneraient le libellé mais iOS 26
+        // > hériterait d'un « Classement » centré en doublon du sélecteur juste dessous.
+        .navigationTitle("Classement")
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Color.clear.frame(width: 0, height: 0)
+            }
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }
@@ -186,7 +204,15 @@ struct ChampionnatDetailView: View {
     private var classement: some View {
         VStack(spacing: 4) {
             ForEach(membres) { membre in
-                LigneClassement(membre: membre, total: membres.count)
+                // `NavigationLink` et non `Button` : c'est lui qui porte le glissement
+                // d'écran natif et le geste de retour par le bord, qu'un `Button` poussant
+                // un état ne donne pas.
+                NavigationLink {
+                    ProfilMembreView(membre: membre.profil)
+                } label: {
+                    LigneClassement(membre: membre, total: membres.count)
+                }
+                .buttonStyle(StyleAppui(.grandeSurface))
             }
         }
         .padding(12)
@@ -257,6 +283,10 @@ private struct LigneClassement: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 4)
         .frame(minHeight: 44)                                // plancher tactile iOS
+        // **La ligne entière est la cible**, pas ses seuls textes. Sans cela, le lien vers
+        // le profil ne répondrait qu'au pseudo et au score, et l'intervalle entre les deux
+        // lignes de texte — au milieu de la ligne, là où le doigt tombe — resterait mort.
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "\(membre.rang)\(membre.rang == 1 ? "er" : "e") sur \(total), \(membre.pseudo), "
@@ -402,7 +432,11 @@ private struct WidgetGrandPrixSuivant: View {
 
 /// Un membre du classement. `points` est un **entier**, et c'est déjà le nombre de points :
 /// `CLAUDE.md` §3.1 — une cote de 2,80 vaut 28 points, et rien en base ne stocke une cote.
-private struct MembreMock: Identifiable {
+///
+/// **Le type n'est pas `private`** : c'est lui qui alimente ``ProfilMembreView``, et un
+/// second jeu de valeurs mockées pour le profil aurait fait dire deux choses différentes du
+/// même membre — un meilleur coup au classement, un autre sur sa fiche.
+struct MembreMock: Identifiable {
     /// L'identifiant du compte. C'est de lui que se tire la teinte de l'avatar, jamais du
     /// rang : un membre qui perd une place ne change pas de couleur.
     let id: String
@@ -411,20 +445,102 @@ private struct MembreMock: Identifiable {
     let rang: Int
     /// Pronostics réussis sur la saison.
     let reussis: Int
+    /// Pronostics **tentés** sur la saison — obligatoires et bonus confondus. C'est le
+    /// dénominateur de « Paris gagnés », et il est mocké plutôt que calculé : le nombre de
+    /// paris par Grand Prix dépend des bonus retenus, que rien ici ne connaît.
+    let tentes: Int
     /// Le meilleur coup de la saison, en points. **Jamais une cote.**
     let meilleurCoup: Int
+    /// Grands Prix joués cette saison. C'est le diviseur de « Pts moy. / GP ».
+    let grandsPrixJoues: Int
+    /// La moyenne des paris tentés, **en points** — c'est ce que la tuile « Cote moy.
+    /// tentée » affiche, et le mot « cote » n'y est qu'un libellé hérité de la version web :
+    /// la valeur est un entier de points (`CLAUDE.md` §3.1).
+    let moyenneTentee: Int
+    /// Ce que porte sa voiture, et le numéro peint sur son museau.
+    let livree: Livree
+    let numero: String
+
+    /// Le profil tel que ``ProfilMembreView`` l'attend. **Les quatre statistiques sont
+    /// mises en forme ici**, à côté des chiffres bruts dont elles sortent : l'écran qui les
+    /// affiche n'est alors jamais celui qui décide de leur arrondi.
+    var profil: MembreProfil {
+        MembreProfil(
+            identifiant: id,
+            pseudo: pseudo,
+            livree: livree,
+            numero: numero,
+            grandsPrixJoues: grandsPrixJoues,
+            statistiques: [
+                StatistiqueProfil(valeur: "\(pourcentageReussite)%", libelle: "Paris gagnés"),
+                StatistiqueProfil(valeur: String(pointsMoyensParGrandPrix), libelle: "Pts moy. / GP"),
+                StatistiqueProfil(valeur: String(meilleurCoup), libelle: "Meilleur coup"),
+                StatistiqueProfil(valeur: String(moyenneTentee), libelle: "Cote moy. tentée")
+            ]
+        )
+    }
+
+    /// Zéro pari tenté ne fait pas 0 % mais **rien à dire** : `NULL` et `0` ne se confondent
+    /// jamais (`CLAUDE.md` §3.1), et une saison pas encore commencée n'est pas une saison
+    /// ratée.
+    private var pourcentageReussite: Int {
+        tentes > 0 ? Int((Double(reussis) / Double(tentes) * 100).rounded()) : 0
+    }
+
+    private var pointsMoyensParGrandPrix: Int {
+        grandsPrixJoues > 0 ? Int((Double(points) / Double(grandsPrixJoues)).rounded()) : 0
+    }
 
     /// Huit membres, repris de `screen-13` : de quoi remplir le plus grand des championnats
     /// mockés. Un championnat plus petit en prend le préfixe.
+    ///
+    /// **Les valeurs de Matthieu et de 7homas sont celles des captures** — `screen-20`
+    /// pour le premier (33 %, 31, 25, 46), `screen-22` pour le second (40 %, 33, 22, 41) —
+    /// et elles tombent juste parce que les chiffres bruts les redonnent : 66 points en
+    /// 2 Grands Prix font bien 33, et 4 réussis sur 10 tentés font bien 40 %.
     static let exemples: [MembreMock] = [
-        MembreMock(id: "nicolas", pseudo: "Nicolas", points: 168, rang: 1, reussis: 9, meilleurCoup: 42),
-        MembreMock(id: "matthieu", pseudo: "Matthieu", points: 93, rang: 2, reussis: 5, meilleurCoup: 25),
-        MembreMock(id: "7homas", pseudo: "7homas", points: 66, rang: 3, reussis: 4, meilleurCoup: 22),
-        MembreMock(id: "clem1500", pseudo: "Clem1500", points: 50, rang: 4, reussis: 2, meilleurCoup: 25),
-        MembreMock(id: "petiotte", pseudo: "Petiotte", points: 47, rang: 5, reussis: 2, meilleurCoup: 35),
-        MembreMock(id: "camikaz", pseudo: "Camikaz", points: 26, rang: 6, reussis: 2, meilleurCoup: 14),
-        MembreMock(id: "lucas", pseudo: "Lucas", points: 18, rang: 7, reussis: 1, meilleurCoup: 18),
-        MembreMock(id: "julie", pseudo: "Julie", points: 12, rang: 8, reussis: 1, meilleurCoup: 12)
+        MembreMock(id: "nicolas", pseudo: "Nicolas", points: 168, rang: 1,
+                   reussis: 9, tentes: 25, meilleurCoup: 42,
+                   grandsPrixJoues: 5, moyenneTentee: 38,
+                   livree: Livree(mode: .perso, coque: "#CC0000", ailerons: "#FFFFFF"),
+                   numero: "1"),
+        MembreMock(id: "matthieu", pseudo: "Matthieu", points: 93, rang: 2,
+                   reussis: 5, tentes: 15, meilleurCoup: 25,
+                   grandsPrixJoues: 3, moyenneTentee: 46,
+                   livree: Livree(mode: .perso, coque: "#CC0000", ailerons: "#003087",
+                                  couleurTexte: "#00D2BE"),
+                   numero: "33"),
+        MembreMock(id: "7homas", pseudo: "7homas", points: 66, rang: 3,
+                   reussis: 4, tentes: 10, meilleurCoup: 22,
+                   grandsPrixJoues: 2, moyenneTentee: 41,
+                   livree: Livree(mode: .perso, coque: "#2D2D2D", ailerons: "#00A19C",
+                                  couleurTexte: "#00D2BE"),
+                   numero: "44"),
+        MembreMock(id: "clem1500", pseudo: "Clem1500", points: 50, rang: 4,
+                   reussis: 2, tentes: 10, meilleurCoup: 25,
+                   grandsPrixJoues: 2, moyenneTentee: 33,
+                   livree: Livree(mode: .perso, coque: "#E8027B", ailerons: "#FFFFFF"),
+                   numero: "27"),
+        MembreMock(id: "petiotte", pseudo: "Petiotte", points: 47, rang: 5,
+                   reussis: 2, tentes: 10, meilleurCoup: 35,
+                   grandsPrixJoues: 2, moyenneTentee: 39,
+                   livree: Livree(mode: .perso, coque: "#003087", ailerons: "#FFD700"),
+                   numero: "10"),
+        MembreMock(id: "camikaz", pseudo: "Camikaz", points: 26, rang: 6,
+                   reussis: 2, tentes: 10, meilleurCoup: 14,
+                   grandsPrixJoues: 2, moyenneTentee: 22,
+                   livree: Livree(mode: .ecurie, ecurie: "mclaren"),
+                   numero: "7"),
+        MembreMock(id: "lucas", pseudo: "Lucas", points: 18, rang: 7,
+                   reussis: 1, tentes: 5, meilleurCoup: 18,
+                   grandsPrixJoues: 1, moyenneTentee: 26,
+                   livree: Livree(mode: .perso, coque: "#FF8000", ailerons: "#000000"),
+                   numero: "81"),
+        MembreMock(id: "julie", pseudo: "Julie", points: 12, rang: 8,
+                   reussis: 1, tentes: 5, meilleurCoup: 12,
+                   grandsPrixJoues: 1, moyenneTentee: 19,
+                   livree: Livree(mode: .perso, coque: "#960064", ailerons: "#C0C0C0"),
+                   numero: "22")
     ]
 }
 

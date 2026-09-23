@@ -59,11 +59,11 @@ struct ProfilView: View {
     /// à tout le monde serait pire qu'absente.
     private let estAdmin = false
 
-    private let statistiques: [Statistique] = [
-        Statistique(valeur: "33%", libelle: "Paris gagnés"),
-        Statistique(valeur: "31", libelle: "Pts moy. / GP"),
-        Statistique(valeur: "25", libelle: "Meilleur coup"),
-        Statistique(valeur: "46", libelle: "Cote moy. tentée")
+    private let statistiques: [StatistiqueProfil] = [
+        StatistiqueProfil(valeur: "33%", libelle: "Paris gagnés"),
+        StatistiqueProfil(valeur: "31", libelle: "Pts moy. / GP"),
+        StatistiqueProfil(valeur: "25", libelle: "Meilleur coup"),
+        StatistiqueProfil(valeur: "46", libelle: "Cote moy. tentée")
     ]
 
     // MARK: - Corps
@@ -117,50 +117,20 @@ struct ProfilView: View {
 
     /// L'aplat d'identité : photo, pseudo, saison, et la voiture du membre à droite.
     ///
+    /// **C'est le même en-tête que sur le profil d'un autre membre** (``EnteteProfil``) :
+    /// seule la pastille diffère, parce qu'ici elle se change. Deux aplats écrits
+    /// séparément auraient divergé au premier ajustement de rembourrage.
+    ///
     /// **La voiture est ici en petit et là-dessous en grand, et c'est voulu** : la même
     /// chose, vue à la taille où les autres la verront au classement, puis à la taille où
     /// on la règle. C'est ce qui rend lisible ce que le bloc du dessous fabrique.
     private var entete: some View {
-        HStack(spacing: 14) {
+        EnteteProfil(pseudo: pseudoAffiche,
+                     livree: livree,
+                     numero: numero,
+                     photo: viewModel.photoProfil) {
             avatar
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(pseudoAffiche)
-                    .font(.custom("HelveticaNeue-Medium", size: 22))
-                    .tracking(-0.44)                      // -0,02 em, la règle des titres
-                    .foregroundColor(.white)              // 10,88:1 sur #800111
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-
-                // **`encreSecondaire` (blanc 70 %), pas 60 %.** Mesuré : le blanc à 60 %
-                // composité sur `primaire` donne #D9B3B8, soit 4,47:1 — sous le plancher
-                // de 4,5:1 d'un texte ordinaire. À 70 % il y tient 5,75:1, pour un gris que
-                // l'œil ne distingue pas du premier (`ios/CLAUDE.md` §3).
-                Text("Saison 2026")
-                    .font(.corpsSm)
-                    .foregroundColor(.encreSecondaire)
-            }
-
-            Spacer(minLength: 8)
-
-            VueVoiture(livree: livree,
-                       numero: numero,
-                       nom: pseudoAffiche,
-                       photo: viewModel.photoProfil,
-                       teintePilote: .primaire)
-                .frame(height: 76)
-
-            Text("#\(numeroAffiche)")
-                .font(.custom("HelveticaNeue-Medium", size: 26))
-                .tracking(-0.65)
-                .foregroundColor(.encreSecondaire)        // 5,75:1 sur #800111
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity)
-        .background(Color.primaire)
-        .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
-        .ombreAplat()
     }
 
     /// La pastille du compte, et le bouton qui change la photo. **L'appareil photo est posé
@@ -172,19 +142,7 @@ struct ProfilView: View {
             // elle, est déjà à sa place et à sa taille.
         } label: {
             ZStack(alignment: .bottomTrailing) {
-                Group {
-                    if let photo = viewModel.photoProfil {
-                        AsyncImage(url: photo) { image in
-                            image.resizable().scaledToFill()
-                        } placeholder: {
-                            initialeDuPseudo
-                        }
-                    } else {
-                        initialeDuPseudo
-                    }
-                }
-                .frame(width: 64, height: 64)
-                .clipShape(Circle())
+                PastilleProfil(pseudo: pseudoAffiche, photo: viewModel.photoProfil)
 
                 Image(systemName: "camera.fill")
                     .font(.system(size: 11, weight: .medium))
@@ -198,15 +156,6 @@ struct ProfilView: View {
         }
         .buttonStyle(StyleAppui(.bouton))
         .accessibilityLabel("Changer ma photo de profil")
-    }
-
-    private var initialeDuPseudo: some View {
-        Color.primaireFonce
-            .overlay {
-                Text(pseudoAffiche.first.map { String($0).uppercased() } ?? "?")
-                    .font(.custom("HelveticaNeue-Medium", size: 26))
-                    .foregroundColor(.white)
-            }
     }
 
     private var supprimerLaPhoto: some View {
@@ -225,49 +174,13 @@ struct ProfilView: View {
         viewModel.pseudo.isEmpty ? "pilote" : viewModel.pseudo
     }
 
-    private var numeroAffiche: String {
-        numero.isEmpty ? "—" : numero
-    }
-
     // MARK: - Statistiques
 
-    private struct Statistique: Identifiable {
-        let valeur: String
-        let libelle: String
-        var id: String { libelle }
-    }
-
-    /// Quatre tuiles, deux par rangée. **`LazyVGrid` à colonnes flexibles**, pas deux
-    /// `HStack` : les quatre gardent alors la même largeur quelle que soit la longueur du
-    /// libellé, et « Cote moy. tentée » ne fait pas grossir sa colonne.
+    /// Quatre tuiles, deux par rangée — **les mêmes que sur le profil d'un autre membre**
+    /// (``GrilleStatistiques``), et c'est ce qui permet de comparer les deux d'un coup
+    /// d'œil sans relire les libellés.
     private var grilleStatistiques: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
-                            GridItem(.flexible(), spacing: 12)],
-                  spacing: 12) {
-            ForEach(statistiques) { statistique in
-                VStack(spacing: 4) {
-                    Text(statistique.valeur)
-                        .font(.score)
-                        .tracking(Tracking.score)
-                        .foregroundColor(.primaire)       // 12,60:1 sur le blanc
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-
-                    // **`grisSecondaire`, pas `texteDoux`** : sur le blanc, #999999 ne vaut
-                    // que 2,85:1 — sous le plancher de 4,5:1. #6B6B6B y tient 5,33:1.
-                    Text(statistique.libelle)
-                        .font(.custom("HelveticaNeue", size: 12))
-                        .foregroundColor(.grisSecondaire)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .padding(.vertical, 18)
-                .frame(maxWidth: .infinity)
-                .background(Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
-                .ombreCarte()
-            }
-        }
+        GrilleStatistiques(statistiques: statistiques)
     }
 
     // MARK: - Ma livrée

@@ -176,7 +176,10 @@ ios/
     │   │   ├── CotesView.swift      tableau des cotes + paris bonus, et `EtapePronos` — MOCKÉS
     │   │   ├── PronosView.swift     saisie des deux pronostics obligatoires — MOCKÉE
     │   │   └── RecapView.swift      récapitulatif après validation — MOCKÉ
-    │   └── Profil/ProfilView.swift      construit — données mockées
+    │   └── Profil/
+    │       ├── ProfilView.swift         mon profil — données mockées
+    │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — MOCKÉ
+    │       └── ComposantsProfil.swift   pastille, en-tête et grille de stats, PARTAGÉS
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)
     │   ├── Assets.xcassets/      les assets de §6
