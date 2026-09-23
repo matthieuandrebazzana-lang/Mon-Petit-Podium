@@ -1,5 +1,5 @@
 import Voiture from "./Voiture.jsx";
-import { FondDrapeau, drapeauDeNationalite } from "./DrapeauxGP.jsx";
+import { drapeauDeNationalite } from "./DrapeauxGP.jsx";
 import { nomSurLaVoiture } from "../lib/circuits.js";
 
 /**
@@ -7,8 +7,8 @@ import { nomSurLaVoiture } from "../lib/circuits.js";
  *
  * Chaque carte porte le millésime, la **voiture aux couleurs de l'écurie**
  * (`Voiture` en mode `ecurie`, avec le numéro et le nom du pilote peints
- * dessus), le nom complet à droite, et le drapeau de sa nationalité en fond
- * discret.
+ * dessus), le prénom et le nom du vainqueur, puis son pays précédé de son
+ * **drapeau emoji**.
  *
  * ## Une grille, et non plus une rangée qui défile (v`0.60.0`)
  *
@@ -62,45 +62,58 @@ import { nomSurLaVoiture } from "../lib/circuits.js";
  * §3.8 ter — parce que ce sont deux écrans qui marchent, et que ce sont de
  * vraies rangées qui défilent.
  *
- * ## Le fond est un drapeau, à 18 %
+ * ## Le fond est blanc, partout, et le drapeau est passé dans le texte (v`0.76.0`)
  *
- * C'est une **texture**, pas une information : la nationalité est écrite en
- * toutes lettres sous le nom, et la carte se lit entièrement sans le fond. D'où
- * le fait qu'une nationalité sans drapeau — l'Australie, la Finlande (voir
- * `DrapeauxGP.jsx`) — ne laisse aucun trou.
+ * Les cartes portaient le drapeau de la nationalité en lavis à 18 %. **Six
+ * cartes côte à côte en faisaient six fonds différents** : la carte 2025 d'un GP
+ * gagné par Verstappen sortait rose et bleue quand sa voisine restait blanche,
+ * et l'œil y lisait une mise en avant du millésime le plus récent — une
+ * hiérarchie que la donnée ne porte pas. Un palmarès est une liste d'égaux ;
+ * six éditions se comparent, et rien ne doit dire que l'une compte plus.
  *
- * **9 % ne se voyait pas** sur une carte devenue deux fois plus large qu'un
- * timbre. Doubler l'opacité rend le drapeau lisible comme fond ; **le contraste
- * tient largement**, et c'est mesuré sur les seize teintes que les onze
- * nationalités peignent. Le pire substrat est le noir de l'Allemagne :
+ * **Le fond redevient donc `bg-surface` sur les six**, et la différence entre
+ * les cartes se joue là où elle est vraie : le millésime, la livrée de la
+ * voiture, le nom, le pays.
  *
- * | Opacité | `#000000` composé | `#1A1A1A` dessus | `secondaire` dessus |
- * |---|---|---|---|
- * | `0,09` | `#E8E8E8` | 14,20:1 | 8,62:1 |
- * | **`0,18`** | **`#D1D1D1`** | **11,40:1** | **6,91:1** |
- * | `0,20` | `#CCCCCC` | 10,84:1 | 6,57:1 |
+ * > **La nationalité n'a rien perdu — elle a gagné son drapeau.** Ce qui était
+ * > une texture derrière le texte est maintenant un **glyphe devant lui**
+ * > (`emoji`, `DrapeauxGP.jsx`) : « 🇳🇱 Pays-Bas », sur la ligne du pays. Le
+ * > drapeau se lit enfin au lieu de se deviner, et les deux nationalités que le
+ * > lavis laissait sans rien — l'Australie et la Finlande, faute d'un dessin
+ * > qu'on puisse poser sans l'approximer — sont désormais traitées comme les
+ * > neuf autres.
  *
- * Les deux valeurs demandées passent donc le plancher de 4,5:1 avec une marge
- * confortable : **le choix entre elles est esthétique, pas de lisibilité**, et
- * c'est la plus discrète des deux qui est retenue — un palmarès n'est pas ce
- * qu'on regarde en premier sur cet écran.
+ * **Le contraste est mesuré sur le nouveau substrat, et il monte.** Le pire cas
+ * n'est plus le noir de l'Allemagne composé à 18 % (`#D1D1D1`) mais le blanc
+ * pur, qui est le substrat le plus clair possible :
  *
- * > **Le fond ne passe donc PAS par le voile calculé de `DrapeauxGP.jsx`**, et
- * > c'est la seule différence avec le bloc de l'accueil et les cartes du
- * > calendrier. Là-bas le drapeau est peint à pleine intensité sous du texte
- * > blanc, et le voile est ce qui garantit les 3:1 ; ici c'est l'opacité qui
- * > joue ce rôle, en amont, et un voile par-dessus n'assombrirait qu'un lavis
- * > déjà très clair. `apparence()` reste appelée pour une seule raison — que la
- * > nationalité et le pays hôte partagent exactement le même calcul, et
- * > qu'ajouter demain une carte à fond plein ne demande pas d'y revenir.
+ * | Substrat | `texte` dessus | `secondaire` dessus |
+ * |---|---|---|
+ * | Lavis à 18 %, pire cas `#D1D1D1` | 11,40:1 | 6,91:1 |
+ * | **`surface` `#FFFFFF`** | **17,40:1** | **10,56:1** |
+ *
+ * Les trois lignes de texte gardent donc leurs encres, et la carte n'a plus de
+ * pire cas à surveiller : c'est un substrat unique, pas seize.
+ *
+ * > **`texte-doux` reste banni de cette carte** — 2,85:1 sur le blanc, sous le
+ * > plancher de 4,5:1. Le fond plus clair ne rouvre pas ce gris : c'est la
+ * > couleur qui est trop faible, pas le substrat qui était trop sombre.
+ *
+ * **`FondDrapeau` et `apparence()` ne sont plus appelés d'ici.** Ils restent
+ * entiers dans `DrapeauxGP.jsx`, où l'accueil et les cartes du calendrier
+ * peignent toujours leurs drapeaux à pleine intensité sous du texte blanc, avec
+ * le voile qui leur garantit les 3:1. `drapeauDeNationalite` reste la seule
+ * porte d'entrée : elle rend maintenant le glyphe en plus du reste.
  *
  * ## Ce qui n'anime pas
  *
- * **Rien, encore.** Les cartes ne sont pas tapables — il n'y a rien derrière un
- * palmarès — donc pas de retour d'appui à donner ; elles entrent avec le bloc
- * qui les porte, sous le `.t-stagger-line` de l'écran. Un décalage carte par
- * carte aurait animé six vignettes qui arrivent déjà ensemble, et l'œil les lit
- * comme un tableau, pas comme une file. Aucun jeton de mouvement n'est ajouté.
+ * **Rien, toujours pas**, et le fond uniforme ne change pas cet arbitrage : ce
+ * qui a disparu est une couleur, pas un geste. Les cartes ne sont pas tapables
+ * — il n'y a rien derrière un palmarès — donc pas de retour d'appui à donner ;
+ * elles entrent avec le bloc qui les porte, sous le `.t-stagger-line` de
+ * l'écran. Un décalage carte par carte aurait animé six vignettes qui arrivent
+ * déjà ensemble, et l'œil les lit comme un tableau, pas comme une file. Aucun
+ * jeton de mouvement n'est ajouté.
  */
 
 /** Hauteur de la voiture, en classe utilitaire et non en style : `Voiture`
@@ -112,9 +125,6 @@ import { nomSurLaVoiture } from "../lib/circuits.js";
  *  depuis la version `0.60.0` (voir l'en-tête), donc cette hauteur ne borne plus
  *  rien — elle reste celle qui donnait la bonne présence dans la carte. */
 const HAUTEUR_VOITURE = "h-[112px]";
-
-/** Opacité du drapeau en fond. Voir la mesure de contraste en tête de fichier. */
-const OPACITE_DRAPEAU = 0.18;
 
 function Carte({ vainqueur }) {
   const drapeau = drapeauDeNationalite(vainqueur.nationalite);
@@ -128,24 +138,12 @@ function Carte({ vainqueur }) {
 
   return (
     <li>
-      <article className="rounded-carte bg-surface shadow-carte relative h-full overflow-hidden">
-        {/* Le lavis. `absolute inset-0` plutôt qu'un pseudo-élément, comme
-            `lueur-haute` : un pseudo-élément obligerait chaque appelant à poser
-            `relative` et `overflow-hidden` lui-même. Il porte le dégradé du
-            drapeau, et `FondDrapeau` pose par-dessus le dessin quand il y en a
-            un — c'est le même composant que les cartes de Grand Prix, jamais
-            une seconde façon de peindre un drapeau. */}
-        {drapeau?.fond && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0"
-            style={{ background: drapeau.fond, opacity: OPACITE_DRAPEAU }}
-          >
-            <FondDrapeau apparence={drapeau} />
-          </span>
-        )}
-
-        <div className="relative flex flex-col p-3">
+      {/* `overflow-hidden` reste alors qu'il n'y a plus de lavis à rogner : il
+          garantit que ce qui dépasserait d'une carte est coupé par son rayon et
+          non par un angle droit. `relative` est parti avec le lavis — plus rien
+          ici n'est positionné en absolu. */}
+      <article className="rounded-carte bg-surface shadow-carte h-full overflow-hidden">
+        <div className="flex flex-col p-3">
           <p className="text-label-sm text-secondaire">{vainqueur.annee}</p>
 
           {/* `titre` remplace l'étiquette générique de `Voiture` : un lecteur
@@ -171,8 +169,23 @@ function Carte({ vainqueur }) {
               {nom}
             </p>
             {drapeau && (
-              <p className="text-secondaire mt-1.5 truncate text-[11px]">
-                {drapeau.libelle}
+              /* Le glyphe et le nom sur une rangée plutôt que dans un même
+                 texte : `truncate` ne doit ronger que le nom du pays. Écrits à
+                 la suite, « 🇬🇧 Royaume-Uni » se serait coupé sur le drapeau
+                 lui-même, qui est la moitié de l'information. `shrink-0` le met
+                 hors d'atteinte, et il est peint deux points plus gros que le
+                 texte : un emoji rendu à 11 px n'est plus reconnaissable sur un
+                 écran d'iPhone.
+
+                 **Mesuré contre la feuille compilée**, et aucun des onze pays
+                 ne se tronque : le glyphe occupe 16 px, la gouttière 4, ce qui
+                 laisse 122 px au nom à 375 et **94,5 px à 320**. Le plus long,
+                 « Royaume-Uni », en demande 67. */
+              <p className="text-secondaire mt-1.5 flex items-center gap-1 text-[11px]">
+                <span aria-hidden="true" className="shrink-0 text-[13px]">
+                  {drapeau.emoji}
+                </span>
+                <span className="truncate">{drapeau.libelle}</span>
               </p>
             )}
           </div>

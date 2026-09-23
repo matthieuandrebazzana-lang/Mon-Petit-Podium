@@ -493,8 +493,22 @@ export function VoileDrapeau({ voile }) {
  *
  * `pays` renvoie vers `DRAPEAUX` quand le pays y est déjà décrit ; sinon
  * l'entrée porte ses propres bandes, dans la forme exacte de `DRAPEAUX`.
- * `libelle` est le gentilé affiché — c'est lui qui porte le sens, le fond n'est
- * qu'une texture.
+ * `libelle` est le nom du pays affiché — c'est lui qui porte le sens, le fond
+ * n'est qu'une texture.
+ *
+ * ## `emoji` : le drapeau comme GLYPHE, à côté du drapeau comme dessin
+ *
+ * `emoji` porte le drapeau du pays sous sa forme Unicode — la paire
+ * d'indicatifs régionaux que Safari iOS rend nativement. **Ce n'est pas un
+ * troisième système de drapeaux** : c'est le même pays, écrit DANS le texte au
+ * lieu d'être peint derrière lui, pour les appelants qui le veulent sur la ligne
+ * du nom (`VainqueursCircuit`) plutôt qu'en fond.
+ *
+ * > **Les onze entrées en ont un, y compris les deux sans dessin.** Le glyphe ne
+ * > demande ni bandes ni planche SVG : l'Australie et la Finlande, privées de
+ * > fond faute d'un tracé qu'on puisse poser sans l'approximer, ont bien leur
+ * > 🇦🇺 et leur 🇫🇮. C'est le seul endroit du projet où un drapeau n'a pas à
+ * > être construit — la police le dessine déjà, exactement.
  *
  * **Trois entrées sont arrivées avec la version `0.60.0`**, en même temps que
  * la sixième édition de chaque palmarès (`lib/circuits.js`) : la France de
@@ -512,12 +526,12 @@ export function VoileDrapeau({ voile }) {
  * n'a jamais retiré une information — la carte se lit entière sans lui.
  */
 export const NATIONALITES = {
-  neerlandaise: { libelle: "Pays-Bas", pays: "pays-bas" },
-  espagnole: { libelle: "Espagne", pays: "espagne" },
-  mexicaine: { libelle: "Mexique", pays: "mexique" },
-  italienne: { libelle: "Italie", pays: "italie" },
+  neerlandaise: { libelle: "Pays-Bas", emoji: "🇳🇱", pays: "pays-bas" },
+  espagnole: { libelle: "Espagne", emoji: "🇪🇸", pays: "espagne" },
+  mexicaine: { libelle: "Mexique", emoji: "🇲🇽", pays: "mexique" },
+  italienne: { libelle: "Italie", emoji: "🇮🇹", pays: "italie" },
   britannique: {
-    libelle: "Royaume-Uni",
+    libelle: "Royaume-Uni", emoji: "🇬🇧",
     drapeau: {
       type: "svg",
       svg: "royaume-uni",
@@ -526,11 +540,11 @@ export const NATIONALITES = {
     },
   },
   monegasque: {
-    libelle: "Monaco",
+    libelle: "Monaco", emoji: "🇲🇨",
     drapeau: { type: "horizontal", couleurs: ["#CE1126", "#FFFFFF"] },
   },
   allemande: {
-    libelle: "Allemagne",
+    libelle: "Allemagne", emoji: "🇩🇪",
     drapeau: {
       type: "horizontal",
       couleurs: ["#000000", "#DD0000", "#FFCE00"],
@@ -539,14 +553,14 @@ export const NATIONALITES = {
   // Tricolore vertical : trois bandes égales, ce que `fondCss` sait dire
   // exactement. Aucun `parts` — les trois bandes de 1946 le sont bien.
   francaise: {
-    libelle: "France",
+    libelle: "France", emoji: "🇫🇷",
     drapeau: {
       type: "vertical",
       couleurs: ["#002395", "#FFFFFF", "#ED2939"],
     },
   },
   autrichienne: {
-    libelle: "Autriche",
+    libelle: "Autriche", emoji: "🇦🇹",
     drapeau: {
       type: "horizontal",
       couleurs: ["#ED2939", "#FFFFFF", "#ED2939"],
@@ -554,8 +568,8 @@ export const NATIONALITES = {
   },
   // Croix nordique : voir l'en-tête. Sans dessin, pas de fond — jamais une
   // approximation, et jamais une teinte de repli.
-  finlandaise: { libelle: "Finlande" },
-  australienne: { libelle: "Australie" },
+  finlandaise: { libelle: "Finlande", emoji: "🇫🇮", },
+  australienne: { libelle: "Australie", emoji: "🇦🇺", },
 };
 
 /** Le même calcul que pour les Grands Prix, figé au chargement du module.
@@ -565,11 +579,16 @@ export const NATIONALITES = {
 const APPARENCES_NATIONALITE = Object.fromEntries(
   Object.entries(NATIONALITES).map(([cle, entree]) => {
     const drapeau = entree.pays ? DRAPEAUX[entree.pays] : entree.drapeau;
-    if (!drapeau) return [cle, { libelle: entree.libelle, fond: null, svg: null }];
+    if (!drapeau)
+      return [
+        cle,
+        { libelle: entree.libelle, emoji: entree.emoji, fond: null, svg: null },
+      ];
     return [
       cle,
       {
         libelle: entree.libelle,
+        emoji: entree.emoji,
         ...apparence(drapeau.couleurs),
         fond: fondCss(drapeau),
         svg: drapeau.svg && aUnDrapeauSvg(drapeau.svg) ? drapeau.svg : null,

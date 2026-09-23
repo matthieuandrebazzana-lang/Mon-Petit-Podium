@@ -116,7 +116,7 @@ lui appartient. Retoucher l'onglet déjà ouvert **ramène en haut de l'écran**
 | `FondPiste` | `preserveAspectRatio="none"` : la planche s'étire en hauteur. Les deux `<rect>` du bandeau en sont **volontairement absents** |
 | `Icones` | les variantes `pleine` emploient **`fill-rule="evenodd"`** : la porte de la maison est un **trou dans l'aplat**, jamais un rectangle blanc posé dessus — qui se verrait le jour où le fond n'est plus blanc |
 | `CarteGpSaison` | **deux `<a>` frères**, jamais imbriqués (le corps et la bande mènent ailleurs). Le `pressable-large` est sur l'`<article>` : `:active` remonte aux ancêtres, et le poser sur les deux liens composerait 0,985 × 0,985 |
-| `VainqueursCircuit` | **grille 2 colonnes, plus une rangée qui défile** (v`0.60.0`) : la voiture passe AU-DESSUS du nom, sans quoi « Verstappen » (79 px) se tronque dans une colonne qui n'en laisse que 77,5 à 375 px |
+| `VainqueursCircuit` | **grille 2 colonnes, plus une rangée qui défile** (v`0.60.0`) : la voiture passe AU-DESSUS du nom, sans quoi « Verstappen » (79 px) se tronque dans une colonne qui n'en laisse que 77,5 à 375 px. **Fond blanc uniforme sur les six cartes depuis la v`0.76.0`** : le lavis de drapeau à 18 % faisait six fonds différents et laissait croire à une hiérarchie entre les millésimes. Le drapeau est passé DANS le texte, en emoji (`NATIONALITES.emoji`), sur la ligne du pays |
 | `SeancesWeekend` | c'est le **rang** qui décide de la mise en avant, pas le seuil de 24 h — un vendredi matin, les deux premières séances y tiennent. Le nombre de rangées **n'est pas fixe** : il vient des clés que `gp.seances` déclare (week-end sprint) |
 | `DrapeauxPilotes` | **`preserveAspectRatio="none"`, pas `slice`** — une rangée de classement fait 5,2:1, un drapeau 1,5:1, et `slice` recadrait l'Allemagne en rouge uni. Et **aucun `fill` sur un ancêtre** : la bande noire allemande n'a pas d'attribut `fill` et l'hériterait |
 | `LigneClassement` (`ResultatsGp`) | **aucun texte en `texte-doux`** : sur le lavis de drapeau à 8 %, le gris ne vaut que 2,39:1. Le prénom et l'écurie prennent le marron `secondaire` |
@@ -281,14 +281,20 @@ Le choix était donc entre approximer sept drapeaux et en prendre seize exacts.
 | Point | Pourquoi |
 |---|---|
 | **`country-flag-icons`, pas `react-world-flags`** | le second embarque les 250 drapeaux en data-URI dans un lot UMD de **3,6 Mo** et les résout par `require.context`, une API propre à webpack que Vite n'implémente pas. Le premier est de l'ESM pur, `sideEffects: false` : les seize imports pèsent **+15,5 Ko** au lot, mesurés — et le contrôle du lot confirme **seize** composants pays, pas un de plus |
-| **`preserveAspectRatio="none"`** | même arbitrage que `FondPiste`. Une rangée fait 5,2:1, un drapeau 1,5:1 : `slice` recadrait sur la bande centrale, et l'Allemagne ressortait rouge uni. `none` garde **toutes** les bandes. `VainqueursCircuit` garde son `slice` — ses cartes sont presque carrées |
+| **`preserveAspectRatio="none"`** | même arbitrage que `FondPiste`. Une rangée fait 5,2:1, un drapeau 1,5:1 : `slice` recadrait sur la bande centrale, et l'Allemagne ressortait rouge uni. `none` garde **toutes** les bandes. **`VainqueursCircuit` ne peint plus de drapeau du tout depuis la v`0.76.0`** — il n'y a donc plus qu'un seul appelant à arbitrer |
 | **Aucun `fill` ni `color` sur un ancêtre** | la bande noire allemande n'a pas d'attribut `fill` et **hérite** ; le Canada pose le piège à l'envers avec `fill="red"` en mot-clé. Invisible à la lecture du JSX |
 | **Le lavis à 8 %, mesuré** | pire substrat le noir → `#EBEBEB` : `texte` **14,60:1**, `secondaire` **8,86:1**, `primaire` **9,13:1**. **`texte-doux` : 2,39:1, banni de ces lignes**. Le Japon ne déplace pas ce plancher — son `#D80027` compose `#FCEBEE`, plus clair |
 | **Un pays absent ne rend rien** | la règle du projet depuis la `0.15.0`, jamais une couleur de repli |
 
 > **Deux systèmes de drapeaux coexistent donc**, et c'est un écart assumé au principe de la
 > source unique : `DRAPEAUX` garde les pays hôtes parce que son champ `couleurs` alimente
-> le calcul de `voileNecessaire`, qu'un SVG importé ne peut pas nourrir. Le détail et la
+> le calcul de `voileNecessaire`, qu'un SVG importé ne peut pas nourrir.
+>
+> **Le champ `emoji` de `NATIONALITES` n'en est pas un troisième** (v`0.76.0`) : il ne
+> dessine rien et n'alimente aucun calcul — c'est un caractère, posé dans une ligne de
+> texte, et il vit dans la même entrée que le reste de ce qu'une nationalité affiche. Les
+> onze en ont un, y compris l'Australie et la Finlande, que l'absence de tracé laissait
+> jusqu'ici sans drapeau nulle part. Le détail et la
 > façon de le résorber sont dans `roadmap.md` §3.8 quater.
 
 ### Les voitures
