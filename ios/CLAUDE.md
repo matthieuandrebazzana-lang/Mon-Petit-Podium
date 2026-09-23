@@ -131,6 +131,7 @@ ios/
 │   ├── decouper-icones.sh       planches → icônes individuelles, d'après le manifeste
 │   ├── icones.txt               manifeste des découpes : planche, nom, fenêtre, hauteur
 │   ├── extraire-gp.mjs          drapeaux + tracés + table des teintes, DEPUIS LA VERSION WEB
+│   ├── extraire-fond-piste.sh   assets/vue_piste.svg → la planche du sol de la piste
 │   └── extraire-drapeaux-pilotes.sh  les 16 drapeaux de NATIONALITÉ, DEPUIS LA VERSION WEB
 ├── AuthViewModel.swift          ┐
 ├── ConnexionView.swift          ├ hors du groupe synchronisé, référencés un à un
@@ -165,7 +166,8 @@ ios/
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données mockées
-    │   │   ├── ChampionnatDetailView.swift  classement + vue piste — données mockées
+    │   │   ├── ChampionnatDetailView.swift  classement + onglet piste — données mockées
+    │   │   ├── VuePisteView.swift           la piste, ses voitures et leur placement — MOCKÉ
     │   │   ├── CreerChampionnatView.swift   nom, photo, code à venir — alerte mockée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases — alerte mockée
     │   ├── Calendrier/CalendrierView.swift  liste de la saison + lien vers les résultats
@@ -265,7 +267,7 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 
 ### Planches lues au runtime — `Greed F1/Resources/Vecteurs/`
 
-**Cinq SVG embarqués comme fichiers**, pas comme `imageset`, et lus par ``PlancheSVG``.
+**Six SVG embarqués comme fichiers**, pas comme `imageset`, et lus par ``PlancheSVG``.
 
 | Fichier | Contenu |
 |---|---|
@@ -274,6 +276,7 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 | `VOITUREs_am.svg` | Alpine et Mercedes |
 | `matti.svg` | Neuf vignettes de casque |
 | `matt.svg` | Racing Bulls et Red Bull — les deux casques **corrigés** |
+| `vue_piste.svg` | Le sol de la vue piste, ses kerbs, sa ligne médiane — **étiré** aux deux axes |
 
 > **Pourquoi pas le catalogue d'assets.** Une image du catalogue se teinte d'une seule
 > encre (`template`) ou d'aucune. La voiture personnalisée demande **deux** aplats
@@ -282,9 +285,20 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 > ne bougent pas. Le fichier est donc lu tel quel et ses `fill` sont substitués, exactement
 > comme la version web remplace `cls-6` et `cls-14`.
 >
-> **`PlancheSVG` n'est pas un moteur SVG** : il couvre ce que ces cinq fichiers emploient,
-> et rien de plus. Aucun arc — les cinq n'en contiennent pas un, vérifié fichier par
-> fichier.
+> **`PlancheSVG` n'est pas un moteur SVG** : il couvre ce que ces six fichiers emploient,
+> et rien de plus. Aucun arc — les six n'en contiennent pas un, vérifié fichier par
+> fichier. Il ne connaît ni les `<pattern>` ni l'`opacity` : c'est pourquoi
+> `extraire-fond-piste.sh` retire le motif de la planche de piste, et pourquoi les 11 %
+> de sa ligne médiane passent par la **substitution d'encre** de ``VuePisteView``.
+>
+> **`vue_piste.svg` est la seule planche étirée** — `CadrePlanche.etiree`, l'équivalent de
+> `preserveAspectRatio="none"` : le sol doit couvrir l'écran quel que soit l'iPhone. Une
+> voiture, elle, ne s'étire jamais : déformée, elle cesse d'être une voiture.
+>
+> **Le bandeau de la planche n'y est PAS**, et c'est le seul écart avec
+> `assets/vue_piste.svg` : il porte la couleur Pantone du championnat, le damier et le
+> nom, donc il est peint par SwiftUI. Même écart que `frontend/src/composants/FondPiste.jsx`
+> côté web.
 >
 > **Les fenêtres sont mesurées, jamais des tranches arithmétiques.** Les planches empilent
 > leurs voitures en zigzag, ni jointives ni régulièrement espacées. Les valeurs de

@@ -6,7 +6,7 @@ import SwiftUI
 /// `extraire-gp.mjs` (`ios/CLAUDE.md` §3), appliquée à des planches que le catalogue
 /// d'assets ne peut pas servir.
 ///
-/// > **Pourquoi ces cinq planches ne sont pas des `imageset`.** Une image du catalogue se
+/// > **Pourquoi ces six planches ne sont pas des `imageset`.** Une image du catalogue se
 /// > teinte d'une seule encre (`template`) ou d'aucune. Or la voiture personnalisée demande
 /// > **deux** aplats remplacés indépendamment, sur une trentaine de formes entrelacées avec
 /// > les gris mécaniques — pneus, suspensions, fond plat, casque — qui, eux, ne bougent
@@ -14,11 +14,11 @@ import SwiftUI
 /// > `fill` sont substitués à la volée, exactement comme la version web remplace `cls-6` et
 /// > `cls-14` (`frontend/src/composants/Voiture.jsx`).
 ///
-/// **Ce n'est pas un moteur SVG.** Il couvre précisément ce que ces cinq planches
+/// **Ce n'est pas un moteur SVG.** Il couvre précisément ce que ces six planches
 /// emploient, et rien de plus : `polygon`, `rect` (avec `rx`/`ry`), `circle`, `path`
 /// limité à `M L H V C S Q T Z`, les classes d'une feuille `<style>` en tête de fichier,
 /// et les transformations `translate` / `rotate` / `scale` / `matrix`. **Aucun arc** — les
-/// cinq planches n'en contiennent pas une, vérifié fichier par fichier.
+/// six planches n'en contiennent pas une, vérifié fichier par fichier.
 ///
 /// Les `<text>` de la planche sont **ignorés** : ce sont ses réserves (« ZoneName », un
 /// numéro d'exemple), que ``VueVoiture`` réécrit au vrai pseudo et au vrai numéro.
@@ -273,8 +273,8 @@ private enum Nombres {
 
 /// L'analyseur d'un attribut `d`.
 ///
-/// **Il ne gère pas les arcs**, et c'est délibéré : aucune des cinq planches n'en contient
-/// (relevé commande par commande sur les cinq fichiers). Un `A` rencontré un jour serait
+/// **Il ne gère pas les arcs**, et c'est délibéré : aucune des six planches n'en contient
+/// (relevé commande par commande sur les six fichiers). Un `A` rencontré un jour serait
 /// donc un fichier nouveau, pas une régression silencieuse — la commande est ignorée et le
 /// tracé se ferme sur ce qu'il a.
 private struct LecteurChemin {
@@ -502,9 +502,12 @@ struct VuePlanche: View {
     /// garde ses couleurs.
     var substitutions: [String: Color] = [:]
 
+    /// Voir ``CadrePlanche/etiree``. Faux par défaut : une voiture ne se déforme pas.
+    var etiree: Bool = false
+
     var body: some View {
         Canvas { contexte, taille in
-            let cadre = CadrePlanche(fenetre: fenetre, taille: taille)
+            let cadre = CadrePlanche(fenetre: fenetre, taille: taille, etiree: etiree)
             contexte.transform = cadre.transformation
             for forme in PlancheSVG.nommee(planche).formes {
                 guard let encre = substitutions[forme.remplissage] ?? EncreSVG.couleur(forme.remplissage)
@@ -527,18 +530,48 @@ struct CadrePlanche {
     let fenetre: CGRect
     let taille: CGSize
 
+    /// Étirement des deux axes **indépendamment** — l'équivalent de
+    /// `preserveAspectRatio="none"`.
+    ///
+    /// **Une seule planche en a besoin, et pour une raison de fond** : le sol de la vue
+    /// piste doit couvrir l'écran entier, quel que soit l'iPhone. Ses kerbs gardent alors
+    /// une largeur proportionnelle à celle de la piste, seule la pente de leurs bandes
+    /// s'incline — c'est exactement ce que `FondPiste.jsx` documente côté web, où l'écart
+    /// mesuré est nul à deux dixièmes de pour cent près (planche 589,5 × 1280,4, soit
+    /// 0,4604 ; iPhone 15 Pro 393 × 852, soit 0,4613).
+    ///
+    /// **Une voiture, elle, ne s'étire jamais** : une voiture déformée cesse d'être une
+    /// voiture. D'où le défaut à `false`.
+    var etiree: Bool = false
+
     /// Facteur d'échelle, sans déformation : la fenêtre entre entièrement dans la place
     /// donnée, comme `xMidYMid meet`.
+    ///
+    /// **C'est l'échelle des calques posés PAR-DESSUS la planche** — la photo du cockpit,
+    /// le numéro, le pseudo. Sous étirement elle n'a plus de sens unique, et elle rend
+    /// alors la plus petite des deux : rien de ce qui s'appuie dessus n'est étiré.
     var echelle: CGFloat {
         guard fenetre.width > 0, fenetre.height > 0 else { return 1 }
         return min(taille.width / fenetre.width, taille.height / fenetre.height)
     }
 
+    private var echelleX: CGFloat {
+        guard fenetre.width > 0 else { return 1 }
+        return etiree ? taille.width / fenetre.width : echelle
+    }
+
+    private var echelleY: CGFloat {
+        guard fenetre.height > 0 else { return 1 }
+        return etiree ? taille.height / fenetre.height : echelle
+    }
+
     var transformation: CGAffineTransform {
-        let e = echelle
-        let dx = (taille.width - fenetre.width * e) / 2 - fenetre.minX * e
-        let dy = (taille.height - fenetre.height * e) / 2 - fenetre.minY * e
-        return CGAffineTransform(scaleX: e, y: e).concatenating(
+        let (ex, ey) = (echelleX, echelleY)
+        // Sous étirement les deux termes de centrage valent zéro par construction — la
+        // fenêtre occupe exactement la place donnée. La formule reste donc la même.
+        let dx = (taille.width - fenetre.width * ex) / 2 - fenetre.minX * ex
+        let dy = (taille.height - fenetre.height * ey) / 2 - fenetre.minY * ey
+        return CGAffineTransform(scaleX: ex, y: ey).concatenating(
             CGAffineTransform(translationX: dx, y: dy))
     }
 

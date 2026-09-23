@@ -33,6 +33,17 @@ enum Mouvement {
     /// Échange d'icône — étoile de favori, icônes de nav, interrupteur.
     static let echangeIcone: TimeInterval = 0.18
 
+    /// **Décalage entre deux entrées voisines** — le « stagger » d'une série qui apparaît
+    /// d'un coup.
+    ///
+    /// > Il existe parce que le vocabulaire n'avait pas de valeur pour ça, et que faire
+    /// > entrer huit voitures **exactement ensemble** ne dit rien : c'est le décalage qui
+    /// > les fait lire une par une. Il reste sous le seuil où l'œil compte les éléments —
+    /// > à 60 ms, huit voitures sont toutes lancées en moins d'une demi-seconde.
+    ///
+    /// La version web dit la même chose avec `--voiture-stagger`.
+    static let decalage: TimeInterval = 0.06
+
     /// Passage d'écran.
     static let passageEcran: TimeInterval = 0.20
 }

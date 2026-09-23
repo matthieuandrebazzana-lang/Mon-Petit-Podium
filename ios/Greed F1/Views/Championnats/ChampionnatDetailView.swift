@@ -46,30 +46,43 @@ struct ChampionnatDetailView: View {
             Color.fondPrincipal
                 .ignoresSafeArea()
 
-            ScrollView {
+            // **L'en-tête et le sélecteur ne défilent plus.** La vue piste occupe toute la
+            // hauteur restante : la mettre dans un `ScrollView` reviendrait à lui demander
+            // sa taille intrinsèque, qu'elle n'a pas — un `ZStack` de positions absolues
+            // s'y réduirait à la boîte englobante de ses voitures. Les deux onglets
+            // partagent donc un en-tête fixe, et seul le contenu du classement défile.
+            //
+            // Le sélecteur y gagne au passage : un onglet qui disparaît en haut de course
+            // n'est plus là quand on veut revenir à l'autre.
+            VStack(spacing: 0) {
                 VStack(spacing: 0) {
                     entete
 
                     Spacer().frame(height: 16)
                     selecteur
-
-                    Spacer().frame(height: 12)
-
-                    switch onglet {
-                    case .classement:
-                        classement
-
-                        Spacer().frame(height: 12)
-                        WidgetGrandPrixSuivant(nom: "GP Pays-Bas", slug: "pays-bas",
-                                               echeance: "Fermeture dans 3 jours")
-
-                    case .piste:
-                        piste
-                    }
                 }
                 .padding(.horizontal, margeLaterale)
                 .padding(.top, 8)
-                .padding(.bottom, 24)
+
+                Spacer().frame(height: 12)
+
+                switch onglet {
+                case .classement:
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            classement
+                            WidgetGrandPrixSuivant(nom: "GP Pays-Bas", slug: "pays-bas",
+                                                   echeance: "Fermeture dans 3 jours")
+                        }
+                        .padding(.horizontal, margeLaterale)
+                        .padding(.bottom, 24)
+                    }
+
+                case .piste:
+                    piste
+                        .padding(.horizontal, margeLaterale)
+                        .padding(.bottom, 24)
+                }
             }
         }
         // Le nom du championnat est déjà dans le contenu, à 28 pt : le répéter dans la
@@ -224,22 +237,18 @@ struct ChampionnatDetailView: View {
 
     // MARK: - Onglet Piste
 
-    /// L'écran d'attente de la vue piste (`screen-14`). Il **dit ce qui manque**, plutôt
-    /// que de laisser un blanc qui se lirait comme un chargement en panne.
+    /// La piste (`screen-14`), qui prend toute la hauteur restante.
+    ///
+    /// **Elle reçoit les membres, elle ne les cherche pas.** C'est le même tableau que le
+    /// classement affiche, déjà trié : deux jeux de valeurs mockées auraient fait dire deux
+    /// choses différentes du même championnat selon l'onglet regardé.
+    ///
+    /// L'identité du membre bascule d'un onglet à l'autre : la ``VuePisteView`` est
+    /// remontée à chaque retour sur l'onglet, donc son entrée se rejoue. C'est voulu — la
+    /// grille de départ est ce que cet écran montre.
     private var piste: some View {
-        VStack(spacing: 8) {
-            Text("Vue piste")
-                .font(.custom("HelveticaNeue-Medium", size: 17))
-                .tracking(-0.34)
-                .foregroundColor(.texte)
-
-            Text("À venir")
-                .font(.corpsSm)
-                .foregroundColor(.secondaire)       // 9,32:1 sur le beige
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 64)
-        .accessibilityElement(children: .combine)
+        VuePisteView(championnat: championnat, membres: membres)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
