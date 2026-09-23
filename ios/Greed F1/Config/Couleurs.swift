@@ -45,6 +45,16 @@ extension Color {
     /// que leur mot ne tient pas en ambre.
     static let accent = Color(hexadecimal: 0xE8A020)
 
+    /// Bleu ardoise — `#2C4A6E`, le `bleu-ardoise` de `frontend/src/lib/couleurs.js`.
+    ///
+    /// **C'est l'aplat du marché « 2e et 3e du podium »**, et il n'en peint aucun autre :
+    /// les deux pronostics obligatoires se distinguent ainsi l'un de l'autre au premier
+    /// coup d'œil, le vainqueur gardant le rouge de la marque.
+    ///
+    /// Le blanc y tient **11,04:1**. C'est en revanche un aplat **plus clair que
+    /// `primaire`**, et c'est ce qui oblige ``encreSecondaireClaire`` à exister.
+    static let bleuArdoise = Color(hexadecimal: 0x2C4A6E)
+
     /// Vert sauge — `#4A7C59`. L'encre de ce qui est **consultable et derrière nous** :
     /// la pastille « Terminé » et la bande « Voir les résultats ».
     ///
@@ -173,6 +183,26 @@ enum Tracking {
 // MARK: - Encre graphique sur aplat
 
 extension Color {
+
+    /// Encre de second rang sur les aplats **clairs** — ``bleuArdoise`` : blanc à **85 %**.
+    ///
+    /// > Elle existe parce que ``encreSecondaire`` (70 %) est réglée sur `primaire`, le
+    /// > plus sombre des aplats de l'app. Mesuré : le blanc à 70 % composité sur le champ
+    /// > du bloc bleu (`#4C6584`) ne vaut que **3,86:1**, et **4,47:1** à 80 % — sous le
+    /// > plancher de 4,5:1 d'un texte ordinaire dans les deux cas. À 85 % il y tient
+    /// > **4,82:1**, et **7,11:1** sur l'aplat lui-même.
+    ///
+    /// **Le choix ne revient pas à l'écran** : c'est le marché qui porte son aplat ET son
+    /// encre douce, sinon les deux blocs de la saisie en choisiraient chacun une.
+    static let encreSecondaireClaire = Color.white.opacity(0.85)
+
+    /// Encre de second rang sur l'aplat **ambre** — ``accent`` : l'encre ``texte`` à
+    /// **75 %**.
+    ///
+    /// > Le blanc est exclu d'office (2,2:1 sur l'ambre). Le `texte/70` de la version web
+    /// > compose `#58421C`, soit **4,28:1** — sous le plancher. À 75 % il donne `#4D3B1B`
+    /// > et **4,84:1**.
+    static let encreSecondaireAmbre = Color.texte.opacity(0.75)
 
     /// Encre d'un **élément graphique** posé sur un aplat de couleur — les six tirets du
     /// code d'invitation, et ce qui viendra du même genre : blanc à **50 %**.

@@ -253,8 +253,19 @@ private struct WidgetGrandPrix: View {
     private var apparence: ApparenceDrapeau? { ApparenceDrapeau.pour(slug: grandPrix.slug) }
 
     var body: some View {
-        Button {
-            // Destination à câbler : tableau des cotes ou récapitulatif (`screen-24`).
+        // **Le widget EST le bouton « Pronostiquer » de l'accueil.** La version web pose un
+        // bouton nommé à l'intérieur du bloc ; ici c'est le bloc entier qui mène au tableau
+        // des cotes, et le libellé accessible ci-dessous le nomme. Un bouton dans un bouton
+        // n'existe pas, et deux cibles empilées se disputeraient le doigt.
+        //
+        // La destination est celle de la version web : `/cotes`, jamais la saisie — on
+        // ajoute ses paris bonus avant de pronostiquer, et un bouton qui sauterait cette
+        // étape mentirait sur son libellé.
+        NavigationLink {
+            CotesView(
+                nomGrandPrix: grandPrix.nom,
+                sousTitre: "\(grandPrix.date) · Départ \(grandPrix.heureDepart)"
+            )
         } label: {
             contenu
                 .padding(rembourrage)
@@ -270,6 +281,8 @@ private struct WidgetGrandPrix: View {
             + "Départ à \(grandPrix.heureDepart). "
             + "\(grandPrix.libelleEcheance) \(grandPrix.echeance)."
         )
+        .accessibilityHint("Pronostiquer")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: Les calques du fond

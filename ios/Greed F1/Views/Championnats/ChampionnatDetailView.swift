@@ -337,8 +337,11 @@ private struct WidgetGrandPrixSuivant: View {
     let echeance: String
 
     var body: some View {
-        Button {
-            // Destination à câbler : saisie des pronostics (`screen-25`).
+        // **La destination est le tableau des cotes, pas la saisie.** Le parcours passe par
+        // les paris bonus avant les pronostics obligatoires : c'est ce que fait la version
+        // web, et c'est ce que le mode d'emploi de `CotesView` annonce.
+        NavigationLink {
+            CotesView(nomGrandPrix: nom, sousTitre: echeance)
         } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {

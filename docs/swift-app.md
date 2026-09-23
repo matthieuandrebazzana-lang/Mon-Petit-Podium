@@ -1107,6 +1107,34 @@ drapeau, parce qu'**une encre ambre ne tient pas sur du blanc** (2,2:1). L'inver
 passe : `texte` sur `accent` vaut **7,86:1**. C'est la seule encre que cet aplat accepte —
 du blanc dessus retomberait à 2,2:1.
 
+#### Les encres de second rang sur un aplat — trois, et chacune a son aplat
+
+`encreSecondaire` (blanc à 70 %) est **réglée sur `primaire`**, le plus sombre des aplats.
+Elle ne se transpose pas telle quelle sur les deux autres familles, et c'est mesuré :
+
+| Aplat | Surface la plus claire du bloc | Encre | Rapport |
+|---|---|---|---|
+| `primaire` `#800111` | champ à 15 % de blanc → `#932734` | `encreSecondaire` (70 %) | **4,69:1** |
+| `bleuArdoise` `#2C4A6E` | champ à 15 % de blanc → `#4C6584` | `encreSecondaire` (70 %) | 3,86:1 ✗ |
+| `bleuArdoise` | idem | **`encreSecondaireClaire` (85 %)** | **4,82:1** |
+| `accent` `#E8A020` | l'aplat lui-même | `texte` à 70 % → `#58421C` | 4,28:1 ✗ |
+| `accent` | idem | **`encreSecondaireAmbre` (`texte` à 75 %)** | **4,84:1** |
+
+```swift
+static let encreSecondaire       = Color.white.opacity(0.70)   // sur primaire
+static let encreSecondaireClaire = Color.white.opacity(0.85)   // sur bleuArdoise
+static let encreSecondaireAmbre  = Color.texte.opacity(0.75)   // sur accent
+```
+
+> **Le choix ne revient jamais à l'écran.** C'est le marché (`MarcheCote`) qui porte son
+> aplat ET son encre douce : un écran qui les choisirait séparément finirait par poser un
+> blanc à 70 % sur le bleu. Une question, un propriétaire.
+
+**Sur un champ REMPLI (22 % de blanc), l'encre douce ne suffit plus** — 3,84:1 sur le bleu.
+Les points y passent en **blanc plein** (4,61:1), et ce sont la taille et la graisse qui les
+distinguent du nom, pas l'opacité. Le chevron, lui, est un élément graphique (plancher 3:1)
+et garde l'encre douce.
+
 ### 4.4 Les six teintes de championnat — palette Pantone sombre
 
 ```swift

@@ -19,3 +19,9 @@ logo-02     icone-profil       394.98  24   62.45    78       28
 # le même système de coordonnées, donc leurs tailles relatives sont celles du dessin.
 logo        icone-creer        11.02   1.85    106      106      40
 logo        icone-rejoindre    14.02   137.93  106      106      40
+
+# L'étoile de `logoV2.svg` — le bouton « pari bonus » du tableau des cotes. La fenêtre est
+# la VRAIE boîte englobante élargie à un carré de 88 unités, pas le tiers du milieu de la
+# planche : `frontend/src/composants/icones/IconeEtoileLogo.jsx` en donne l'arbitrage et
+# les coordonnées, résolues sur les cubiques. Les deux applications cadrent donc pareil.
+logoV2      icone-etoile       143.09  4.72    88       88       22

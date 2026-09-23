@@ -168,6 +168,9 @@ ios/
     │   │   ├── CreerChampionnatView.swift   nom, photo, code à venir — alerte mockée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases — alerte mockée
     │   ├── Calendrier/CalendrierView.swift
+    │   ├── Pronos/
+    │   │   ├── CotesView.swift      tableau des cotes + paris bonus — grille et points MOCKÉS
+    │   │   └── PronosView.swift     saisie des deux pronostics obligatoires — MOCKÉE
     │   └── Profil/ProfilView.swift      construit — données mockées
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)
@@ -209,6 +212,7 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 | `icone-profil` | Pilote casqué — onglet **Profil**, 22,42 × 28 pt, *template* |
 | `icone-creer` | Croix + coupe — carte « Créer un championnat », 40 × 40 pt, *template* |
 | `icone-rejoindre` | Deux casques — carte « Rejoindre un championnat », 40 × 40 pt, *template* |
+| `icone-etoile` | Étoile — bouton « pari bonus » de `CotesView`, 22 × 22 pt, *template* |
 | `texture-hexa` | Damier en filigrane des cartes — monté par ``Damier``, jamais en direct |
 | `flag-<slug>` | Les 12 drapeaux des pays hôtes. **Pas de rendu *template*** : ils gardent leurs couleurs |
 | `trace-<slug>` | Les 12 tracés de circuits, *template* — ils prennent l'encre de l'écran |
@@ -280,9 +284,12 @@ tracé : elle ne s'utilise jamais telle quelle, elle se découpe.
 | `logoV2.svg` | **Planche** — chronomètre, étoile, deux pilotes, drapeau à damier |
 | `Screenshots/` | 28 captures de la version web — voir §7 |
 
-Les deux logos du haut de `logo.svg` sont découpés (`icone-creer`, `icone-rejoindre`) ;
-ceux de `logoV2.svg` ne le sont pas encore. Le jour où un écran en a besoin, une ligne au
-manifeste suffit.
+Les deux logos du haut de `logo.svg` sont découpés (`icone-creer`, `icone-rejoindre`), et
+l'étoile de `logoV2.svg` depuis `CotesView` (`icone-etoile`) — **sur la fenêtre de
+`frontend/src/composants/icones/IconeEtoileLogo.jsx`**, qui est la vraie boîte englobante
+élargie à un carré de 88 unités, jamais une tranche arithmétique de la planche. Les trois
+autres dessins de `logoV2.svg` ne sont pas encore découpés : le jour où un écran en a
+besoin, une ligne au manifeste suffit.
 
 **Les trois planches ne sont jamais installées telles quelles** : `ajouter-assets.sh` les
 saute, et c'est délibéré — posées dans le catalogue elles n'affichent rien d'utilisable et
