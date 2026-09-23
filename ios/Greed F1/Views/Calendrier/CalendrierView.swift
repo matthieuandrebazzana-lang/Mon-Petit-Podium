@@ -46,29 +46,29 @@ struct CalendrierView: View {
     /// séparément parce qu'ils répondent à deux questions différentes.
     private let grandsPrix: [GrandPrixSaisonMock] = [
         .init(slug: "pays-bas", pays: "Pays-Bas", nom: "GP Pays-Bas",
-              circuit: "Zandvoort", jour: "23", mois: "AOÛT", etat: .termine),
+              circuit: "Zandvoort", jour: "23", mois: "AOÛT", etat: .termine, date: "23 août 2026"),
         .init(slug: "italie", pays: "Italie", nom: "GP Italie",
-              circuit: "Monza", jour: "6", mois: "SEPT", etat: .termine),
+              circuit: "Monza", jour: "6", mois: "SEPT", etat: .termine, date: "6 septembre 2026"),
         .init(slug: "espagne", pays: "Espagne", nom: "GP Espagne",
-              circuit: "Madrid", jour: "13", mois: "SEPT", etat: .termine),
+              circuit: "Madrid", jour: "13", mois: "SEPT", etat: .termine, date: "13 septembre 2026"),
         .init(slug: "azerbaidjan", pays: "Azerbaïdjan", nom: "GP Azerbaïdjan",
-              circuit: "Bakou", jour: "26", mois: "SEPT", etat: .ouvert),
+              circuit: "Bakou", jour: "26", mois: "SEPT", etat: .ouvert, date: "26 septembre 2026"),
         .init(slug: "malaisie", pays: "Malaisie", nom: "GP Malaisie",
-              circuit: "Sepang", jour: "4", mois: "OCT", etat: .aVenir),
+              circuit: "Sepang", jour: "4", mois: "OCT", etat: .aVenir, date: "4 octobre 2026"),
         .init(slug: "singapour", pays: "Singapour", nom: "GP Singapour",
-              circuit: "Singapour", jour: "11", mois: "OCT", etat: .aVenir),
+              circuit: "Singapour", jour: "11", mois: "OCT", etat: .aVenir, date: "11 octobre 2026"),
         .init(slug: "etats-unis", pays: "États-Unis", nom: "GP États-Unis",
-              circuit: "Austin", jour: "25", mois: "OCT", etat: .aVenir),
+              circuit: "Austin", jour: "25", mois: "OCT", etat: .aVenir, date: "25 octobre 2026"),
         .init(slug: "mexique", pays: "Mexique", nom: "GP Mexique",
-              circuit: "Hermanos Rodríguez", jour: "1", mois: "NOV", etat: .aVenir),
+              circuit: "Hermanos Rodríguez", jour: "1", mois: "NOV", etat: .aVenir, date: "1er novembre 2026"),
         .init(slug: "bresil", pays: "Brésil", nom: "GP Brésil",
-              circuit: "Interlagos", jour: "15", mois: "NOV", etat: .aVenir),
+              circuit: "Interlagos", jour: "15", mois: "NOV", etat: .aVenir, date: "15 novembre 2026"),
         .init(slug: "las-vegas", pays: "États-Unis", nom: "GP Las Vegas",
-              circuit: "Las Vegas", jour: "21", mois: "NOV", etat: .aVenir),
+              circuit: "Las Vegas", jour: "21", mois: "NOV", etat: .aVenir, date: "21 novembre 2026"),
         .init(slug: "qatar", pays: "Qatar", nom: "GP Qatar",
-              circuit: "Lusail", jour: "29", mois: "NOV", etat: .aVenir),
+              circuit: "Lusail", jour: "29", mois: "NOV", etat: .aVenir, date: "29 novembre 2026"),
         .init(slug: "abu-dhabi", pays: "Abu Dhabi", nom: "GP Abu Dhabi",
-              circuit: "Yas Marina", jour: "6", mois: "DÉC", etat: .aVenir)
+              circuit: "Yas Marina", jour: "6", mois: "DÉC", etat: .aVenir, date: "6 décembre 2026")
     ]
 
     /// **Le décompte se lit sur les cartes**, il ne vient pas d'ailleurs : c'est le nombre
@@ -90,24 +90,34 @@ struct CalendrierView: View {
     @State private var defilementFait = false
 
     var body: some View {
-        ZStack {
-            Color.fondPrincipal
-                .ignoresSafeArea()
+        // **Une pile par onglet, et non une pile autour de la barre** — c'est le choix déjà
+        // fait par l'accueil et par la liste des championnats : sans elle, le retour depuis
+        // les résultats d'un Grand Prix ramènerait sur un autre onglet que celui d'où l'on
+        // est parti.
+        NavigationStack {
+            ZStack {
+                Color.fondPrincipal
+                    .ignoresSafeArea()
 
-            ScrollViewReader { lecteur in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        entete
+                ScrollViewReader { lecteur in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            entete
 
-                        Spacer().frame(height: 16)
-                        liste
+                            Spacer().frame(height: 16)
+                            liste
+                        }
+                        .padding(.horizontal, margeLaterale)
+                        .padding(.top, 8)
+                        .padding(.bottom, 24)
                     }
-                    .padding(.horizontal, margeLaterale)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
+                    .onAppear { ouvrirSurLeProchainGp(lecteur) }
                 }
-                .onAppear { ouvrirSurLeProchainGp(lecteur) }
             }
+            // Le titre de l'écran est dans le contenu, à 28 pt : la barre système ferait
+            // doublon et se contente de nommer le retour des écrans poussés d'ici.
+            .navigationTitle("Calendrier")
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 
@@ -146,13 +156,26 @@ struct CalendrierView: View {
                     .frame(height: rang == 0 ? 0 : espacement)
                     .id(ancreDefilement(gp))
 
-                Button {
-                    // Destination à câbler : les résultats du Grand Prix (`screen-15`)
-                    // s'il est couru, sa fiche de week-end (`screen-18`) sinon.
-                } label: {
-                    CarteGrandPrixSaison(grandPrix: gp)
+                // **Un `NavigationLink` seulement là où il mène quelque part.** Un Grand
+                // Prix couru ouvre ses résultats ; les trois autres états n'ont pas encore
+                // d'écran, et un lien vers rien se serait enfoncé sous le doigt pour ne
+                // rien faire — ce qui se lit comme une panne. La bande « Voir les
+                // résultats » de la carte est déjà la promesse que ce lien tient.
+                if gp.etat == .termine {
+                    NavigationLink {
+                        ResultatsGPView(resultat: .pour(slug: gp.slug, nom: gp.nom, date: gp.date))
+                    } label: {
+                        CarteGrandPrixSaison(grandPrix: gp)
+                    }
+                    .buttonStyle(StyleAppui(.grandeSurface))
+                } else {
+                    Button {
+                        // Destination à câbler : la fiche de week-end (`screen-18`).
+                    } label: {
+                        CarteGrandPrixSaison(grandPrix: gp)
+                    }
+                    .buttonStyle(StyleAppui(.grandeSurface))
                 }
-                .buttonStyle(StyleAppui(.grandeSurface))
             }
         }
     }
@@ -551,6 +574,10 @@ private struct GrandPrixSaisonMock {
     let jour: String
     let mois: String
     let etat: EtatGp
+    /// La date complète, **écrite** — l'en-tête de ``ResultatsGPView`` la porte telle
+    /// quelle. Elle n'est pas recomposée depuis ``jour`` et ``mois`` : la même règle que
+    /// ces deux-là, et pour la même raison. Voir l'en-tête de ``CalendrierView``.
+    let date: String
 }
 
 #Preview {

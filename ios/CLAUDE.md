@@ -130,7 +130,8 @@ ios/
 │   ├── ajouter-assets.sh        SVG de Ressources/ → Assets.xcassets, récursif, hors planches
 │   ├── decouper-icones.sh       planches → icônes individuelles, d'après le manifeste
 │   ├── icones.txt               manifeste des découpes : planche, nom, fenêtre, hauteur
-│   └── extraire-gp.mjs          drapeaux + tracés + table des teintes, DEPUIS LA VERSION WEB
+│   ├── extraire-gp.mjs          drapeaux + tracés + table des teintes, DEPUIS LA VERSION WEB
+│   └── extraire-drapeaux-pilotes.sh  les 16 drapeaux de NATIONALITÉ, DEPUIS LA VERSION WEB
 ├── AuthViewModel.swift          ┐
 ├── ConnexionView.swift          ├ hors du groupe synchronisé, référencés un à un
 ├── InscriptionView.swift        ┘
@@ -167,7 +168,10 @@ ios/
     │   │   ├── ChampionnatDetailView.swift  classement + vue piste — données mockées
     │   │   ├── CreerChampionnatView.swift   nom, photo, code à venir — alerte mockée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases — alerte mockée
-    │   ├── Calendrier/CalendrierView.swift
+    │   ├── Calendrier/CalendrierView.swift  liste de la saison + lien vers les résultats
+    │   ├── Resultats/
+    │   │   ├── ResultatsGPView.swift       mes résultats + classement officiel — MOCKÉS
+    │   │   └── NationalitesPilotes.swift   pilote → pays, contrepartie de `lib/nationalites.js`
     │   ├── Pronos/
     │   │   ├── CotesView.swift      tableau des cotes + paris bonus, et `EtapePronos` — MOCKÉS
     │   │   ├── PronosView.swift     saisie des deux pronostics obligatoires — MOCKÉE
@@ -184,7 +188,8 @@ ios/
         ├── logo-02.svg              ├ planches d'icônes, à découper par script
         ├── logoV2.svg               ┘
         ├── texture-hexa.svg         damier des cartes (assets/06.svg)
-        ├── flags/                   flag-<slug>.svg — un drapeau par Grand Prix
+        ├── flags/                   flag-<slug>.svg — un drapeau par Grand Prix HÔTE
+        ├── flags-pilotes/           drapeau-<code>.svg — un drapeau par NATIONALITÉ
         ├── traces/                  trace-<slug>.svg — un circuit par Grand Prix
         └── Screenshots/             28 captures de la version web
 ```
@@ -216,6 +221,7 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 | `icone-etoile` | Étoile — bouton « pari bonus » de `CotesView`, 22 × 22 pt, *template* |
 | `texture-hexa` | Damier en filigrane des cartes — monté par ``Damier``, jamais en direct |
 | `flag-<slug>` | Les 12 drapeaux des pays hôtes. **Pas de rendu *template*** : ils gardent leurs couleurs |
+| `drapeau-<code>` | Les 16 drapeaux de **nationalité** des pilotes, en ISO alpha-2 — `drapeau-gb`, `drapeau-nl`… Pas *template* non plus |
 | `trace-<slug>` | Les 12 tracés de circuits, *template* — ils prennent l'encre de l'écran |
 
 > **Les drapeaux et les tracés viennent de la version web, pas d'une recopie.**
@@ -227,6 +233,23 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 > ce que la planche `assets/flags.svg` ne dessine pas, et ce que le web rend en dégradé.
 > Ajouter un Grand Prix = l'ajouter **côté web**, puis rejouer le script.
 >
+> **Les deux familles de drapeaux ne se confondent pas.** `flag-<slug>` peint un pays
+> **hôte** — il habille une carte de Grand Prix, et cinq d'entre eux sont des bandes que
+> le web rend en dégradé. `drapeau-<code>` peint la **nationalité d'un pilote**, en fond
+> d'une ligne de classement, et il en faut **seize** : la grille 2026 compte l'Australie,
+> la Nouvelle-Zélande, le Brésil, le Mexique, le Canada, la Thaïlande et l'Argentine, sept
+> drapeaux qu'aucune borne de dégradé ne sait dire, et la règle du projet interdit
+> d'approximer un drapeau. `scripts/extraire-drapeaux-pilotes.sh` les prend donc dans
+> `country-flag-icons`, **la bibliothèque qu'importe déjà `DrapeauxPilotes.jsx`**, sur les
+> codes que `frontend/src/lib/nationalites.js` déclare. Ajouter un pilote = l'ajouter
+> **côté web**, puis rejouer le script — et relire `NationalitesPilotes.swift`, qui est la
+> transcription de la même table.
+>
+> **Un drapeau de nationalité s'étire, il ne se recadre pas.** Une ligne de classement fait
+> 361 × 62 pt, soit 5,8:1 là où un drapeau en fait 1,5:1 : un `scaledToFill` recadrerait sur
+> la bande centrale et l'Allemagne ressortirait entièrement rouge. `.resizable()` seul —
+> le `preserveAspectRatio="none"` du web — garde toutes les bandes.
+
 > **L'épaisseur du trait d'un circuit est calculée**, pas choisie : un SVG de catalogue
 > n'a pas de `non-scaling-stroke`, donc le script l'écrit en unités de la `viewBox` à la
 > valeur qui donne 3 pt dans la bande de 343 × 160 du widget. Sans ce calcul, Bakou (481
@@ -278,6 +301,7 @@ tracé : elle ne s'utilise jamais telle quelle, elle se découpe.
 |---|---|
 | `texture-hexa.svg` | Damier des cartes, copie d'`assets/06.svg` |
 | `flags/`, `traces/` | Un fichier par Grand Prix — **écrits par `extraire-gp.mjs`** |
+| `flags-pilotes/` | Un fichier par nationalité — **écrits par `extraire-drapeaux-pilotes.sh`** |
 | `logo-05.svg` | Source du logo complet |
 | `logo-bandeau.svg` | Le même à viewBox rognée « 0 215 894.21 243 » |
 | `logo-02.svg` | **Planche** — les 4 icônes de la barre : garage, coupe, calendrier, pilote |

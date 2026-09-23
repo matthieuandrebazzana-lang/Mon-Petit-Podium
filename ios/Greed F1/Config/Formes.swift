@@ -20,6 +20,9 @@ enum Rayon {
     static let widget: CGFloat = 16
     /// Champs et petits éléments posés à l'intérieur d'un bloc.
     static let champ: CGFloat = 14
+    /// Pastilles de points — le nombre de points d'un pronostic, posé au bout d'une ligne.
+    /// C'est le `rounded-[10px]` de la version web, et il n'habille que cet objet-là.
+    static let pastille: CGFloat = 10
 }
 
 // MARK: - Élévation

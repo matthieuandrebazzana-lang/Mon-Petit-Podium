@@ -371,7 +371,7 @@ private struct RangeeRecap: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(ligne.aplat)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
