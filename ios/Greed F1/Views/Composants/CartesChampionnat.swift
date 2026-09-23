@@ -265,6 +265,10 @@ struct CarteAction: View {
 /// mouvement du pouce, du dernier championnat aux deux façons d'en avoir un de plus.
 struct ActionsChampionnat: View {
 
+    /// Descend jusqu'aux deux écrans : après une création ou une adhésion, ils rechargent
+    /// la liste que l'accueil et l'onglet affichent.
+    @ObservedObject var mesChampionnats: MesChampionnats
+
     var body: some View {
         VStack(spacing: 10) {
             // `NavigationLink` et non `Button`, pour la même raison que dans la liste des
@@ -272,7 +276,7 @@ struct ActionsChampionnat: View {
             // retour par le bord. Les deux écrans qui montent ce bloc ont donc chacun leur
             // `NavigationStack`.
             NavigationLink {
-                CreerChampionnatView()
+                CreerChampionnatView(mesChampionnats: mesChampionnats)
             } label: {
                 CarteAction(
                     logo: "icone-creer",
@@ -284,7 +288,7 @@ struct ActionsChampionnat: View {
             .buttonStyle(StyleAppui(.grandeSurface))
 
             NavigationLink {
-                RejoindreChampionnatView()
+                RejoindreChampionnatView(mesChampionnats: mesChampionnats)
             } label: {
                 CarteAction(
                     logo: "icone-rejoindre",

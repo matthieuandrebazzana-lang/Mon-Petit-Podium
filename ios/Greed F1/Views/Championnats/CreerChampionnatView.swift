@@ -6,9 +6,14 @@ import PhotosUI
 ///
 /// Référence visuelle : `Ressources/Screenshots/screen-11-creer-championnat.PNG`.
 ///
-/// > **Rien ne part encore sur le réseau.** L'appui sur « Créer le championnat » ouvre une
-/// > alerte ; la route `POST /championnats` et la navigation vers le championnat créé
-/// > seront branchées à la passe API (`docs/swift-app.md` §5).
+/// **`POST /championnats`** (`docs/swift-app.md` §3.3). Le succès ne quitte pas l'écran :
+/// il **remplit** l'aplat rouge du code reçu — c'est ce que l'utilisateur vient chercher,
+/// et il doit pouvoir le partager avant d'aller plus loin —, puis le bouton devient
+/// « Voir le championnat ». Un refus s'écrit sous le bouton (``ErreurEnLigne``), jamais
+/// dans une alerte. La liste de ``MesChampionnats`` est rechargée dès le succès.
+///
+/// > **La photo n'est pas encore envoyée** : elle est choisie et vérifiée ici, le dépôt
+/// > Storage suivi du `PATCH` vient à la fin de l'étape 2 (§7.6).
 ///
 /// **Le code d'invitation n'est pas engendré ici, et c'est délibéré.** Six caractères tirés
 /// par l'app pourraient entrer en collision avec un code déjà attribué ; c'est le serveur
@@ -20,6 +25,8 @@ struct CreerChampionnatView: View {
     private let margeLaterale: CGFloat = 16
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
+
+    @ObservedObject var mesChampionnats: MesChampionnats
 
     @State private var nom = ""
     @FocusState private var nomActif: Bool
@@ -33,16 +40,30 @@ struct CreerChampionnatView: View {
     /// Le refus opposé à une photo trop lourde. `nil` tant qu'il n'y a rien à dire.
     @State private var refusPhoto: String?
 
-    @State private var alerteCreation = false
+    /// Vrai pendant l'appel : le bouton porte un spinner et ne se rappuie pas.
+    @State private var envoi = false
+    /// Le refus du serveur, affiché sous le bouton jusqu'à la prochaine frappe.
+    @State private var erreur: ErreurAPI?
+    /// Le championnat que le serveur a créé. **Non nul, l'écran a fini son travail** : le
+    /// nom se fige, le code s'affiche, le bouton mène au championnat.
+    @State private var cree: Championnat?
+
+    /// Bornes du serveur, **après `strip()`** — `422` au-delà (§3.3).
+    private static let longueurNom = 2...40
 
     /// Le plafond annoncé sous la ligne « Ajouter une photo ». **Annoncé et appliqué au
     /// même endroit** : une limite écrite dans le sous-titre et vérifiée ailleurs finit par
     /// diverger, et le symptôme est un fichier accepté que le serveur rejettera.
     private static let poidsMaximal = 2 * 1024 * 1024
 
-    /// Un nom fait de seuls espaces n'est pas un nom.
+    private var nomNettoye: String {
+        nom.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Les bornes du serveur, vérifiées avant l'envoi : un nom d'une lettre allumerait
+    /// sinon un bouton que le serveur refuserait.
     private var nomValide: Bool {
-        !nom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        Self.longueurNom.contains(nomNettoye.count)
     }
 
     var body: some View {
@@ -62,6 +83,12 @@ struct CreerChampionnatView: View {
 
                     Spacer().frame(height: 12)
                     boutonCreer
+
+                    if let erreur {
+                        Spacer().frame(height: 12)
+                        ErreurEnLigne(erreur: erreur)
+                            .transition(.opacity)
+                    }
                 }
                 .padding(.horizontal, margeLaterale)
                 .padding(.top, 4)
@@ -74,10 +101,42 @@ struct CreerChampionnatView: View {
         // geste de retour par le bord, qu'un bouton dessiné à la main ne donne pas.
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Championnat créé !", isPresented: $alerteCreation) {
-            Button("Parfait", role: .cancel) { }
-        } message: {
-            Text("Son code d'invitation sera affiché ici dès que le serveur l'aura engendré.")
+        .animation(Mouvement.entree(0.20), value: erreur)
+        // Retour haptique **au même instant** que ce qu'il confirme : le code qui apparaît,
+        // ou le refus qui s'écrit.
+        .sensoryFeedback(.success, trigger: cree) { _, nouveau in nouveau != nil }
+        .sensoryFeedback(.error, trigger: erreur) { _, nouveau in nouveau != nil }
+    }
+
+    // MARK: - Envoi
+
+    private struct CorpsCreation: Encodable {
+        let nom: String
+    }
+
+    /// `POST /championnats`. La tâche n'est **pas** liée à l'écran : quitter pendant
+    /// l'appel ne l'annule pas, et la liste se recharge quand même — le championnat existe
+    /// côté serveur, il doit apparaître côté app.
+    private func creer() {
+        guard nomValide, !envoi, cree == nil else { return }
+        nomActif = false
+        erreur = nil
+        envoi = true
+        let corps = CorpsCreation(nom: nomNettoye)
+
+        Task {
+            do {
+                let championnat: Championnat = try await APIClient.partage.requete(
+                    "championnats", methode: .post, corps: corps)
+                envoi = false
+                cree = championnat
+                await mesChampionnats.charger(forcer: true)
+            } catch let refus as ErreurAPI {
+                envoi = false
+                erreur = refus
+            } catch {
+                envoi = false
+            }
         }
     }
 
@@ -122,7 +181,7 @@ struct CreerChampionnatView: View {
     /// Le rayon est `champ` (14) : une surface posée **à l'intérieur** d'un bloc, donc
     /// **sans ombre** — elle ne casse jamais le plan de son bloc (`Formes.swift`).
     private var champNom: some View {
-        TextField("", text: $nom, prompt: placeholder)
+        TextField("", text: lienNom, prompt: placeholder)
             .font(.custom("HelveticaNeue", size: 17))
             .foregroundColor(.texte)
             .tint(.primaire)
@@ -131,11 +190,26 @@ struct CreerChampionnatView: View {
             .submitLabel(.done)
             .focused($nomActif)
             .onSubmit { nomActif = false }
+            // Créé, le nom ne se modifie plus : le serveur ne sait pas le renommer (§3.3).
+            .disabled(cree != nil)
             .padding(.horizontal, 16)
             .frame(height: 52)                  // > 44 pt, contrainte tactile iOS
             .background(Color.fondPrincipal)
             .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
             .accessibilityLabel("Nom du championnat")
+    }
+
+    /// Le lien du champ : plafonné à la borne du serveur **en écrivant**, pour la même
+    /// raison que le code de ``RejoindreChampionnatView`` — une correction après coup perd
+    /// des frappes. Toute frappe efface aussi le refus précédent : il parlait d'un autre nom.
+    private var lienNom: Binding<String> {
+        Binding(
+            get: { nom },
+            set: { saisie in
+                nom = String(saisie.prefix(Self.longueurNom.upperBound))
+                erreur = nil
+            }
+        )
     }
 
     /// **`grisSecondaire` et non le `#999999` de la version web.** Sur le beige du champ,
@@ -265,24 +339,81 @@ struct CreerChampionnatView: View {
                 .foregroundColor(.encreSecondaire)      // 5,75:1 sur primaire
 
             HStack(spacing: 14) {
-                ForEach(0..<6, id: \.self) { _ in
-                    Capsule()
-                        .fill(Color.encreGraphique)     // 3,46:1 sur primaire
-                        .frame(width: 26, height: 3)
+                ForEach(0..<6, id: \.self) { index in
+                    caseCode(index)
                 }
             }
+            .frame(height: 30)
 
-            Text("Généré automatiquement à la création.")
+            Text(cree == nil ? "Généré automatiquement à la création."
+                             : "Partage ce code avec tes amis pour qu'ils te rejoignent.")
                 .font(.custom("HelveticaNeue", size: 12))
                 .foregroundColor(.encreSecondaire)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityHidden(true)
+
+            if let cree {
+                partage(cree)
+                    .transition(.opacity)
+            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primaire)
         .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
         .ombreAplat()                                   // aplat de couleur (§4.7)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Code d'invitation de six caractères, généré automatiquement à la création.")
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Un caractère du code, ou son tiret tant que le serveur ne l'a pas tiré.
+    ///
+    /// **Les six caractères entrent l'un après l'autre**, décalés de ``Mouvement/decalage`` :
+    /// c'est le décalage qui fait lire un code, et non un bloc qui s'allume. Ils naissent à
+    /// `0,94`, jamais à `0` ; sous `accessibilityReduceMotion` il ne reste que le fondu.
+    @ViewBuilder
+    private func caseCode(_ index: Int) -> some View {
+        ZStack {
+            if let caractere = caractereCode(index) {
+                Text(String(caractere))
+                    .font(.custom("HelveticaNeue-Medium", size: 26))
+                    .foregroundColor(.white)            // 9,61:1 sur primaire
+                    .transition(transitionCaractere)
+            } else {
+                Capsule()
+                    .fill(Color.encreGraphique)         // 3,46:1 sur primaire
+                    .frame(width: 26, height: 3)
+                    .transition(.opacity)
+            }
+        }
+        .frame(width: 26)
+        .animation(Mouvement.entree(0.20).delay(Double(index) * Mouvement.decalage),
+                   value: cree)
+        .accessibilityHidden(true)
+    }
+
+    private func caractereCode(_ index: Int) -> Character? {
+        guard let code = cree?.codeInvitation, index < code.count else { return nil }
+        return code[code.index(code.startIndex, offsetBy: index)]
+    }
+
+    private var transitionCaractere: AnyTransition {
+        let fondu = AnyTransition.opacity
+        guard !mouvementReduit else { return fondu }
+        return fondu.combined(with: .scale(scale: 0.94))
+    }
+
+    /// Le code n'a de valeur que transmis : la feuille de partage système le porte, avec
+    /// une phrase qui dit à l'ami quoi en faire.
+    private func partage(_ championnat: Championnat) -> some View {
+        ShareLink(item: "Rejoins mon championnat « \(championnat.nom) » sur Greed F1 avec le code \(championnat.codeInvitation).") {
+            Label("Partager le code", systemImage: "square.and.arrow.up")
+                .font(.custom("HelveticaNeue-Medium", size: 15))
+                .foregroundColor(.white)
+                .frame(minHeight: 44)                   // contrainte tactile iOS
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(StyleAppui(.bouton))
+        .accessibilityLabel("Partager le code \(championnat.codeInvitation.map(String.init).joined(separator: " "))")
     }
 
     // MARK: - Le bouton
@@ -293,21 +424,38 @@ struct CreerChampionnatView: View {
     /// inerte. Le marron `secondaire` à 22 % sur le beige donne `#D2C8BF`, où la même encre
     /// pleine tient **6,42:1** — un bouton éteint reste lisible, sans quoi on ne sait pas
     /// ce qu'on attend de nous.
+    ///
+    /// **Créé, il devient le chemin vers le championnat** — même place, même forme : l'écran
+    /// garde une seule action, c'est seulement l'action suivante.
+    @ViewBuilder
     private var boutonCreer: some View {
-        Button {
-            nomActif = false
-            alerteCreation = true
-        } label: {
-            Text("Créer le championnat")
-                .font(.custom("HelveticaNeue-Medium", size: 18))
-                .foregroundColor(nomValide ? .white : .secondaire)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)              // > 44 pt, contrainte tactile iOS
-                .background(nomValide ? Color.primaire : Color.secondaire.opacity(0.22))
-                .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
+        if let cree {
+            NavigationLink {
+                ChampionnatDetailView(championnat: ChampionnatMock(cree))
+            } label: {
+                Text("Voir le championnat")
+                    .habillageBoutonPrincipal(actif: true)
+            }
+            .buttonStyle(StyleAppui(.bouton))
+            .shadow(color: Color.secondaire.opacity(0.16), radius: 17, y: 14)
+        } else {
+            boutonEnvoi
+        }
+    }
+
+    private var boutonEnvoi: some View {
+        Button(action: creer) {
+            ZStack {
+                // Le libellé reste en place, invisible, sous le spinner : le bouton ne
+                // change pas de taille, et le texte revient à l'identique en cas d'échec.
+                Text("Créer le championnat").opacity(envoi ? 0 : 1)
+                if envoi { ProgressView().tint(.white) }
+            }
+            .habillageBoutonPrincipal(actif: nomValide)
         }
         .buttonStyle(StyleAppui(.bouton))
-        .disabled(!nomValide)
+        .disabled(!nomValide || envoi)
+        .accessibilityLabel(envoi ? "Création en cours" : "Créer le championnat")
         // **Le seul changement d'état que l'écran produit de lui-même.** Il s'anime parce
         // qu'il arrive une fois par visite, à la première lettre tapée, et qu'un bouton qui
         // change d'encre d'une image à l'autre se lit comme un défaut d'affichage. Couleur
@@ -330,6 +478,6 @@ struct CreerChampionnatView: View {
 
 #Preview {
     NavigationStack {
-        CreerChampionnatView()
+        CreerChampionnatView(mesChampionnats: MesChampionnats())
     }
 }

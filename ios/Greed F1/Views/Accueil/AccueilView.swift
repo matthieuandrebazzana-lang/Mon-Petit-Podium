@@ -166,7 +166,7 @@ struct AccueilView: View {
 
     /// Les deux cartes d'action, dont la composition vit dans ``ActionsChampionnat``
     /// — la liste des championnats pose exactement le même bloc.
-    private var actions: some View { ActionsChampionnat() }
+    private var actions: some View { ActionsChampionnat(mesChampionnats: mesChampionnats) }
 
     /// La ligne qui ferme l'écran. Elle répond à un vrai défaut de composition — sous une
     /// liste d'un ou deux championnats, le bas de l'écran restait vide sur toute sa moitié.

@@ -2073,7 +2073,7 @@ ci-dessous ; chaque étape ne dépend que des précédentes.
 |---|---|---|
 | **0** | Fondations : `APIClient`, `ErreurAPI`, `JSONDecoder.api`, réveil, `Profil` / `Championnat` / `Membre`, profil courant en direct | **Fait** (iOS 0.20.0) |
 | **1** | `GET /championnats/moi` — **un seul propriétaire** pour l'accueil et l'onglet Championnats. L'`id` devient un UUID : la teinte Pantone, tirée de l'id, changera une fois | **Fait** (iOS 0.21.0) |
-| **2** | Créer / rejoindre, puis la photo (Storage + `PATCH`). Navigation vers le championnat obtenu, liste de l'étape 1 invalidée | |
+| **2** | Créer / rejoindre, puis la photo (Storage + `PATCH`). Navigation vers le championnat obtenu, liste de l'étape 1 invalidée | **Créer / rejoindre faits** (iOS 0.22.0) — photo à faire |
 | **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | |
 | **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | |
 | **5** | Calendrier : liste statique **croisée** avec `GET /scraper/cotes` → états réels **et `gp_id`** · GP suivant de l'accueil en lecture directe · **un seul calcul d'échéance** (§6.4) | |
@@ -2123,6 +2123,19 @@ rechargée par leur `.task`. `CarteChampionnat` lit le vrai `Championnat` ; le r
 écrans. Le détail reçoit encore un `ChampionnatMock`, projeté du réel avec la même clé de
 teinte (UUID en minuscules) — jusqu'à l'étape 3.
 
+
+**Étape 2, mise en œuvre (créer / rejoindre).** Les deux écrans reçoivent ``MesChampionnats``
+par ``ActionsChampionnat`` et appellent `APIClient` directement. **Le succès ne quitte pas
+l'écran** : « Créer » remplit l'aplat rouge avec le code reçu (entrée décalée, bouton de
+partage système), « Rejoindre » écrit « Bienvenue dans « nom » ! » ; dans les deux cas le
+bouton devient « Voir le championnat » (`ChampionnatDetailView`, encore sur
+`ChampionnatMock`). Un refus (`422`, `404` code inconnu, `409` déjà membre) s'écrit sous le
+bouton via `ErreurEnLigne` — **jamais d'alerte système** — et s'efface à la frappe suivante.
+Le rechargement passe par `charger(forcer: true)` : sans lui, un chargement déjà en vol,
+lancé **avant** l'écriture, absorberait la demande et le championnat manquerait à la liste.
+L'appel n'est pas lié à l'écran : le quitter en cours de route n'annule ni l'écriture ni le
+rechargement. Le nom est borné à **2–40 caractères** côté client, comme le serveur.
+**Reste de l'étape 2 : la photo** — choisie et vérifiée (2 Mo), mais pas encore déposée.
 ---
 
 ## 8. Références

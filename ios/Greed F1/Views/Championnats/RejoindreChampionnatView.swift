@@ -4,9 +4,11 @@ import SwiftUI
 ///
 /// Référence visuelle : `Ressources/Screenshots/screen-12-rejoindre-championnat.PNG`.
 ///
-/// > **Rien ne part encore sur le réseau.** L'appui sur « Rejoindre le championnat » ouvre
-/// > une alerte ; la route `POST /championnats/rejoindre` et la navigation vers le
-/// > championnat rejoint seront branchées à la passe API (`docs/swift-app.md` §5).
+/// **`POST /championnats/rejoindre`** (`docs/swift-app.md` §3.3). Le succès fige la
+/// saisie, écrit le nom du championnat rejoint sous le bouton, et le bouton devient
+/// « Voir le championnat ». Un refus — code inconnu (`404`), déjà membre (`409`) — s'écrit
+/// au même endroit (``ErreurEnLigne``), jamais dans une alerte, et s'efface à la frappe
+/// suivante. La liste de ``MesChampionnats`` est rechargée dès le succès.
 ///
 /// **Six cases, mais un seul champ de texte.** Les cases sont un dessin ; ce qui reçoit la
 /// frappe est un `TextField` unique, invisible, posé par-dessus toute la rangée. C'est ce
@@ -25,6 +27,8 @@ struct RejoindreChampionnatView: View {
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
+    @ObservedObject var mesChampionnats: MesChampionnats
+
     @State private var code = ""
     @FocusState private var saisieActive: Bool
 
@@ -34,7 +38,12 @@ struct RejoindreChampionnatView: View {
     /// première mesure.
     @State private var coteCase: CGFloat = 46
 
-    @State private var alerteRejoint = false
+    /// Vrai pendant l'appel : le bouton porte un spinner et ne se rappuie pas.
+    @State private var envoi = false
+    /// Le refus du serveur, affiché sous le bouton jusqu'à la prochaine frappe.
+    @State private var erreur: ErreurAPI?
+    /// Le championnat rejoint. **Non nul, l'écran a fini son travail.**
+    @State private var rejoint: Championnat?
 
     /// La longueur du code, écrite **une fois** : la rangée, la validité du bouton et le
     /// texte d'accessibilité s'y réfèrent tous les trois.
@@ -79,6 +88,16 @@ struct RejoindreChampionnatView: View {
 
                     Spacer().frame(height: 12)   // espacement entre blocs (§4.6)
                     boutonRejoindre
+
+                    if let erreur {
+                        Spacer().frame(height: 12)
+                        ErreurEnLigne(erreur: erreur)
+                            .transition(.opacity)
+                    } else if let rejoint {
+                        Spacer().frame(height: 12)
+                        bienvenue(rejoint)
+                            .transition(.opacity)
+                    }
                 }
                 .padding(.horizontal, margeLaterale)
                 .padding(.top, 4)
@@ -91,11 +110,56 @@ struct RejoindreChampionnatView: View {
         // geste de retour par le bord, qu'un bouton dessiné à la main ne donne pas.
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Championnat rejoint !", isPresented: $alerteRejoint) {
-            Button("Parfait", role: .cancel) { }
-        } message: {
-            Text("Le classement s'ouvrira ici dès que le serveur aura confirmé le code.")
+        .animation(Mouvement.entree(0.20), value: erreur)
+        .animation(Mouvement.entree(0.20), value: rejoint)
+        // Retour haptique **au même instant** que ce qu'il confirme.
+        .sensoryFeedback(.success, trigger: rejoint) { _, nouveau in nouveau != nil }
+        .sensoryFeedback(.error, trigger: erreur) { _, nouveau in nouveau != nil }
+    }
+
+    // MARK: - Envoi
+
+    private struct CorpsAdhesion: Encodable {
+        let code: String
+    }
+
+    /// `POST /championnats/rejoindre`. Le serveur normalise lui-même le code (majuscules,
+    /// espaces et tirets retirés) : ``codeNormalise`` n'est envoyé que par cohérence avec
+    /// ce que les cases affichent.
+    ///
+    /// La tâche n'est **pas** liée à l'écran : quitter pendant l'appel ne l'annule pas, et
+    /// la liste se recharge quand même.
+    private func rejoindre() {
+        guard codeComplet, !envoi, rejoint == nil else { return }
+        saisieActive = false
+        erreur = nil
+        envoi = true
+        let corps = CorpsAdhesion(code: codeNormalise)
+
+        Task {
+            do {
+                let championnat: Championnat = try await APIClient.partage.requete(
+                    "championnats/rejoindre", methode: .post, corps: corps)
+                envoi = false
+                rejoint = championnat
+                await mesChampionnats.charger(forcer: true)
+            } catch let refus as ErreurAPI {
+                envoi = false
+                erreur = refus
+            } catch {
+                envoi = false
+            }
         }
+    }
+
+    /// La confirmation, à la place exacte où un refus se serait écrit.
+    private func bienvenue(_ championnat: Championnat) -> some View {
+        Text("Bienvenue dans « \(championnat.nom) » !")
+            .font(.corps)
+            .foregroundColor(.texte)                // 15,37:1 sur le beige
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
     }
 
     // MARK: - Titre
@@ -253,6 +317,8 @@ struct RejoindreChampionnatView: View {
                 if complet { saisieActive = false }
             }
             .onSubmit { saisieActive = false }
+            // Rejoint, le code ne se modifie plus : il a servi.
+            .disabled(rejoint != nil)
             .accessibilityLabel("Code d'invitation")
             .accessibilityValue(valeurAccessible)
             .accessibilityHint("Six caractères, lettres ou chiffres.")
@@ -269,7 +335,11 @@ struct RejoindreChampionnatView: View {
     private var lienCode: Binding<String> {
         Binding(
             get: { code },
-            set: { code = Self.nettoyer($0) }
+            set: { saisie in
+                code = Self.nettoyer(saisie)
+                // Le refus parlait d'un autre code.
+                erreur = nil
+            }
         )
     }
 
@@ -311,21 +381,37 @@ struct RejoindreChampionnatView: View {
     /// **L'écran n'a qu'une action**, et le bouton ne s'allume que lorsqu'elle est possible
     /// — mêmes encres et même bascule que « Créer le championnat », parce que c'est le même
     /// bouton à deux endroits.
+    ///
+    /// **Rejoint, il devient le chemin vers le championnat** — même place, même forme.
+    @ViewBuilder
     private var boutonRejoindre: some View {
-        Button {
-            saisieActive = false
-            alerteRejoint = true
-        } label: {
-            Text("Rejoindre le championnat")
-                .font(.custom("HelveticaNeue-Medium", size: 18))
-                .foregroundColor(codeComplet ? .white : .secondaire)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)              // > 44 pt, contrainte tactile iOS
-                .background(codeComplet ? Color.primaire : Color.secondaire.opacity(0.22))
-                .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
+        if let rejoint {
+            NavigationLink {
+                ChampionnatDetailView(championnat: ChampionnatMock(rejoint))
+            } label: {
+                Text("Voir le championnat")
+                    .habillageBoutonPrincipal(actif: true)
+            }
+            .buttonStyle(StyleAppui(.bouton))
+            .shadow(color: Color.secondaire.opacity(0.16), radius: 17, y: 14)
+        } else {
+            boutonEnvoi
+        }
+    }
+
+    private var boutonEnvoi: some View {
+        Button(action: rejoindre) {
+            ZStack {
+                // Le libellé reste en place, invisible, sous le spinner : le bouton ne
+                // change pas de taille, et le texte revient à l'identique en cas d'échec.
+                Text("Rejoindre le championnat").opacity(envoi ? 0 : 1)
+                if envoi { ProgressView().tint(.white) }
+            }
+            .habillageBoutonPrincipal(actif: codeComplet)
         }
         .buttonStyle(StyleAppui(.bouton))
-        .disabled(!codeComplet)
+        .disabled(!codeComplet || envoi)
+        .accessibilityLabel(envoi ? "Adhésion en cours" : "Rejoindre le championnat")
         // Couleur et opacité seulement, jamais une géométrie : rien ne bouge sous le doigt,
         // et le repli `accessibilityReduceMotion` est donc inutile ici.
         .animation(Mouvement.entree(0.18), value: codeComplet)
@@ -345,6 +431,6 @@ private struct LargeurRangee: PreferenceKey {
 
 #Preview {
     NavigationStack {
-        RejoindreChampionnatView()
+        RejoindreChampionnatView(mesChampionnats: MesChampionnats())
     }
 }

@@ -60,7 +60,7 @@ struct ChampionnatsView: View {
                         liste
 
                         Spacer().frame(height: 10)
-                        ActionsChampionnat()
+                        ActionsChampionnat(mesChampionnats: mesChampionnats)
 
                         Spacer().frame(height: 20)
                         blocSaison

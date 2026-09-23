@@ -169,14 +169,16 @@ ios/
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Composants/
     │   │   ├── CartesChampionnat.swift  carte de championnat, cartes d'action, chargement/échec, PARTAGÉS
+    │   │   ├── BoutonPrincipal.swift    habillage du bouton de « Créer » et « Rejoindre », PARTAGÉ
+    │   │   ├── ErreurEnLigne.swift      refus d'une écriture, sous le bouton — jamais d'alerte
     │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
     │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste — données mockées
     │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — MOCKÉ
-    │   │   ├── CreerChampionnatView.swift   nom, photo, code à venir — alerte mockée
-    │   │   └── RejoindreChampionnatView.swift  code à 6 cases — alerte mockée
+    │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée
+    │   │   └── RejoindreChampionnatView.swift  code à 6 cases → `POST /championnats/rejoindre`
     │   ├── Calendrier/
     │   │   ├── CalendrierView.swift   liste de la saison — terminé → résultats, sinon → fiche
     │   │   ├── DetailGPView.swift     fiche d'un GP à venir : séances, circuit, vainqueurs — MOCKÉE
