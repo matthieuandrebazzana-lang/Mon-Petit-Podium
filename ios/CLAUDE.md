@@ -165,7 +165,8 @@ ios/
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données mockées
     │   │   ├── ChampionnatDetailView.swift  classement + vue piste — données mockées
-    │   │   └── CreerChampionnatView.swift   nom, photo, code à venir — alerte mockée
+    │   │   ├── CreerChampionnatView.swift   nom, photo, code à venir — alerte mockée
+    │   │   └── RejoindreChampionnatView.swift  code à 6 cases — alerte mockée
     │   ├── Calendrier/CalendrierView.swift
     │   └── Profil/ProfilView.swift      construit — données mockées
     ├── Resources/               ← EMBARQUÉ dans l'app

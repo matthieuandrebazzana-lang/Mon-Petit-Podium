@@ -243,8 +243,8 @@ struct ActionsChampionnat: View {
             }
             .buttonStyle(StyleAppui(.grandeSurface))
 
-            Button {
-                // Destination à câbler : rejoindre par code à 6 caractères (`screen-12`).
+            NavigationLink {
+                RejoindreChampionnatView()
             } label: {
                 CarteAction(
                     logo: "icone-rejoindre",
