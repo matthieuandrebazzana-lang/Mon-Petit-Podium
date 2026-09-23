@@ -227,8 +227,12 @@ struct ActionsChampionnat: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Button {
-                // Destination à câbler : créer un championnat (`screen-11`).
+            // `NavigationLink` et non `Button`, pour la même raison que dans la liste des
+            // championnats : c'est lui qui porte le glissement d'écran natif et le geste de
+            // retour par le bord. Les deux écrans qui montent ce bloc ont donc chacun leur
+            // `NavigationStack`.
+            NavigationLink {
+                CreerChampionnatView()
             } label: {
                 CarteAction(
                     logo: "icone-creer",

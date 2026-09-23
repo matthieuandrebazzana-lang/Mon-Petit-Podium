@@ -169,3 +169,18 @@ enum Tracking {
     /// `label` et `labelSm`, tous deux en `.textCase(.uppercase)`.
     static let label: CGFloat = 0.7
 }
+
+// MARK: - Encre graphique sur aplat
+
+extension Color {
+
+    /// Encre d'un **élément graphique** posé sur un aplat de couleur — les six tirets du
+    /// code d'invitation, et ce qui viendra du même genre : blanc à **50 %**.
+    ///
+    /// > Elle existe parce que ``encreSecondaire`` (70 %) est réglée pour du **texte** et
+    /// > pèse trop lourd sur un simple tiret, quand le blanc à 40 % de la version web ne
+    /// > tient que **2,64:1** sur `primaire` — sous le plancher de 3:1 d'un élément
+    /// > graphique porteur de sens, et ces tirets en portent un : ils disent que le code
+    /// > fait six caractères. Mesuré : 45 % tombe pile à 3,01:1, 50 % donne **3,46:1**.
+    static let encreGraphique = Color.white.opacity(0.50)
+}

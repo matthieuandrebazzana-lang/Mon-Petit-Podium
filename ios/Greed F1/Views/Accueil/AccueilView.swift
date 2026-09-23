@@ -49,36 +49,45 @@ struct AccueilView: View {
     private let grandsPrixRestants = 12
 
     var body: some View {
-        ZStack {
-            Color.fondPrincipal
-                .ignoresSafeArea()
+        // L'accueil est la **racine de sa propre pile** : c'est de ses deux cartes
+        // d'action que part la création d'un championnat. Une pile par onglet, et non
+        // une pile autour de la barre — sinon le retour ramènerait sur un autre onglet
+        // que celui d'où l'on est parti.
+        NavigationStack {
+            ZStack {
+                Color.fondPrincipal
+                    .ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    entete
+                ScrollView {
+                    VStack(spacing: 0) {
+                        entete
 
-                    Spacer().frame(height: 12)
-                    WidgetGrandPrix(grandPrix: grandPrix)
+                        Spacer().frame(height: 12)
+                        WidgetGrandPrix(grandPrix: grandPrix)
 
-                    Spacer().frame(height: 24)   // changement de sujet : 24 pt (§4.6)
-                    titreSection("Mes championnats")
+                        Spacer().frame(height: 24)   // changement de sujet : 24 pt (§4.6)
+                        titreSection("Mes championnats")
 
-                    Spacer().frame(height: 10)
-                    listeChampionnats
+                        Spacer().frame(height: 10)
+                        listeChampionnats
 
-                    Spacer().frame(height: 10)
-                    actions
+                        Spacer().frame(height: 10)
+                        actions
 
-                    Spacer().frame(height: 20)
-                    blocSaison
+                        Spacer().frame(height: 20)
+                        blocSaison
 
-                    Spacer().frame(height: 28)
-                    versionAffichee
+                        Spacer().frame(height: 28)
+                        versionAffichee
+                    }
+                    .padding(.horizontal, margeLaterale)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, margeLaterale)
-                .padding(.top, 8)
-                .padding(.bottom, 24)
             }
+            // Pas de titre : le bouton de retour des écrans poussés d'ici affiche alors le
+            // « Retour » générique du système, comme la capture de référence.
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 
