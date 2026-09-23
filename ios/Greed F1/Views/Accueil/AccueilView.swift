@@ -48,12 +48,18 @@ struct AccueilView: View {
     /// « 1 Grand Prix restant » au milieu d'une saison qui en compte douze.
     private let grandsPrixRestants = 12
 
+    /// Le chemin du parcours de pronostics — voir ``EtapePronos``.
+    @State private var cheminPronos: [EtapePronos] = []
+
     var body: some View {
         // L'accueil est la **racine de sa propre pile** : c'est de ses deux cartes
         // d'action que part la création d'un championnat. Une pile par onglet, et non
         // une pile autour de la barre — sinon le retour ramènerait sur un autre onglet
         // que celui d'où l'on est parti.
-        NavigationStack {
+        // Le chemin est **explicite** parce que le récapitulatif doit pouvoir revenir ici
+        // d'un coup, trois écrans plus haut (``EtapePronos``). Les deux cartes d'action
+        // gardent leurs `NavigationLink` classiques : elles n'ont rien à remonter.
+        NavigationStack(path: $cheminPronos) {
             ZStack {
                 Color.fondPrincipal
                     .ignoresSafeArea()
@@ -88,6 +94,7 @@ struct AccueilView: View {
             // Pas de titre : le bouton de retour des écrans poussés d'ici affiche alors le
             // « Retour » générique du système, comme la capture de référence.
             .toolbar(.hidden, for: .navigationBar)
+            .etapesPronos(libelleRetour: "Accueil") { cheminPronos.removeAll() }
         }
     }
 
@@ -261,12 +268,11 @@ private struct WidgetGrandPrix: View {
         // La destination est celle de la version web : `/cotes`, jamais la saisie — on
         // ajoute ses paris bonus avant de pronostiquer, et un bouton qui sauterait cette
         // étape mentirait sur son libellé.
-        NavigationLink {
-            CotesView(
-                nomGrandPrix: grandPrix.nom,
-                sousTitre: "\(grandPrix.date) · Départ \(grandPrix.heureDepart)"
-            )
-        } label: {
+        NavigationLink(value: EtapePronos.cotes(
+            nom: grandPrix.nom,
+            slug: grandPrix.slug,
+            sousTitre: "\(grandPrix.date) · Départ \(grandPrix.heureDepart)"
+        )) {
             contenu
                 .padding(rembourrage)
                 .frame(maxWidth: .infinity, alignment: .leading)

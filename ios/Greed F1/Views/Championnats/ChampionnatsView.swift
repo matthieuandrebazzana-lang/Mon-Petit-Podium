@@ -50,8 +50,14 @@ struct ChampionnatsView: View {
         }
     }
 
+    /// Le chemin du parcours de pronostics — voir ``EtapePronos``. **Le vider ramène au
+    /// championnat**, pas à l'accueil : le détail d'un championnat est poussé hors de ce
+    /// chemin, et reste donc en place. C'est pourquoi le libellé du retour diffère de
+    /// celui de l'accueil.
+    @State private var cheminPronos: [EtapePronos] = []
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $cheminPronos) {
             ZStack {
                 Color.fondPrincipal
                     .ignoresSafeArea()
@@ -79,6 +85,7 @@ struct ChampionnatsView: View {
             // détail affiche à côté de son chevron de retour.
             .navigationTitle("Championnats")
             .toolbar(.hidden, for: .navigationBar)
+            .etapesPronos(libelleRetour: "Championnat") { cheminPronos.removeAll() }
         }
     }
 

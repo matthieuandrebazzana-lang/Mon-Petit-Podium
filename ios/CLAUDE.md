@@ -169,8 +169,9 @@ ios/
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases — alerte mockée
     │   ├── Calendrier/CalendrierView.swift
     │   ├── Pronos/
-    │   │   ├── CotesView.swift      tableau des cotes + paris bonus — grille et points MOCKÉS
-    │   │   └── PronosView.swift     saisie des deux pronostics obligatoires — MOCKÉE
+    │   │   ├── CotesView.swift      tableau des cotes + paris bonus, et `EtapePronos` — MOCKÉS
+    │   │   ├── PronosView.swift     saisie des deux pronostics obligatoires — MOCKÉE
+    │   │   └── RecapView.swift      récapitulatif après validation — MOCKÉ
     │   └── Profil/ProfilView.swift      construit — données mockées
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)

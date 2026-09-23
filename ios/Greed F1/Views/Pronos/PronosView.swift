@@ -16,15 +16,12 @@ import SwiftUI
 /// > (`screen-27`) seront branchés à la passe API (`docs/swift-app.md` §5).
 struct PronosView: View {
 
+    let nomGrandPrix: String
+    let slugGrandPrix: String
     let sousTitre: String
     let parisBonus: [PariBonus]
 
     private let margeLaterale: CGFloat = 16
-
-    /// Le compte à rebours mocké, tuile par tuile.
-    private let echeance: [(valeur: String, label: String)] = [
-        ("04", "Jours"), ("14", "Heures"), ("34", "Minutes")
-    ]
 
     /// Ce qui est choisi, emplacement par emplacement. **Un dictionnaire et non trois
     /// `@State`** : les trois emplacements obéissent à la même règle d'exclusion, et trois
@@ -33,8 +30,6 @@ struct PronosView: View {
 
     /// L'emplacement dont la feuille de choix est ouverte. `nil` quand elle est fermée.
     @State private var feuille: EmplacementProno?
-
-    @State private var alerteValidation = false
 
     private let modeAdmin = false
 
@@ -48,7 +43,7 @@ struct PronosView: View {
                     titre
 
                     Spacer().frame(height: 12)
-                    blocEcheance
+                    BlocEcheance(libelle: "Ouverture dans")
 
                     Spacer().frame(height: 24)   // changement de sujet (§4.6)
                     titreSection("Obligatoires")
@@ -83,11 +78,6 @@ struct PronosView: View {
                 feuille = nil
             }
         }
-        .alert("Pronostics enregistrés !", isPresented: $alerteValidation) {
-            Button("Parfait", role: .cancel) { }
-        } message: {
-            Text("Le récapitulatif s'affichera ici dès que la route d'enregistrement sera branchée.")
-        }
     }
 
     // MARK: - Titre
@@ -117,52 +107,6 @@ struct PronosView: View {
             .foregroundColor(.grisSecondaire)
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: - Le compte à rebours
-
-    /// Trois tuiles plutôt qu'une ligne : « 4j 14h 34min » demande de lire une phrase pour
-    /// en extraire trois nombres, quand un chiffre posé sous son unité se lit d'un coup
-    /// d'œil. C'est déjà l'arbitrage des deux cases de l'accueil.
-    ///
-    /// **La carte prend le beige du fond, pas le blanc des autres cartes** : sur une surface
-    /// blanche, trois aplats presque noirs se découperaient comme des trous. Sur le beige
-    /// ils se lisent comme des objets posés, et c'est ``ombreBloc()`` qui dit alors que la
-    /// carte est une carte.
-    private var blocEcheance: some View {
-        VStack(spacing: 12) {
-            Text("Ouverture dans")
-                .font(.label)
-                .tracking(Tracking.label)
-                .textCase(.uppercase)
-                .foregroundColor(.grisSecondaire)
-
-            HStack(alignment: .top, spacing: 10) {
-                ForEach(Array(echeance.enumerated()), id: \.offset) { rang, tuile in
-                    if rang > 0 { deuxPoints }
-                    TuileEcheance(valeur: tuile.valeur, label: tuile.label)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(20)
-        .background(Color.fondPrincipal)
-        .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
-        .ombreBloc()                                // rayon `bloc` → `ombreBloc` (§4.7)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Ouverture dans 4 jours, 14 heures et 34 minutes.")
-    }
-
-    /// Le deux-points entre deux tuiles. **Décoratif** : les unités sont écrites sous
-    /// chaque tuile, il ne porte aucune information et reste hors de l'assistance vocale.
-    private var deuxPoints: some View {
-        VStack(spacing: 6) {
-            Circle().frame(width: 5, height: 5)
-            Circle().frame(width: 5, height: 5)
-        }
-        .foregroundColor(.secondaire.opacity(0.40))
-        .padding(.top, 34)
-        .accessibilityHidden(true)
     }
 
     // MARK: - Les deux blocs obligatoires
@@ -296,9 +240,10 @@ struct PronosView: View {
                 .padding(.horizontal, 4)
             }
 
-            Button {
-                alerteValidation = true
-            } label: {
+            NavigationLink(value: EtapePronos.recap(
+                nom: nomGrandPrix, slug: slugGrandPrix, sousTitre: sousTitre,
+                obligatoires: lignesObligatoires, bonus: parisBonus
+            )) {
                 Text("Valider mes pronos")
                     .font(.custom("HelveticaNeue-Medium", size: 16))
                     .foregroundColor(.white)          // 10,88:1 sur #800111
@@ -345,6 +290,19 @@ struct PronosView: View {
             somme + (choix[slot].map { slot.marche.points(de: $0) } ?? 0)
         }
         return obligatoires + parisBonus.reduce(0) { $0 + $1.points }
+    }
+
+    /// Les trois emplacements obligatoires, dans l'ordre, tels que le récapitulatif les
+    /// écrit. **Construits ici** : c'est cet écran qui tient la grille, et le
+    /// récapitulatif qui la montre — lui laisser lire le dictionnaire des choix aurait
+    /// donné deux endroits où l'ordre des lignes se décide.
+    private var lignesObligatoires: [LigneRecap] {
+        EmplacementProno.allCases.compactMap { slot in
+            choix[slot].map {
+                LigneRecap(marche: slot.marche, pilote: $0.nom,
+                           points: slot.marche.points(de: $0), bonus: false)
+            }
+        }
     }
 
     /// Les pilotes qu'un emplacement ne peut plus proposer.
@@ -489,6 +447,97 @@ private struct BlocObligatoire<Contenu: View>: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
         .ombreAplat()                             // aplat de couleur (§4.7)
+    }
+}
+
+// MARK: - Le compte à rebours
+
+/// Les tuiles du compte à rebours, **mockées**. Un seul propriétaire : la saisie et le
+/// récapitulatif affichent la même échéance, et deux tables tenues séparément auraient
+/// fini par annoncer deux heures d'ouverture différentes à un écran d'intervalle.
+///
+/// Aucun `Timer` : l'écran ne calcule pas encore d'échéance, il en affiche une. Le calcul
+/// viendra avec la date de la course (`docs/swift-app.md` §5).
+enum EcheanceMock {
+
+    static let tuiles: [(valeur: String, label: String)] = [
+        ("04", "Jours"), ("14", "Heures"), ("34", "Minutes")
+    ]
+
+    /// Ce que l'assistance vocale lit à la place des trois tuiles.
+    static let libelleAccessible =
+        "4 jours, 14 heures et 34 minutes"
+}
+
+/// Le compte à rebours, et **ce qu'on pose éventuellement dessous** — le récapitulatif y
+/// glisse son bouton « Modifier mes pronos », la saisie n'y met rien.
+///
+/// Trois tuiles plutôt qu'une ligne : « 4j 14h 34min » demande de lire une phrase pour en
+/// extraire trois nombres, quand un chiffre posé sous son unité se lit d'un coup d'œil.
+/// C'est déjà l'arbitrage des deux cases de l'accueil.
+///
+/// **La carte prend le beige du fond, pas le blanc des autres cartes** : sur une surface
+/// blanche, trois aplats presque noirs se découperaient comme des trous. Sur le beige ils
+/// se lisent comme des objets posés, et c'est ``ombreBloc()`` qui dit alors que la carte
+/// est une carte.
+///
+/// > *Écart signalé.* La consigne du récapitulatif demandait un widget **blanc**. La
+/// > capture `screen-28-recap-bas.PNG` montre le même beige qu'à la saisie, et c'est
+/// > l'arbitrage ci-dessus : deux écrans qui montrent le même compte à rebours ne peuvent
+/// > pas le poser sur deux surfaces différentes.
+struct BlocEcheance<Pied: View>: View {
+
+    private let libelle: String
+    private let pied: Pied
+
+    init(libelle: String, @ViewBuilder pied: () -> Pied) {
+        self.libelle = libelle
+        self.pied = pied()
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text(libelle)
+                .font(.label)
+                .tracking(Tracking.label)
+                .textCase(.uppercase)
+                .foregroundColor(.grisSecondaire)
+
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(Array(EcheanceMock.tuiles.enumerated()), id: \.offset) { rang, tuile in
+                    if rang > 0 { deuxPoints }
+                    TuileEcheance(valeur: tuile.valeur, label: tuile.label)
+                }
+            }
+
+            pied
+        }
+        .frame(maxWidth: .infinity)
+        .padding(20)
+        .background(Color.fondPrincipal)
+        .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
+        .ombreBloc()                                // rayon `bloc` → `ombreBloc` (§4.7)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(libelle) \(EcheanceMock.libelleAccessible).")
+    }
+
+    /// Le deux-points entre deux tuiles. **Décoratif** : les unités sont écrites sous
+    /// chaque tuile, il ne porte aucune information et reste hors de l'assistance vocale.
+    private var deuxPoints: some View {
+        VStack(spacing: 6) {
+            Circle().frame(width: 5, height: 5)
+            Circle().frame(width: 5, height: 5)
+        }
+        .foregroundColor(.secondaire.opacity(0.40))
+        .padding(.top, 34)
+        .accessibilityHidden(true)
+    }
+}
+
+extension BlocEcheance where Pied == EmptyView {
+    /// Le compte à rebours seul, sans rien dessous.
+    init(libelle: String) {
+        self.init(libelle: libelle) { EmptyView() }
     }
 }
 
@@ -673,18 +722,27 @@ private struct FeuilleChoixPilote: View {
 
 #Preview("Vide") {
     NavigationStack {
-        PronosView(sousTitre: "Samedi 26 septembre · Départ 07h00", parisBonus: [])
+        PronosView(
+            nomGrandPrix: "GP Azerbaïdjan",
+            slugGrandPrix: "azerbaidjan",
+            sousTitre: "Samedi 26 septembre · Départ 07h00",
+            parisBonus: []
+        )
+        .etapesPronos(libelleRetour: "Accueil") { }
     }
 }
 
 #Preview("Deux paris bonus") {
     NavigationStack {
         PronosView(
+            nomGrandPrix: "GP Azerbaïdjan",
+            slugGrandPrix: "azerbaidjan",
             sousTitre: "Samedi 26 septembre · Départ 07h00",
             parisBonus: [
                 PariBonus(marche: .vainqueur, pilote: "A.Albon", points: 5000),
                 PariBonus(marche: .vainqueur, pilote: "C.Sainz Jr", points: 5000)
             ]
         )
+        .etapesPronos(libelleRetour: "Accueil") { }
     }
 }

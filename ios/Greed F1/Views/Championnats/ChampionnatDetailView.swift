@@ -60,7 +60,8 @@ struct ChampionnatDetailView: View {
                         classement
 
                         Spacer().frame(height: 12)
-                        WidgetGrandPrixSuivant(nom: "GP Pays-Bas", echeance: "Fermeture dans 3 jours")
+                        WidgetGrandPrixSuivant(nom: "GP Pays-Bas", slug: "pays-bas",
+                                               echeance: "Fermeture dans 3 jours")
 
                     case .piste:
                         piste
@@ -334,15 +335,18 @@ private struct LigneClassement: View {
 private struct WidgetGrandPrixSuivant: View {
 
     let nom: String
+
+    /// La clé des assets du pays hôte. Elle ne peint rien ici, elle **traverse** : c'est
+    /// l'en-tête du récapitulatif, au bout du parcours, qui porte le drapeau.
+    let slug: String
+
     let echeance: String
 
     var body: some View {
         // **La destination est le tableau des cotes, pas la saisie.** Le parcours passe par
         // les paris bonus avant les pronostics obligatoires : c'est ce que fait la version
         // web, et c'est ce que le mode d'emploi de `CotesView` annonce.
-        NavigationLink {
-            CotesView(nomGrandPrix: nom, sousTitre: echeance)
-        } label: {
+        NavigationLink(value: EtapePronos.cotes(nom: nom, slug: slug, sousTitre: echeance)) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(nom)

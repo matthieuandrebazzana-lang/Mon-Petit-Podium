@@ -112,6 +112,19 @@ enum MarcheCote: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Le libellé **court** — celui qui tient dans une étiquette de 10 pt au-dessus d'un
+    /// nom de pilote, au récapitulatif. « 2e et 3e du podium » y passerait sur deux lignes
+    /// et doublerait la hauteur de chaque rangée.
+    ///
+    /// Il vit ici et non dans l'écran qui l'emploie : un marché porte ses deux libellés,
+    /// sans quoi le récapitulatif en inventerait un troisième au premier marché ajouté.
+    var libelleCourt: String {
+        switch self {
+        case .vainqueur: return "Vainqueur"
+        case .podium:    return "Podium"
+        }
+    }
+
     /// L'aplat du marché. Le rouge de la marque pour le vainqueur, le bleu ardoise pour le
     /// podium : les deux pronostics obligatoires se distinguent alors au premier coup
     /// d'œil, avant même d'être lus.
@@ -150,13 +163,62 @@ enum MarcheCote: String, CaseIterable, Identifiable {
 /// « A.Albon vainqueur » et « A.Albon sur le podium » sont deux paris distincts, qui ne
 /// rapportent pas le même nombre de points. Ne garder que le nom du pilote aurait fondu
 /// les deux en un.
-struct PariBonus: Identifiable, Equatable {
+struct PariBonus: Identifiable, Hashable {
 
     let marche: MarcheCote
     let pilote: String
     let points: Int
 
     var id: String { "\(marche.rawValue):\(pilote)" }
+}
+
+// MARK: - Le parcours de pronostics
+
+/// Les trois écrans du parcours, **et l'ordre dans lequel on les traverse** : le tableau
+/// des cotes, la saisie, le récapitulatif.
+///
+/// > **Pourquoi un chemin de navigation plutôt que trois `NavigationLink` posés chacun sur
+/// > sa destination.** Le récapitulatif doit pouvoir revenir d'un coup à l'écran d'où le
+/// > parcours est parti, trois crans plus bas. Mesuré au simulateur : une `dismiss` prise
+/// > au milieu d'une pile **ne fait rien** — elle ne ferme que l'écran du dessus. Seul un
+/// > `NavigationStack(path:)` se vide, et il faut pour cela que les trois écrans soient
+/// > des **valeurs** dans ce chemin.
+///
+/// C'est ce qui oblige ``PariBonus`` et ``LigneRecap`` à être `Hashable` : ils voyagent
+/// dedans.
+enum EtapePronos: Hashable {
+
+    case cotes(nom: String, slug: String, sousTitre: String)
+    case pronos(nom: String, slug: String, sousTitre: String, bonus: [PariBonus])
+    case recap(nom: String, slug: String, sousTitre: String,
+               obligatoires: [LigneRecap], bonus: [PariBonus])
+}
+
+extension View {
+
+    /// Les trois destinations du parcours, **déclarées une fois pour toutes**, à poser sur
+    /// la racine de chaque pile qui y mène — l'accueil et le détail d'un championnat.
+    ///
+    /// Les deux entrées ne ramènent pas au même endroit : `libelleRetour` nomme donc ce que
+    /// le récapitulatif annonce, et `retour` vide le chemin. **Le mot et l'action arrivent
+    /// ensemble** : un bouton qui nommerait une destination qu'il n'atteint pas mentirait.
+    func etapesPronos(libelleRetour: String, retour: @escaping () -> Void) -> some View {
+        navigationDestination(for: EtapePronos.self) { etape in
+            switch etape {
+            case let .cotes(nom, slug, sousTitre):
+                CotesView(nomGrandPrix: nom, slugGrandPrix: slug, sousTitre: sousTitre)
+
+            case let .pronos(nom, slug, sousTitre, bonus):
+                PronosView(nomGrandPrix: nom, slugGrandPrix: slug,
+                           sousTitre: sousTitre, parisBonus: bonus)
+
+            case let .recap(nom, slug, sousTitre, obligatoires, bonus):
+                RecapView(nomGrandPrix: nom, slugGrandPrix: slug, sousTitre: sousTitre,
+                          obligatoires: obligatoires, parisBonus: bonus,
+                          libelleRetour: libelleRetour, retour: retour)
+            }
+        }
+    }
 }
 
 // MARK: - L'écran
@@ -175,6 +237,11 @@ struct PariBonus: Identifiable, Equatable {
 struct CotesView: View {
 
     let nomGrandPrix: String
+
+    /// La clé des assets `flag-<slug>` / `trace-<slug>` et de ``TeintesDrapeaux``. Elle
+    /// traverse la pile parce que l'en-tête du récapitulatif porte le drapeau du pays hôte.
+    let slugGrandPrix: String
+
     let sousTitre: String
 
     /// Marge latérale commune à tous les écrans.
@@ -401,9 +468,9 @@ struct CotesView: View {
     private var barreAction: some View {
         let libelle = parisBonus.count > 1 ? "paris" : "pari"
 
-        return NavigationLink {
-            PronosView(sousTitre: sousTitre, parisBonus: parisBonus)
-        } label: {
+        return NavigationLink(value: EtapePronos.pronos(
+            nom: nomGrandPrix, slug: slugGrandPrix, sousTitre: sousTitre, bonus: parisBonus
+        )) {
             Text("Continuer · \(parisBonus.count) \(libelle)")
                 .font(.custom("HelveticaNeue-Medium", size: 16))
                 .foregroundColor(.white)          // 10,88:1 sur #800111
@@ -795,7 +862,9 @@ struct PastillePrevisualisation: View {
     NavigationStack {
         CotesView(
             nomGrandPrix: "GP Azerbaïdjan",
+            slugGrandPrix: "azerbaidjan",
             sousTitre: "Samedi 26 septembre · Départ 07h00"
         )
+        .etapesPronos(libelleRetour: "Accueil") { }
     }
 }
