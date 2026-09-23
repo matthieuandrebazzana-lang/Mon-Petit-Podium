@@ -43,6 +43,11 @@ struct VuePisteView: View {
     /// une seule fois.
     let membres: [MembreMock]
 
+    /// Vrai quand la piste est montée **dans** ``ChampionnatDetailView``, sous son
+    /// sélecteur segmenté. L'en-tête de cet écran porte déjà le nom du championnat et la
+    /// navigation reste la sienne : ni bandeau, ni chrome masqué. Faux, c'est l'écran plein.
+    var integree: Bool = false
+
     /// Vrai une fois la piste montée. C'est lui qui lance l'entrée des voitures.
     @State private var enPiste = false
 
@@ -88,7 +93,7 @@ struct VuePisteView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    bandeau
+                    if !integree { bandeau }
                     zoneDeJeu
                         .padding(.leading, Self.margeGauche * bloc.size.width)
                         .padding(.trailing, Self.margeDroite * bloc.size.width)
@@ -102,7 +107,8 @@ struct VuePisteView: View {
         .background(Color.fondPrincipal.ignoresSafeArea())
         // **Le chrome disparaît, les deux barres avec.** Le retour du bandeau est le seul
         // chemin sortant, et le geste de bord continue de fonctionner.
-        .toolbar(.hidden, for: .navigationBar, .tabBar)
+        // Intégrée, la piste laisse les barres à l'écran qui l'accueille.
+        .toolbar(integree ? .automatic : .hidden, for: .navigationBar, .tabBar)
         // L'entrée part au montage de la piste, pas à celui d'une voiture : les huit
         // partagent une seule bascule, et c'est le retard de chacune qui les échelonne.
         .onAppear {

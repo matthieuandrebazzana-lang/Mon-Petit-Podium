@@ -30,31 +30,47 @@ struct ChampionnatDetailView: View {
         Array(MembreMock.exemples.prefix(championnat.membres))
     }
 
+    /// Les deux segments de l'écran.
+    private enum Vue: Hashable {
+        case classement, piste
+    }
+
+    @State private var vue: Vue = .classement
+
     var body: some View {
         ZStack {
             Color.fondPrincipal
                 .ignoresSafeArea()
 
-            // **L'en-tête ne défile pas**, le reste oui. La vue piste n'est plus un onglet
-            // de cet écran depuis la version `0.17.0` : elle est un écran à part entière, et
-            // c'est ``lienPiste`` qui y mène.
+            // **L'en-tête et le sélecteur ne défilent pas**, le contenu dessous oui. La
+            // piste redevient un segment de cet écran : elle s'affiche **en place**, sous
+            // l'en-tête, au lieu d'être poussée comme un écran plein.
             VStack(spacing: 0) {
                 entete
                     .padding(.horizontal, margeLaterale)
                     .padding(.top, 8)
 
-                Spacer().frame(height: 12)
-
-                ScrollView {
-                    VStack(spacing: 12) {
-                        classement
-                        WidgetGrandPrixSuivant(nom: "GP Pays-Bas", slug: "pays-bas",
-                                               echeance: "Fermeture dans 3 jours")
-                        lienPiste
-                    }
+                selecteur
                     .padding(.horizontal, margeLaterale)
-                    .padding(.bottom, 24)
+                    .padding(.top, 12)
+                    .padding(.bottom, 12)
+
+                // Un fondu court entre les deux contenus, et rien d'autre : un segment
+                // se bascule souvent, un glissement latéral finirait par se faire attendre.
+                // L'opacité reste permise en mouvement réduit.
+                ZStack {
+                    switch vue {
+                    case .classement:
+                        contenuClassement
+                            .transition(.opacity)
+                    case .piste:
+                        VuePisteView(championnat: championnat, membres: membres,
+                                     integree: true)
+                            .transition(.opacity)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
             }
         }
         // Le nom du championnat est déjà dans le contenu, à 28 pt : le répéter dans la
@@ -129,7 +145,38 @@ struct ChampionnatDetailView: View {
         .padding(.top, -6)
     }
 
+    // MARK: - Le sélecteur
+
+    /// **Un `Picker` segmenté natif** : c'est le contrôle qu'iOS donne à « deux vues du
+    /// même objet », et il porte seul l'accessibilité, le retour d'appui et le glissement
+    /// de la pastille. Rien ici ne le redessine.
+    private var selecteur: some View {
+        Picker("Affichage", selection: $vue) {
+            Text("Classement").tag(Vue.classement)
+            Text("Piste").tag(Vue.piste)
+        }
+        .pickerStyle(.segmented)
+    }
+
+    // MARK: - Le contenu « Classement »
+
+    private var contenuClassement: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                classement
+                WidgetGrandPrixSuivant(nom: "GP Pays-Bas", slug: "pays-bas",
+                                       echeance: "Fermeture dans 3 jours")
+            }
+            .padding(.horizontal, margeLaterale)
+            .padding(.bottom, 24)
+        }
+    }
+
     // MARK: - Le lien vers la piste
+
+    /// > **Non monté depuis le sélecteur segmenté.** La piste s'affiche de nouveau en place,
+    /// > sous l'en-tête ; ce bouton et l'écran plein qu'il poussait restent disponibles.
+    ///
 
     /// **Un bouton pleine largeur, et non plus un segment de bascule.** La piste est
     /// devenue un écran plein (``VuePisteView``) : un segment l'aurait ouverte en

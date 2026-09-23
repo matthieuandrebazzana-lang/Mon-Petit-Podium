@@ -1535,17 +1535,18 @@ médiane, **deux kerbs en chemins** (pas en dégradés répétés).
 - **La zone de jeu est bornée par des pourcentages mesurés** : 4,2205 % à gauche, 4,8058 % à
   droite (bords intérieurs des kerbs, non symétriques).
 
-#### La piste est un **écran plein**, pas un onglet
+#### La piste est un **segment** de `ChampionnatDetailView`
 
-Elle a sa propre route (`VuePisteView`, poussée par `ChampionnatDetailView`), et elle
-**masque la barre de navigation et la barre d'onglets** : la piste est un dessin, et tout
-chrome posé dessus en rogne la hauteur, donc l'échelle des scores. Le bandeau, lui, reste —
-il porte la teinte du championnat, son nom, et le **seul chemin sortant** : « ‹ Classement »,
-en haut à gauche, dans sa première rangée. C'est ce que fait la version web, où l'écran est
-en `fixed inset-0` mais garde son `<header>`.
+Un `Picker` segmenté natif, sous l'en-tête, bascule entre **Classement** et **Piste**. La
+piste s'affiche **en place** (`VuePisteView(…, integree: true)`) : sans bandeau — l'en-tête
+de l'écran porte déjà le nom du championnat — et sans masquer la barre de navigation ni la
+barre d'onglets. Le passage d'un segment à l'autre est un fondu de 200 ms ; les voitures
+rejouent leur entrée à chaque affichage de la piste.
 
-**Le chemin d'entrée est un bouton pleine largeur**, jamais un segment de bascule : les deux
-offriraient deux chemins vers le même écran à trois centimètres l'un de l'autre.
+L'**écran plein** (`integree: false`) reste en place, non monté, avec son bandeau et son
+retour « ‹ Classement » ; le bouton pleine largeur qui le poussait (`lienPiste`) aussi. La
+règle précédente — « jamais un segment de bascule » — est levée : il n'y a plus qu'un
+chemin vers la piste, le segment.
 
 **Seul le sol franchit les zones sûres** — la couleur passe sous la barre d'état, le texte
 jamais. En bas, la zone de jeu s'arrête au-dessus de l'indicateur d'accueil : sans cela le
