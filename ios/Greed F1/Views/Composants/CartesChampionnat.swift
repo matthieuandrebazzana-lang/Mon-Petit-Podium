@@ -11,8 +11,12 @@ import SwiftUI
 
 // MARK: - Données mockées
 
-/// Un championnat de la liste. Sa couleur n'est **pas** une donnée : elle se tire de `id`
-/// par `Color.teinteChampionnat(pour:)`, jamais du rang dans la liste.
+/// Ce que le détail et la vue piste lisent encore d'un championnat, en attendant qu'ils
+/// soient branchés à leur tour (étape 3 de `docs/swift-app.md` §7.6). La liste, elle, ne
+/// connaît plus que ``Championnat`` : ce type n'en est qu'une projection.
+///
+/// Sa couleur n'est **pas** une donnée : elle se tire de `id` par
+/// `Color.teinteChampionnat(pour:)`, jamais du rang dans la liste.
 struct ChampionnatMock: Identifiable {
     let id: String
     let nom: String
@@ -20,9 +24,35 @@ struct ChampionnatMock: Identifiable {
     let rang: Int
     /// Les points du membre rapportés à ceux du leader, entre 0 et 1.
     let fraction: CGFloat
-    /// Photo du championnat, dans le bucket Supabase Storage. `nil` tant que les écrans
-    /// sont mockés : aucun appel réseau n'en part.
+    /// Photo du championnat, dans le bucket Supabase Storage.
     var photo: URL? = nil
+}
+
+extension ChampionnatMock {
+    /// La projection d'un championnat réel. L'`id` garde **la même chaîne** que la carte
+    /// de la liste (``Championnat/cleTeinte``) : la teinte ne change pas en ouvrant le détail.
+    init(_ championnat: Championnat) {
+        self.init(id: championnat.cleTeinte,
+                  nom: championnat.nom,
+                  membres: championnat.nombreMembres,
+                  rang: championnat.position?.monRang ?? 0,
+                  fraction: championnat.fractionLeader,
+                  photo: championnat.photoUrl)
+    }
+}
+
+extension Championnat {
+    /// La chaîne d'où se tire la teinte Pantone : l'UUID **en minuscules**, la forme que
+    /// sert le backend — `uuidString` le rend en majuscules.
+    var cleTeinte: String { id.uuidString.lowercased() }
+
+    /// Les points du membre rapportés au **plus haut total** du championnat, entre 0 et 1.
+    /// Nulle avant le premier Grand Prix, quand le leader est lui-même à zéro, et quand le
+    /// rang n'a pas pu être lu.
+    var fractionLeader: CGFloat {
+        guard let position, position.pointsLeader > 0 else { return 0 }
+        return min(1, max(0, CGFloat(position.mesPoints) / CGFloat(position.pointsLeader)))
+    }
 }
 
 // MARK: - Carte d'un championnat
@@ -35,7 +65,9 @@ struct ChampionnatMock: Identifiable {
 /// couleurs à la première adhésion.
 struct CarteChampionnat: View {
 
-    let championnat: ChampionnatMock
+    let championnat: Championnat
+
+    private var membres: Int { championnat.nombreMembres }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -47,7 +79,7 @@ struct CarteChampionnat: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
 
-                    Text("\(championnat.membres) \(championnat.membres > 1 ? "membres" : "membre") · Saison 2026")
+                    Text("\(membres) \(membres > 1 ? "membres" : "membre") · Saison 2026")
                         .font(.custom("HelveticaNeue", size: 12))
                         .foregroundColor(.encreSecondaire)        // ≥ 4,97:1 sur les six teintes
                         .lineLimit(1)
@@ -58,7 +90,7 @@ struct CarteChampionnat: View {
                 // rangée** alors que le nom et le rang s'alignent par le haut : un carré de
                 // 56 pt calé sur la ligne de base d'un nom de 20 paraîtrait tomber. Absente,
                 // elle ne réserve pas sa place — aucune gouttière ne subsiste.
-                if let photo = championnat.photo {
+                if let photo = championnat.photoUrl {
                     AsyncImage(url: photo) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
@@ -80,7 +112,7 @@ struct CarteChampionnat: View {
             // Le damier d'abord, la lueur par-dessus : la lueur est un galbe de lumière qui
             // doit porter sur la surface FINIE, texture comprise.
             ZStack {
-                Color.teinteChampionnat(pour: championnat.id)
+                Color.teinteChampionnat(pour: championnat.cleTeinte)
                 Damier(opacite: Materiau.damier)
                 LueurHaute()
             }
@@ -102,14 +134,17 @@ struct CarteChampionnat: View {
     /// Le chiffre est à 80 % de blanc, et **c'est un plancher mesuré** : sur la plus claire
     /// des six teintes il y tient 3,2:1, juste au-dessus du plancher des grands textes. À
     /// 75 % il tombe à 2,99:1.
+    ///
+    /// **Rang illisible ⇒ un tiret, jamais un zéro** : le serveur omet `position` quand le
+    /// classement n'a pas pu être lu, et « 0/8 » passerait pour un rang.
     private var rang: some View {
         VStack(alignment: .trailing, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(String(championnat.rang))
+                Text(championnat.position.map { String($0.monRang) } ?? "–")
                     .font(.custom("HelveticaNeue-Medium", size: 48))
                     .tracking(-1.44)                              // −0,03em × 48
                     .foregroundColor(.white.opacity(0.80))
-                Text("/\(championnat.membres)")
+                Text("/\(membres)")
                     .font(.custom("HelveticaNeue-Medium", size: 24))
                     .tracking(-0.60)                              // −0,025em × 24
                     .foregroundColor(.encreSecondaire)
@@ -123,9 +158,14 @@ struct CarteChampionnat: View {
         }
         .fixedSize()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "Classement : \(championnat.rang)\(championnat.rang == 1 ? "er" : "e") sur \(championnat.membres)"
-        )
+        .accessibilityLabel(libelleRang)
+    }
+
+    private var libelleRang: String {
+        guard let rang = championnat.position?.monRang else {
+            return "Classement indisponible, \(membres) \(membres > 1 ? "membres" : "membre")"
+        }
+        return "Classement : \(rang)\(rang == 1 ? "er" : "e") sur \(membres)"
     }
 
     /// La jauge. Elle est **vide avant le premier Grand Prix**, quand tout le monde est
@@ -137,7 +177,7 @@ struct CarteChampionnat: View {
                 Capsule().fill(Color.white.opacity(0.30))
                 Capsule()
                     .fill(Color.white)
-                    .frame(width: geometrie.size.width * championnat.fraction)
+                    .frame(width: geometrie.size.width * championnat.fractionLeader)
             }
         }
         .frame(height: 4)
@@ -255,5 +295,62 @@ struct ActionsChampionnat: View {
             }
             .buttonStyle(StyleAppui(.grandeSurface))
         }
+    }
+}
+
+// MARK: - Chargement et échec de la liste
+
+/// Ce que l'accueil et l'onglet **Championnats** montrent à la place de leurs cartes tant
+/// que ``MesChampionnats`` n'a pas de liste : un spinner, ou le message de l'échec.
+///
+/// **Le même bloc dans les deux écrans**, pour la même raison que ``CarteChampionnat`` :
+/// deux états d'erreur écrits séparément n'auraient pas proposé le même geste.
+///
+/// Le spinner occupe **la hauteur d'une carte** : la liste qui arrive prend sa place sans
+/// pousser les cartes d'action de plusieurs centaines de points.
+struct EtatMesChampionnats<Contenu: View>: View {
+
+    @ObservedObject var mesChampionnats: MesChampionnats
+    @ViewBuilder let contenu: ([Championnat]) -> Contenu
+
+    var body: some View {
+        switch mesChampionnats.etat {
+        case .chargement:
+            ProgressView()
+                .tint(.secondaire)
+                .frame(maxWidth: .infinity, minHeight: 120)
+                .accessibilityLabel("Chargement des championnats")
+
+        case .echec(let erreur):
+            echec(erreur)
+
+        case .pret(let liste):
+            contenu(liste)
+        }
+    }
+
+    /// Le message est celui d'``ErreurAPI`` tel quel — déjà en français, déjà affichable.
+    /// **« Réessayer » n'apparaît que si réessayer peut réussir** (``ErreurAPI/estRejouable``) :
+    /// une session morte rejouerait le même refus, et ``APIClient`` ramène déjà à la connexion.
+    private func echec(_ erreur: ErreurAPI) -> some View {
+        VStack(spacing: 12) {
+            Text(erreur.message)
+                .font(.custom("HelveticaNeue", size: 15))
+                .foregroundColor(.secondaire)   // 9,32:1 sur le beige
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if erreur.estRejouable {
+                Button("Réessayer") {
+                    Task { await mesChampionnats.charger() }
+                }
+                .font(.custom("HelveticaNeue-Medium", size: 15))
+                .foregroundColor(.primaire)     // 9,61:1 sur le beige
+                .frame(minWidth: 44, minHeight: 44)
+                .buttonStyle(StyleAppui(.bouton))
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 120)
     }
 }

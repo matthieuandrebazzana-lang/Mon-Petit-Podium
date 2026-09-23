@@ -156,6 +156,7 @@ ios/
     ├── Services/
     │   ├── SupabaseManager.swift  chemin direct, sous RLS
     │   ├── APIClient.swift        chemin Railway : Bearer, décodage, réessais, réveil
+    │   ├── MesChampionnats.swift  `GET /championnats/moi` — propriétaire unique, accueil + onglet
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
     │   ├── ContentView.swift
@@ -163,15 +164,15 @@ ios/
     │   │   ├── BarreNavigation.swift  TabView à 4 onglets + apparence de la barre
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
     │   ├── Accueil/
-    │   │   ├── AccueilView.swift       construit — données mockées, cartes → `ChampionnatDetailView`
+    │   │   ├── AccueilView.swift       championnats réels, GP suivant mocké, cartes → `ChampionnatDetailView`
     │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Composants/
-    │   │   ├── CartesChampionnat.swift  carte de championnat + cartes d'action, PARTAGÉES
+    │   │   ├── CartesChampionnat.swift  carte de championnat, cartes d'action, chargement/échec, PARTAGÉS
     │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
-    │   │   ├── ChampionnatsView.swift       liste — données mockées
+    │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
     │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste — données mockées
     │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — MOCKÉ
     │   │   ├── CreerChampionnatView.swift   nom, photo, code à venir — alerte mockée

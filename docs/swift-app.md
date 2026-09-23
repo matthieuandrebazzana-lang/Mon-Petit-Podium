@@ -2072,7 +2072,7 @@ ci-dessous ; chaque étape ne dépend que des précédentes.
 | Étape | Contenu | État |
 |---|---|---|
 | **0** | Fondations : `APIClient`, `ErreurAPI`, `JSONDecoder.api`, réveil, `Profil` / `Championnat` / `Membre`, profil courant en direct | **Fait** (iOS 0.20.0) |
-| **1** | `GET /championnats/moi` — **un seul propriétaire** pour l'accueil et l'onglet Championnats. L'`id` devient un UUID : la teinte Pantone, tirée de l'id, changera une fois | |
+| **1** | `GET /championnats/moi` — **un seul propriétaire** pour l'accueil et l'onglet Championnats. L'`id` devient un UUID : la teinte Pantone, tirée de l'id, changera une fois | **Fait** (iOS 0.21.0) |
 | **2** | Créer / rejoindre, puis la photo (Storage + `PATCH`). Navigation vers le championnat obtenu, liste de l'étape 1 invalidée | |
 | **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | |
 | **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | |
@@ -2107,9 +2107,21 @@ quel GP demander. Les pronostics en dernier : trois écrans, deux changements de
 course, circuits, palmarès), la liste des 12 GP, `NationalitesPilotes`, `DrapeauxGP`,
 `LivreeEcurie`, la table pilote → écurie.
 
-**Encore à trancher** : « 12 Grands Prix restants » en constante ou compté en base (possible
-depuis la migration 19) · cache des réponses le temps de la session, ou rechargement à
-chaque apparition · le hors ligne (§7.2) dans ce chantier ou après.
+**Tranché avant l'étape 1 :**
+
+- **« 12 Grands Prix restants » reste une constante fixe** — pas de comptage en base.
+- **Pas de cache de session** : chaque écran recharge ses données à chaque ouverture. La
+  liste déjà affichée reste visible pendant le rechargement ; le spinner ne sert qu'au
+  premier chargement et après un échec (`MesChampionnats`).
+- **Le hors ligne (§7.2) est hors périmètre** de ce chantier : il viendra après.
+
+**Étape 1, mise en œuvre.** `Services/MesChampionnats.swift` est le propriétaire unique :
+une instance créée par `BarreNavigation`, passée à `AccueilView` et `ChampionnatsView`,
+rechargée par leur `.task`. `CarteChampionnat` lit le vrai `Championnat` ; le rang absent
+(`position` nulle) s'affiche « – », jamais « 0 ». Spinner et message d'`ErreurAPI` (avec
+« Réessayer » si `estRejouable`) vivent dans `EtatMesChampionnats`, partagé par les deux
+écrans. Le détail reçoit encore un `ChampionnatMock`, projeté du réel avec la même clé de
+teinte (UUID en minuscules) — jusqu'à l'étape 3.
 
 ---
 

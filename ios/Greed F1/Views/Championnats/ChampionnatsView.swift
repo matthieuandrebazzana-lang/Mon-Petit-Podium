@@ -6,8 +6,8 @@ import SwiftUI
 /// Référence visuelle : `Ressources/Screenshots/screen-06-championnats-haut.PNG` et
 /// `screen-07-championnats-bas.PNG`.
 ///
-/// > **Les données sont mockées.** Aucun appel réseau : ``ChampionnatMock`` porte des
-/// > valeurs en dur, reprises des captures pour que le rendu se compare à elles.
+/// > **Les données sont réelles** : ``MesChampionnats`` (`GET /championnats/moi`), la
+/// > même instance que l'accueil.
 ///
 /// **La carte est celle de l'accueil, pas une copie** : ``CarteChampionnat`` et
 /// ``ActionsChampionnat`` vivent dans `Views/Composants/`, et les deux écrans montent la
@@ -18,19 +18,7 @@ struct ChampionnatsView: View {
     /// deux onglets ne s'aligneraient pas au passage de l'un à l'autre.
     private let margeLaterale: CGFloat = 16
 
-    // MARK: - Données mockées
-
-    /// Trois championnats d'effectifs distincts : c'est ce qui permet de **vérifier le
-    /// tri** à l'œil, une liste de trois valeurs égales ne prouvant rien.
-    ///
-    /// Les identifiants sont **stables** : c'est d'eux que se tire la teinte de la carte
-    /// (`Color.teinteChampionnat(pour:)`), et un `UUID()` neuf à chaque lancement aurait
-    /// fait changer la couleur d'un championnat d'une ouverture de l'app à la suivante.
-    private let championnats: [ChampionnatMock] = [
-        ChampionnatMock(id: "team-f1", nom: "Team F1", membres: 3, rang: 1, fraction: 1),
-        ChampionnatMock(id: "team-bazzana", nom: "Team Bazzana", membres: 8, rang: 2, fraction: 0.55),
-        ChampionnatMock(id: "les-potes-f1", nom: "Les Potes F1", membres: 6, rang: 4, fraction: 0.72)
-    ]
+    @ObservedObject var mesChampionnats: MesChampionnats
 
     /// Grands Prix restants — une **constante**, comme sur la version web : la base ne
     /// contient que les Grands Prix déjà relevés par le scraper, et les compter annoncerait
@@ -44,9 +32,11 @@ struct ChampionnatsView: View {
     ///
     /// À effectif égal, le nom départage — sans quoi deux championnats de même taille
     /// échangeraient leur place au gré de l'ordre d'arrivée des données.
-    private var championnatsTries: [ChampionnatMock] {
+    private func tries(_ championnats: [Championnat]) -> [Championnat] {
         championnats.sorted {
-            $0.membres == $1.membres ? $0.nom < $1.nom : $0.membres > $1.membres
+            $0.nombreMembres == $1.nombreMembres
+                ? $0.nom < $1.nom
+                : $0.nombreMembres > $1.nombreMembres
         }
     }
 
@@ -86,6 +76,8 @@ struct ChampionnatsView: View {
             .navigationTitle("Championnats")
             .toolbar(.hidden, for: .navigationBar)
             .etapesPronos(libelleRetour: "Championnat") { cheminPronos.removeAll() }
+            // Rechargée à chaque apparition, pas de cache de session (§7.6).
+            .task { await mesChampionnats.charger() }
         }
     }
 
@@ -104,7 +96,7 @@ struct ChampionnatsView: View {
             // `#999999`, qui ne vaut que 2,52:1 sur le beige — sous le plancher de 4,5:1
             // d'un texte ordinaire. `#6B6B6B` y tient 4,71:1 pour un gris que l'œil ne
             // distingue pas du premier. Le contraste se mesure (`ios/CLAUDE.md` §3).
-            Text("\(championnats.count) \(championnats.count > 1 ? "championnats" : "championnat") · Saison 2026")
+            Text(sousTitre)
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
         }
@@ -112,19 +104,28 @@ struct ChampionnatsView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Le décompte n'est dit qu'une fois la liste connue : « 0 championnat » pendant le
+    /// chargement serait faux.
+    private var sousTitre: String {
+        guard case .pret(let liste) = mesChampionnats.etat else { return "Saison 2026" }
+        return "\(liste.count) \(liste.count > 1 ? "championnats" : "championnat") · Saison 2026"
+    }
+
     // MARK: - La liste
 
     /// `NavigationLink` et non `Button` : c'est lui qui porte le glissement d'écran natif
     /// et le geste de retour par le bord, qu'un `Button` poussant un état ne donne pas.
     private var liste: some View {
-        VStack(spacing: 10) {
-            ForEach(championnatsTries) { championnat in
-                NavigationLink {
-                    ChampionnatDetailView(championnat: championnat)
-                } label: {
-                    CarteChampionnat(championnat: championnat)
+        EtatMesChampionnats(mesChampionnats: mesChampionnats) { championnats in
+            VStack(spacing: 10) {
+                ForEach(tries(championnats)) { championnat in
+                    NavigationLink {
+                        ChampionnatDetailView(championnat: ChampionnatMock(championnat))
+                    } label: {
+                        CarteChampionnat(championnat: championnat)
+                    }
+                    .buttonStyle(StyleAppui(.grandeSurface))
                 }
-                .buttonStyle(StyleAppui(.grandeSurface))
             }
         }
     }
@@ -139,5 +140,5 @@ struct ChampionnatsView: View {
 }
 
 #Preview {
-    ChampionnatsView()
+    ChampionnatsView(mesChampionnats: MesChampionnats())
 }

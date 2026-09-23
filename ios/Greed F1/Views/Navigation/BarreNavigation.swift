@@ -17,12 +17,16 @@ struct BarreNavigation: View {
     /// c'est lui qui porte le pseudo affiché par l'accueil.
     @ObservedObject var viewModel: AuthViewModel
 
+    /// Les championnats du compte, **une instance pour deux onglets** : l'accueil et
+    /// l'onglet Championnats lisent la même liste (``MesChampionnats``).
+    @StateObject private var mesChampionnats = MesChampionnats()
+
     var body: some View {
         TabView {
-            AccueilView(viewModel: viewModel)
+            AccueilView(viewModel: viewModel, mesChampionnats: mesChampionnats)
                 .tabItem { Label("Accueil", image: "icone-accueil") }
 
-            ChampionnatsView()
+            ChampionnatsView(mesChampionnats: mesChampionnats)
                 .tabItem { Label("Championnats", image: "icone-championnats") }
 
             CalendrierView()

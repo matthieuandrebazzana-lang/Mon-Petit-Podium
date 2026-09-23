@@ -5,9 +5,9 @@ import SwiftUI
 /// Référence visuelle : `Ressources/Screenshots/screen-04-accueil_haut.PNG` et
 /// `screen-05-accueil-bas.PNG`, écran par écran.
 ///
-/// > **Les données sont mockées.** Aucun appel réseau : ``GrandPrixMock`` et
-/// > ``ChampionnatMock`` sont des valeurs en dur, reprises des captures pour que le rendu
-/// > se compare à elles.
+/// > **Les championnats sont réels** (``MesChampionnats``, `GET /championnats/moi`). Le
+/// > Grand Prix suivant est encore mocké : ``GrandPrixMock`` est une valeur en dur, reprise
+/// > des captures pour que le rendu se compare à elles.
 ///
 /// **Rien n'est dessiné en SwiftUI de ce qui existe en SVG** (`ios/CLAUDE.md` §3) : le
 /// drapeau, le tracé du circuit, le damier et les deux logos d'action sont des assets,
@@ -15,6 +15,7 @@ import SwiftUI
 struct AccueilView: View {
 
     @ObservedObject var viewModel: AuthViewModel
+    @ObservedObject var mesChampionnats: MesChampionnats
 
     /// Marge latérale commune à tous les blocs — la même que `LandingView`, sans quoi les
     /// deux écrans ne s'aligneraient pas au passage de l'un à l'autre.
@@ -30,18 +31,6 @@ struct AccueilView: View {
         libelleEcheance: "Ouverture dans",
         echeance: "4j 14h 48min"
     )
-
-    /// Les identifiants sont **stables** : c'est d'eux que se tire la teinte de la carte
-    /// (`Color.teinteChampionnat(pour:)`), et un `UUID()` neuf à chaque lancement aurait
-    /// fait changer la couleur d'un championnat d'une ouverture de l'app à la suivante.
-    ///
-    /// **La fraction de la jauge n'est pas le rang.** Elle dit où en est le membre par
-    /// rapport au leader — c'est ce que la version web calcule à partir des points, et
-    /// c'est pour cela qu'un premier sur trois remplit la barre entière.
-    private let championnats: [ChampionnatMock] = [
-        ChampionnatMock(id: "team-f1", nom: "Team F1", membres: 3, rang: 1, fraction: 1),
-        ChampionnatMock(id: "team-bazzana", nom: "Team Bazzana", membres: 8, rang: 2, fraction: 0.55)
-    ]
 
     /// Grands Prix restants — une **constante**, comme sur la version web : la base ne
     /// contient que les Grands Prix déjà relevés par le scraper, et les compter annoncerait
@@ -95,6 +84,8 @@ struct AccueilView: View {
             // « Retour » générique du système, comme la capture de référence.
             .toolbar(.hidden, for: .navigationBar)
             .etapesPronos(libelleRetour: "Accueil") { cheminPronos.removeAll() }
+            // Rechargée à chaque apparition, pas de cache de session (§7.6).
+            .task { await mesChampionnats.charger() }
         }
     }
 
@@ -159,14 +150,16 @@ struct AccueilView: View {
     /// tombait auparavant sur un `Button` à l'action vide — elle s'enfonçait sous le doigt
     /// et rien ne s'ouvrait.
     private var listeChampionnats: some View {
-        VStack(spacing: 10) {
-            ForEach(championnats) { championnat in
-                NavigationLink {
-                    ChampionnatDetailView(championnat: championnat)
-                } label: {
-                    CarteChampionnat(championnat: championnat)
+        EtatMesChampionnats(mesChampionnats: mesChampionnats) { championnats in
+            VStack(spacing: 10) {
+                ForEach(championnats) { championnat in
+                    NavigationLink {
+                        ChampionnatDetailView(championnat: ChampionnatMock(championnat))
+                    } label: {
+                        CarteChampionnat(championnat: championnat)
+                    }
+                    .buttonStyle(StyleAppui(.grandeSurface))
                 }
-                .buttonStyle(StyleAppui(.grandeSurface))
             }
         }
     }
@@ -469,5 +462,5 @@ private struct GrandPrixMock {
 }
 
 #Preview {
-    AccueilView(viewModel: AuthViewModel())
+    AccueilView(viewModel: AuthViewModel(), mesChampionnats: MesChampionnats())
 }
