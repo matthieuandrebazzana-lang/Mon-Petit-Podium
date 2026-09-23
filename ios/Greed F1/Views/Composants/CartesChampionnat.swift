@@ -11,9 +11,9 @@ import SwiftUI
 
 // MARK: - Données mockées
 
-/// Ce que le détail et la vue piste lisent encore d'un championnat, en attendant qu'ils
-/// soient branchés à leur tour (étape 3 de `docs/swift-app.md` §7.6). La liste, elle, ne
-/// connaît plus que ``Championnat`` : ce type n'en est qu'une projection.
+/// > **Non monté depuis l'étape 3** (`docs/swift-app.md` §7.6) : le détail et la vue
+/// > piste lisent le vrai ``Championnat``. Ce type n'en est qu'une projection, gardée en
+/// > place.
 ///
 /// Sa couleur n'est **pas** une donnée : elle se tire de `id` par
 /// `Color.teinteChampionnat(pour:)`, jamais du rang dans la liste.
@@ -326,17 +326,31 @@ struct EtatMesChampionnats<Contenu: View>: View {
                 .accessibilityLabel("Chargement des championnats")
 
         case .echec(let erreur):
-            echec(erreur)
+            EchecChargement(erreur: erreur) {
+                Task { await mesChampionnats.charger() }
+            }
 
         case .pret(let liste):
             contenu(liste)
         }
     }
+}
 
-    /// Le message est celui d'``ErreurAPI`` tel quel — déjà en français, déjà affichable.
-    /// **« Réessayer » n'apparaît que si réessayer peut réussir** (``ErreurAPI/estRejouable``) :
-    /// une session morte rejouerait le même refus, et ``APIClient`` ramène déjà à la connexion.
-    private func echec(_ erreur: ErreurAPI) -> some View {
+// MARK: - L'échec d'un chargement
+
+/// Le message d'un appel qui a échoué, et « Réessayer ». **Un seul bloc pour tous les
+/// écrans qui chargent** — la liste des championnats comme le classement d'un
+/// championnat : deux états d'erreur écrits séparément n'auraient pas proposé le même geste.
+///
+/// Le message est celui d'``ErreurAPI`` tel quel — déjà en français, déjà affichable.
+/// **« Réessayer » n'apparaît que si réessayer peut réussir** (``ErreurAPI/estRejouable``) :
+/// une session morte rejouerait le même refus, et ``APIClient`` ramène déjà à la connexion.
+struct EchecChargement: View {
+
+    let erreur: ErreurAPI
+    let reessayer: () -> Void
+
+    var body: some View {
         VStack(spacing: 12) {
             Text(erreur.message)
                 .font(.custom("HelveticaNeue", size: 15))
@@ -345,13 +359,11 @@ struct EtatMesChampionnats<Contenu: View>: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if erreur.estRejouable {
-                Button("Réessayer") {
-                    Task { await mesChampionnats.charger() }
-                }
-                .font(.custom("HelveticaNeue-Medium", size: 15))
-                .foregroundColor(.primaire)     // 9,61:1 sur le beige
-                .frame(minWidth: 44, minHeight: 44)
-                .buttonStyle(StyleAppui(.bouton))
+                Button("Réessayer", action: reessayer)
+                    .font(.custom("HelveticaNeue-Medium", size: 15))
+                    .foregroundColor(.primaire)     // 9,61:1 sur le beige
+                    .frame(minWidth: 44, minHeight: 44)
+                    .buttonStyle(StyleAppui(.bouton))
             }
         }
         .padding(.horizontal, 16)

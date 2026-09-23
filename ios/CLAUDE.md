@@ -157,6 +157,7 @@ ios/
     │   ├── SupabaseManager.swift  chemin direct, sous RLS
     │   ├── APIClient.swift        chemin Railway : Bearer, décodage, réessais, réveil
     │   ├── MesChampionnats.swift  `GET /championnats/moi` — propriétaire unique, accueil + onglet
+    │   ├── ClassementChampionnat.swift  `GET /championnats/{id}/classement` — un appel, deux segments
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
     │   ├── ContentView.swift
@@ -168,15 +169,15 @@ ios/
     │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Composants/
-    │   │   ├── CartesChampionnat.swift  carte de championnat, cartes d'action, chargement/échec, PARTAGÉS
+    │   │   ├── CartesChampionnat.swift  carte de championnat, cartes d'action, chargement/échec (`EchecChargement`), PARTAGÉS
     │   │   ├── BoutonPrincipal.swift    habillage du bouton de « Créer » et « Rejoindre », PARTAGÉ
     │   │   ├── ErreurEnLigne.swift      refus d'une écriture, sous le bouton — jamais d'alerte
     │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
-    │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste — données mockées
-    │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — MOCKÉ
+    │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste — classement réel · menu « ⋯ » et widget GP mockés
+    │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — reçoit le classement
     │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases → `POST /championnats/rejoindre`
     │   ├── Calendrier/

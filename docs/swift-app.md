@@ -1637,8 +1637,8 @@ alors sur la ligne du bas, qui est sa place exacte, et la résolution des chevau
 fait une grille de départ sur plusieurs voies.
 
 > **Jeu d'essai** : `168, 93, 66, 50, 47, 26, 24, 0`, les scores de
-> `maquettes_V2/screen-14-vue-piste.PNG`. Ils sont en dur dans `MembreMock.exemples` tant que
-> la passe réseau n'est pas faite, et ils couvrent les trois cas qui comptent — un écart
+> `maquettes_V2/screen-14-vue-piste.PNG`. Ils restent dans `MembreMock.exemples`, qui ne sert
+> plus qu'aux aperçus Xcode depuis l'étape 3, et ils couvrent les trois cas qui comptent — un écart
 > énorme en tête, un peloton qui se chevauche, un membre à zéro.
 
 **La vue piste identifie chacun par sa livrée, son numéro, et le pseudo peint sur l'aileron
@@ -2074,7 +2074,7 @@ ci-dessous ; chaque étape ne dépend que des précédentes.
 | **0** | Fondations : `APIClient`, `ErreurAPI`, `JSONDecoder.api`, réveil, `Profil` / `Championnat` / `Membre`, profil courant en direct | **Fait** (iOS 0.20.0) |
 | **1** | `GET /championnats/moi` — **un seul propriétaire** pour l'accueil et l'onglet Championnats. L'`id` devient un UUID : la teinte Pantone, tirée de l'id, changera une fois | **Fait** (iOS 0.21.0) |
 | **2** | Créer / rejoindre, puis la photo (Storage + `PATCH`). Navigation vers le championnat obtenu, liste de l'étape 1 invalidée | **Créer / rejoindre faits** (iOS 0.22.0) — photo à faire |
-| **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | |
+| **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | **Classement et piste faits** (iOS 0.23.0) — menu « ⋯ » et widget GP à faire |
 | **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | |
 | **5** | Calendrier : liste statique **croisée** avec `GET /scraper/cotes` → états réels **et `gp_id`** · GP suivant de l'accueil en lecture directe · **un seul calcul d'échéance** (§6.4) | |
 | **6** | Résultats : `GET /grands-prix/{id}/resultats` + mes pronostics en direct, puis `?championnat_id=` | |
@@ -2136,6 +2136,19 @@ lancé **avant** l'écriture, absorberait la demande et le championnat manquerai
 L'appel n'est pas lié à l'écran : le quitter en cours de route n'annule ni l'écriture ni le
 rechargement. Le nom est borné à **2–40 caractères** côté client, comme le serveur.
 **Reste de l'étape 2 : la photo** — choisie et vérifiée (2 Mo), mais pas encore déposée.
+
+**Étape 3, mise en œuvre (classement et piste).** `ChampionnatDetailView` reçoit le vrai
+`Championnat` ; `ChampionnatMock` n'est plus monté. `Services/ClassementChampionnat.swift`,
+possédé par l'écran (`@StateObject`), appelle `GET /championnats/{id}/classement` à chaque
+apparition — **un seul appel pour les deux segments** : la piste reçoit le tableau déjà
+chargé, basculer de segment ne rappelle rien. Spinner puis `EchecChargement` (message
+d'`ErreurAPI`, « Réessayer » si `estRejouable`) — le bloc d'échec est désormais **partagé**
+avec `EtatMesChampionnats`. L'effectif de l'en-tête est celui du classement dès qu'il est
+lu. `meilleure_cote` nulle ⇒ le sous-titre tait le meilleur coup, jamais « 0 pts » ;
+`numero` nul ⇒ la voiture porte le rang. Le profil d'un membre est projeté de sa ligne :
+**les statistiques que le classement ne sert pas s'affichent « – »** jusqu'à l'étape 4.
+`MembreMock` ne sert plus qu'aux aperçus (jeu d'essai de la piste, §5.6).
+
 ---
 
 ## 8. Références

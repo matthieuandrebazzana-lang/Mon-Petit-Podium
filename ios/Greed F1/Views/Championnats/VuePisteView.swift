@@ -32,16 +32,17 @@ import SwiftUI
 /// > mesuré ainsi sur la maquette : la piste y occupe 667 pt de haut sur un iPhone 15 Pro,
 /// > pas 701.
 ///
-/// > **Les données sont mockées** : elles arrivent de ``ChampionnatDetailView``. L'appel à
-/// > `classement_du_championnat` viendra à la passe réseau.
+/// > **La piste n'appelle rien** : elle reçoit de ``ChampionnatDetailView`` le tableau que
+/// > `GET /championnats/{id}/classement` a servi au segment « Classement ». Un second appel
+/// > aurait pu poser une voiture à un autre score que sa ligne.
 struct VuePisteView: View {
 
-    let championnat: ChampionnatMock
+    let championnat: Championnat
 
     /// Le classement, **déjà trié par points décroissants** — c'est ce que rend le serveur,
     /// et les deux passes en dépendent : elles balaient les hauteurs dans l'ordre croissant
     /// une seule fois.
-    let membres: [MembreMock]
+    let membres: [Membre]
 
     /// Vrai quand la piste est montée **dans** ``ChampionnatDetailView``, sous son
     /// sélecteur segmenté. L'en-tête de cet écran porte déjà le nom du championnat et la
@@ -157,7 +158,7 @@ struct VuePisteView: View {
             // haut de la piste. Mesuré au simulateur, invisible à la lecture du code.
             // Une couleur, elle, prend exactement la place qu'on lui propose ; un
             // `overlay` ne change pas la taille de son hôte.
-            Color.teinteChampionnat(pour: championnat.id)
+            Color.teinteChampionnat(pour: championnat.cleTeinte)
                 .overlay { Damier(opacite: Materiau.damier) }
                 .overlay { LueurHaute() }
                 .clipShape(
@@ -243,12 +244,12 @@ struct VuePisteView: View {
 
         return VStack(spacing: 3) {
             VueVoiture(livree: placement.membre.livree,
-                       numero: placement.membre.numero,
+                       numero: placement.membre.numeroAffiche,
                        nom: placement.membre.pseudo,
-                       teintePilote: .teinteAvatar(pour: placement.membre.id))
+                       teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte))
                 .frame(width: largeurVoiture, height: hauteurVoiture)
 
-            Text(String(placement.membre.points))
+            Text(String(placement.membre.totalPoints))
                 .font(.custom("HelveticaNeue", size: DispositionPiste.tailleScore))
                 .foregroundColor(.texte)                  // 15,23:1 sur le beige de la piste
                 .monospacedDigit()
@@ -281,7 +282,7 @@ struct VuePisteView: View {
     /// Ce que la piste dit, en toutes lettres — le classement dans l'ordre.
     private var resume: String {
         guard !membres.isEmpty else { return "Aucun membre à afficher sur la piste." }
-        let lignes = membres.map { "\($0.rang). \($0.pseudo), \($0.points) points" }
+        let lignes = membres.map { "\($0.rang). \($0.pseudo), \($0.totalPoints) points" }
         return "Piste du championnat \(championnat.nom). " + lignes.joined(separator: ". ") + "."
     }
 }
@@ -338,13 +339,13 @@ enum DispositionPiste {
     /// Où se pose une voiture. **Rien sur sa taille** : elles l'ont toutes la même, et un
     /// champ par placement inviterait à en faire varier une.
     struct Placement: Identifiable {
-        let membre: MembreMock
+        let membre: Membre
         /// Le centre vertical du **dessin**, en points depuis le haut de la piste.
         let centre: CGFloat
         /// L'écart à l'axe de la piste, en points. Négatif à gauche.
         let decalage: CGFloat
 
-        var id: String { membre.id }
+        var id: UUID { membre.id }
     }
 
     // MARK: Passe 1 — l'échelle verticale
@@ -497,11 +498,11 @@ enum DispositionPiste {
 
     /// Elle enchaîne les trois étapes et **ne décide rien elle-même**. La hauteur qu'elle
     /// recopie est celle de la passe 1, inchangée.
-    static func placements(_ membres: [MembreMock],
+    static func placements(_ membres: [Membre],
                            hauteur: CGFloat, largeur: CGFloat) -> [Placement] {
         guard !membres.isEmpty, hauteur > 0, largeur > 0 else { return [] }
 
-        let centres = hauteurs(pour: membres.map(\.points), dans: hauteur)
+        let centres = hauteurs(pour: membres.map(\.totalPoints), dans: hauteur)
         var resultat: [Placement] = []
 
         for groupe in groupes(de: centres) {
@@ -524,9 +525,7 @@ enum DispositionPiste {
 
 #Preview("Huit membres") {
     NavigationStack {
-        VuePisteView(championnat: ChampionnatMock(id: "team-bazzana", nom: "Team Bazzana",
-                                                  membres: 8, rang: 2, fraction: 0.55),
-                     membres: MembreMock.exemples)
+        VuePisteView(championnat: .apercu, membres: MembreMock.exemples.map(\.enMembre))
     }
 }
 
@@ -534,8 +533,7 @@ enum DispositionPiste {
     // Le cas que la passe 2 doit résoudre : trois scores identiques, donc trois hauteurs
     // identiques, donc trois voies — centre, gauche, droite.
     NavigationStack {
-        VuePisteView(championnat: ChampionnatMock(id: "serres-chevalier", nom: "Les Bleus",
-                                                  membres: 5, rang: 1, fraction: 1),
+        VuePisteView(championnat: .apercu,
                      membres: MembreMock.exemples.prefix(5).enumerated().map { rang, membre in
                          MembreMock(id: membre.id, pseudo: membre.pseudo,
                                     points: rang < 3 ? 80 : membre.points, rang: membre.rang,
@@ -543,7 +541,7 @@ enum DispositionPiste {
                                     meilleurCoup: membre.meilleurCoup,
                                     grandsPrixJoues: membre.grandsPrixJoues,
                                     moyenneTentee: membre.moyenneTentee,
-                                    livree: membre.livree, numero: membre.numero)
+                                    livree: membre.livree, numero: membre.numero).enMembre
                      })
     }
 }

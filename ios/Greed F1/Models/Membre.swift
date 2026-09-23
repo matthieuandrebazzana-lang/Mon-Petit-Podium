@@ -60,3 +60,32 @@ struct Membre: Codable, Identifiable, Equatable, Hashable {
         avatarUrl = URL.facultative(try c.decodeIfPresent(String.self, forKey: .avatarUrl))
     }
 }
+
+extension Membre {
+    /// La construction directe, pour les aperçus : le décodeur reste le seul chemin des
+    /// données servies.
+    init(profilId: UUID, pseudo: String, totalPoints: Int, pronosticsReussis: Int,
+         meilleureCote: Int?, rang: Int, ordreInscription: Int,
+         couleur1: String, couleur2: String, couleurTexte: String? = nil,
+         numero: Int?, livreeMode: ModeLivree, livreeEcurie: String? = nil,
+         avatarUrl: URL? = nil) {
+        self.profilId = profilId
+        self.pseudo = pseudo
+        self.totalPoints = totalPoints
+        self.pronosticsReussis = pronosticsReussis
+        self.meilleureCote = meilleureCote
+        self.rang = rang
+        self.ordreInscription = ordreInscription
+        self.couleur1 = couleur1
+        self.couleur2 = couleur2
+        self.couleurTexte = couleurTexte
+        self.numero = numero
+        self.livreeMode = livreeMode
+        self.livreeEcurie = livreeEcurie
+        self.avatarUrl = avatarUrl
+    }
+
+    /// La chaîne d'où se tire la teinte de l'avatar : l'UUID **en minuscules**, la forme
+    /// que sert le backend — la même règle que ``Championnat/cleTeinte``.
+    var cleTeinte: String { profilId.uuidString.lowercased() }
+}

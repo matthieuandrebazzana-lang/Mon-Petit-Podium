@@ -154,7 +154,7 @@ struct AccueilView: View {
             VStack(spacing: 10) {
                 ForEach(championnats) { championnat in
                     NavigationLink {
-                        ChampionnatDetailView(championnat: ChampionnatMock(championnat))
+                        ChampionnatDetailView(championnat: championnat)
                     } label: {
                         CarteChampionnat(championnat: championnat)
                     }

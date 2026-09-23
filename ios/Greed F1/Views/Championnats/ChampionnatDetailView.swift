@@ -6,28 +6,32 @@ import SwiftUI
 /// `Ressources/Screenshots/screen-13-classement-championnat.PNG` pour ce que la version web
 /// en a finalement fait.
 ///
-/// > **Les données sont mockées.** ``MembreMock`` porte des valeurs en dur ; aucun appel
-/// > réseau ne part de cet écran.
+/// > **Un seul appel pour les deux segments.** ``ClassementChampionnat`` lit
+/// > `GET /championnats/{id}/classement` à chaque apparition ; le classement et la piste
+/// > reçoivent **le même tableau**, et basculer de l'un à l'autre ne rappelle rien.
 ///
 /// **Les points sont des entiers, jamais une cote** (`CLAUDE.md` §3.1) : « 168 pts », et
 /// nulle part un « ×2,80 ».
 struct ChampionnatDetailView: View {
 
-    let championnat: ChampionnatMock
+    let championnat: Championnat
+
+    @StateObject private var classement: ClassementChampionnat
+
+    init(championnat: Championnat) {
+        self.championnat = championnat
+        _classement = StateObject(wrappedValue: ClassementChampionnat(championnatId: championnat.id))
+    }
 
     /// Marge latérale commune à tous les écrans.
     private let margeLaterale: CGFloat = 16
 
-    // MARK: - Données mockées
-
-    /// Le classement, **déjà trié et rangé** — c'est ce que fait le serveur
-    /// (`docs/swift-app.md` §5) et l'écran ne le retrie jamais.
-    ///
-    /// La liste est tronquée à l'effectif du championnat : un en-tête qui annonce huit
-    /// membres au-dessus de six lignes est exactement le genre de défaut discret que le
-    /// `CLAUDE.md` de la racine décrit.
-    private var membres: [MembreMock] {
-        Array(MembreMock.exemples.prefix(championnat.membres))
+    /// L'effectif affiché sous le nom. **Celui du classement dès qu'il est lu** : un
+    /// en-tête qui annonce huit membres au-dessus de sept lignes est exactement le genre de
+    /// défaut discret que le `CLAUDE.md` de la racine décrit. Avant, celui de la liste.
+    private var effectif: Int {
+        if case .pret(let membres) = classement.etat { return membres.count }
+        return championnat.nombreMembres
     }
 
     /// Les deux segments de l'écran.
@@ -59,20 +63,38 @@ struct ChampionnatDetailView: View {
                 // se bascule souvent, un glissement latéral finirait par se faire attendre.
                 // L'opacité reste permise en mouvement réduit.
                 ZStack {
-                    switch vue {
-                    case .classement:
-                        contenuClassement
-                            .transition(.opacity)
-                    case .piste:
-                        VuePisteView(championnat: championnat, membres: membres,
-                                     integree: true)
-                            .transition(.opacity)
+                    switch classement.etat {
+                    case .chargement:
+                        ProgressView()
+                            .tint(.secondaire)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .accessibilityLabel("Chargement du classement")
+
+                    case .echec(let erreur):
+                        EchecChargement(erreur: erreur) {
+                            Task { await classement.charger() }
+                        }
+                        .frame(maxHeight: .infinity)
+
+                    case .pret(let membres):
+                        switch vue {
+                        case .classement:
+                            contenuClassement(membres)
+                                .transition(.opacity)
+                        case .piste:
+                            VuePisteView(championnat: championnat, membres: membres,
+                                         integree: true)
+                                .transition(.opacity)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
             }
         }
+        // À chaque apparition, retour du profil d'un membre compris : pas de cache de
+        // session (`docs/swift-app.md` §7.6). Le classement affiché reste en place.
+        .task { await classement.charger() }
         // Le nom du championnat est déjà dans le contenu, à 28 pt : le répéter dans la
         // barre ferait doublon. Elle ne garde donc que le chevron de retour natif, qui
         // porte le titre de l'écran précédent — « Championnats ».
@@ -112,7 +134,7 @@ struct ChampionnatDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 // `grisSecondaire` (4,71:1) et non le `#999999` de la maquette (2,52:1).
-                Text("\(championnat.membres) \(championnat.membres > 1 ? "membres" : "membre") · Saison 2026")
+                Text("\(effectif) \(effectif > 1 ? "membres" : "membre") · Saison 2026")
                     .font(.custom("HelveticaNeue", size: 13))
                     .foregroundColor(.grisSecondaire)
             }
@@ -160,10 +182,10 @@ struct ChampionnatDetailView: View {
 
     // MARK: - Le contenu « Classement »
 
-    private var contenuClassement: some View {
+    private func contenuClassement(_ membres: [Membre]) -> some View {
         ScrollView {
             VStack(spacing: 12) {
-                classement
+                listeClassement(membres)
                 WidgetGrandPrixSuivant(nom: "GP Pays-Bas", slug: "pays-bas",
                                        echeance: "Fermeture dans 3 jours")
             }
@@ -193,7 +215,7 @@ struct ChampionnatDetailView: View {
     ///
     /// `NavigationLink` et non `Button` : c'est lui qui porte le glissement d'écran natif
     /// et le geste de retour par le bord, qu'un `Button` poussant un état ne donne pas.
-    private var lienPiste: some View {
+    private func lienPiste(_ membres: [Membre]) -> some View {
         NavigationLink {
             VuePisteView(championnat: championnat, membres: membres)
         } label: {
@@ -223,7 +245,7 @@ struct ChampionnatDetailView: View {
     /// (`docs/swift-app.md` §4.6, « jamais une règle horizontale »). Ce sont le filet de
     /// 4 pt posé *à l'intérieur* de chaque ligne — l'exception explicite de cette même
     /// section — et l'espace qui les séparent.
-    private var classement: some View {
+    private func listeClassement(_ membres: [Membre]) -> some View {
         VStack(spacing: 4) {
             ForEach(membres) { membre in
                 // `NavigationLink` et non `Button` : c'est lui qui porte le glissement
@@ -256,8 +278,17 @@ struct ChampionnatDetailView: View {
 /// pas — les pronostics réussis et le meilleur coup. C'est cette version-là qui est reprise.
 private struct LigneClassement: View {
 
-    let membre: MembreMock
+    let membre: Membre
     let total: Int
+
+    /// Le sous-titre. **Pas de meilleur coup tant que rien n'est réussi** : `nil` veut dire
+    /// « aucun », et « meilleur coup 0 pts » le confondrait avec un coup raté
+    /// (`CLAUDE.md` §3.1).
+    private var detail: String {
+        let reussis = "\(membre.pronosticsReussis) \(membre.pronosticsReussis > 1 ? "réussis" : "réussi")"
+        guard let meilleur = membre.meilleureCote else { return reussis }
+        return "\(reussis) · meilleur coup \(meilleur) pts"
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -273,7 +304,7 @@ private struct LigneClassement: View {
 
                 // `grisSecondaire` (5,33:1 sur le blanc) et non le `#999999` de la
                 // maquette, qui n'y vaut que 2,85:1.
-                Text("\(membre.reussis) réussis · meilleur coup \(membre.meilleurCoup) pts")
+                Text(detail)
                     .font(.custom("HelveticaNeue", size: 12))
                     .foregroundColor(.grisSecondaire)
                     .lineLimit(1)
@@ -293,8 +324,8 @@ private struct LigneClassement: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "\(membre.rang)\(membre.rang == 1 ? "er" : "e") sur \(total), \(membre.pseudo), "
-            + "\(membre.points) points, \(membre.reussis) pronostics réussis, "
-            + "meilleur coup \(membre.meilleurCoup) points."
+            + "\(membre.totalPoints) points, \(membre.pronosticsReussis) pronostics réussis"
+            + (membre.meilleureCote.map { ", meilleur coup \($0) points." } ?? ".")
         )
     }
 
@@ -304,7 +335,7 @@ private struct LigneClassement: View {
     /// lui qui sépare deux lignes sans qu'aucune règle horizontale ne traverse le bloc.
     private var filet: some View {
         Capsule()
-            .fill(Color.teinteAvatar(pour: membre.id))
+            .fill(Color.teinteAvatar(pour: membre.cleTeinte))
             .frame(width: 4, height: 36)
             .accessibilityHidden(true)
     }
@@ -327,7 +358,7 @@ private struct LigneClassement: View {
     /// la même dans tous les championnats où il figure.
     private var avatar: some View {
         Circle()
-            .fill(Color.teinteAvatar(pour: membre.id))
+            .fill(Color.teinteAvatar(pour: membre.cleTeinte))
             .frame(width: 36, height: 36)
             .overlay {
                 Text(membre.pseudo.first.map { String($0).uppercased() } ?? "?")
@@ -342,7 +373,7 @@ private struct LigneClassement: View {
     /// de plus.
     private var score: some View {
         VStack(alignment: .trailing, spacing: 0) {
-            Text(String(membre.points))
+            Text(String(membre.totalPoints))
                 .font(.custom("HelveticaNeue-Medium", size: 20))
                 .tracking(-0.50)                              // −0,025em × 20
                 .foregroundColor(.primaire)                   // 10,88:1 sur le blanc
@@ -428,6 +459,46 @@ private struct WidgetGrandPrixSuivant: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Pronostiquer pour le \(nom). \(echeance).")
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+// MARK: - Un membre, vu par les écrans
+
+extension Membre {
+    /// Ce que porte sa voiture. Un slug d'écurie inconnu retombe sur la livrée perso à
+    /// l'affichage (``Livree/ecurieChoisie``), ce n'est pas une panne.
+    var livree: Livree {
+        Livree(mode: livreeMode == .ecurie ? .ecurie : .perso,
+               ecurie: livreeEcurie,
+               coque: couleur1,
+               ailerons: couleur2,
+               couleurTexte: couleurTexte)
+    }
+
+    /// Le numéro peint sur le museau. **Pas de numéro choisi ⇒ le rang**, jamais `0`
+    /// (`docs/swift-app.md` §3.2).
+    var numeroAffiche: String { String(numero ?? rang) }
+
+    /// Le profil tel que ``ProfilMembreView`` l'attend, **de ce que le classement sait
+    /// seul**. Les statistiques qu'il ne sert pas s'affichent « – » : les calculer ici
+    /// serait les inventer. `GET /profils/{id}/stats` les remplira (étape 4 de
+    /// `docs/swift-app.md` §7.6).
+    var profil: MembreProfil {
+        MembreProfil(
+            identifiant: cleTeinte,
+            pseudo: pseudo,
+            photo: avatarUrl,
+            livree: livree,
+            numero: numeroAffiche,
+            grandsPrixJoues: nil,
+            statistiques: [
+                StatistiqueProfil(valeur: "–", libelle: "Paris gagnés"),
+                StatistiqueProfil(valeur: "–", libelle: "Pts moy. / GP"),
+                StatistiqueProfil(valeur: meilleureCote.map(String.init) ?? "–",
+                                  libelle: "Meilleur coup"),
+                StatistiqueProfil(valeur: "–", libelle: "Cote moy. tentée")
+            ]
+        )
     }
 }
 
@@ -559,12 +630,35 @@ struct MembreMock: Identifiable {
     ]
 }
 
+// MARK: - Aperçus
+
+extension MembreMock {
+    /// Le membre mocké sous la forme que sert le serveur — **pour les aperçus seulement**,
+    /// qui gardent ainsi le jeu d'essai de la piste (`docs/swift-app.md` §5.6).
+    var enMembre: Membre {
+        Membre(profilId: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", rang))!,
+               pseudo: pseudo, totalPoints: points, pronosticsReussis: reussis,
+               meilleureCote: reussis > 0 ? meilleurCoup : nil,
+               rang: rang, ordreInscription: rang,
+               couleur1: livree.coque, couleur2: livree.ailerons,
+               couleurTexte: livree.couleurTexte, numero: Int(numero),
+               livreeMode: livree.mode == .ecurie ? .ecurie : .perso,
+               livreeEcurie: livree.ecurie)
+    }
+}
+
+extension Championnat {
+    /// Un championnat d'aperçu, décodé comme le serait une réponse du serveur.
+    static let apercu: Championnat = try! JSONDecoder.api.decode(Championnat.self, from: Data("""
+        {"id": "5f0c6a1e-2b7d-4c1a-9e3f-8a2b1c0d9e7f", "nom": "Team Bazzana",
+         "code_invitation": "F1X7K2", "cree_par": null,
+         "cree_le": "2026-08-13T18:23:31+00:00", "nombre_membres": 8,
+         "est_createur": true, "photo_url": null}
+        """.utf8))
+}
+
 #Preview {
     NavigationStack {
-        ChampionnatDetailView(
-            championnat: ChampionnatMock(
-                id: "team-bazzana", nom: "Team Bazzana", membres: 8, rang: 2, fraction: 0.55
-            )
-        )
+        ChampionnatDetailView(championnat: .apercu)
     }
 }

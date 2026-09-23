@@ -23,8 +23,10 @@ struct MembreProfil {
     let livree: Livree
     let numero: String
 
-    /// Grands Prix joués cette saison, pour la ligne « Ses Grands Prix ».
-    let grandsPrixJoues: Int
+    /// Grands Prix joués cette saison, pour la ligne « Ses Grands Prix ». **`nil` tant que
+    /// `GET /profils/{id}/stats` n'est pas branché** : la ligne dit alors la saison, pas
+    /// un « 0 GP joué » qui serait faux.
+    let grandsPrixJoues: Int?
 
     /// Les quatre tuiles, dans l'ordre de ``ProfilView`` — **les mêmes quatre**, sans quoi
     /// comparer son profil à celui d'un autre demanderait de relire les libellés.
@@ -135,7 +137,7 @@ struct ProfilMembreView: View {
 
                     // `grisSecondaire` (5,33:1 sur le blanc) et non le `#999999` de la
                     // capture, qui n'y vaut que 2,85:1.
-                    Text("\(membre.grandsPrixJoues) \(membre.grandsPrixJoues > 1 ? "GP joués" : "GP joué") cette saison")
+                    Text(sousTitreGrandsPrix)
                         .font(.custom("HelveticaNeue", size: 13))
                         .foregroundColor(.grisSecondaire)
                         .lineLimit(1)
@@ -157,11 +159,13 @@ struct ProfilMembreView: View {
         }
         .buttonStyle(StyleAppui(.grandeSurface))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "Ses Grands Prix. \(membre.grandsPrixJoues) "
-            + "\(membre.grandsPrixJoues > 1 ? "Grands Prix joués" : "Grand Prix joué") cette saison."
-        )
+        .accessibilityLabel("Ses Grands Prix. \(sousTitreGrandsPrix).")
         .accessibilityAddTraits(.isButton)
+    }
+
+    private var sousTitreGrandsPrix: String {
+        guard let joues = membre.grandsPrixJoues else { return "Saison 2026" }
+        return "\(joues) \(joues > 1 ? "GP joués" : "GP joué") cette saison"
     }
 }
 

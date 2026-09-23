@@ -431,7 +431,7 @@ struct CreerChampionnatView: View {
     private var boutonCreer: some View {
         if let cree {
             NavigationLink {
-                ChampionnatDetailView(championnat: ChampionnatMock(cree))
+                ChampionnatDetailView(championnat: cree)
             } label: {
                 Text("Voir le championnat")
                     .habillageBoutonPrincipal(actif: true)
