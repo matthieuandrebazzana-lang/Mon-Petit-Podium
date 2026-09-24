@@ -1,77 +1,39 @@
 import SwiftUI
 
-// MARK: - La grille 2026 et ses points
+// MARK: - La grille 2026 : pilote → écurie
 
-/// Un pilote de la grille 2026 et ce qu'il rapporte sur les deux marchés du noyau.
-///
-/// > **`vainqueur` et `podium` sont des POINTS, jamais des cotes** (`CLAUDE.md` §3.1) :
-/// > une cote de 2,20 vaut 22 points, et rien — ni en base, ni ici — ne stocke la cote.
-/// > Aucun écran n'écrit « ×2,20 ».
-///
-/// **Une seule table pour les deux marchés.** Deux listes tenues séparément auraient fini
-/// par ne plus nommer les mêmes pilotes, et le symptôme aurait été un pilote proposé au
-/// vainqueur et introuvable au podium.
-///
-/// L'ordre est celui des **points croissants** du marché « Vainqueur » — les favoris en
-/// tête, comme sur la version web. Le marché « Podium » suit le même ordre : ses points
-/// dérivent des mêmes probabilités, ils ne les réordonnent pas.
+/// L'écurie de chaque pilote de la grille 2026, **dans les libellés du bookmaker** — la seule
+/// chose que l'API ne sert pas (`docs/swift-app.md` §7.6 : « l'écurie d'un pilote n'est pas
+/// servie »). Statique, et **à tenir avec `frontend/src/lib/ecuries.js`**.
 ///
 /// `ecurie` est le **slug de ``LivreeEcurie``**, jamais une couleur écrite ici : la teinte
-/// des onze écuries a déjà un propriétaire (`Views/Composants/Voiture.swift`), lui-même
-/// aligné sur `frontend/src/lib/ecuries.js`. Une douzième copie de `#FF2800` aurait
-/// divergé au premier ajustement de livrée.
-struct PiloteMock: Identifiable {
+/// des onze écuries a déjà un propriétaire (`Views/Composants/Voiture.swift`).
+///
+/// Les points, eux, ne vivent plus ici : ce sont ceux de `GET /grands-prix/{id}/cotes`.
+enum GrillePilotes {
 
-    let nom: String
-    let ecurie: String
-    let vainqueur: Int
-    let podium: Int
+    private static let ecuries: [String: String] = Dictionary(uniqueKeysWithValues: [
+        ("AK.Antonelli", "mercedes"),     ("G.Russell", "mercedes"),
+        ("L.Norris", "mclaren"),          ("O.Piastri", "mclaren"),
+        ("M.Verstappen", "red-bull"),     ("I.Hadjar", "red-bull"),
+        ("L.Hamilton", "ferrari"),        ("C.Leclerc", "ferrari"),
+        ("L.Lawson", "racing-bulls"),     ("A.Lindblad", "racing-bulls"),
+        ("F.Alonso", "aston-martin"),     ("L.Stroll", "aston-martin"),
+        ("P.Gasly", "alpine"),            ("F.Colapinto", "alpine"),
+        ("N.Hulkenberg", "audi"),         ("G.Bortoleto", "audi"),
+        ("E.Ocon", "haas"),               ("O.Bearman", "haas"),
+        ("A.Albon", "williams"),          ("C.Sainz Jr", "williams"),
+        ("S.Perez", "cadillac"),          ("V.Bottas", "cadillac")
+    ].map { (ClePilote.de($0.0), $0.1) })
 
-    var id: String { nom }
-
-    /// La teinte de l'écurie, **lue dans la table des livrées**. `nil` pour un slug
-    /// inconnu — la carte garde alors son blanc, exactement comme la version web, qui
-    /// n'invente jamais une couleur de repli pour un pilote qu'elle ne connaît pas.
-    var couleurEcurie: Color? {
-        LivreeEcurie.slug(ecurie).flatMap { EncreSVG.couleur($0.teinte) }
+    /// La teinte d'écurie d'une issue. `nil` pour tout ce qui n'est pas un pilote connu —
+    /// une écart, une nationalité, un duel : la carte garde alors son blanc, comme au web,
+    /// qui n'invente jamais une couleur de repli.
+    static func couleurEcurie(de issue: String?) -> Color? {
+        ecuries[ClePilote.de(issue)]
+            .flatMap { LivreeEcurie.slug($0) }
+            .flatMap { EncreSVG.couleur($0.teinte) }
     }
-}
-
-/// Les vingt-deux pilotes de la grille 2026, dans les libellés qu'emploie le bookmaker.
-///
-/// **Vingt-deux et non vingt** : onze écuries × deux baquets. C'est la grille de
-/// `frontend/src/lib/ecuries.js`, elle-même alignée sur `backend/app/calcul/pilotes.py`.
-///
-/// > **Les valeurs sont mockées**, mais pas arbitraires : celles que montrent
-/// > `screen-24-cotes-haut.PNG` et `screen-26-pronos-remplis.PNG` sont reprises telles
-/// > quelles, et le total de la capture — 10 113 pts — retombe exactement sur la somme
-/// > calculée par ``PronosView``. Le reste de la table les prolonge.
-enum GrilleMock {
-
-    static let pilotes: [PiloteMock] = [
-        PiloteMock(nom: "AK.Antonelli",  ecurie: "mercedes",      vainqueur: 22,    podium: 12),
-        PiloteMock(nom: "L.Norris",      ecurie: "mclaren",       vainqueur: 48,    podium: 14),
-        PiloteMock(nom: "G.Russell",     ecurie: "mercedes",      vainqueur: 70,    podium: 16),
-        PiloteMock(nom: "M.Verstappen",  ecurie: "red-bull",      vainqueur: 80,    podium: 18),
-        PiloteMock(nom: "L.Hamilton",    ecurie: "ferrari",       vainqueur: 130,   podium: 21),
-        PiloteMock(nom: "C.Leclerc",     ecurie: "ferrari",       vainqueur: 150,   podium: 23),
-        PiloteMock(nom: "O.Piastri",     ecurie: "mclaren",       vainqueur: 170,   podium: 25),
-        PiloteMock(nom: "L.Lawson",      ecurie: "racing-bulls",  vainqueur: 900,   podium: 90),
-        PiloteMock(nom: "I.Hadjar",      ecurie: "red-bull",      vainqueur: 1100,  podium: 110),
-        PiloteMock(nom: "F.Alonso",      ecurie: "aston-martin",  vainqueur: 1500,  podium: 150),
-        PiloteMock(nom: "P.Gasly",       ecurie: "alpine",        vainqueur: 2000,  podium: 200),
-        PiloteMock(nom: "A.Lindblad",    ecurie: "racing-bulls",  vainqueur: 2500,  podium: 250),
-        PiloteMock(nom: "N.Hulkenberg",  ecurie: "audi",          vainqueur: 3300,  podium: 330),
-        PiloteMock(nom: "E.Ocon",        ecurie: "haas",          vainqueur: 4000,  podium: 400),
-        PiloteMock(nom: "O.Bearman",     ecurie: "haas",          vainqueur: 4000,  podium: 400),
-        PiloteMock(nom: "A.Albon",       ecurie: "williams",      vainqueur: 5000,  podium: 500),
-        PiloteMock(nom: "C.Sainz Jr",    ecurie: "williams",      vainqueur: 5000,  podium: 500),
-        PiloteMock(nom: "G.Bortoleto",   ecurie: "audi",          vainqueur: 6600,  podium: 660),
-        PiloteMock(nom: "F.Colapinto",   ecurie: "alpine",        vainqueur: 8000,  podium: 800),
-        PiloteMock(nom: "L.Stroll",      ecurie: "aston-martin",  vainqueur: 10000, podium: 1000),
-        PiloteMock(nom: "S.Perez",       ecurie: "cadillac",      vainqueur: 15000, podium: 1500),
-        PiloteMock(nom: "V.Bottas",      ecurie: "cadillac",      vainqueur: 15000, podium: 1500)
-    ]
 }
 
 /// Le nombre de points, **habillé à un seul endroit** — le pendant iOS de
@@ -86,7 +48,14 @@ extension Int {
     var enPoints: String { String(self) }
 }
 
-// MARK: - Les deux marchés
+/// Trois états, jamais deux (§6.1) : une valeur, **ou** « Cote retirée » quand l'issue a
+/// disparu du Grand Prix depuis l'épinglage. **Jamais un zéro inventé.**
+func formaterPoints(_ points: Int?) -> String {
+    guard let points else { return "Cote retirée" }
+    return "\(points.enPoints) pts"
+}
+
+// MARK: - Les deux marchés obligatoires
 
 /// Un marché du noyau — son libellé, son aplat, et **l'encre de second rang qui va avec**.
 ///
@@ -94,6 +63,9 @@ extension Int {
 /// > à côté de son aplat finirait par poser le blanc à 70 % de ``Color/encreSecondaire``
 /// > sur le bleu ardoise, où il ne vaut que **3,86:1** — sous le plancher de 4,5:1. Une
 /// > question, un propriétaire (`CLAUDE.md` §6).
+///
+/// Les autres marchés — ceux que le scraper découvre — gardent le libellé du bookmaker et
+/// prennent l'aplat ``aplat(slug:)`` : ils n'ont pas d'encre douce, rien n'y est posé.
 enum MarcheCote: String, CaseIterable, Identifiable {
 
     case vainqueur
@@ -101,10 +73,12 @@ enum MarcheCote: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Le slug du marché côté serveur — le contrôle des obligatoires est **strict** (§6.3).
+    var slug: String { rawValue }
+
     /// Le libellé affiché. « 2e et 3e du podium » est le **seul** libellé que l'app
-    /// réécrit : c'est une constante partagée avec le backend, donc ce marché-là ne peut
-    /// désigner que celui-là. Les marchés découverts par le scraper garderont le nom du
-    /// bookmaker, seule source légitime.
+    /// réécrit : le vainqueur est déjà sur le podium (§6.3). Les marchés découverts par le
+    /// scraper gardent le nom du bookmaker, seule source légitime.
     var libelle: String {
         switch self {
         case .vainqueur: return "Vainqueur"
@@ -112,12 +86,7 @@ enum MarcheCote: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Le libellé **court** — celui qui tient dans une étiquette de 10 pt au-dessus d'un
-    /// nom de pilote, au récapitulatif. « 2e et 3e du podium » y passerait sur deux lignes
-    /// et doublerait la hauteur de chaque rangée.
-    ///
-    /// Il vit ici et non dans l'écran qui l'emploie : un marché porte ses deux libellés,
-    /// sans quoi le récapitulatif en inventerait un troisième au premier marché ajouté.
+    /// Le libellé **court** — celui qui tient dans une étiquette de 10 pt au récapitulatif.
     var libelleCourt: String {
         switch self {
         case .vainqueur: return "Vainqueur"
@@ -125,9 +94,7 @@ enum MarcheCote: String, CaseIterable, Identifiable {
         }
     }
 
-    /// L'aplat du marché. Le rouge de la marque pour le vainqueur, le bleu ardoise pour le
-    /// podium : les deux pronostics obligatoires se distinguent alors au premier coup
-    /// d'œil, avant même d'être lus.
+    /// Le rouge de la marque pour le vainqueur, le bleu ardoise pour le podium.
     var aplat: Color {
         switch self {
         case .vainqueur: return .primaire
@@ -135,8 +102,7 @@ enum MarcheCote: String, CaseIterable, Identifiable {
         }
     }
 
-    /// L'encre de second rang sur cet aplat — **mesurée sur le champ de 15 % de blanc**,
-    /// qui est la surface la plus claire du bloc et donc celle qui contraint :
+    /// L'encre de second rang sur cet aplat — **mesurée sur le champ de 15 % de blanc** :
     /// `#932734` → 4,69:1 · `#4C6584` → 4,82:1.
     var encreDouce: Color {
         switch self {
@@ -145,31 +111,17 @@ enum MarcheCote: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Les points de ce marché, pilote par pilote, dans l'ordre de la grille.
-    var cotes: [(pilote: PiloteMock, points: Int)] {
-        GrilleMock.pilotes.map { ($0, points(de: $0)) }
+    /// L'aplat d'en-tête d'un marché quelconque. **Le brun `secondaire` pour les marchés
+    /// bonus** : le blanc y tient 11,6:1, et il ne se confond ni avec le rouge du vainqueur
+    /// ni avec le bleu du podium.
+    static func aplat(slug: String) -> Color {
+        MarcheCote(rawValue: slug)?.aplat ?? .secondaire
     }
 
-    func points(de pilote: PiloteMock) -> Int {
-        switch self {
-        case .vainqueur: return pilote.vainqueur
-        case .podium:    return pilote.podium
-        }
+    /// Le libellé d'en-tête d'un marché quelconque.
+    static func libelle(de marche: MarcheCotes) -> String {
+        MarcheCote(rawValue: marche.marche)?.libelle ?? marche.libelle
     }
-}
-
-/// Un pari bonus retenu : **le marché ET le pilote**, jamais le pilote seul.
-///
-/// « A.Albon vainqueur » et « A.Albon sur le podium » sont deux paris distincts, qui ne
-/// rapportent pas le même nombre de points. Ne garder que le nom du pilote aurait fondu
-/// les deux en un.
-struct PariBonus: Identifiable, Hashable {
-
-    let marche: MarcheCote
-    let pilote: String
-    let points: Int
-
-    var id: String { "\(marche.rawValue):\(pilote)" }
 }
 
 // MARK: - Le parcours de pronostics
@@ -184,37 +136,38 @@ struct PariBonus: Identifiable, Hashable {
 /// > `NavigationStack(path:)` se vide, et il faut pour cela que les trois écrans soient
 /// > des **valeurs** dans ce chemin.
 ///
-/// C'est ce qui oblige ``PariBonus`` et ``LigneRecap`` à être `Hashable` : ils voyagent
-/// dedans.
+/// **Le récapitulatif n'est atteint qu'après un `200`** : ``PronosView`` l'empile elle-même
+/// (`avancer`) une fois l'écriture acceptée, jamais par un lien — le bandeau « Pronos
+/// enregistrés ! » ne peut donc plus annoncer un enregistrement qui n'a pas eu lieu.
 enum EtapePronos: Hashable {
 
-    case cotes(nom: String, slug: String, sousTitre: String)
-    case pronos(nom: String, slug: String, sousTitre: String, bonus: [PariBonus])
-    case recap(nom: String, slug: String, sousTitre: String,
-               obligatoires: [LigneRecap], bonus: [PariBonus])
+    case cotes(GrandPrixPronos)
+    case pronos(GrandPrixPronos)
+    case recap(GrandPrixPronos, GrilleEnregistree)
 }
 
 extension View {
 
     /// Les trois destinations du parcours, **déclarées une fois pour toutes**, à poser sur
-    /// la racine de chaque pile qui y mène — l'accueil et le détail d'un championnat.
+    /// la racine de chaque pile qui y mène — l'accueil et l'onglet Championnats.
     ///
-    /// Les deux entrées ne ramènent pas au même endroit : `libelleRetour` nomme donc ce que
-    /// le récapitulatif annonce, et `retour` vide le chemin. **Le mot et l'action arrivent
-    /// ensemble** : un bouton qui nommerait une destination qu'il n'atteint pas mentirait.
-    func etapesPronos(libelleRetour: String, retour: @escaping () -> Void) -> some View {
+    /// `avancer` empile une étape (la saisie s'en sert après le `200`), `retour` vide le
+    /// chemin, et `libelleRetour` nomme ce que le récapitulatif annonce. **Le mot et l'action
+    /// arrivent ensemble** : un bouton qui nommerait une destination qu'il n'atteint pas
+    /// mentirait.
+    func etapesPronos(libelleRetour: String,
+                      avancer: @escaping (EtapePronos) -> Void,
+                      retour: @escaping () -> Void) -> some View {
         navigationDestination(for: EtapePronos.self) { etape in
             switch etape {
-            case let .cotes(nom, slug, sousTitre):
-                CotesView(nomGrandPrix: nom, slugGrandPrix: slug, sousTitre: sousTitre)
+            case let .cotes(gp):
+                CotesView(grandPrix: gp)
 
-            case let .pronos(nom, slug, sousTitre, bonus):
-                PronosView(nomGrandPrix: nom, slugGrandPrix: slug,
-                           sousTitre: sousTitre, parisBonus: bonus)
+            case let .pronos(gp):
+                PronosView(grandPrix: gp, avancer: avancer)
 
-            case let .recap(nom, slug, sousTitre, obligatoires, bonus):
-                RecapView(nomGrandPrix: nom, slugGrandPrix: slug, sousTitre: sousTitre,
-                          obligatoires: obligatoires, parisBonus: bonus,
+            case let .recap(gp, grille):
+                RecapView(grandPrix: gp, grille: grille,
                           libelleRetour: libelleRetour, retour: retour)
             }
         }
@@ -223,26 +176,20 @@ extension View {
 
 // MARK: - L'écran
 
-/// **Fais tes paris** — le tableau des cotes, et l'ajout des paris bonus.
+/// **Fais tes paris** — le tableau des cotes, et l'épinglage des favoris.
 ///
 /// Référence visuelle : `Ressources/Screenshots/screen-24-cotes-haut.PNG`.
 ///
-/// C'est le premier des deux écrans de saisie : on y met de côté jusqu'à **trois** paris
-/// bonus, puis on passe à ``PronosView`` pour les deux pronostics obligatoires. Le panier
-/// est donc **en haut**, avant le catalogue, et non relégué sous quarante-quatre cartes.
+/// Les cotes sont celles de `GET /grands-prix/{id}/cotes`, **tous les marchés** que le
+/// scraper a relevés, dans l'ordre d'``OrdreMarches``. L'étoile épingle une cote **en
+/// favori côté serveur** (`POST …/favoris`) : c'est parmi eux que ``PronosView`` fait
+/// choisir les trois paris bonus, et le serveur refuse un bonus qui n'en est pas un.
 ///
-/// > **Les données sont mockées** (``GrilleMock``). Aucun appel réseau : la route
-/// > `GET /grands-prix/{id}/cotes` et l'écriture des favoris seront branchées à la passe
-/// > API (`docs/swift-app.md` §5).
+/// **Aucun plafond sur les favoris** : le maximum de trois porte sur les paris bonus
+/// retenus à la saisie, pas sur ce qu'on met de côté.
 struct CotesView: View {
 
-    let nomGrandPrix: String
-
-    /// La clé des assets `flag-<slug>` / `trace-<slug>` et de ``TeintesDrapeaux``. Elle
-    /// traverse la pile parce que l'en-tête du récapitulatif porte le drapeau du pays hôte.
-    let slugGrandPrix: String
-
-    let sousTitre: String
+    let grandPrix: GrandPrixPronos
 
     /// Marge latérale commune à tous les écrans.
     private let margeLaterale: CGFloat = 16
@@ -251,13 +198,23 @@ struct CotesView: View {
     /// ``PronosView`` le relit ici plutôt que d'en garder une seconde copie.
     static let bonusMaximum = 3
 
-    @State private var parisBonus: [PariBonus] = []
+    @StateObject private var donnees: DonneesPronostics
+
+    /// Le refus d'un épinglage, posé sous la rangée des favoris — jamais une alerte.
+    @State private var erreurFavori: ErreurAPI?
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
-    /// Mode administrateur — **mocké à `false`**. La pastille « Prévisualisation » n'existe
-    /// que pour lui : elle dit que ce qu'on voit n'est pas ce que voient les autres.
+    /// Mode administrateur — **à `false`** tant que la prévisualisation n'est pas branchée.
     private let modeAdmin = false
+
+    init(grandPrix: GrandPrixPronos) {
+        self.grandPrix = grandPrix
+        _donnees = StateObject(wrappedValue: DonneesPronostics(gpId: grandPrix.id,
+                                                              avecMesPronostics: false))
+    }
+
+    private var favoris: [Favori] { donnees.donnees?.favoris ?? [] }
 
     var body: some View {
         ZStack {
@@ -268,15 +225,37 @@ struct CotesView: View {
                 VStack(spacing: 0) {
                     titre
 
-                    Spacer().frame(height: 20)
-                    sectionParisBonus
+                    switch donnees.etat {
+                    case .chargement:
+                        Spacer().frame(height: 20)
+                        ChargementPronos()
 
-                    Spacer().frame(height: 20)
-                    ModeEmploi()
+                    case .echec(let erreur):
+                        Spacer().frame(height: 20)
+                        EchecChargement(erreur: erreur) {
+                            Task { await donnees.charger() }
+                        }
 
-                    ForEach(MarcheCote.allCases) { marche in
-                        Spacer().frame(height: 24)   // changement de sujet (§4.6)
-                        sectionMarche(marche)
+                    case .pret(let lu):
+                        Spacer().frame(height: 20)
+                        sectionParisBonus
+
+                        Spacer().frame(height: 20)
+                        ModeEmploi()
+
+                        if lu.gp.marches.isEmpty {
+                            Spacer().frame(height: 24)
+                            Text("Aucune cote n'est encore publiée pour ce Grand Prix.")
+                                .font(.corps)
+                                .foregroundColor(.secondaire)       // 9,32:1 sur le beige
+                                .frame(maxWidth: .infinity)
+                                .multilineTextAlignment(.center)
+                        }
+
+                        ForEach(lu.gp.marches) { marche in
+                            Spacer().frame(height: 24)   // changement de sujet (§4.6)
+                            sectionMarche(marche)
+                        }
                     }
                 }
                 .padding(.horizontal, margeLaterale)
@@ -293,6 +272,8 @@ struct CotesView: View {
         .overlay(alignment: .bottomLeading) {
             if modeAdmin { PastillePrevisualisation().padding(.leading, margeLaterale) }
         }
+        // Rechargé à chaque apparition — y compris au retour de la saisie (§7.6).
+        .task { await donnees.charger() }
     }
 
     // MARK: - Titre
@@ -306,8 +287,7 @@ struct CotesView: View {
 
             // **`grisSecondaire` et non `texteDoux`** : sur le beige `#F5F0EB`, `#999999`
             // ne vaut que 2,52:1, sous le plancher de 4,5:1 d'un texte ordinaire.
-            // `#6B6B6B` y tient 4,71:1 pour un gris que l'œil ne distingue pas du premier.
-            Text(sousTitre)
+            Text(grandPrix.sousTitre)
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
         }
@@ -315,17 +295,15 @@ struct CotesView: View {
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Mes paris bonus
+    // MARK: - Mes favoris
 
-    /// Le panier du joueur : ce qu'il a mis de côté, et ce dans quoi ``PronosView``
-    /// puisera. La rangée défile à l'horizontale, calée sur les pastilles — un doigt qui la
-    /// pousse la laisse sur une pastille entière, jamais coupée en deux.
+    /// Le panier du joueur : ce qu'il a épinglé, et ce dans quoi ``PronosView`` puisera.
+    /// La rangée défile à l'horizontale, calée sur les pastilles.
     private var sectionParisBonus: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                // **L'encre est `secondaire` (9,32:1), pas `texteDoux`** : c'est le titre
-                // que la composition veut bien visible, et `#999999` ne tient pas sur le
-                // beige. Même correction qu'au bandeau de saison.
+                // **L'encre est `secondaire` (9,32:1), pas `texteDoux`** : `#999999` ne
+                // tient pas sur le beige.
                 Text("Mes paris bonus")
                     .font(.label)
                     .tracking(Tracking.label)
@@ -334,8 +312,8 @@ struct CotesView: View {
 
                 Spacer(minLength: 12)
 
-                if !parisBonus.isEmpty {
-                    Text("\(parisBonus.count) \(parisBonus.count > 1 ? "paris" : "pari")")
+                if !favoris.isEmpty {
+                    Text("\(favoris.count) \(favoris.count > 1 ? "favoris" : "favori")")
                         .font(.custom("HelveticaNeue", size: 12))
                         .foregroundColor(.grisSecondaire)
                         .contentTransition(.numericText())
@@ -343,10 +321,14 @@ struct CotesView: View {
             }
             .padding(.horizontal, 4)
 
-            if parisBonus.isEmpty {
+            if favoris.isEmpty {
                 zoneVideParisBonus
             } else {
                 rangeeParisBonus
+            }
+
+            if let erreurFavori {
+                ErreurEnLigne(erreur: erreurFavori)
             }
         }
     }
@@ -354,13 +336,15 @@ struct CotesView: View {
     private var rangeeParisBonus: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(parisBonus) { pari in
-                    ChipPariBonus(pari: pari) { retirer(pari) }
+                ForEach(favoris) { favori in
+                    ChipPariBonus(favori: favori) { retirer(favori) }
                 }
             }
             .padding(.horizontal, margeLaterale)
             .padding(.vertical, 2)
+            .scrollTargetLayout()
         }
+        .scrollTargetBehavior(.viewAligned)
         // La rangée annule la marge de l'écran pour que les pastilles glissent d'un bord à
         // l'autre, et la remet en rembourrage : c'est ce qui fait qu'aucune n'est déjà
         // coupée à l'arrivée.
@@ -368,9 +352,7 @@ struct CotesView: View {
     }
 
     /// La zone vide. **L'ambre y est décoratif** — l'étoile est masquée à l'assistance
-    /// vocale et c'est la phrase qui porte seule le sens : `#E8A020` sur le blanc du bloc
-    /// ne vaut que 2,2:1, sous le plancher de 3:1 d'un élément graphique porteur de sens.
-    /// L'étoile qu'on touche vraiment, elle, est mesurée à 3,4:1 dans sa carte.
+    /// vocale et c'est la phrase qui porte seule le sens.
     private var zoneVideParisBonus: some View {
         VStack(spacing: 10) {
             Image("icone-etoile")
@@ -394,19 +376,19 @@ struct CotesView: View {
 
     // MARK: - Un marché
 
-    private func sectionMarche(_ marche: MarcheCote) -> some View {
+    private func sectionMarche(_ marche: MarcheCotes) -> some View {
         VStack(spacing: 12) {
             enTeteMarche(marche)
 
             LazyVGrid(columns: [GridItem(spacing: 12), GridItem(spacing: 12)], spacing: 12) {
-                ForEach(marche.cotes, id: \.pilote.id) { cote in
+                ForEach(marche.cotes) { cote in
                     CarteCote(
-                        pilote: cote.pilote,
+                        nom: cote.pilote,
                         points: cote.points,
-                        retenu: estRetenu(marche, cote.pilote),
-                        sature: sature && !estRetenu(marche, cote.pilote)
+                        couleurEcurie: GrillePilotes.couleurEcurie(de: cote.pilote),
+                        retenu: estEpingle(cote)
                     ) {
-                        basculer(marche, cote.pilote, points: cote.points)
+                        basculer(cote, dans: marche)
                     }
                 }
             }
@@ -414,33 +396,32 @@ struct CotesView: View {
     }
 
     /// L'en-tête du marché. **La pastille est toujours rendue, y compris à zéro** : une
-    /// pastille qui apparaîtrait au premier pari bonus ferait sauter l'en-tête sous le
-    /// doigt qui vient de l'ajouter.
-    private func enTeteMarche(_ marche: MarcheCote) -> some View {
-        let compte = parisBonus.filter { $0.marche == marche }.count
+    /// pastille qui apparaîtrait au premier favori ferait sauter l'en-tête sous le doigt.
+    private func enTeteMarche(_ marche: MarcheCotes) -> some View {
+        let compte = favoris.filter { $0.marche == marche.marche }.count
+        let libelle = MarcheCote.libelle(de: marche)
+        let aplat = MarcheCote.aplat(slug: marche.marche)
 
         return HStack(spacing: 12) {
-            Text(marche.libelle)
+            Text(libelle)
                 .font(.custom("HelveticaNeue-Medium", size: 13))
                 .tracking(0.5)
                 .textCase(.uppercase)
-                .foregroundColor(.white)          // 10,88:1 · 11,04:1
+                .foregroundColor(.white)          // 10,88:1 · 11,04:1 · 11,6:1
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 8)
 
             HStack(spacing: 5) {
-                // La coche, et non un `+` : la pastille compte ce qui est **déjà** ajouté,
-                // elle ne propose rien. Un `+` inviterait à appuyer sur un en-tête qui ne
-                // bascule rien.
+                // La coche, et non un `+` : la pastille compte ce qui est **déjà** épinglé.
                 Image(systemName: "checkmark")
                     .font(.system(size: 10, weight: .bold))
                 Text("\(compte)")
                     .font(.custom("HelveticaNeue-Medium", size: 12))
                     .contentTransition(.numericText())
             }
-            .foregroundColor(marche.aplat)        // l'aplat sur du blanc : 10,88:1 · 9,40:1
+            .foregroundColor(aplat)               // l'aplat sur du blanc
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(Color.surface)
@@ -451,27 +432,23 @@ struct CotesView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             ZStack {
-                marche.aplat
+                aplat
                 LueurHaute()
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
         .ombreAplat()                             // aplat de couleur (§4.7)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Marché \(marche.libelle). \(compte) pari bonus ajouté\(compte > 1 ? "s" : "").")
+        .accessibilityLabel("Marché \(libelle). \(compte) favori\(compte > 1 ? "s" : "").")
     }
 
     // MARK: - Barre d'action
 
-    /// La validation est **collée en bas** : sur un écran qui déroule quarante-quatre
-    /// cartes, un bouton en fin de page obligerait à redescendre à chaque changement d'avis.
+    /// La saisie est **collée en bas**. Le bouton **nomme sa destination** et reste actif
+    /// sans favori : les paris bonus sont facultatifs, trois est un maximum, pas un quota.
     private var barreAction: some View {
-        let libelle = parisBonus.count > 1 ? "paris" : "pari"
-
-        return NavigationLink(value: EtapePronos.pronos(
-            nom: nomGrandPrix, slug: slugGrandPrix, sousTitre: sousTitre, bonus: parisBonus
-        )) {
-            Text("Continuer · \(parisBonus.count) \(libelle)")
+        NavigationLink(value: EtapePronos.pronos(grandPrix)) {
+            Text("Saisir mes pronos")
                 .font(.custom("HelveticaNeue-Medium", size: 16))
                 .foregroundColor(.white)          // 10,88:1 sur #800111
                 .frame(maxWidth: .infinity)
@@ -483,11 +460,8 @@ struct CotesView: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
-                .opacity(parisBonus.isEmpty ? 0.45 : 1)
         }
         .buttonStyle(StyleAppui(.bouton))
-        .disabled(parisBonus.isEmpty)
-        .animation(Mouvement.entree(0.18), value: parisBonus.isEmpty)
         .padding(.horizontal, margeLaterale)
         .padding(.top, 10)
         .padding(.bottom, 10)
@@ -495,32 +469,45 @@ struct CotesView: View {
         .ombreFlottant()
     }
 
-    // MARK: - La règle des trois paris
+    // MARK: - L'épinglage
 
-    private var sature: Bool { parisBonus.count >= Self.bonusMaximum }
-
-    private func estRetenu(_ marche: MarcheCote, _ pilote: PiloteMock) -> Bool {
-        parisBonus.contains { $0.marche == marche && $0.pilote == pilote.nom }
+    private func estEpingle(_ cote: Cote) -> Bool {
+        favoris.contains { $0.idOutcomeUnibet == cote.id }
     }
 
-    /// L'ajout et le retrait passent par **le même geste sur la même étoile** : rien ne
-    /// s'ajoute ici qui ne se retire au même endroit.
-    private func basculer(_ marche: MarcheCote, _ pilote: PiloteMock, points: Int) {
-        let pari = PariBonus(marche: marche, pilote: pilote.nom, points: points)
-
-        withAnimation(mouvementReduit ? .none : Mouvement.entree(0.22)) {
-            if let rang = parisBonus.firstIndex(of: pari) {
-                parisBonus.remove(at: rang)
-            } else if !sature {
-                parisBonus.append(pari)
+    /// L'ajout et le retrait passent par **le même geste sur la même étoile**, et par la
+    /// même écriture serveur que la croix d'une pastille.
+    private func basculer(_ cote: Cote, dans marche: MarcheCotes) {
+        erreurFavori = nil
+        Task {
+            let erreur = await donnees.basculerFavori(cote, dans: marche)
+            withAnimation(mouvementReduit ? .none : Mouvement.entree(0.22)) {
+                erreurFavori = erreur
             }
         }
     }
 
-    private func retirer(_ pari: PariBonus) {
-        withAnimation(mouvementReduit ? .none : Mouvement.entree(0.22)) {
-            parisBonus.removeAll { $0 == pari }
-        }
+    /// La croix d'une pastille : la même bascule, vue de l'autre bout. Une cote retirée
+    /// par le bookmaker se dépunaise quand même — son marché est reconstitué du favori.
+    private func retirer(_ favori: Favori) {
+        let cote = Cote(pilote: favori.pilote ?? favori.idOutcomeUnibet,
+                        points: favori.points ?? 0, id: favori.idOutcomeUnibet)
+        let marche = MarcheCotes(marche: favori.marche ?? "", libelle: favori.libelle ?? "",
+                                 cotes: [])
+        basculer(cote, dans: marche)
+    }
+}
+
+// MARK: - L'attente
+
+/// Le spinner des écrans de pronostics : premier chargement seulement — les données déjà
+/// affichées restent en place pendant un rechargement (§7.6).
+struct ChargementPronos: View {
+    var body: some View {
+        ProgressView()
+            .tint(.primaire)
+            .frame(maxWidth: .infinity, minHeight: 120)
+            .accessibilityLabel("Chargement des cotes")
     }
 }
 
@@ -543,10 +530,11 @@ struct CotesView: View {
 /// exigé d'un élément graphique porteur de sens, qu'elle est ici.
 private struct CarteCote: View {
 
-    let pilote: PiloteMock
+    let nom: String
     let points: Int
+    /// La teinte d'écurie, `nil` hors pilote connu (``GrillePilotes``).
+    let couleurEcurie: Color?
     let retenu: Bool
-    let sature: Bool
     let onBasculer: () -> Void
 
     /// La hauteur des cartes, écrite une fois. C'est celle de la version web (90 px),
@@ -567,14 +555,14 @@ private struct CarteCote: View {
     var body: some View {
         Button(action: onBasculer) {
             VStack(alignment: .leading, spacing: 0) {
-                if let teinte = pilote.couleurEcurie {
+                if let teinte = couleurEcurie {
                     teinte.opacity(opaciteLisere)
                         .frame(height: 3)
                         .accessibilityHidden(true)
                 }
 
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(pilote.nom)
+                    Text(nom)
                         .font(.custom("HelveticaNeue-Medium", size: 15))
                         .foregroundColor(.texte)
                         .lineLimit(1)
@@ -607,7 +595,7 @@ private struct CarteCote: View {
             .background {
                 ZStack {
                     Color.surface
-                    if let teinte = pilote.couleurEcurie { teinte.opacity(opaciteFond) }
+                    if let teinte = couleurEcurie { teinte.opacity(opaciteFond) }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: Rayon.widget, style: .continuous))
@@ -616,14 +604,12 @@ private struct CarteCote: View {
                 EtoileParisBonus(actif: retenu)
                     .frame(width: 44, height: 44)   // plancher tactile iOS
             }
-            .opacity(sature ? 0.5 : 1)
         }
         .buttonStyle(StyleAppui(.grandeSurface))
-        .disabled(sature)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(pilote.nom), \(points) points")
-        .accessibilityValue(retenu ? "Pari bonus ajouté" : "Pas encore ajouté")
-        .accessibilityHint(retenu ? "Retirer de mes paris bonus" : "Ajouter à mes paris bonus")
+        .accessibilityLabel("\(nom), \(points) points")
+        .accessibilityValue(retenu ? "En favori" : "Pas en favori")
+        .accessibilityHint(retenu ? "Retirer de mes favoris" : "Ajouter à mes favoris")
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -714,21 +700,22 @@ struct EtoileParisBonus: View {
 /// rangée qui défile sous le pouce, une cible étroite se rate.
 private struct ChipPariBonus: View {
 
-    let pari: PariBonus
+    let favori: Favori
     let onRetirer: () -> Void
+
+    /// Le libellé de l'issue — l'identifiant brut quand la cote a disparu du Grand Prix.
+    private var nom: String { favori.pilote ?? favori.idOutcomeUnibet }
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(pari.pilote)
+            Text(nom)
                 .font(.custom("HelveticaNeue-Medium", size: 13))
                 .foregroundColor(.texte)
                 .lineLimit(1)
 
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(pari.points.enPoints)
+                Text(formaterPoints(favori.points))
                     .font(.custom("HelveticaNeue-Medium", size: 12))
-                Text("pts")
-                    .font(.custom("HelveticaNeue", size: 10))
             }
             .foregroundColor(.texte)              // 7,86:1 sur l'ambre
             .padding(.horizontal, 8)
@@ -743,7 +730,7 @@ private struct ChipPariBonus: View {
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(StyleAppui(.bouton))
-            .accessibilityLabel("Retirer \(pari.pilote) de mes paris bonus")
+            .accessibilityLabel("Retirer \(nom) de mes favoris")
         }
         .padding(.leading, 14)
         .frame(height: 44)
@@ -860,11 +847,9 @@ struct PastillePrevisualisation: View {
 
 #Preview {
     NavigationStack {
-        CotesView(
-            nomGrandPrix: "GP Azerbaïdjan",
-            slugGrandPrix: "azerbaidjan",
-            sousTitre: "Samedi 26 septembre · Départ 07h00"
-        )
-        .etapesPronos(libelleRetour: "Accueil") { }
+        CotesView(grandPrix: GrandPrixPronos(
+            id: UUID(), nom: "GP Azerbaïdjan", slug: "azerbaidjan",
+            sousTitre: "Samedi 26 septembre · Départ 07h00"))
+        .etapesPronos(libelleRetour: "Accueil", avancer: { _ in }) { }
     }
 }

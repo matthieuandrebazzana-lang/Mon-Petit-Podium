@@ -75,7 +75,8 @@ struct ChampionnatsView: View {
             // détail affiche à côté de son chevron de retour.
             .navigationTitle("Championnats")
             .toolbar(.hidden, for: .navigationBar)
-            .etapesPronos(libelleRetour: "Championnat") { cheminPronos.removeAll() }
+            .etapesPronos(libelleRetour: "Championnat",
+                          avancer: { cheminPronos.append($0) }) { cheminPronos.removeAll() }
             // Rechargée à chaque apparition, pas de cache de session (§7.6).
             .task { await mesChampionnats.charger() }
         }

@@ -75,7 +75,8 @@ struct AccueilView: View {
             // Pas de titre : le bouton de retour des écrans poussés d'ici affiche alors le
             // « Retour » générique du système, comme la capture de référence.
             .toolbar(.hidden, for: .navigationBar)
-            .etapesPronos(libelleRetour: "Accueil") { cheminPronos.removeAll() }
+            .etapesPronos(libelleRetour: "Accueil",
+                          avancer: { cheminPronos.append($0) }) { cheminPronos.removeAll() }
             // Rechargée à chaque apparition, pas de cache de session (§7.6).
             .task { await mesChampionnats.charger() }
             .task { await prochainGP.charger() }
@@ -336,11 +337,12 @@ private struct WidgetGrandPrix: View {
         // La destination est celle de la version web : `/cotes`, jamais la saisie — on
         // ajoute ses paris bonus avant de pronostiquer, et un bouton qui sauterait cette
         // étape mentirait sur son libellé.
-        NavigationLink(value: EtapePronos.cotes(
+        NavigationLink(value: EtapePronos.cotes(GrandPrixPronos(
+            id: grandPrix.id,
             nom: grandPrix.nom,
             slug: grandPrix.slug,
             sousTitre: "\(date) · Départ \(heureDepart)"
-        )) {
+        ))) {
             surface
         }
         .buttonStyle(StyleAppui(.grandeSurface))

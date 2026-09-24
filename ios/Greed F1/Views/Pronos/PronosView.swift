@@ -1,37 +1,55 @@
 import SwiftUI
 
-/// **Mes pronos** — la saisie des deux pronostics obligatoires, et le rappel des paris
-/// bonus retenus au tableau des cotes.
+/// **Mes pronos** — la saisie des deux pronostics obligatoires, et le choix des paris bonus
+/// parmi les favoris.
 ///
 /// Références visuelles : `Ressources/Screenshots/screen-25-pronos-haut.PNG` (vide) et
 /// `screen-26-pronos-remplis.PNG` (remplie).
 ///
-/// C'est le second des deux écrans de saisie. ``CotesView`` lui confie les paris bonus ;
-/// il n'en ajoute pas, il les montre — le geste d'ajout vit à l'écran précédent, et à un
-/// seul endroit.
-///
-/// > **Les données sont mockées.** Le compte à rebours est figé à 4j 14h 34min — aucun
-/// > `Timer` : l'écran ne calcule pas encore d'échéance, il en affiche une. La validation
-/// > ouvre une alerte ; la route `POST /pronostics` et l'écran récapitulatif
-/// > (`screen-27`) seront branchés à la passe API (`docs/swift-app.md` §5).
+/// Tout vient du serveur (`docs/swift-app.md` §7.6, étape 7) : les cotes et les favoris par
+/// Railway, **mes pronostics déjà enregistrés en direct** sous RLS, qui préremplissent
+/// l'écran **une seule fois** — un rechargement au retour du récapitulatif n'écrase jamais
+/// une saisie en cours. La validation envoie `POST …/pronostics` ; le récapitulatif n'est
+/// empilé **qu'après le `200`**.
 struct PronosView: View {
 
-    let nomGrandPrix: String
-    let slugGrandPrix: String
-    let sousTitre: String
-    let parisBonus: [PariBonus]
+    let grandPrix: GrandPrixPronos
+
+    /// Empile une étape du parcours — le récapitulatif, une fois l'écriture acceptée.
+    let avancer: (EtapePronos) -> Void
 
     private let margeLaterale: CGFloat = 16
 
+    @StateObject private var donnees: DonneesPronostics
+
     /// Ce qui est choisi, emplacement par emplacement. **Un dictionnaire et non trois
-    /// `@State`** : les trois emplacements obéissent à la même règle d'exclusion, et trois
-    /// variables séparées auraient fini par l'appliquer différemment.
-    @State private var choix: [EmplacementProno: PiloteMock] = [:]
+    /// `@State`** : les trois emplacements obéissent à la même règle d'exclusion.
+    @State private var choix: [EmplacementProno: Cote] = [:]
+
+    /// Les paris bonus retenus, **par `id_outcome_unibet`**, dans l'ordre d'ajout.
+    @State private var bonus: [String] = []
+
+    /// La saisie a été préremplie depuis mes pronostics enregistrés — une seule fois.
+    @State private var prerempli = false
 
     /// L'emplacement dont la feuille de choix est ouverte. `nil` quand elle est fermée.
     @State private var feuille: EmplacementProno?
 
+    @State private var envoi = false
+
+    /// Ce qui manque, ou le refus du serveur — **au-dessus du bouton**, jamais une alerte.
+    @State private var erreurEnvoi: ErreurAPI?
+
+    @Environment(\.accessibilityReduceMotion) private var mouvementReduit
+
     private let modeAdmin = false
+
+    init(grandPrix: GrandPrixPronos, avancer: @escaping (EtapePronos) -> Void) {
+        self.grandPrix = grandPrix
+        self.avancer = avancer
+        _donnees = StateObject(wrappedValue: DonneesPronostics(gpId: grandPrix.id,
+                                                              avecMesPronostics: true))
+    }
 
     var body: some View {
         ZStack {
@@ -42,20 +60,20 @@ struct PronosView: View {
                 VStack(spacing: 0) {
                     titre
 
-                    Spacer().frame(height: 12)
-                    BlocEcheance(libelle: "Ouverture dans")
+                    switch donnees.etat {
+                    case .chargement:
+                        Spacer().frame(height: 20)
+                        ChargementPronos()
 
-                    Spacer().frame(height: 24)   // changement de sujet (§4.6)
-                    titreSection("Obligatoires")
+                    case .echec(let erreur):
+                        Spacer().frame(height: 20)
+                        EchecChargement(erreur: erreur) {
+                            Task { await charger() }
+                        }
 
-                    Spacer().frame(height: 10)
-                    blocVainqueur
-
-                    Spacer().frame(height: 12)   // espacement entre blocs (§4.6)
-                    blocPodium
-
-                    Spacer().frame(height: 24)
-                    sectionParisBonus
+                    case .pret(let lu):
+                        contenu(lu)
+                    }
                 }
                 .padding(.horizontal, margeLaterale)
                 .padding(.top, 4)
@@ -64,20 +82,31 @@ struct PronosView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom, spacing: 0) { barreAction }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let lu = donnees.donnees { barreAction(lu) }
+        }
         .overlay(alignment: .bottomLeading) {
             if modeAdmin { PastillePrevisualisation().padding(.leading, margeLaterale) }
         }
         .sheet(item: $feuille) { emplacement in
             FeuilleChoixPilote(
                 emplacement: emplacement,
+                cotes: donnees.donnees?.gp.marche(emplacement.marche.slug)?.cotes ?? [],
                 choisi: choix[emplacement],
                 indisponibles: indisponibles(pour: emplacement)
-            ) { pilote in
-                choix[emplacement] = pilote
+            ) { cote in
+                choix[emplacement] = cote
+                erreurEnvoi = nil
                 feuille = nil
             }
         }
+        // Rechargé à chaque apparition, y compris au retour du récapitulatif (§7.6).
+        .task { await charger() }
+    }
+
+    private func charger() async {
+        await donnees.charger()
+        preremplir()
     }
 
     // MARK: - Titre
@@ -89,7 +118,7 @@ struct PronosView: View {
                 .tracking(Tracking.titre)
                 .foregroundColor(.texte)            // 15,37:1 sur le beige
 
-            Text(sousTitre)
+            Text(grandPrix.sousTitre)
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)   // 4,71:1 — `texteDoux` n'y tient que 2,52:1
         }
@@ -97,8 +126,43 @@ struct PronosView: View {
         .accessibilityElement(children: .combine)
     }
 
+    @ViewBuilder private func contenu(_ lu: DonneesPronostics.Donnees) -> some View {
+        Spacer().frame(height: 12)
+        BlocEcheance(horaires: lu.gp.horaires)
+
+        Spacer().frame(height: 24)   // changement de sujet (§4.6)
+        titreSection("Obligatoires")
+
+        if lu.gp.marche(MarcheCote.vainqueur.slug) == nil || lu.gp.marche(MarcheCote.podium.slug) == nil {
+            // Le serveur refuserait tout pronostic : le dire avant qu'on remplisse.
+            Spacer().frame(height: 10)
+            Text("Les cotes « Vainqueur » et « Podium » ne sont pas encore publiées pour ce Grand Prix.")
+                .font(.corps)
+                .foregroundColor(.secondaire)           // 9,32:1 sur le beige
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+        }
+
+        Spacer().frame(height: 10)
+        BlocObligatoire(marche: .vainqueur) {
+            emplacement(.vainqueur)
+        }
+
+        Spacer().frame(height: 12)   // espacement entre blocs (§4.6)
+        BlocObligatoire(marche: .podium) {
+            VStack(spacing: 8) {
+                emplacement(.podium1)
+                emplacement(.podium2)
+            }
+        }
+
+        Spacer().frame(height: 24)
+        sectionParisBonus(favoris: favorisTries(lu))
+    }
+
     /// Titre de section. **L'encre est `grisSecondaire`, pas `texteDoux`** : sur le beige
-    /// le premier mesure 4,71:1, le second 2,52:1 — sous le plancher d'un texte de 11 pt.
+    /// le premier mesure 4,71:1, le second 2,52:1.
     private func titreSection(_ texte: String) -> some View {
         Text(texte)
             .font(.label)
@@ -109,44 +173,23 @@ struct PronosView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Les deux blocs obligatoires
-
-    private var blocVainqueur: some View {
-        BlocObligatoire(marche: .vainqueur) {
-            emplacement(.vainqueur)
-        }
-    }
-
-    private var blocPodium: some View {
-        BlocObligatoire(marche: .podium) {
-            VStack(spacing: 8) {
-                emplacement(.podium1)
-                emplacement(.podium2)
-            }
-        }
-    }
-
-    /// **Les deux emplacements du podium ne sont pas numérotés.** Une pastille « 1er » /
-    /// « 2e » désignerait leur rang dans le bloc et non dans la course — alors qu'ils valent
-    /// les 2e et 3e places. Les numéroter laisserait croire à un ordre à respecter, qu'il
-    /// n'y a pas : la validation demande « ces deux pilotes sont-ils sur le podium ? »,
-    /// jamais « lequel devant ».
+    /// **Les deux emplacements du podium ne sont pas numérotés** : ils valent les 2e et 3e
+    /// places sans ordre entre eux (§6.3).
     private func emplacement(_ slot: EmplacementProno) -> some View {
-        EmplacementProno.Champ(
-            marche: slot.marche,
-            choisi: choix[slot],
-            points: choix[slot].map { slot.marche.points(de: $0) }
-        ) {
+        EmplacementProno.Champ(marche: slot.marche, choisi: choix[slot]) {
             feuille = slot
         }
     }
 
     // MARK: - Les paris bonus
 
-    /// Les paris bonus **retenus au tableau des cotes**. Ils s'affichent ici, ils ne s'y
-    /// ajoutent pas : le geste d'ajout vit à l'écran précédent, et à un seul endroit.
-    private var sectionParisBonus: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    /// Les favoris épinglés au tableau des cotes, **dans l'ordre de leurs marchés** — le même
+    /// qu'au tableau (``OrdreMarches``). On en retient jusqu'à trois ; l'épinglage, lui,
+    /// vit à l'écran précédent et à un seul endroit.
+    private func sectionParisBonus(favoris: [Favori]) -> some View {
+        let retenus = bonusRetenus(favoris)
+
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Mes paris bonus")
                     .font(.label)
@@ -157,9 +200,10 @@ struct PronosView: View {
                 Spacer(minLength: 12)
 
                 HStack(spacing: 0) {
-                    Text("\(parisBonus.count)")
+                    Text("\(retenus.count)")
                         .font(.custom("HelveticaNeue-Medium", size: 12))
                         .foregroundColor(.primaire)
+                        .contentTransition(.numericText())
                     Text(" sur \(CotesView.bonusMaximum) max")
                         .font(.custom("HelveticaNeue", size: 12))
                         .foregroundColor(.grisSecondaire)
@@ -167,12 +211,19 @@ struct PronosView: View {
             }
             .padding(.horizontal, 4)
 
-            if parisBonus.isEmpty {
+            if favoris.isEmpty {
                 zoneVide
             } else {
                 VStack(spacing: 8) {
-                    ForEach(parisBonus) { pari in
-                        CarteParisBonus(pari: pari)
+                    ForEach(favoris) { favori in
+                        let actif = retenus.contains(favori.idOutcomeUnibet)
+                        CarteParisBonus(
+                            favori: favori,
+                            actif: actif,
+                            sature: !actif && retenus.count >= CotesView.bonusMaximum
+                        ) {
+                            basculerBonus(favori.idOutcomeUnibet, favoris: favoris)
+                        }
                     }
                 }
             }
@@ -190,7 +241,7 @@ struct PronosView: View {
                 .font(.corps)
                 .foregroundColor(.texte)
 
-            Text("Ils se choisissent au tableau des cotes, avec l'étoile.")
+            Text("Ils se choisissent parmi les cotes épinglées au tableau des cotes, avec l'étoile.")
                 .font(.corpsSm)
                 .foregroundColor(.grisSecondaire)
                 .multilineTextAlignment(.center)
@@ -207,14 +258,19 @@ struct PronosView: View {
     // MARK: - Barre d'action
 
     /// Le total vit **dans la barre, au-dessus du bouton** : c'est le chiffre qui fait
-    /// changer d'avis, il doit bouger sous les yeux au moment du choix et non attendre le
-    /// récapitulatif.
+    /// changer d'avis. Il n'apparaît qu'une fois quelque chose de choisi.
     ///
-    /// Il n'apparaît **qu'une fois quelque chose de choisi** — « 0 pts » avant le premier
-    /// pilote se lirait comme un mauvais départ, et c'est ce que montre `screen-25`, où la
-    /// ligne est absente.
-    private var barreAction: some View {
-        VStack(spacing: 10) {
+    /// **Le bouton reste actif même quand la saisie est incomplète** (§7.1) : l'appui pose
+    /// le message juste au-dessus, à l'endroit où il se lit.
+    private func barreAction(_ lu: DonneesPronostics.Donnees) -> some View {
+        let total = total(lu)
+
+        return VStack(spacing: 10) {
+            if let erreurEnvoi {
+                ErreurEnLigne(erreur: erreurEnvoi)
+                    .transition(.opacity)
+            }
+
             if total > 0 {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Total si tout tombe")
@@ -240,30 +296,34 @@ struct PronosView: View {
                 .padding(.horizontal, 4)
             }
 
-            NavigationLink(value: EtapePronos.recap(
-                nom: nomGrandPrix, slug: slugGrandPrix, sousTitre: sousTitre,
-                obligatoires: lignesObligatoires, bonus: parisBonus
-            )) {
-                Text("Valider mes pronos")
-                    .font(.custom("HelveticaNeue-Medium", size: 16))
-                    .foregroundColor(.white)          // 10,88:1 sur #800111
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background {
-                        ZStack {
-                            Color.primaire
-                            LueurHaute()
-                        }
+            Button {
+                Task { await valider(lu) }
+            } label: {
+                ZStack {
+                    Text("Valider mes pronos")
+                        .opacity(envoi ? 0 : 1)
+                    if envoi {
+                        ProgressView().tint(.white)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
-                    .opacity(complet ? 1 : 0.45)
+                }
+                .font(.custom("HelveticaNeue-Medium", size: 16))
+                .foregroundColor(.white)          // 10,88:1 sur #800111
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background {
+                    ZStack {
+                        Color.primaire
+                        LueurHaute()
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
             }
             .buttonStyle(StyleAppui(.bouton))
-            .disabled(!complet)
-            .accessibilityHint(complet ? "" : "Choisis le vainqueur et les deux pilotes du podium.")
+            .disabled(envoi)
+            .accessibilityLabel(envoi ? "Enregistrement en cours" : "Valider mes pronos")
         }
-        .animation(Mouvement.entree(0.18), value: complet)
-        .animation(Mouvement.entree(0.18), value: total)
+        .animation(mouvementReduit ? .none : Mouvement.entree(0.18), value: total)
+        .animation(mouvementReduit ? .none : Mouvement.entree(0.18), value: erreurEnvoi)
         .padding(.horizontal, margeLaterale)
         .padding(.top, 10)
         .padding(.bottom, 10)
@@ -273,60 +333,144 @@ struct PronosView: View {
 
     // MARK: - La règle
 
-    /// La saisie est complète quand **les trois emplacements obligatoires** sont remplis.
-    /// Les paris bonus n'y entrent pas : ils sont facultatifs par définition.
-    private var complet: Bool {
-        EmplacementProno.allCases.allSatisfy { choix[$0] != nil }
+    private func favorisTries(_ lu: DonneesPronostics.Donnees) -> [Favori] {
+        OrdreMarches.trier(lu.favoris, slug: \.marche)
     }
 
-    /// Ce que rapporterait la grille si tout tombait : les trois pronostics obligatoires,
-    /// plus les paris bonus retenus.
-    ///
-    /// > Vérifié contre `screen-26-pronos-remplis.PNG` : Verstappen vainqueur (80) +
-    /// > Antonelli podium (12) + Hamilton podium (21) + Albon bonus (5000) + Sainz bonus
-    /// > (5000) = **10 113 pts**, exactement le total de la capture.
-    private var total: Int {
-        let obligatoires = EmplacementProno.allCases.reduce(0) { somme, slot in
-            somme + (choix[slot].map { slot.marche.points(de: $0) } ?? 0)
-        }
-        return obligatoires + parisBonus.reduce(0) { $0 + $1.points }
+    /// Les bonus **encore épinglés** — `bonusEpingles` du web. Un bonus enregistré dont la
+    /// cote a été dépunaisée depuis n'occupe aucune des trois places : sans ce filtre,
+    /// l'écran affichait « 3 sur 3 max » avec deux cases cochées.
+    private func bonusRetenus(_ favoris: [Favori]) -> [String] {
+        let epingles = Set(favoris.map(\.idOutcomeUnibet))
+        return bonus.filter { epingles.contains($0) }
     }
 
-    /// Les trois emplacements obligatoires, dans l'ordre, tels que le récapitulatif les
-    /// écrit. **Construits ici** : c'est cet écran qui tient la grille, et le
-    /// récapitulatif qui la montre — lui laisser lire le dictionnaire des choix aurait
-    /// donné deux endroits où l'ordre des lignes se décide.
-    private var lignesObligatoires: [LigneRecap] {
-        EmplacementProno.allCases.compactMap { slot in
-            choix[slot].map {
-                LigneRecap(marche: slot.marche, pilote: $0.nom,
-                           points: slot.marche.points(de: $0), bonus: false)
+    /// Le maximum est une limite, pas un quota : au-delà, l'appui ne fait rien plutôt que
+    /// de remplacer en douce un bonus déjà choisi.
+    private func basculerBonus(_ id: String, favoris: [Favori]) {
+        erreurEnvoi = nil
+        withAnimation(mouvementReduit ? .none : Mouvement.entree(0.22)) {
+            if let rang = bonus.firstIndex(of: id) {
+                bonus.remove(at: rang)
+            } else if bonusRetenus(favoris).count < CotesView.bonusMaximum {
+                bonus.append(id)
             }
         }
     }
 
-    /// Les pilotes qu'un emplacement ne peut plus proposer.
+    /// Ce que rapporterait la grille si tout tombait : chaque pronostic pour sa cote, le
+    /// podium pour **la somme de ses deux pilotes** (§6.3), plus les bonus retenus.
+    private func total(_ lu: DonneesPronostics.Donnees) -> Int {
+        let obligatoires = choix.values.reduce(0) { $0 + $1.points }
+        let retenus = Set(bonusRetenus(lu.favoris))
+        return obligatoires + lu.favoris
+            .filter { retenus.contains($0.idOutcomeUnibet) }
+            .reduce(0) { $0 + ($1.points ?? 0) }
+    }
+
+    /// Les pilotes qu'un emplacement ne peut plus proposer, **par ``ClePilote``** : un même
+    /// pilote n'a pas le même identifiant au vainqueur et au podium.
     ///
-    /// **Un pilote ne peut pas occuper deux emplacements à la fois** : pronostiquer
-    /// Verstappen vainqueur *et* Verstappen 2e du podium serait se contredire, et la
-    /// validation du backend le refuserait. La feuille de choix le montre donc barré plutôt
-    /// que de laisser composer une grille impossible puis de la rejeter.
+    /// L'exclusion est **réactive et non destructive** : changer de vainqueur rend aussitôt
+    /// l'ancien aux listes, sans vider les sélections déjà faites — la validation nomme
+    /// celle qui est devenue conflictuelle.
     private func indisponibles(pour slot: EmplacementProno) -> Set<String> {
-        Set(
-            EmplacementProno.allCases
-                .filter { $0 != slot }
-                .compactMap { choix[$0]?.nom }
-        )
+        Set(EmplacementProno.allCases
+            .filter { $0 != slot }
+            .compactMap { choix[$0].map { ClePilote.de($0.pilote) } })
+    }
+
+    /// Un même pilote occupe deux emplacements — vainqueur changé après le podium.
+    private var conflit: Bool {
+        let cles = EmplacementProno.allCases.compactMap { choix[$0].map { ClePilote.de($0.pilote) } }
+        return Set(cles).count < cles.count
+    }
+
+    /// Préremplissage depuis mes pronostics enregistrés, **une seule fois**.
+    private func preremplir() {
+        guard !prerempli, let lu = donnees.donnees else { return }
+        prerempli = true
+        let miens = lu.miens ?? []
+
+        if let vainqueur = miens.first(where: { $0.type == "vainqueur" }),
+           let cote = lu.gp.cote(vainqueur.idOutcomeUnibet)?.cote {
+            choix[.vainqueur] = cote
+        }
+        if let podium = miens.first(where: { $0.type == "podium" })?.podium {
+            if let cote = lu.gp.cote(podium.0)?.cote { choix[.podium1] = cote }
+            if let cote = lu.gp.cote(podium.1)?.cote { choix[.podium2] = cote }
+        }
+        bonus = miens.filter { $0.type == "bonus" }.map(\.idOutcomeUnibet)
+    }
+
+    // MARK: - La validation
+
+    private func refuser(_ message: String) {
+        erreurEnvoi = .serveur(statut: nil, message: message)
+    }
+
+    private func valider(_ lu: DonneesPronostics.Donnees) async {
+        erreurEnvoi = nil
+
+        // **La fermeture est vérifiée ici ET en base** : c'est la base qui fait foi, et un
+        // `423` peut encore arriver alors que l'horloge du téléphone disait ouvert.
+        if lu.gp.horaires.echeance().ferme {
+            refuser("Les pronostics de ce Grand Prix sont fermés : la course est partie.")
+            return
+        }
+        guard let vainqueur = choix[.vainqueur] else {
+            refuser("Choisis d'abord ton vainqueur.")
+            return
+        }
+        guard let podium1 = choix[.podium1], let podium2 = choix[.podium2] else {
+            refuser("Le podium demande deux pilotes.")
+            return
+        }
+        guard !conflit else {
+            refuser("Ton vainqueur est déjà sur le podium : choisis deux autres pilotes.")
+            return
+        }
+
+        let retenus = bonusRetenus(lu.favoris)
+        envoi = true
+        defer { envoi = false }
+        do {
+            try await donnees.enregistrer(CorpsPronostics(
+                vainqueur: vainqueur.id,
+                podium: .init(pilote_1: podium1.id, pilote_2: podium2.id),
+                bonus: retenus))
+        } catch is CancellationError {
+            return
+        } catch {
+            erreurEnvoi = (error as? ErreurAPI) ?? .serveur(statut: nil, message: nil)
+            return
+        }
+
+        // Le récapitulatif montre **exactement ce qui vient d'être accepté** : le serveur a
+        // écrit ces identifiants-là, dans une seule transaction.
+        let lignesBonus = favorisTries(lu)
+            .filter { retenus.contains($0.idOutcomeUnibet) }
+            .map { LigneRecap(genre: .bonus, libelle: $0.libelle ?? "Bonus",
+                              pilote: $0.pilote ?? $0.idOutcomeUnibet, points: $0.points) }
+        let grille = GrilleEnregistree(
+            horaires: lu.gp.horaires,
+            obligatoires: [
+                LigneRecap(genre: .vainqueur, libelle: MarcheCote.vainqueur.libelleCourt,
+                           pilote: vainqueur.pilote, points: vainqueur.points),
+                LigneRecap(genre: .podium, libelle: MarcheCote.podium.libelleCourt,
+                           pilote: podium1.pilote, points: podium1.points),
+                LigneRecap(genre: .podium, libelle: MarcheCote.podium.libelleCourt,
+                           pilote: podium2.pilote, points: podium2.points)
+            ],
+            bonus: lignesBonus)
+        avancer(.recap(grandPrix, grille))
     }
 }
 
 // MARK: - Les trois emplacements
 
-/// Les trois emplacements obligatoires d'une grille.
-///
-/// **Ils portent leur marché**, plutôt que de laisser l'écran s'en souvenir : c'est lui qui
-/// décide des points, de l'aplat et de l'encre douce, et un emplacement qui l'oublierait
-/// irait chercher la mauvaise cote.
+/// Les trois emplacements obligatoires d'une grille. **Ils portent leur marché** : c'est
+/// lui qui décide de la liste de cotes, de l'aplat et de l'encre douce.
 enum EmplacementProno: String, CaseIterable, Identifiable {
 
     case vainqueur
@@ -340,32 +484,26 @@ enum EmplacementProno: String, CaseIterable, Identifiable {
     }
 
     /// Le champ d'un emplacement : la valeur à gauche, les points à droite, le chevron au
-    /// bout. **Le choix, ou son absence, dit toujours la même chose au même endroit.**
-    ///
-    /// Contrastes mesurés, le champ vide étant la surface la plus sombre et donc celle qui
-    /// contraint pour l'encre douce, le champ rempli la plus claire pour le blanc :
+    /// bout.
     ///
     /// | | vide (blanc 15 %) | rempli (blanc 22 %) |
     /// |---|---|---|
     /// | Vainqueur | `#932734` · encre douce **4,69:1** | `#9F404C` · blanc **6,34:1** |
     /// | Podium | `#4C6584` · encre douce **4,82:1** | `#607792` · blanc **4,61:1** |
     ///
-    /// > **Les points d'un champ rempli sont en blanc plein, pas en encre douce.** Mesuré :
-    /// > le blanc à 85 % sur `#607792` ne vaut que 3,84:1, sous le plancher de 4,5:1. Ce
-    /// > sont la taille (13 contre 15) et la graisse qui distinguent alors les points du
-    /// > nom, pas l'opacité. Le chevron, lui, est un **élément graphique** (plancher 3:1) et
-    /// > garde l'encre douce, qui y tient 3,84:1.
+    /// > **Les points d'un champ rempli sont en blanc plein, pas en encre douce** : le blanc
+    /// > à 85 % sur `#607792` ne vaut que 3,84:1. Le chevron, élément graphique (3:1), garde
+    /// > l'encre douce.
     struct Champ: View {
 
         let marche: MarcheCote
-        let choisi: PiloteMock?
-        let points: Int?
+        let choisi: Cote?
         let onOuvrir: () -> Void
 
         var body: some View {
             Button(action: onOuvrir) {
                 HStack(spacing: 12) {
-                    Text(choisi?.nom ?? "Non sélectionné")
+                    Text(choisi?.pilote ?? "Non sélectionné")
                         .font(.custom(choisi == nil ? "HelveticaNeue" : "HelveticaNeue-Medium",
                                       size: 15))
                         .foregroundColor(choisi == nil ? marche.encreDouce : .white)
@@ -373,8 +511,8 @@ enum EmplacementProno: String, CaseIterable, Identifiable {
                         .minimumScaleFactor(0.85)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if let points {
-                        Text("\(points.enPoints) pts")
+                    if let choisi {
+                        Text(formaterPoints(choisi.points))
                             .font(.custom("HelveticaNeue", size: 13))
                             .foregroundColor(.white)
                             .lineLimit(1)
@@ -388,13 +526,13 @@ enum EmplacementProno: String, CaseIterable, Identifiable {
                 .padding(.vertical, 14)
                 .frame(minHeight: 44)               // plancher tactile iOS
                 // Surface posée *à l'intérieur* d'un bloc : rayon `champ`, donc **aucune
-                // ombre** (§4.7). Elle ne casse jamais le plan de son bloc.
+                // ombre** (§4.7).
                 .background(Color.white.opacity(choisi == nil ? 0.15 : 0.22))
                 .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
             }
             .buttonStyle(StyleAppui(.grandeSurface))
             .accessibilityLabel(marche.libelle)
-            .accessibilityValue(choisi.map { "\($0.nom), \((points ?? 0).enPoints) points" } ?? "Non sélectionné")
+            .accessibilityValue(choisi.map { "\($0.pilote), \($0.points) points" } ?? "Non sélectionné")
             .accessibilityHint("Choisir un pilote")
         }
     }
@@ -450,97 +588,6 @@ private struct BlocObligatoire<Contenu: View>: View {
     }
 }
 
-// MARK: - Le compte à rebours
-
-/// Les tuiles du compte à rebours, **mockées**. Un seul propriétaire : la saisie et le
-/// récapitulatif affichent la même échéance, et deux tables tenues séparément auraient
-/// fini par annoncer deux heures d'ouverture différentes à un écran d'intervalle.
-///
-/// Aucun `Timer` : l'écran ne calcule pas encore d'échéance, il en affiche une. Le calcul
-/// viendra avec la date de la course (`docs/swift-app.md` §5).
-enum EcheanceMock {
-
-    static let tuiles: [(valeur: String, label: String)] = [
-        ("04", "Jours"), ("14", "Heures"), ("34", "Minutes")
-    ]
-
-    /// Ce que l'assistance vocale lit à la place des trois tuiles.
-    static let libelleAccessible =
-        "4 jours, 14 heures et 34 minutes"
-}
-
-/// Le compte à rebours, et **ce qu'on pose éventuellement dessous** — le récapitulatif y
-/// glisse son bouton « Modifier mes pronos », la saisie n'y met rien.
-///
-/// Trois tuiles plutôt qu'une ligne : « 4j 14h 34min » demande de lire une phrase pour en
-/// extraire trois nombres, quand un chiffre posé sous son unité se lit d'un coup d'œil.
-/// C'est déjà l'arbitrage des deux cases de l'accueil.
-///
-/// **La carte prend le beige du fond, pas le blanc des autres cartes** : sur une surface
-/// blanche, trois aplats presque noirs se découperaient comme des trous. Sur le beige ils
-/// se lisent comme des objets posés, et c'est ``ombreBloc()`` qui dit alors que la carte
-/// est une carte.
-///
-/// > *Écart signalé.* La consigne du récapitulatif demandait un widget **blanc**. La
-/// > capture `screen-28-recap-bas.PNG` montre le même beige qu'à la saisie, et c'est
-/// > l'arbitrage ci-dessus : deux écrans qui montrent le même compte à rebours ne peuvent
-/// > pas le poser sur deux surfaces différentes.
-struct BlocEcheance<Pied: View>: View {
-
-    private let libelle: String
-    private let pied: Pied
-
-    init(libelle: String, @ViewBuilder pied: () -> Pied) {
-        self.libelle = libelle
-        self.pied = pied()
-    }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Text(libelle)
-                .font(.label)
-                .tracking(Tracking.label)
-                .textCase(.uppercase)
-                .foregroundColor(.grisSecondaire)
-
-            HStack(alignment: .top, spacing: 10) {
-                ForEach(Array(EcheanceMock.tuiles.enumerated()), id: \.offset) { rang, tuile in
-                    if rang > 0 { deuxPoints }
-                    TuileEcheance(valeur: tuile.valeur, label: tuile.label)
-                }
-            }
-
-            pied
-        }
-        .frame(maxWidth: .infinity)
-        .padding(20)
-        .background(Color.fondPrincipal)
-        .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
-        .ombreBloc()                                // rayon `bloc` → `ombreBloc` (§4.7)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(libelle) \(EcheanceMock.libelleAccessible).")
-    }
-
-    /// Le deux-points entre deux tuiles. **Décoratif** : les unités sont écrites sous
-    /// chaque tuile, il ne porte aucune information et reste hors de l'assistance vocale.
-    private var deuxPoints: some View {
-        VStack(spacing: 6) {
-            Circle().frame(width: 5, height: 5)
-            Circle().frame(width: 5, height: 5)
-        }
-        .foregroundColor(.secondaire.opacity(0.40))
-        .padding(.top, 34)
-        .accessibilityHidden(true)
-    }
-}
-
-extension BlocEcheance where Pied == EmptyView {
-    /// Le compte à rebours seul, sans rien dessous.
-    init(libelle: String) {
-        self.init(libelle: libelle) { EmptyView() }
-    }
-}
-
 // MARK: - Une tuile du compte à rebours
 
 /// Un nombre posé sous son unité. **Graisse 500** — `ios/CLAUDE.md` §3 n'en connaît que
@@ -576,77 +623,184 @@ private struct TuileEcheance: View {
     }
 }
 
-// MARK: - Une carte de pari bonus
 
-/// Un pari bonus retenu. **L'encre reste `#1A1A1A` sur l'ambre** : le blanc y tomberait à
-/// 2,2:1, quand l'encre du design system y tient **7,86:1**.
-private struct CarteParisBonus: View {
+// MARK: - Le compte à rebours
 
-    let pari: PariBonus
+/// Le compte à rebours, et **ce qu'on pose éventuellement dessous** — le récapitulatif y
+/// glisse son bouton « Modifier mes pronos », la saisie n'y met rien.
+///
+/// **Il ne décide jamais de ce qu'il annonce** : label, décompte et substitut viennent
+/// d'``EcheancePronostics``, la seule source (§6.4) — « Fermeture dans » pendant la saisie,
+/// « Pronostics · Fermés » après le départ. Une `TimelineView` à la seconde, **aucune
+/// animation** : un chiffre qui glisse chaque seconde attirerait l'œil pour rien.
+///
+/// Trois tuiles : jours · heures · minutes, puis heures · minutes · secondes dans le
+/// dernier jour — sous l'heure, les minutes seules ne suffisent plus à dire l'urgence.
+///
+/// **La carte prend le beige du fond, pas le blanc des autres cartes** : sur une surface
+/// blanche, trois aplats presque noirs se découperaient comme des trous.
+struct BlocEcheance<Pied: View>: View {
+
+    private let horaires: HorairesGP
+    private let pied: Pied
+
+    init(horaires: HorairesGP, @ViewBuilder pied: () -> Pied) {
+        self.horaires = horaires
+        self.pied = pied()
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                // `texte` à 75 % et non 70 % : mesuré, le 70 % de la version web compose
-                // `#58421C` sur l'ambre, soit 4,28:1 — sous le plancher de 4,5:1. À 75 % il
-                // donne `#4D3B1B` et 4,84:1.
-                Text(pari.marche.libelle)
-                    .font(.labelSm)
-                    .tracking(0.4)
+        TimelineView(.periodic(from: .now, by: 1)) { contexte in
+            let echeance = horaires.echeance(le: contexte.date)
+
+            VStack(spacing: 12) {
+                Text(echeance.label)
+                    .font(.label)
+                    .tracking(Tracking.label)
                     .textCase(.uppercase)
-                    .foregroundColor(.encreSecondaireAmbre)
-                    .lineLimit(1)
+                    .foregroundColor(.grisSecondaire)
 
-                Text(pari.pilote)
-                    .font(.custom("HelveticaNeue-Medium", size: 14))
-                    .foregroundColor(.texte)      // 7,86:1 sur l'ambre
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                if let restant = echeance.restant, echeance.texte != nil {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(Array(Self.tuiles(restant).enumerated()), id: \.offset) { rang, tuile in
+                            if rang > 0 { deuxPoints }
+                            TuileEcheance(valeur: tuile.valeur, label: tuile.label)
+                        }
+                    }
+                } else {
+                    Text(echeance.substitut)
+                        .font(.custom("HelveticaNeue-Medium", size: 28))
+                        .tracking(Tracking.titre)
+                        .foregroundColor(.texte)        // 15,37:1 sur le beige
+                }
+
+                pied
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Noir à 15 % sur l'ambre — la surface forte du design system côté encre
-            // foncée. L'encre `texte` y tient 6,4:1.
-            Text("\(pari.points.enPoints) pts")
-                .font(.custom("HelveticaNeue-Medium", size: 12))
-                .foregroundColor(.texte)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(Color.black.opacity(0.15))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .lineLimit(1)
-
-            // La rangée est **déjà ambre** : l'aplat ambre de la coche y disparaîtrait
-            // dans le fond. `inverse` échange les deux encres, et tient le même 7,86:1.
-            EtoileParisBonus(actif: true, inverse: true)
+            .frame(maxWidth: .infinity)
+            .padding(20)
+            .background(Color.fondPrincipal)
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
+            .ombreBloc()                                // rayon `bloc` → `ombreBloc` (§4.7)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("\(echeance.phrase).")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(minHeight: 44)
-        .background(Color.accent)
-        .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
-        .ombreCarte()
+    }
+
+    /// Les trois tuiles d'un décompte en secondes.
+    static func tuiles(_ secondes: TimeInterval) -> [(valeur: String, label: String)] {
+        let total = max(0, Int(secondes))
+        let (j, h, m, s) = (total / 86_400, total % 86_400 / 3600, total % 3600 / 60, total % 60)
+        let deux = { (n: Int) in String(format: "%02d", n) }
+        if j > 0 {
+            return [(deux(j), "Jours"), (deux(h), "Heures"), (deux(m), "Minutes")]
+        }
+        return [(deux(h), "Heures"), (deux(m), "Minutes"), (deux(s), "Secondes")]
+    }
+
+    /// Le deux-points entre deux tuiles. **Décoratif** : les unités sont écrites sous
+    /// chaque tuile.
+    private var deuxPoints: some View {
+        VStack(spacing: 6) {
+            Circle().frame(width: 5, height: 5)
+            Circle().frame(width: 5, height: 5)
+        }
+        .foregroundColor(.secondaire.opacity(0.40))
+        .padding(.top, 34)
+        .accessibilityHidden(true)
+    }
+}
+
+extension BlocEcheance where Pied == EmptyView {
+    /// Le compte à rebours seul, sans rien dessous.
+    init(horaires: HorairesGP) {
+        self.init(horaires: horaires) { EmptyView() }
+    }
+}
+
+// MARK: - Une carte de pari bonus
+
+/// Un favori, **ambre une fois retenu en pari bonus**, blanc sinon. Chaque bonus est son
+/// propre bloc : un mur ambre de vingt favoris ne dirait plus lesquels comptent.
+///
+/// **L'encre reste `#1A1A1A` sur l'ambre** : le blanc y tomberait à 2,2:1, l'encre du design
+/// system y tient **7,86:1**. Sur le blanc, l'étiquette de marché passe en `grisSecondaire`
+/// (5,33:1).
+private struct CarteParisBonus: View {
+
+    let favori: Favori
+    let actif: Bool
+    /// Trois bonus déjà retenus : celui-ci ne peut plus entrer.
+    let sature: Bool
+    let onBasculer: () -> Void
+
+    private var nom: String { favori.pilote ?? favori.idOutcomeUnibet }
+    private var marche: String { favori.libelle ?? "Cote retirée" }
+
+    var body: some View {
+        Button(action: onBasculer) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    // `texte` à 75 % sur l'ambre : 4,84:1 (le 70 % du web n'y tient que 4,28:1).
+                    Text(marche)
+                        .font(.labelSm)
+                        .tracking(0.4)
+                        .textCase(.uppercase)
+                        .foregroundColor(actif ? .encreSecondaireAmbre : .grisSecondaire)
+                        .lineLimit(1)
+
+                    Text(nom)
+                        .font(.custom("HelveticaNeue-Medium", size: 14))
+                        .foregroundColor(.texte)      // 7,86:1 sur l'ambre, 15,37:1 sur le blanc
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Noir à 15 % sur l'ambre (6,4:1), beige sur le blanc.
+                Text(formaterPoints(favori.points))
+                    .font(.custom("HelveticaNeue-Medium", size: 12))
+                    .foregroundColor(.texte)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(actif ? Color.black.opacity(0.15) : Color.fondPrincipal)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .lineLimit(1)
+
+                // La rangée retenue est **déjà ambre** : `inverse` échange les deux encres.
+                EtoileParisBonus(actif: actif, inverse: true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(minHeight: 44)
+            .background(actif ? Color.accent : Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
+            .ombreCarte()
+            .opacity(sature ? 0.5 : 1)
+        }
+        .buttonStyle(StyleAppui(.grandeSurface))
+        .disabled(sature)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Pari bonus, \(pari.marche.libelle), \(pari.pilote), \(pari.points) points")
+        .accessibilityLabel("\(marche), \(nom), \(formaterPoints(favori.points))")
+        .accessibilityValue(actif ? "Retenu en pari bonus" : "Non retenu")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
 // MARK: - La feuille de choix
 
-/// La liste des cotes d'un marché, en feuille modale.
+/// Les cotes d'un marché obligatoire, en feuille modale — la forme native d'un choix dans
+/// une liste longue, avec le geste de fermeture par glissement.
 ///
-/// **Une feuille et non un accordéon** : sur iOS, c'est la forme native d'un choix dans une
-/// liste longue — vingt-deux pilotes tiennent mal sous un champ, et la feuille apporte
-/// gratuitement le geste de fermeture par glissement et la poignée qui l'annonce.
-///
-/// Elle s'ouvre en hauteur moyenne : le bloc qu'on est en train de remplir reste visible
-/// derrière, ce qui garde le lien entre le champ touché et la liste qui s'ouvre.
+/// Un pilote déjà pris à un autre emplacement est **barré, pas retiré** : la liste ne
+/// saute pas sous le doigt, et le lien entre les deux emplacements reste visible.
 private struct FeuilleChoixPilote: View {
 
     let emplacement: EmplacementProno
-    let choisi: PiloteMock?
+    let cotes: [Cote]
+    let choisi: Cote?
+    /// Les ``ClePilote`` des pilotes pris ailleurs.
     let indisponibles: Set<String>
-    let onChoisir: (PiloteMock) -> Void
+    let onChoisir: (Cote) -> Void
 
     @Environment(\.dismiss) private var fermer
 
@@ -654,8 +808,8 @@ private struct FeuilleChoixPilote: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 8) {
-                    ForEach(GrilleMock.pilotes) { pilote in
-                        ligne(pilote)
+                    ForEach(cotes) { cote in
+                        ligne(cote)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -675,30 +829,29 @@ private struct FeuilleChoixPilote: View {
         .presentationDragIndicator(.visible)
     }
 
-    private func ligne(_ pilote: PiloteMock) -> some View {
-        let indisponible = indisponibles.contains(pilote.nom)
-        let actif = choisi?.nom == pilote.nom
+    private func ligne(_ cote: Cote) -> some View {
+        let actif = choisi?.id == cote.id
+        let indisponible = !actif && indisponibles.contains(ClePilote.de(cote.pilote))
 
         return Button {
-            onChoisir(pilote)
+            onChoisir(cote)
         } label: {
             HStack(spacing: 12) {
-                // Le liseré d'écurie, debout : c'est le même renfort que sur la carte de
-                // cote, et il ne porte pas seul l'information — le nom est écrit à côté.
-                if let teinte = pilote.couleurEcurie {
+                // Le liseré d'écurie, debout : un renfort, jamais le seul porteur du sens.
+                if let teinte = GrillePilotes.couleurEcurie(de: cote.pilote) {
                     Capsule()
                         .fill(teinte.opacity(0.60))
                         .frame(width: 3, height: 22)
                         .accessibilityHidden(true)
                 }
 
-                Text(pilote.nom)
+                Text(cote.pilote)
                     .font(.custom("HelveticaNeue-Medium", size: 15))
                     .foregroundColor(.texte)      // 15,37:1 sur le blanc
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text("\(emplacement.marche.points(de: pilote).enPoints) pts")
+                Text(formaterPoints(cote.points))
                     .font(.custom("HelveticaNeue-Medium", size: 13))
                     .foregroundColor(.primaire)   // 10,88:1 sur le blanc
                     .lineLimit(1)
@@ -720,29 +873,12 @@ private struct FeuilleChoixPilote: View {
     }
 }
 
-#Preview("Vide") {
+#Preview {
     NavigationStack {
         PronosView(
-            nomGrandPrix: "GP Azerbaïdjan",
-            slugGrandPrix: "azerbaidjan",
-            sousTitre: "Samedi 26 septembre · Départ 07h00",
-            parisBonus: []
+            grandPrix: GrandPrixPronos(id: UUID(), nom: "GP Azerbaïdjan", slug: "azerbaidjan",
+                                       sousTitre: "Samedi 26 septembre · Départ 07h00"),
+            avancer: { _ in }
         )
-        .etapesPronos(libelleRetour: "Accueil") { }
-    }
-}
-
-#Preview("Deux paris bonus") {
-    NavigationStack {
-        PronosView(
-            nomGrandPrix: "GP Azerbaïdjan",
-            slugGrandPrix: "azerbaidjan",
-            sousTitre: "Samedi 26 septembre · Départ 07h00",
-            parisBonus: [
-                PariBonus(marche: .vainqueur, pilote: "A.Albon", points: 5000),
-                PariBonus(marche: .vainqueur, pilote: "C.Sainz Jr", points: 5000)
-            ]
-        )
-        .etapesPronos(libelleRetour: "Accueil") { }
     }
 }

@@ -2078,7 +2078,7 @@ ci-dessous ; chaque étape ne dépend que des précédentes.
 | **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | **Stats (moi et membre) faites** (iOS 0.25.0) — `PATCH`, avatar, Administration, « Ses Grands Prix » à faire |
 | **5** | Calendrier : liste statique **croisée** avec `GET /scraper/cotes` → états réels **et `gp_id`** · GP suivant de l'accueil en lecture directe · **un seul calcul d'échéance** (§6.4) | **Fait** (iOS 0.26.0) |
 | **6** | Résultats : `GET /grands-prix/{id}/resultats` + mes pronostics en direct, puis `?championnat_id=` | **Classement de course fait** (iOS 0.27.0) — mes pronostics et `?championnat_id=` à faire |
-| **7** | Pronostics : `EtapePronos` porte le `gp_id` · cotes réelles · bonus = favoris serveur · `POST …/pronostics` avec `423` · destination du widget d'accueil | |
+| **7** | Pronostics : `EtapePronos` porte le `gp_id` · cotes réelles · bonus = favoris serveur · `POST …/pronostics` avec `423` · destination du widget d'accueil | **Fait** (iOS 0.28.0) — mode prévisualisation admin à faire |
 
 **Pourquoi cet ordre.** Les championnats d'abord : les écrans les plus vus, une seule route,
 de quoi éprouver la couche réseau sur un cas simple. Le calendrier avant résultats et
@@ -2218,6 +2218,25 @@ classement vide, `404` ou `gp_id` nul ⇒ « Résultats non disponibles » (pas 
 `LivreeEcurie.duLibelle`, transcription de `ALIAS_ECURIES` — **à tenir avec le web**.
 **« Mes résultats » n'est plus monté** (`SectionMesResultats`, code conservé) : il
 attend la lecture directe de mes pronostics ; `ResultatGPMock` est supprimé.
+
+**Étape 7, pronostics.** `EtapePronos` porte un `GrandPrixPronos` (`id`, nom, slug,
+sous-titre) ; l'accueil et le widget d'un championnat y mettent l'`id` réel. Un seul
+chargeur, `Services/DonneesPronostics.swift`, possédé par chaque écran (`@StateObject`,
+rappelé à chaque apparition) : `GET /grands-prix/{id}/cotes` + `GET …/favoris`, et pour la
+saisie **mes pronostics lus en direct** (`pronostics` + `pronostic_podium`, sous RLS) —
+premier échec l'emporte, spinner puis `EchecChargement`. `Models/Pronostics.swift` porte
+les modèles, ``ClePilote`` (exclusion croisée par libellé) et ``OrdreMarches``,
+transcription d'`ORDRE_MARCHES` — **à tenir avec le web**. Le tableau des cotes montre
+**tous les marchés** (aplat `secondaire` pour les bonus) ; l'étoile bascule un **favori
+serveur**, en optimiste avec retour arrière et `ErreurEnLigne`, **sans plafond**. La saisie
+se préremplit **une seule fois** ; les bonus se choisissent parmi les favoris encore
+épinglés (3 au maximum). Le bouton reste actif : fermeture (`EcheancePronostics.ferme`),
+vainqueur manquant, podium incomplet et conflit sont dits au-dessus de lui, puis
+`POST …/pronostics` ; un `423` affiche le message du serveur. **Le récapitulatif n'est
+empilé qu'après le `200`** (`avancer`, passé par `etapesPronos`), avec la grille envoyée ;
+`BlocEcheance` lit `EcheancePronostics` (`TimelineView` à la seconde). `GrilleMock`,
+`PariBonus` et `EcheanceMock` sont supprimés ; il reste `GrillePilotes`, la table
+pilote → écurie.
 ---
 
 ## 8. Références

@@ -2,29 +2,48 @@ import SwiftUI
 
 // MARK: - Une ligne du récapitulatif
 
-/// Un pronostic tel que le récapitulatif l'écrit : **le marché, le pilote, les points**, et
-/// s'il est bonus ou obligatoire.
+/// Un pronostic tel que le récapitulatif l'écrit : **l'étiquette, le pilote, les points**, et
+/// son genre — vainqueur, podium ou bonus.
 ///
-/// **Une seule forme pour les deux sections**, et non deux structures jumelles : les deux
-/// rangées se composent exactement pareil, seul l'aplat de l'étiquette change. Deux types
-/// distincts auraient divergé au premier ajustement de rembourrage.
+/// **Une seule forme pour les deux sections**, et non deux structures jumelles : seul
+/// l'aplat de l'étiquette change.
 struct LigneRecap: Identifiable, Hashable {
 
-    let marche: MarcheCote
-    let pilote: String
-    let points: Int
-    let bonus: Bool
+    enum Genre: String, Hashable { case vainqueur, podium, bonus }
 
-    var id: String { "\(bonus ? "bonus" : "obligatoire"):\(marche.rawValue):\(pilote)" }
+    let genre: Genre
+    /// « Vainqueur », « Podium », ou le libellé du marché bonus tel que le bookmaker l'écrit.
+    let libelle: String
+    let pilote: String
+    /// `nil` quand la cote a disparu depuis l'épinglage — « Cote retirée », jamais `0`.
+    let points: Int?
+
+    var bonus: Bool { genre == .bonus }
+
+    var id: String { "\(genre.rawValue):\(libelle):\(pilote)" }
 
     /// L'aplat de l'étiquette de points. L'ambre des paris bonus, sinon celui du marché —
     /// rouge pour le vainqueur, bleu ardoise pour le podium, comme à la saisie.
-    var aplat: Color { bonus ? .accent : marche.aplat }
+    var aplat: Color {
+        switch genre {
+        case .vainqueur: return MarcheCote.vainqueur.aplat
+        case .podium:    return MarcheCote.podium.aplat
+        case .bonus:     return .accent
+        }
+    }
 
     /// L'encre de cette étiquette. **L'ambre n'accepte que ``Color/texte``** (7,86:1) ; le
     /// blanc y tomberait à 2,2:1. Sur les deux autres aplats, le blanc tient 10,88:1 et
     /// 11,04:1.
     var encre: Color { bonus ? .texte : .white }
+}
+
+/// La grille **acceptée par le serveur** (`200` de `POST …/pronostics`), et de quoi
+/// décompter la fermeture. Elle voyage dans le chemin de navigation, d'où `Hashable`.
+struct GrilleEnregistree: Hashable {
+    let horaires: HorairesGP
+    let obligatoires: [LigneRecap]
+    let bonus: [LigneRecap]
 }
 
 // MARK: - L'écran
@@ -40,21 +59,15 @@ struct LigneRecap: Identifiable, Hashable {
 /// plus rien — il montre. Tout ce qui s'y modifie repasse par l'écran précédent, et le
 /// bouton « Modifier mes pronos » y ramène : **un seul endroit où l'on change d'avis**.
 ///
-/// > **Les données sont mockées.** La grille vient de ``PronosView``, le compte à rebours
-/// > d'``EcheanceMock``. Rien n'est envoyé : la route `POST /pronostics` sera branchée à la
-/// > passe API (`docs/swift-app.md` §5) — d'où le bandeau « Pronos enregistrés ! », qui
-/// > annonce pour l'instant un enregistrement qui n'a pas eu lieu.
+/// > **Il n'est empilé qu'après le `200`** de `POST …/pronostics` (``PronosView``) : le
+/// > bandeau « Pronos enregistrés ! » dit donc un enregistrement qui a eu lieu, et la grille
+/// > est exactement celle que le serveur a acceptée.
 struct RecapView: View {
 
-    let nomGrandPrix: String
-    let slugGrandPrix: String
-    let sousTitre: String
+    let grandPrix: GrandPrixPronos
 
-    /// Les trois emplacements obligatoires, dans l'ordre où ``PronosView`` les a remplis.
-    let obligatoires: [LigneRecap]
-
-    /// Les paris bonus retenus au tableau des cotes.
-    let parisBonus: [PariBonus]
+    /// Ce qui vient d'être enregistré.
+    let grille: GrilleEnregistree
 
     /// Ce que le bouton de retour **annonce** — « Accueil » depuis l'accueil, le nom du
     /// championnat depuis un championnat. Les deux entrées du parcours ne ramènent pas au
@@ -73,17 +86,14 @@ struct RecapView: View {
     /// Rembourrage de la carte de résumé. Mesuré sur `screen-28` : 48 px à 3×.
     private let rembourrageCarte: CGFloat = 16
 
-    private var lignesBonus: [LigneRecap] {
-        parisBonus.map {
-            LigneRecap(marche: $0.marche, pilote: $0.pilote, points: $0.points, bonus: true)
-        }
-    }
+    private var obligatoires: [LigneRecap] { grille.obligatoires }
+    private var lignesBonus: [LigneRecap] { grille.bonus }
 
     /// Ce que la grille rapporterait si tout tombait. **La même addition qu'à la saisie** —
     /// les trois obligatoires plus les paris bonus — et elle porte ici le nom que lui donne
     /// la capture : « total de points disponibles ».
     private var total: Int {
-        (obligatoires + lignesBonus).reduce(0) { $0 + $1.points }
+        (obligatoires + lignesBonus).reduce(0) { $0 + ($1.points ?? 0) }
     }
 
     var body: some View {
@@ -99,9 +109,9 @@ struct RecapView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         EnteteDrapeau(
-                            nom: nomGrandPrix,
-                            sousTitre: sousTitre,
-                            slug: slugGrandPrix,
+                            nom: grandPrix.nom,
+                            sousTitre: grandPrix.sousTitre,
+                            slug: grandPrix.slug,
                             retrait: proxy.safeAreaInsets.top,
                             libelleRetour: libelleRetour,
                             retour: retour
@@ -207,7 +217,7 @@ struct RecapView: View {
     /// blocs écrits séparément auraient fini par afficher deux échéances différentes à un
     /// écran d'intervalle.
     private var blocEcheance: some View {
-        BlocEcheance(libelle: "Ouverture dans") {
+        BlocEcheance(horaires: grille.horaires) {
             boutonModifier
         }
         .padding(.horizontal, margeLaterale)
@@ -349,7 +359,7 @@ private struct RangeeRecap: View {
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(ligne.marche.libelleCourt)
+                Text(ligne.libelle)
                     .font(.labelSm)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)
@@ -364,7 +374,7 @@ private struct RangeeRecap: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text("\(ligne.points.enPoints) pts")
+            Text(formaterPoints(ligne.points))
                 .font(.custom("HelveticaNeue-Medium", size: 14))
                 .foregroundColor(ligne.encre)
                 .lineLimit(1)
@@ -375,8 +385,8 @@ private struct RangeeRecap: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(ligne.bonus ? "Pari bonus, " : "")\(ligne.marche.libelleCourt), "
-            + "\(ligne.pilote), \(ligne.points) points"
+            "\(ligne.bonus ? "Pari bonus, " : "")\(ligne.libelle), "
+            + "\(ligne.pilote), \(formaterPoints(ligne.points))"
         )
     }
 }
@@ -519,36 +529,20 @@ private extension View {
 #Preview("Grille complète") {
     NavigationStack {
         RecapView(
-            nomGrandPrix: "GP Azerbaïdjan",
-            slugGrandPrix: "azerbaidjan",
-            sousTitre: "Samedi 26 septembre · Départ 07h00",
-            obligatoires: [
-                LigneRecap(marche: .vainqueur, pilote: "M.Verstappen", points: 80, bonus: false),
-                LigneRecap(marche: .podium, pilote: "AK.Antonelli", points: 12, bonus: false),
-                LigneRecap(marche: .podium, pilote: "L.Hamilton", points: 21, bonus: false)
-            ],
-            parisBonus: [
-                PariBonus(marche: .vainqueur, pilote: "A.Albon", points: 5000),
-                PariBonus(marche: .vainqueur, pilote: "C.Sainz Jr", points: 5000)
-            ],
-            libelleRetour: "Accueil",
-            retour: { }
-        )
-    }
-}
-
-#Preview("Sans pari bonus") {
-    NavigationStack {
-        RecapView(
-            nomGrandPrix: "GP Pays-Bas",
-            slugGrandPrix: "pays-bas",
-            sousTitre: "Dimanche 30 août · Départ 15h00",
-            obligatoires: [
-                LigneRecap(marche: .vainqueur, pilote: "L.Norris", points: 32, bonus: false),
-                LigneRecap(marche: .podium, pilote: "M.Verstappen", points: 8, bonus: false),
-                LigneRecap(marche: .podium, pilote: "C.Leclerc", points: 15, bonus: false)
-            ],
-            parisBonus: [],
+            grandPrix: GrandPrixPronos(id: UUID(), nom: "GP Azerbaïdjan", slug: "azerbaidjan",
+                                       sousTitre: "Samedi 26 septembre · Départ 07h00"),
+            grille: GrilleEnregistree(
+                horaires: HorairesGP(statut: "cotes_figees",
+                                     dateCourse: .now.addingTimeInterval(200_000),
+                                     dateQualifications: nil),
+                obligatoires: [
+                    LigneRecap(genre: .vainqueur, libelle: "Vainqueur", pilote: "M.Verstappen", points: 80),
+                    LigneRecap(genre: .podium, libelle: "Podium", pilote: "AK.Antonelli", points: 12),
+                    LigneRecap(genre: .podium, libelle: "Podium", pilote: "L.Hamilton", points: 21)
+                ],
+                bonus: [
+                    LigneRecap(genre: .bonus, libelle: "Top 6", pilote: "A.Albon", points: 50)
+                ]),
             libelleRetour: "Accueil",
             retour: { }
         )

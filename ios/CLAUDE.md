@@ -155,7 +155,8 @@ ios/
     │   ├── Championnat.swift    `Championnat`, `ProchainGP`, `PositionMembre`
     │   ├── GrandPrix.swift      `GrandPrixEnBase`, `SlugCircuit`, `EcheancePronostics` — LE calcul d'échéance
     │   ├── Membre.swift         une ligne de classement
-    │   └── ResultatsGP.swift    résultats d'une course : lignes, nom coupé, mention, livrée
+    │   ├── ResultatsGP.swift    résultats d'une course : lignes, nom coupé, mention, livrée
+    │   └── Pronostics.swift     cotes, favoris, mes pronostics, corps du POST, `ClePilote`, `OrdreMarches`
     ├── Services/
     │   ├── SupabaseManager.swift  chemin direct, sous RLS
     │   ├── APIClient.swift        chemin Railway : Bearer, décodage, réessais, réveil
@@ -165,6 +166,7 @@ ios/
     │   ├── CalendrierSaison.swift  `GET /scraper/cotes` — états et `gp_id` du calendrier
     │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil, lecture directe `grands_prix`
     │   ├── ResultatsGrandPrix.swift  `GET /grands-prix/{id}/resultats` — 404 / `disponible: false` ⇒ indisponible
+    │   ├── DonneesPronostics.swift  cotes + favoris (+ mes pronos en direct), bascule de favori, `POST …/pronostics`
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
     │   ├── ContentView.swift
@@ -195,9 +197,9 @@ ios/
     │   │   ├── ResultatsGPView.swift       classement officiel réel ; « Mes résultats » non monté
     │   │   └── NationalitesPilotes.swift   pilote → pays, contrepartie de `lib/nationalites.js`
     │   ├── Pronos/
-    │   │   ├── CotesView.swift      tableau des cotes + paris bonus, et `EtapePronos` — MOCKÉS
-    │   │   ├── PronosView.swift     saisie des deux pronostics obligatoires — MOCKÉE
-    │   │   └── RecapView.swift      récapitulatif après validation — MOCKÉ
+    │   │   ├── CotesView.swift      tous les marchés réels, étoile = favori serveur, `EtapePronos`
+    │   │   ├── PronosView.swift     saisie préremplie, bonus parmi les favoris, `POST` + `423`
+    │   │   └── RecapView.swift      récapitulatif, empilé seulement après le `200`
     │   └── Profil/
     │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue ; enregistrement pas encore branché
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
