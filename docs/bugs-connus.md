@@ -1607,3 +1607,36 @@ le marché n'était pas reconnu.
 
 Vérification attendue dans les logs Railway : plus aucune ligne
 `marché « …-les-2-voitures-dans-le-top-10 » non reconnu`.
+
+## 35. iOS — les zones de tap étaient décalées d'une carte sur l'autre (`ios 0.29.0`)
+
+**Symptôme.** Dans l'app native, taper une carte déclenchait **celle du dessous** :
+« Créer un championnat » ouvrait « Rejoindre », un championnat en ouvrait un autre, et un
+Grand Prix du calendrier ouvrait son voisin.
+
+**Cause réelle.** Ni une `ZStack` mal ordonnée, ni un lien imbriqué, ni un décalage de
+`ScrollView`. Les fonds des cartes posent une image en `scaledToFill` — le ``Damier`` des
+cartes de championnat et d'action, le drapeau des cartes du calendrier et du widget GP.
+Dans une `ZStack`, un `scaledToFill` impose sa **taille de remplissage** : le damier
+(542 × 420) réclamait 280 pt de haut dans une carte de 120, soit 80 pt de débord au-dessus
+et en dessous ; un drapeau 3:2 réclamait ~241 pt dans une carte de 200. Le `clipShape`
+de la carte rognait ce débord **à l'œil, pas au doigt** — `clipShape` et `clipped()` ne
+touchent pas au hit-testing. La carte suivante étant peinte par-dessus la précédente, son
+débord supérieur captait les taps du bas de sa voisine.
+
+C'est le même mécanisme que celui déjà mesuré sur le bandeau de `VuePisteView` — qui
+l'avait corrigé localement, sans que la leçon remonte au ``Damier`` lui-même.
+
+**Correctif.**
+- ``Damier`` pose son motif en `overlay` sur un `Color.clear`, rogné par `clipped()` : il
+  prend exactement la place qu'on lui propose, quel que soit son hôte.
+- `contentShape` de la forme visible sur chaque surface dont le fond porte un
+  `scaledToFill` : `CarteChampionnat`, `CarteAction`, la carte du calendrier, le widget GP
+  de l'accueil, et les deux pastilles photo (`Avatar`, `PastilleProfil`).
+
+### Ce qu'il ne faut pas refaire
+
+- **Un `clipShape` ne définit pas la cible.** Toute surface tappable dont le fond peut
+  déborder de son cadre porte une `contentShape` de sa forme visible.
+- **Jamais de `scaledToFill` nu dans une `ZStack` de fond** : l'`overlay` sur une couleur,
+  ou un `Color.clear`, ne change pas la taille de son hôte.

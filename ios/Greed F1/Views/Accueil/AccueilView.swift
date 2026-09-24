@@ -235,6 +235,8 @@ private struct Avatar: View {
         }
         .frame(width: diametre, height: diametre)
         .clipShape(Circle())
+        // Une photo en `scaledToFill` déborde du disque : la cible reste le disque.
+        .contentShape(Circle())
         .accessibilityLabel("Mon profil")
     }
 
@@ -325,6 +327,9 @@ private struct WidgetGrandPrix: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background { fond }
             .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
+            // Le drapeau en `scaledToFill` déborde du widget : `clipShape` le rogne à
+            // l'œil, pas au doigt. La cible est la forme visible, et rien d'autre.
+            .contentShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
             .ombreAplat()
     }
 

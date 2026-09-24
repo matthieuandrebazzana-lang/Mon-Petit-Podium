@@ -118,6 +118,11 @@ struct CarteChampionnat: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
+        // **La cible est la forme visible, et rien d'autre.** `clipShape` rogne le dessin,
+        // pas la zone de tap : sans cette ligne, tout ce qui déborde du cadre — le damier,
+        // la photo en `scaledToFill` — reste touchable, et la carte suivante, peinte
+        // par-dessus, vole le tap du bas de la précédente.
+        .contentShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
         .ombreAplat()
     }
 
@@ -249,6 +254,8 @@ struct CarteAction: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
+        // Même raison que ``CarteChampionnat`` : la cible est la forme visible.
+        .contentShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
         .ombreCarte()
         .accessibilityElement(children: .combine)
     }

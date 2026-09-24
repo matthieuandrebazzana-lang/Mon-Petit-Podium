@@ -34,15 +34,27 @@ enum Materiau {
 ///
 /// L'hôte doit porter son propre `clipShape` : sans lui le motif déborde des coins
 /// arrondis de la carte.
+///
+/// > **Le motif est posé en `overlay` sur un `Color.clear`, jamais nu.** Nu, un
+/// > `scaledToFill` impose sa *taille de remplissage* à la `ZStack` qui l'accueille :
+/// > une carte de 361 × 120 réclamait 280 pt de haut, et le fond débordait de 80 pt
+/// > au-dessus et en dessous. Le `clipShape` de la carte le cachait à l'œil, **pas au
+/// > doigt** : la carte suivante, peinte par-dessus, captait le tap du bas de la
+/// > précédente — « Créer un championnat » ouvrait « Rejoindre ». Un `Color.clear` prend
+/// > exactement la place qu'on lui propose, et le `clipped()` rogne le motif à ce cadre.
 struct Damier: View {
 
     /// `Materiau.damier` sur un aplat de couleur, `Materiau.damierDoux` sur du blanc.
     let opacite: Double
 
     var body: some View {
-        Image("texture-hexa")
-            .resizable()
-            .scaledToFill()
+        Color.clear
+            .overlay {
+                Image("texture-hexa")
+                    .resizable()
+                    .scaledToFill()
+            }
+            .clipped()
             .opacity(opacite)
             .allowsHitTesting(false)
             .accessibilityHidden(true)

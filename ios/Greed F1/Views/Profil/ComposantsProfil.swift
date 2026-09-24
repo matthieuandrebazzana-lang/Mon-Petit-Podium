@@ -35,6 +35,8 @@ struct PastilleProfil: View {
         }
         .frame(width: taille, height: taille)
         .clipShape(Circle())
+        // Une photo en `scaledToFill` déborde du disque : la cible reste le disque.
+        .contentShape(Circle())
     }
 
     /// Le blanc tient **≥ 10,35:1** sur les six teintes Pantone comme sur `#5A000C` : une

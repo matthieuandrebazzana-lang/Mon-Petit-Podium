@@ -301,6 +301,10 @@ private struct CarteGrandPrixSaison: View {
         .frame(height: hauteurCarte)
         .background { fond }
         .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
+        // **La cible est la forme visible.** Le drapeau en `scaledToFill` réclame ~241 pt
+        // de haut dans une carte de 200 : `clipShape` le rogne à l'œil, pas au doigt, et
+        // chaque carte volait ~20 pt à ses deux voisines — le tap ouvrait le GP d'à côté.
+        .contentShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
         .ombreAplat()
         // **`compositingGroup()` n'est pas décoratif, il est la condition de la ligne
         // suivante.** Sans lui, SwiftUI applique l'opacité **primitive par primitive** et
