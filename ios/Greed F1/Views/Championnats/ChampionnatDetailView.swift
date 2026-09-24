@@ -660,23 +660,24 @@ extension Membre {
     var numeroAffiche: String { String(numero ?? rang) }
 
     /// Le profil tel que ``ProfilMembreView`` l'attend, **de ce que le classement sait
-    /// seul**. Les statistiques qu'il ne sert pas s'affichent « – » : les calculer ici
-    /// serait les inventer. `GET /profils/{id}/stats` les remplira (étape 4 de
-    /// `docs/swift-app.md` §7.6).
+    /// seul** — affiché sans attendre. Les statistiques qu'il ne sert pas s'affichent « – »
+    /// sous le spinner : les calculer ici serait les inventer. `GET /profils/{id}/stats`
+    /// les remplace dès qu'il répond.
     var profil: MembreProfil {
         MembreProfil(
             identifiant: cleTeinte,
+            profilId: profilId,
             pseudo: pseudo,
             photo: avatarUrl,
             livree: livree,
             numero: numeroAffiche,
             grandsPrixJoues: nil,
             statistiques: [
-                StatistiqueProfil(valeur: "–", libelle: "Paris gagnés"),
-                StatistiqueProfil(valeur: "–", libelle: "Pts moy. / GP"),
-                StatistiqueProfil(valeur: meilleureCote.map(String.init) ?? "–",
+                StatistiqueProfil(valeur: StatistiqueProfil.absente, libelle: "Paris gagnés"),
+                StatistiqueProfil(valeur: StatistiqueProfil.absente, libelle: "Pts moy. / GP"),
+                StatistiqueProfil(valeur: meilleureCote.map(String.init) ?? StatistiqueProfil.absente,
                                   libelle: "Meilleur coup"),
-                StatistiqueProfil(valeur: "–", libelle: "Cote moy. tentée")
+                StatistiqueProfil(valeur: StatistiqueProfil.absente, libelle: "Cote moy. tentée")
             ]
         )
     }

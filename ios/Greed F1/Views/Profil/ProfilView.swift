@@ -5,9 +5,11 @@ import SwiftUI
 /// Références visuelles : `Ressources/Screenshots/screen-20-mon-profil-haut.PNG` et
 /// `screen-21-mon-profil-bas.PNG`, écran par écran.
 ///
-/// > **Les données sont mockées.** Aucun appel réseau : les quatre statistiques et la
-/// > livrée sont des valeurs en dur, reprises des captures pour que le rendu se compare à
-/// > elles. Seuls le pseudo, la photo et la déconnexion passent par ``AuthViewModel``.
+/// > **Deux sources.** L'identité et la voiture sont le profil que ``AuthViewModel`` lit en
+/// > direct sous RLS — le seul propriétaire du compte connecté. Les quatre statistiques
+/// > viennent de `GET /profils/{mon id}/stats` (``StatistiquesProfil``), la même route que
+/// > le profil d'un autre membre. L'enregistrement de la voiture (`PATCH /profils/moi`)
+/// > n'est pas encore branché : le bouton ne modifie que l'écran.
 ///
 /// **La voiture et les onze casques sont découpés des planches** (`ios/CLAUDE.md` §3) :
 /// rien n'est redessiné en SwiftUI. ``VueVoiture`` lit `voitures_perso.svg` et y substitue
@@ -26,22 +28,15 @@ struct ProfilView: View {
     /// La livrée telle qu'elle est en base. C'est **elle** qui dit si quelque chose a
     /// changé : comparer deux états vaut mieux qu'un drapeau « modifié » qu'un chemin
     /// oublierait de lever.
-    @State private var livreeEnregistree = Livree(
-        mode: .perso,
-        coque: "#CC0000",
-        ailerons: "#003087",
-        couleurTexte: "#00D2BE"
-    )
+    ///
+    /// Recopiée du profil lu (``synchroniserVoiture(_:)``) tant que rien n'a été touché.
+    @State private var livreeEnregistree = Livree()
+    @State private var livree = Livree()
 
-    @State private var livree = Livree(
-        mode: .perso,
-        coque: "#CC0000",
-        ailerons: "#003087",
-        couleurTexte: "#00D2BE"
-    )
+    @State private var numeroEnregistre = ""
+    @State private var numero = ""
 
-    @State private var numeroEnregistre = "33"
-    @State private var numero = "33"
+    @StateObject private var statistiques = StatistiquesProfil()
 
     /// **Un seul réglage déplié à la fois.** Quatre grilles ouvertes ensemble feraient du
     /// bloc un mur qu'on ne parcourt plus ; et refermer le précédent dit, sans un mot, que
@@ -52,19 +47,12 @@ struct ProfilView: View {
 
     private enum Reglage: Hashable { case skin, coque, ailerons, texte }
 
-    // MARK: - Données mockées
+    // MARK: - Pas encore branché
 
     /// **La section Administration ne se monte que pour un administrateur.** Tant que la
     /// colonne `is_admin` n'est pas lue, elle reste éteinte : une section d'outils affichée
     /// à tout le monde serait pire qu'absente.
     private let estAdmin = false
-
-    private let statistiques: [StatistiqueProfil] = [
-        StatistiqueProfil(valeur: "33%", libelle: "Paris gagnés"),
-        StatistiqueProfil(valeur: "31", libelle: "Pts moy. / GP"),
-        StatistiqueProfil(valeur: "25", libelle: "Meilleur coup"),
-        StatistiqueProfil(valeur: "46", libelle: "Cote moy. tentée")
-    ]
 
     // MARK: - Corps
 
@@ -111,6 +99,37 @@ struct ProfilView: View {
                 .padding(.bottom, 24)
             }
         }
+        .onAppear { synchroniserVoiture(viewModel.profil) }
+        .onChange(of: viewModel.profil) { _, profil in synchroniserVoiture(profil) }
+        // Relancé quand le compte arrive : un profil lu après l'ouverture de l'onglet
+        // n'attend pas le prochain passage pour ses statistiques.
+        .task(id: viewModel.profil?.id) { await chargerStatistiques() }
+    }
+
+    // MARK: - Chargement
+
+    /// Le profil n'a pas pu être lu au lancement : on le redemande avant de conclure
+    /// qu'il n'y a personne à interroger.
+    private func chargerStatistiques() async {
+        if viewModel.profil == nil { await viewModel.rechargerProfil() }
+        await statistiques.charger(profilId: viewModel.profil?.id)
+    }
+
+    /// Recopie la voiture du profil lu. **Jamais par-dessus un réglage en cours** : un
+    /// rechargement du profil ne doit pas effacer une couleur que le membre vient de choisir.
+    private func synchroniserVoiture(_ profil: Profil?) {
+        guard let profil, !aChange else { return }
+        let lue = Livree(mode: profil.livreeMode == .ecurie ? .ecurie : .perso,
+                         ecurie: profil.livreeEcurie,
+                         coque: profil.couleur1,
+                         ailerons: profil.couleur2,
+                         couleurTexte: profil.couleurTexte)
+        // `nil` = pas de numéro choisi : le champ reste vide, jamais « 0 ».
+        let numeroLu = profil.numero.map(String.init) ?? ""
+        livreeEnregistree = lue
+        livree = lue
+        numeroEnregistre = numeroLu
+        numero = numeroLu
     }
 
     // MARK: - En-tête
@@ -180,7 +199,9 @@ struct ProfilView: View {
     /// (``GrilleStatistiques``), et c'est ce qui permet de comparer les deux d'un coup
     /// d'œil sans relire les libellés.
     private var grilleStatistiques: some View {
-        GrilleStatistiques(statistiques: statistiques)
+        BlocStatistiques(etat: statistiques.etat) {
+            Task { await chargerStatistiques() }
+        }
     }
 
     // MARK: - Ma livrée

@@ -151,6 +151,7 @@ ios/
     ├── Models/
     │   ├── DecodageJSON.swift   `JSONDecoder.api` — le décodeur unique, dates ISO 8601
     │   ├── Profil.swift         `Profil` + `ModeLivree`
+    │   ├── StatsProfil.swift    stats d'un profil + `tuiles` — seul endroit qui les met en forme
     │   ├── Championnat.swift    `Championnat`, `ProchainGP`, `PositionMembre`
     │   └── Membre.swift         une ligne de classement
     ├── Services/
@@ -158,6 +159,7 @@ ios/
     │   ├── APIClient.swift        chemin Railway : Bearer, décodage, réessais, réveil
     │   ├── MesChampionnats.swift  `GET /championnats/moi` — propriétaire unique, accueil + onglet
     │   ├── ClassementChampionnat.swift  `GET /championnats/{id}/classement` — un appel, deux segments
+    │   ├── StatistiquesProfil.swift  `GET /profils/{id}/stats` — le sien comme celui d'un membre
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
     │   ├── ContentView.swift
@@ -192,9 +194,9 @@ ios/
     │   │   ├── PronosView.swift     saisie des deux pronostics obligatoires — MOCKÉE
     │   │   └── RecapView.swift      récapitulatif après validation — MOCKÉ
     │   └── Profil/
-    │       ├── ProfilView.swift         mon profil — données mockées
-    │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — MOCKÉ
-    │       └── ComposantsProfil.swift   pastille, en-tête et grille de stats, PARTAGÉS
+    │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue ; enregistrement pas encore branché
+    │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
+    │       └── ComposantsProfil.swift   pastille, en-tête, grille et `BlocStatistiques` (chargement/échec), PARTAGÉS
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)
     │   ├── Assets.xcassets/      les assets de §6

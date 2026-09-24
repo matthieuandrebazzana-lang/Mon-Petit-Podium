@@ -4,15 +4,19 @@ import SwiftUI
 
 /// Le profil d'un autre membre, tel que le classement le passe à l'écran.
 ///
-/// **Les statistiques arrivent déjà mises en forme.** Elles sont calculées là où vivent les
-/// chiffres bruts — le classement — et pas ici : l'écran qui affiche un pourcentage ne doit
-/// pas être aussi celui qui décide comment on l'arrondit, sinon le profil et le classement
-/// finiraient par ne plus dire la même chose du même membre.
+/// **Ce que le classement sait s'affiche tout de suite** : pseudo, voiture, numéro, et les
+/// statistiques qu'il sert déjà (le meilleur coup). Les quatre tuiles définitives viennent
+/// ensuite de `GET /profils/{id}/stats`, mises en forme par ``StatsProfil/tuiles`` — jamais
+/// par l'écran.
 struct MembreProfil {
 
     /// L'identifiant du compte. C'est de lui que se tire la teinte de la pastille, jamais
     /// du rang : un membre qui perd une place ne change pas de couleur.
     let identifiant: String
+
+    /// Le compte à interroger pour les statistiques. **`nil` pour un membre d'aperçu** :
+    /// aucun appel ne part, les tuiles provisoires restent.
+    var profilId: UUID?
 
     let pseudo: String
 
@@ -24,12 +28,12 @@ struct MembreProfil {
     let numero: String
 
     /// Grands Prix joués cette saison, pour la ligne « Ses Grands Prix ». **`nil` tant que
-    /// `GET /profils/{id}/stats` n'est pas branché** : la ligne dit alors la saison, pas
-    /// un « 0 GP joué » qui serait faux.
+    /// les statistiques ne sont pas lues** : la ligne dit alors la saison, pas un « 0 GP
+    /// joué » qui serait faux.
     let grandsPrixJoues: Int?
 
-    /// Les quatre tuiles, dans l'ordre de ``ProfilView`` — **les mêmes quatre**, sans quoi
-    /// comparer son profil à celui d'un autre demanderait de relire les libellés.
+    /// Les quatre tuiles **provisoires**, dans l'ordre de ``ProfilView`` — ce que le
+    /// classement sait déjà, affiché sous le spinner le temps que les vraies arrivent.
     let statistiques: [StatistiqueProfil]
 }
 
@@ -43,14 +47,18 @@ struct MembreProfil {
 /// « Supprimer la photo », ni bloc de livrée, ni déconnexion. **Rien de ce qui est ici ne se
 /// modifie**, et c'est ce qui autorise l'écran à ne porter aucun état.
 ///
-/// > **Les données sont mockées.** ``MembreProfil`` est construit par le classement à
-/// > partir de ses propres valeurs en dur ; aucun appel réseau ne part de cet écran.
+/// > **Deux sources, une seule attente.** L'identité vient de la ligne du classement,
+/// > affichée sans délai ; seules les statistiques font un appel
+/// > (``StatistiquesProfil``, `GET /profils/{id}/stats`), avec spinner, message
+/// > d'``ErreurAPI`` et « Réessayer ».
 ///
 /// **Les points sont des entiers, jamais une cote** (`CLAUDE.md` §3.1) : « 22 », et nulle
 /// part un « ×2,20 ».
 struct ProfilMembreView: View {
 
     let membre: MembreProfil
+
+    @StateObject private var statistiques = StatistiquesProfil()
 
     /// Marge latérale commune à tous les écrans.
     private let margeLaterale: CGFloat = 16
@@ -74,7 +82,7 @@ struct ProfilMembreView: View {
                     entete
 
                     Spacer().frame(height: 20)
-                    GrilleStatistiques(statistiques: membre.statistiques)
+                    grilleStatistiques
 
                     Spacer().frame(height: 12)
                     sesGrandsPrix
@@ -90,6 +98,27 @@ struct ProfilMembreView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .task { await chargerStatistiques() }
+    }
+
+    // MARK: - Statistiques
+
+    @ViewBuilder
+    private var grilleStatistiques: some View {
+        if membre.profilId == nil {
+            // Membre d'aperçu : rien à demander au serveur.
+            GrilleStatistiques(statistiques: membre.statistiques)
+        } else {
+            BlocStatistiques(etat: statistiques.etat,
+                             provisoires: membre.statistiques) {
+                Task { await chargerStatistiques() }
+            }
+        }
+    }
+
+    private func chargerStatistiques() async {
+        guard let id = membre.profilId else { return }
+        await statistiques.charger(profilId: id)
     }
 
     // MARK: - En-tête
@@ -164,7 +193,9 @@ struct ProfilMembreView: View {
     }
 
     private var sousTitreGrandsPrix: String {
-        guard let joues = membre.grandsPrixJoues else { return "Saison 2026" }
+        guard let joues = statistiques.stats?.gpJoues ?? membre.grandsPrixJoues,
+              joues > 0
+        else { return "Saison 2026" }
         return "\(joues) \(joues > 1 ? "GP joués" : "GP joué") cette saison"
     }
 }

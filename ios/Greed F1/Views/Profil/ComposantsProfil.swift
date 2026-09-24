@@ -137,6 +137,54 @@ struct StatistiqueProfil: Identifiable, Equatable {
     let valeur: String
     let libelle: String
     var id: String { libelle }
+
+    /// Le tiret d'une statistique qui n'a encore rien à dire — **jamais « 0 »** : `NULL`
+    /// et `0` ne se confondent pas (`CLAUDE.md` §3.1).
+    static let absente = "–"
+
+    /// Les quatre tuiles avant toute lecture : la grille garde sa place pendant le
+    /// chargement, et rien ne saute quand les chiffres arrivent.
+    static let enAttente: [StatistiqueProfil] = [
+        StatistiqueProfil(valeur: absente, libelle: "Paris gagnés"),
+        StatistiqueProfil(valeur: absente, libelle: "Pts moy. / GP"),
+        StatistiqueProfil(valeur: absente, libelle: "Meilleur coup"),
+        StatistiqueProfil(valeur: absente, libelle: "Cote moy. tentée")
+    ]
+}
+
+/// La grille branchée sur ``StatistiquesProfil`` — **un seul bloc pour les deux profils** :
+/// chargement, échec et « Réessayer » s'y écrivent une fois.
+///
+/// Pendant le premier chargement, la grille reste montée sous le spinner, avec ce qu'on
+/// sait déjà (`provisoires`) : la place ne bouge pas, et un membre ouvert depuis le
+/// classement garde le meilleur coup que le classement a servi.
+struct BlocStatistiques: View {
+
+    let etat: StatistiquesProfil.Etat
+
+    var provisoires: [StatistiqueProfil] = StatistiqueProfil.enAttente
+
+    let reessayer: () -> Void
+
+    var body: some View {
+        switch etat {
+        case .chargement:
+            GrilleStatistiques(statistiques: provisoires)
+                .opacity(0.45)
+                .overlay {
+                    ProgressView()
+                        .tint(.primaire)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Chargement des statistiques")
+
+        case .pret(let stats):
+            GrilleStatistiques(statistiques: stats.tuiles)
+
+        case .echec(let erreur):
+            EchecChargement(erreur: erreur, reessayer: reessayer)
+        }
+    }
 }
 
 /// Quatre tuiles, deux par rangée. **`LazyVGrid` à colonnes flexibles**, pas deux

@@ -2075,7 +2075,7 @@ ci-dessous ; chaque étape ne dépend que des précédentes.
 | **1** | `GET /championnats/moi` — **un seul propriétaire** pour l'accueil et l'onglet Championnats. L'`id` devient un UUID : la teinte Pantone, tirée de l'id, changera une fois | **Fait** (iOS 0.21.0) |
 | **2** | Créer / rejoindre, puis la photo (Storage + `PATCH`). Navigation vers le championnat obtenu, liste de l'étape 1 invalidée | **Créer / rejoindre faits** (iOS 0.22.0) — photo à faire |
 | **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | **Fait** (iOS 0.24.0) |
-| **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | |
+| **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | **Stats (moi et membre) faites** (iOS 0.25.0) — `PATCH`, avatar, Administration, « Ses Grands Prix » à faire |
 | **5** | Calendrier : liste statique **croisée** avec `GET /scraper/cotes` → états réels **et `gp_id`** · GP suivant de l'accueil en lecture directe · **un seul calcul d'échéance** (§6.4) | |
 | **6** | Résultats : `GET /grands-prix/{id}/resultats` + mes pronostics en direct, puis `?championnat_id=` | |
 | **7** | Pronostics : `EtapePronos` porte le `gp_id` · cotes réelles · bonus = favoris serveur · `POST …/pronostics` avec `423` · destination du widget d'accueil | |
@@ -2162,6 +2162,21 @@ que si `pronosticsOuverts`** — `cotesArretees` du web : `cotes_figees` et dép
 passé, départ inconnu ⇒ ouvert. Sinon le widget annonce « Course le … » ou « Pronostics
 fermés » sans mener nulle part. Le calcul d'échéance reste local au widget jusqu'à
 l'étape 5, qui en fera **un seul**.
+
+
+**Étape 4, statistiques.** **Une seule route pour les deux profils** : `GET /profils/{id}/stats`,
+chargée par `Services/StatistiquesProfil.swift`, possédé par chaque écran (`@StateObject`),
+rappelé à chaque apparition. **`GET /profils/moi` n'existe pas** (seul `PATCH /moi`) :
+mon profil demande `/profils/{mon id}/stats`. Son identité **n'est pas relue par Railway** —
+le profil lu en direct par `AuthViewModel` reste le propriétaire unique du compte connecté ;
+la voiture et le numéro de l'onglet en sont recopiés (jamais par-dessus un réglage en cours).
+La mise en forme des quatre tuiles a **un seul propriétaire**, `StatsProfil.tuiles`, pendant
+de `GrilleStats.jsx` : avant le premier pronostic jugé, trois tuiles disent « – », la
+quatrième dès que `cote_moy_tentee > 0`. `BlocStatistiques` porte le spinner, posé **sur la
+grille provisoire** pour que rien ne saute, et `EchecChargement`. Le profil d'un membre
+s'affiche d'abord de sa ligne de classement (meilleur coup compris), seules les stats font
+un appel ; `gp_joues` remplit « Ses Grands Prix » (`0` ⇒ « Saison 2026 »). Profil illisible
+au lancement ⇒ relu une fois, puis échec rejouable plutôt qu'un spinner sans fin.
 
 ---
 
