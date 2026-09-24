@@ -268,6 +268,8 @@ private struct WidgetGrandPrix: View {
 
     let grandPrix: GrandPrixEnBase
 
+    @Environment(\.modePrevisualisation) private var previsualisation
+
     /// Hauteur de la bande du tracé. C'est la moitié du widget : la réduire ferait sauter
     /// l'accueil au moment précis où le joueur le regarde.
     private let hauteurTrace: CGFloat = 160
@@ -304,8 +306,12 @@ private struct WidgetGrandPrix: View {
     /// **Le bouton n'existe que si les pronostics sont ouverts** — la même condition que le
     /// décompte « Fermeture dans ». Avant le relevé des cotes, ou après le départ, le widget
     /// annonce le Grand Prix sans mener nulle part.
+    ///
+    /// La prévisualisation admin lève cette seule condition, comme `cotesArretees(gp) ||
+    /// previsualisation` côté web — rien d'autre (`decisions.md` §15 bis).
     private var ouvert: Bool {
         EcheancePronostics.cotesArretees(statut: grandPrix.statut, dateCourse: grandPrix.dateCourse)
+            || previsualisation
     }
 
     @ViewBuilder var body: some View {

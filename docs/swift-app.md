@@ -968,6 +968,16 @@ sont documentées ici pour que personne ne les câble par erreur dans le client 
 | `POST /jobs/resultats/{gp_id}?forcer=false` | **Synchrone**, rend le `RapportJob` complet. `425` si non publiés |
 | `POST /jobs/resultats/{gp_id}/test` | **Banc d'essai — n'écrit RIEN.** Rejoue le calcul sur des résultats fictifs |
 
+> **iOS (0.31.0).** Un seul bouton, « Scraper les cotes », qui envoie
+> `{"action":"scraper","figer":false}` (`Services/Administration.swift`) : sans écran de
+> confirmation, il n'écrit que ce qui se rattrape — le figeage reste au job du samedi.
+> L'interrupteur « Mode admin actif » (`AuthViewModel.modeAdminActif`, état de session) vaut
+> **prévisualisation** : `modePrevisualisation = estAdmin && modeAdminActif` descend par
+> l'environnement et lève la seule condition `cotesArretees` des deux widgets « Pronostiquer »
+> (accueil, championnat), avec la pastille « Prévisualisation » sur les cotes et la saisie.
+> Écart assumé avec le web, qui a deux interrupteurs : ici un seul, faute d'autres outils à
+> masquer.
+
 > **Ne jamais embarquer `ADMIN_SECRET` dans un binaire iOS.** C'est exactement la faute
 > corrigée à la version `0.64.0` côté web, où Vite inlinait le secret dans le bundle
 > public. Un binaire iOS se décompile aussi bien qu'un bundle JavaScript se lit.
@@ -2075,10 +2085,10 @@ ci-dessous ; chaque étape ne dépend que des précédentes.
 | **1** | `GET /championnats/moi` — **un seul propriétaire** pour l'accueil et l'onglet Championnats. L'`id` devient un UUID : la teinte Pantone, tirée de l'id, changera une fois | **Fait** (iOS 0.21.0) |
 | **2** | Créer / rejoindre, puis la photo (Storage + `PATCH`). Navigation vers le championnat obtenu, liste de l'étape 1 invalidée | **Créer / rejoindre faits** (iOS 0.22.0) — photo à faire |
 | **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | **Fait** (iOS 0.24.0) |
-| **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | **Stats (moi et membre) faites** (iOS 0.25.0) — `PATCH`, avatar, Administration, « Ses Grands Prix » à faire |
+| **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | **Stats (moi et membre) faites** (iOS 0.25.0) · **Administration faite** (iOS 0.31.0 : scraper sans figeage, mode admin = prévisualisation) — `PATCH`, avatar, « Ses Grands Prix » à faire |
 | **5** | Calendrier : liste statique **croisée** avec `GET /scraper/cotes` → états réels **et `gp_id`** · GP suivant de l'accueil en lecture directe · **un seul calcul d'échéance** (§6.4) | **Fait** (iOS 0.26.0) |
 | **6** | Résultats : `GET /grands-prix/{id}/resultats` + mes pronostics en direct, puis `?championnat_id=` | **Classement de course fait** (iOS 0.27.0) — mes pronostics et `?championnat_id=` à faire |
-| **7** | Pronostics : `EtapePronos` porte le `gp_id` · cotes réelles · bonus = favoris serveur · `POST …/pronostics` avec `423` · destination du widget d'accueil | **Fait** (iOS 0.28.0) — mode prévisualisation admin à faire |
+| **7** | Pronostics : `EtapePronos` porte le `gp_id` · cotes réelles · bonus = favoris serveur · `POST …/pronostics` avec `423` · destination du widget d'accueil | **Fait** (iOS 0.28.0) · mode prévisualisation admin (iOS 0.31.0) |
 
 **Pourquoi cet ordre.** Les championnats d'abord : les écrans les plus vus, une seule route,
 de quoi éprouver la couche réseau sur un cas simple. Le calendrier avant résultats et

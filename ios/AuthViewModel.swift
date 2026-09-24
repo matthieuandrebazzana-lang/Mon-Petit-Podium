@@ -32,6 +32,17 @@ final class AuthViewModel: ObservableObject {
     /// drapeau décide d'un affichage, jamais d'un droit (`POST /admin/action` autorise).
     @Published private(set) var estAdmin = false
 
+    /// L'interrupteur « Mode admin actif » du profil, **brut**. État de session : jamais
+    /// persisté, il repart éteint à chaque lancement (`decisions.md` §15).
+    @Published var modeAdminActif = false
+
+    /// La prévisualisation des pronostics : `estAdmin && modeAdminActif`, **nommée une
+    /// fois plutôt que recopiée** — une conjonction recopiée finit écrite à moitié. C'est
+    /// elle, et jamais l'interrupteur brut, que lisent les écrans (``EnvironmentValues/modePrevisualisation``).
+    /// Elle ne ment qu'à l'écran : aucune écriture, et le serveur refuse toujours un
+    /// pronostic hors fenêtre (`423`).
+    var modePrevisualisation: Bool { estAdmin && modeAdminActif }
+
     /// Message d'erreur à afficher sous le formulaire, ou `nil` si aucune erreur.
     @Published var messageErreur: String?
     
@@ -160,6 +171,7 @@ final class AuthViewModel: ObservableObject {
     private func oublierCompte() {
         profil = nil
         estAdmin = false
+        modeAdminActif = false
         estConnecte = false
     }
     
@@ -190,9 +202,20 @@ private struct CleMonProfil: EnvironmentKey {
     static let defaultValue: Profil? = nil
 }
 
+/// La prévisualisation admin (``AuthViewModel/modePrevisualisation``), descendue de la
+/// même façon : `false` hors de la barre, donc jamais allumée par accident dans un aperçu.
+private struct CleModePrevisualisation: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
     var monProfil: Profil? {
         get { self[CleMonProfil.self] }
         set { self[CleMonProfil.self] = newValue }
+    }
+
+    var modePrevisualisation: Bool {
+        get { self[CleModePrevisualisation.self] }
+        set { self[CleModePrevisualisation.self] = newValue }
     }
 }

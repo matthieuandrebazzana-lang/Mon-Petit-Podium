@@ -42,7 +42,9 @@ struct PronosView: View {
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
-    private let modeAdmin = false
+    /// Prévisualisation admin — la pastille rappelle que ce qu'on voit n'est pas ce que
+    /// voient les autres (``AuthViewModel/modePrevisualisation``).
+    @Environment(\.modePrevisualisation) private var modeAdmin
 
     init(grandPrix: GrandPrixPronos, avancer: @escaping (EtapePronos) -> Void) {
         self.grandPrix = grandPrix

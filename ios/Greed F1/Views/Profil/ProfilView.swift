@@ -52,12 +52,10 @@ struct ProfilView: View {
 
     private enum Reglage: Hashable { case skin, coque, ailerons, texte }
 
-    // MARK: - Pas encore branché
-
-    /// **La section Administration ne se monte que pour un administrateur.** Tant que la
-    /// colonne `is_admin` n'est pas lue, elle reste éteinte : une section d'outils affichée
-    /// à tout le monde serait pire qu'absente.
-    private let estAdmin = false
+    /// `POST /admin/action` en vol, et son issue — dite sous le bouton, jamais en alerte.
+    @State private var envoiScraper = false
+    @State private var retourScraper: String?
+    @State private var erreurScraper: ErreurAPI?
 
     // MARK: - Corps
 
@@ -88,7 +86,10 @@ struct ProfilView: View {
                     Spacer().frame(height: 12)
                     blocLivree
 
-                    if estAdmin {
+                    // **`estAdmin`, et non `modePrevisualisation`, et ce n'est pas un
+                    // oubli** : la section porte l'interrupteur qui rallume le mode, elle
+                    // doit donc rester visible mode éteint (`decisions.md` §15).
+                    if viewModel.estAdmin {
                         Spacer().frame(height: 12)
                         blocAdministration
                     }
@@ -625,30 +626,107 @@ struct ProfilView: View {
 
             Spacer().frame(height: 10)
 
-            Toggle(isOn: .constant(false)) {
+            // L'état est **dit**, pas seulement peint : la description change avec lui.
+            Toggle(isOn: $viewModel.modeAdminActif) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Mode admin actif")
                         .font(.custom("HelveticaNeue-Medium", size: 17))
                         .foregroundColor(.texte)
-                    Text("Tu vois l'app comme un membre ordinaire.")
+                    Text(viewModel.modeAdminActif
+                         ? "Tu vois les Grands Prix comme s'ils étaient ouverts. Rien n'est modifié en base."
+                         : "Tu vois l'app comme un membre ordinaire.")
                         .font(.corpsSm)
                         .foregroundColor(.grisSecondaire)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .tint(.primaire)
+            .frame(minHeight: 44)
 
             Spacer().frame(height: 12)
 
-            Text("Rallume le mode pour retrouver les outils. Il repart éteint à chaque lancement.")
+            Text("Il repart éteint à chaque lancement.")
                 .font(.corpsSm)
                 .foregroundColor(.grisSecondaire)
                 .fixedSize(horizontal: false, vertical: true)
+
+            // Le filet sépare ce qui change l'affichage de ce qui écrit pour de bon.
+            Rectangle()
+                .fill(Color.secondaire.opacity(0.15))
+                .frame(height: 1)
+                .padding(.vertical, 16)
+                .accessibilityHidden(true)
+
+            Text("Le scraping tourne déjà tout seul après les qualifications. Ce bouton le force entre-temps, sans figer les cotes.")
+                .font(.corpsSm)
+                .foregroundColor(.grisSecondaire)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer().frame(height: 12)
+            boutonScraper
+
+            if let retourScraper {
+                Spacer().frame(height: 10)
+                Text(retourScraper)
+                    .font(.corpsSm)
+                    .foregroundColor(.texte)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+                    .transition(.opacity)
+            }
+
+            if let erreurScraper {
+                Spacer().frame(height: 10)
+                ErreurEnLigne(erreur: erreurScraper)
+                    .transition(.opacity)
+            }
         }
+        .animation(mouvementReduit ? nil : Mouvement.entree(0.20), value: retourScraper)
+        .animation(mouvementReduit ? nil : Mouvement.entree(0.20), value: erreurScraper)
+        .sensoryFeedback(.success, trigger: retourScraper) { _, nouveau in nouveau != nil }
+        .sensoryFeedback(.error, trigger: erreurScraper) { _, nouveau in nouveau != nil }
         .padding(16)
         .frame(maxWidth: .infinity)
         .background(Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
         .ombreBloc()
+    }
+
+    /// Même habillage que « Enregistrer ma voiture » : deux boutons pleins du même écran
+    /// qui ne se ressembleraient pas cesseraient de se lire comme des boutons.
+    private var boutonScraper: some View {
+        Button(action: lancerScraper) {
+            ZStack {
+                Text("Scraper les cotes").opacity(envoiScraper ? 0 : 1)
+                if envoiScraper { ProgressView().tint(.white) }
+            }
+            .font(.custom("HelveticaNeue-Medium", size: 17))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .background(Color.primaire)
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
+        }
+        .buttonStyle(StyleAppui(.bouton))
+        .disabled(envoiScraper)
+        .accessibilityLabel(envoiScraper ? "Scraping en cours" : "Scraper les cotes")
+    }
+
+    private func lancerScraper() {
+        guard !envoiScraper else { return }
+        envoiScraper = true
+        retourScraper = nil
+        erreurScraper = nil
+        Task {
+            do {
+                retourScraper = try await Administration.lancerScraper()
+            } catch let refus as ErreurAPI {
+                erreurScraper = refus
+            } catch {
+                // Tâche annulée : rien à dire.
+            }
+            envoiScraper = false
+        }
     }
 
     // MARK: - Pied

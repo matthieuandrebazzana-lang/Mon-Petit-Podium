@@ -167,6 +167,7 @@ ios/
     │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil, lecture directe `grands_prix`
     │   ├── ResultatsGrandPrix.swift  `GET /grands-prix/{id}/resultats` — 404 / `disponible: false` ⇒ indisponible
     │   ├── DonneesPronostics.swift  cotes + favoris (+ mes pronos en direct), bascule de favori, `POST …/pronostics`
+    │   ├── Administration.swift   `POST /admin/action` — scraper sans figeage, jamais le secret
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
     │   ├── ContentView.swift

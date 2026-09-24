@@ -205,8 +205,9 @@ struct CotesView: View {
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
-    /// Mode administrateur — **à `false`** tant que la prévisualisation n'est pas branchée.
-    private let modeAdmin = false
+    /// Prévisualisation admin — la pastille rappelle que ce qu'on voit n'est pas ce que
+    /// voient les autres (``AuthViewModel/modePrevisualisation``).
+    @Environment(\.modePrevisualisation) private var modeAdmin
 
     init(grandPrix: GrandPrixPronos) {
         self.grandPrix = grandPrix

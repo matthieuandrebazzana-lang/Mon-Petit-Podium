@@ -501,7 +501,10 @@ private struct WidgetGrandPrixSuivant: View {
     /// l'en-tête du récapitulatif, au bout du parcours, qui porte le drapeau.
     private var slug: String { grandPrix.slug }
 
-    private var ouvert: Bool { grandPrix.pronosticsOuverts() }
+    @Environment(\.modePrevisualisation) private var previsualisation
+
+    /// La prévisualisation admin lève cette seule condition (`decisions.md` §15 bis).
+    private var ouvert: Bool { grandPrix.pronosticsOuverts() || previsualisation }
 
     /// Ce que dit la seconde ligne — ``EcheancePronostics/phrase``, **le seul calcul
     /// d'échéance de l'app**. Lu à l'affichage : l'écran se recharge à chaque apparition,

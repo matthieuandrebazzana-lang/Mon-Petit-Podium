@@ -39,6 +39,8 @@ struct BarreNavigation: View {
         // La voiture du compte connecté, pour les écrans qui peignent le classement :
         // ``AuthViewModel`` en est la seule source (``Membre/avecVoiture(de:)``).
         .environment(\.monProfil, viewModel.profil)
+        // La prévisualisation admin, pour les surfaces qui portent un bouton de pronostics.
+        .environment(\.modePrevisualisation, viewModel.modePrevisualisation)
     }
 
     // MARK: - Apparence
