@@ -156,6 +156,7 @@ ios/
     │   ├── GrandPrix.swift      `GrandPrixEnBase`, `SlugCircuit`, `EcheancePronostics` — LE calcul d'échéance
     │   ├── Membre.swift         une ligne de classement
     │   ├── ResultatsGP.swift    résultats d'une course : lignes, nom coupé, mention, livrée
+    │   ├── PronosticsChampionnat.swift  GP du calendrier d'un championnat, paris de chaque membre, tri par GP
     │   └── Pronostics.swift     cotes, favoris, mes pronostics, corps du POST, `ClePilote`, `OrdreMarches`
     ├── Services/
     │   ├── SupabaseManager.swift  chemin direct, sous RLS
@@ -166,6 +167,7 @@ ios/
     │   ├── CalendrierSaison.swift  `GET /scraper/cotes` — états et `gp_id` du calendrier
     │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil, lecture directe `grands_prix`
     │   ├── ResultatsGrandPrix.swift  `GET /grands-prix/{id}/resultats` — 404 / `disponible: false` ⇒ indisponible
+    │   ├── ResultatsParGrandPrix.swift  `GET /championnats/{id}/calendrier` puis `GET /grands-prix/{gp}/pronostics/championnat/{id}`, un GP à la fois
     │   ├── DonneesPronostics.swift  cotes + favoris (+ mes pronos en direct), bascule de favori, `POST …/pronostics`
     │   ├── Administration.swift   `POST /admin/action` — scraper sans figeage, jamais le secret
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
@@ -188,6 +190,7 @@ ios/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
     │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste, menu « ⋯ » (code, quitter), widget GP — réels
     │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — reçoit le classement
+    │   │   ├── ResultatsParGPView.swift     résultats par GP : sélecteur des GP terminés, paris de chacun en accordéon
     │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases → `POST /championnats/rejoindre`
     │   ├── Calendrier/

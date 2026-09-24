@@ -278,10 +278,58 @@ struct ChampionnatDetailView: View {
                 if let prochainGp = championnat.prochainGp {
                     WidgetGrandPrixSuivant(grandPrix: prochainGp)
                 }
+                lienResultats
             }
             .padding(.horizontal, margeLaterale)
             .padding(.bottom, 24)
         }
+    }
+
+    // MARK: - Le lien vers les résultats par Grand Prix
+
+    /// La carte d'entrée de ``ResultatsParGPView`` — celle de la version web, au même
+    /// endroit. **Le libellé nomme sa destination** ; l'icône est le pilote casqué, car
+    /// l'écran montre des personnes, pas des dates.
+    private var lienResultats: some View {
+        NavigationLink {
+            ResultatsParGPView(championnat: championnat)
+        } label: {
+            HStack(spacing: 12) {
+                Image("icone-profil")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 20)
+                    .foregroundColor(.primaire)
+                    .frame(width: 40, height: 40)
+                    .background(Color.fondPrincipal)
+                    .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Résultats par Grand Prix")
+                        .font(.custom("HelveticaNeue-Medium", size: 15))
+                        .foregroundColor(.texte)                 // 15,37:1 sur le blanc
+                    Text("Les paris de chaque membre, course par course")
+                        .font(.custom("HelveticaNeue", size: 12))
+                        .foregroundColor(.grisSecondaire)        // 5,33:1 sur le blanc
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.grisSecondaire)
+                    .accessibilityHidden(true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
+            .ombreCarte()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(StyleAppui(.grandeSurface))
     }
 
     // MARK: - Le lien vers la piste
