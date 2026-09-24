@@ -201,7 +201,7 @@ ios/
     │   │   ├── PronosView.swift     saisie préremplie, bonus parmi les favoris, `POST` + `423`
     │   │   └── RecapView.swift      récapitulatif, empilé seulement après le `200`
     │   └── Profil/
-    │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue ; enregistrement pas encore branché
+    │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`)
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
     │       └── ComposantsProfil.swift   pastille, en-tête, grille et `BlocStatistiques` (chargement/échec), PARTAGÉS
     ├── Resources/               ← EMBARQUÉ dans l'app

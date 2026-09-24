@@ -140,6 +140,21 @@ final class AuthViewModel: ObservableObject {
         await chargerProfil(id: id)
     }
 
+    /// Enregistre la voiture (`PATCH /profils/moi`), puis relit le profil. **C'est ce
+    /// profil-ci que la piste et le classement peignent pour le compte connecté** — pas la
+    /// ligne du classement, servie avant la modification : une seule source pour sa
+    /// propre voiture, et elle se met à jour ici.
+    ///
+    /// La relecture passe par ``chargerProfil(id:)``, le seul lecteur du profil, plutôt
+    /// que par la réponse du `PATCH` : `estAdmin` ne se décide qu'à un seul endroit.
+    ///
+    /// - Throws: une ``ErreurAPI`` dont le message est affichable (`422` : deux couleurs
+    ///   identiques, numéro hors bornes…).
+    func enregistrerVoiture(_ modification: ModificationVoiture) async throws {
+        try await APIClient.partage.envoyer("profils/moi", methode: .patch, corps: modification)
+        await rechargerProfil()
+    }
+
     /// Efface tout ce qui appartient au compte (§2.6) : deux personnes qui se relaient
     /// sur le même téléphone ne voient jamais les données de l'autre.
     private func oublierCompte() {
@@ -161,5 +176,23 @@ final class AuthViewModel: ObservableObject {
         }
         
         estEnChargement = false
+    }
+}
+
+// MARK: - Le profil connecté, vu par les écrans
+
+/// Le profil du compte connecté, descendu par l'environnement depuis ``BarreNavigation``.
+///
+/// **Une clé, pas un `EnvironmentObject`** : `nil` par défaut, un écran monté hors de la
+/// barre — un aperçu, une feuille — retombe sur ce que le serveur a servi au lieu de
+/// s'arrêter net sur un objet absent.
+private struct CleMonProfil: EnvironmentKey {
+    static let defaultValue: Profil? = nil
+}
+
+extension EnvironmentValues {
+    var monProfil: Profil? {
+        get { self[CleMonProfil.self] }
+        set { self[CleMonProfil.self] = newValue }
     }
 }

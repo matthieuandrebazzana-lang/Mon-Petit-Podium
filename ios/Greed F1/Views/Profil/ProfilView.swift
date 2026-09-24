@@ -8,8 +8,9 @@ import SwiftUI
 /// > **Deux sources.** L'identité et la voiture sont le profil que ``AuthViewModel`` lit en
 /// > direct sous RLS — le seul propriétaire du compte connecté. Les quatre statistiques
 /// > viennent de `GET /profils/{mon id}/stats` (``StatistiquesProfil``), la même route que
-/// > le profil d'un autre membre. L'enregistrement de la voiture (`PATCH /profils/moi`)
-/// > n'est pas encore branché : le bouton ne modifie que l'écran.
+/// > le profil d'un autre membre. La voiture s'enregistre par `PATCH /profils/moi`, via
+/// > ``AuthViewModel/enregistrerVoiture(_:)`` : c'est son profil relu que la piste et le
+/// > classement peignent ensuite pour le compte connecté.
 ///
 /// **La voiture et les onze casques sont découpés des planches** (`ios/CLAUDE.md` §3) :
 /// rien n'est redessiné en SwiftUI. ``VueVoiture`` lit `voitures_perso.svg` et y substitue
@@ -35,6 +36,10 @@ struct ProfilView: View {
 
     @State private var numeroEnregistre = ""
     @State private var numero = ""
+
+    /// Le `PATCH /profils/moi` en vol, et son refus — dit sous le bouton (``ErreurEnLigne``).
+    @State private var envoiVoiture = false
+    @State private var erreurVoiture: ErreurAPI?
 
     @StateObject private var statistiques = StatistiquesProfil()
 
@@ -255,7 +260,15 @@ struct ProfilView: View {
 
             Spacer().frame(height: 16)
             boutonEnregistrer
+
+            if let erreurVoiture {
+                Spacer().frame(height: 10)
+                ErreurEnLigne(erreur: erreurVoiture)
+                    .transition(.opacity)
+            }
         }
+        .animation(mouvementReduit ? nil : Mouvement.entree(0.20), value: erreurVoiture)
+        .sensoryFeedback(.error, trigger: erreurVoiture) { _, nouveau in nouveau != nil }
         .padding(16)
         .frame(maxWidth: .infinity)
         .background(Color.surface)
@@ -536,23 +549,72 @@ struct ProfilView: View {
     }
 
     private var boutonEnregistrer: some View {
-        Button {
-            livreeEnregistree = livree
-            numeroEnregistre = numero
-            withAnimation(mouvementReduit ? nil : Mouvement.deplacement(0.22)) {
-                replieDeplie = nil
+        Button(action: enregistrerVoiture) {
+            ZStack {
+                Text("Enregistrer ma voiture").opacity(envoiVoiture ? 0 : 1)
+                if envoiVoiture { ProgressView().tint(.white) }
             }
-        } label: {
-            Text("Enregistrer ma voiture")
-                .font(.custom("HelveticaNeue-Medium", size: 17))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(Color.primaire.opacity(aChange ? 1 : 0.45))
-                .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
+            .font(.custom("HelveticaNeue-Medium", size: 17))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .background(Color.primaire.opacity(aChange ? 1 : 0.45))
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
         }
         .buttonStyle(StyleAppui(.bouton))
-        .disabled(!aChange)
+        .disabled(!aChange || envoiVoiture)
         .animation(mouvementReduit ? nil : Mouvement.entree(0.18), value: aChange)
+        .accessibilityLabel(envoiVoiture ? "Enregistrement en cours" : "Enregistrer ma voiture")
+    }
+
+    /// Ce que le `PATCH` transmet. **La couleur du texte ne part que si elle a été
+    /// choisie** (§3.2, règle 4), et un champ de numéro vidé part en `retirer_numero` :
+    /// `numero: null` serait lu « non transmis ».
+    private var modificationVoiture: ModificationVoiture {
+        var corps = ModificationVoiture(livreeMode: livree.mode == .ecurie ? .ecurie : .perso,
+                                        livreeEcurie: livree.ecurie)
+        if livree.mode == .perso {
+            corps.couleur1 = livree.coque
+            corps.couleur2 = livree.ailerons
+            corps.couleurTexte = livree.couleurTexte
+        }
+        if let valeur = Int(numero) {
+            corps.numero = valeur
+        } else {
+            corps.retirerNumero = true
+        }
+        return corps
+    }
+
+    /// La tâche n'est **pas** liée à l'écran : changer d'onglet pendant l'appel ne
+    /// l'annule pas, et la voiture s'enregistre quand même.
+    private func enregistrerVoiture() {
+        guard aChange, !envoiVoiture else { return }
+        erreurVoiture = nil
+        envoiVoiture = true
+        let corps = modificationVoiture
+        let livreeEnvoyee = livree
+        let numeroEnvoye = numero
+
+        Task {
+            do {
+                try await viewModel.enregistrerVoiture(corps)
+                envoiVoiture = false
+                // Ce qui est parti, pas ce qui est à l'écran : un réglage touché pendant
+                // l'appel reste « à enregistrer ». Puis le profil relu fait foi — couleurs
+                // normalisées par le serveur —, sauf par-dessus ce réglage-là.
+                livreeEnregistree = livreeEnvoyee
+                numeroEnregistre = numeroEnvoye
+                synchroniserVoiture(viewModel.profil)
+                withAnimation(mouvementReduit ? nil : Mouvement.deplacement(0.22)) {
+                    replieDeplie = nil
+                }
+            } catch let refus as ErreurAPI {
+                envoiVoiture = false
+                erreurVoiture = refus
+            } catch {
+                envoiVoiture = false
+            }
+        }
     }
 
     // MARK: - Administration

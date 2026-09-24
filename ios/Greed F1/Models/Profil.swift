@@ -85,3 +85,29 @@ extension URL {
         return URL(string: texte)
     }
 }
+
+// MARK: - Modification
+
+/// Le corps de `PATCH /profils/moi` pour la voiture (`docs/swift-app.md` §3.2).
+/// **Modification partielle** : un champ `nil` n'est pas transmis, donc pas touché —
+/// d'où les deux drapeaux de retrait, seuls capables de dire « plus de numéro » ou
+/// « plus de couleur de texte choisie ».
+struct ModificationVoiture: Encodable, Equatable {
+    var couleur1: String?
+    var couleur2: String?
+    /// **Ne part que si elle a été choisie** (règle 4) : l'encre calculée affichée à
+    /// défaut ne doit jamais se figer en base.
+    var couleurTexte: String?
+    var numero: Int?
+    var retirerNumero: Bool?
+    var livreeMode: ModeLivree?
+    var livreeEcurie: String?
+
+    enum CodingKeys: String, CodingKey {
+        case couleur1, couleur2, numero
+        case couleurTexte = "couleur_texte"
+        case retirerNumero = "retirer_numero"
+        case livreeMode = "livree_mode"
+        case livreeEcurie = "livree_ecurie"
+    }
+}

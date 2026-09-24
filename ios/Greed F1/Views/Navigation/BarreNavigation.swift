@@ -36,6 +36,9 @@ struct BarreNavigation: View {
                 .tabItem { Label("Profil", image: "icone-profil") }
         }
         .tint(.primaire)
+        // La voiture du compte connecté, pour les écrans qui peignent le classement :
+        // ``AuthViewModel`` en est la seule source (``Membre/avecVoiture(de:)``).
+        .environment(\.monProfil, viewModel.profil)
     }
 
     // MARK: - Apparence

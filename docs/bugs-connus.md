@@ -1640,3 +1640,32 @@ l'avait corrigé localement, sans que la leçon remonte au ``Damier`` lui-même.
   déborder de son cadre porte une `contentShape` de sa forme visible.
 - **Jamais de `scaledToFill` nu dans une `ZStack` de fond** : l'`overlay` sur une couleur,
   ou un `Color.clear`, ne change pas la taille de son hôte.
+
+---
+
+## 36. iOS — la voiture modifiée dans le Profil ne changeait pas sur la piste (`ios 0.30.0`)
+
+**Symptôme.** Nouvelles couleurs ou nouveau numéro choisis dans l'onglet Profil : la vue
+piste du championnat continuait de peindre l'ancienne voiture.
+
+**Cause réelle.** Pas seulement un classement non rechargé. **Le bouton « Enregistrer ma
+voiture » n'envoyait rien** : `PATCH /profils/moi` n'était pas branché, et le bouton ne
+faisait que recopier l'état de l'écran dans son propre « enregistré ». Rien n'arrivait en
+base, ni dans `AuthViewModel.profil`. Par-dessus, la piste peignait la voiture de chaque
+membre depuis `GET /championnats/{id}/classement` — y compris la sienne, servie avant
+toute modification.
+
+**Correctif.**
+- `AuthViewModel.enregistrerVoiture(_:)` envoie le `PATCH`, puis relit le profil par
+  `chargerProfil(id:)`, son seul lecteur. `ProfilView` affiche le refus sous le bouton.
+- **Une seule source pour sa propre voiture** : `BarreNavigation` descend le profil par
+  l'environnement (`\.monProfil`), et `ChampionnatDetailView` remplace la voiture de la
+  ligne du compte connecté par celle du profil (`Membre.avecVoiture(de:)`) avant de
+  donner le tableau au classement, à la piste et au profil d'un membre. Points et rang
+  restent ceux du serveur.
+
+### Ce qu'il ne faut pas refaire
+
+- **Un bouton d'enregistrement qui se contente de l'écran ment** : il affiche « enregistré »
+  sans écrire. Tant que la route n'est pas branchée, il reste éteint.
+- La voiture du compte connecté ne se lit **jamais** dans une ligne de classement.

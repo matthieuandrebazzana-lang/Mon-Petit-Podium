@@ -24,6 +24,11 @@ struct ChampionnatDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    /// Le profil du compte connecté. **C'est lui qui peint sa propre voiture**, pas sa
+    /// ligne du classement : celle-ci a été servie avant une éventuelle modification dans
+    /// l'onglet Profil, et ne se relit qu'à la prochaine apparition.
+    @Environment(\.monProfil) private var monProfil
+
     /// La feuille du code d'invitation.
     @State private var codeAffiche = false
     /// L'alerte qui précède le départ — **la seule confirmation de l'écran** : c'est la
@@ -93,7 +98,8 @@ struct ChampionnatDetailView: View {
                         }
                         .frame(maxHeight: .infinity)
 
-                    case .pret(let membres):
+                    case .pret(let servis):
+                        let membres = servis.map { $0.avecVoiture(de: monProfil) }
                         switch vue {
                         case .classement:
                             contenuClassement(membres)
@@ -628,6 +634,20 @@ private struct FeuilleCodeInvitation: View {
 // MARK: - Un membre, vu par les écrans
 
 extension Membre {
+    /// La ligne, avec **la voiture du profil** quand c'est celle du compte connecté —
+    /// livrée, couleurs et numéro. Le reste (points, rang) reste celui du serveur.
+    /// Sans profil, ou pour un autre membre, la ligne est rendue telle quelle.
+    func avecVoiture(de profil: Profil?) -> Membre {
+        guard let profil, profil.id == profilId else { return self }
+        return Membre(profilId: profilId, pseudo: pseudo, totalPoints: totalPoints,
+                      pronosticsReussis: pronosticsReussis, meilleureCote: meilleureCote,
+                      rang: rang, ordreInscription: ordreInscription,
+                      couleur1: profil.couleur1, couleur2: profil.couleur2,
+                      couleurTexte: profil.couleurTexte, numero: profil.numero,
+                      livreeMode: profil.livreeMode, livreeEcurie: profil.livreeEcurie,
+                      avatarUrl: avatarUrl)
+    }
+
     /// Ce que porte sa voiture. Un slug d'écurie inconnu retombe sur la livrée perso à
     /// l'affichage (``Livree/ecurieChoisie``), ce n'est pas une panne.
     var livree: Livree {
