@@ -69,6 +69,56 @@ struct ProchainGP: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
+extension ProchainGP {
+
+    /// La clé des assets `flag-<slug>` / `trace-<slug>` et de ``TeintesDrapeaux``, tirée
+    /// du nom tel qu'il est en base. **Transcription de `slugCircuit`**
+    /// (`frontend/src/composants/TracesCircuits.jsx`) : minuscules, accents retirés,
+    /// préfixe « GP » ôté en tête, le reste en tirets — puis les alias, parce qu'Unibet
+    /// écrit « GP Pays Bas » une semaine et « GP Pays-Bas » la suivante. Un slug inconnu
+    /// est rendu tel quel : c'est à l'écran de constater qu'aucun asset ne lui répond.
+    var slug: String {
+        var texte = nom.lowercased()
+            .folding(options: [.diacriticInsensitive], locale: Locale(identifier: "fr_FR"))
+        texte = texte.replacingOccurrences(of: #"^\s*(grand\s+prix|gp)\b"#, with: "",
+                                           options: .regularExpression)
+        texte = texte.replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
+        texte = texte.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+
+        if TeintesDrapeaux.table[texte] != nil { return texte }
+        for (motif, cle) in Self.alias
+        where texte.range(of: motif, options: .regularExpression) != nil {
+            return cle
+        }
+        return texte
+    }
+
+    /// Les alias de `ALIAS`, dans le même ordre — le premier qui répond l'emporte.
+    private static let alias: [(String, String)] = [
+        ("zandvoort|hollande|neerland", "pays-bas"),
+        ("monza", "italie"),
+        ("madrid|madring", "espagne"),
+        ("bakou|baku", "azerbaidjan"),
+        ("sepang|malaisi|malaysi|kuala.?lumpur", "malaisie"),
+        ("singapore|marina.?bay", "singapour"),
+        (#"austin|texas|amerique|\busa\b|cota"#, "etats-unis"),
+        ("mexico", "mexique"),
+        ("sao.?paulo|interlagos|bresi", "bresil"),
+        ("vegas", "las-vegas"),
+        ("lusail|losail|doha", "qatar"),
+        ("abou.?dab|abu.?dhab|yas.?marina|emirats", "abu-dhabi")
+    ]
+
+    /// **Les cotes sont arrêtées et les pronostics ouverts** — `cotesArretees` de
+    /// `lib/calendrier.js` (`docs/metier.md`) : statut `cotes_figees` **et** départ pas
+    /// encore passé. **Un départ inconnu laisse ouvert** : aucune fermeture à opposer.
+    func pronosticsOuverts(le maintenant: Date = .now) -> Bool {
+        guard statut == "cotes_figees" else { return false }
+        guard let dateCourse else { return true }
+        return dateCourse > maintenant
+    }
+}
+
 /// Où en est l'appelant dans un championnat — de quoi remplir la jauge de sa carte.
 struct PositionMembre: Codable, Equatable, Hashable {
     let monRang: Int

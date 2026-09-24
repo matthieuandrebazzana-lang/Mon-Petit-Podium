@@ -2074,7 +2074,7 @@ ci-dessous ; chaque étape ne dépend que des précédentes.
 | **0** | Fondations : `APIClient`, `ErreurAPI`, `JSONDecoder.api`, réveil, `Profil` / `Championnat` / `Membre`, profil courant en direct | **Fait** (iOS 0.20.0) |
 | **1** | `GET /championnats/moi` — **un seul propriétaire** pour l'accueil et l'onglet Championnats. L'`id` devient un UUID : la teinte Pantone, tirée de l'id, changera une fois | **Fait** (iOS 0.21.0) |
 | **2** | Créer / rejoindre, puis la photo (Storage + `PATCH`). Navigation vers le championnat obtenu, liste de l'étape 1 invalidée | **Créer / rejoindre faits** (iOS 0.22.0) — photo à faire |
-| **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | **Classement et piste faits** (iOS 0.23.0) — menu « ⋯ » et widget GP à faire |
+| **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | **Fait** (iOS 0.24.0) |
 | **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | |
 | **5** | Calendrier : liste statique **croisée** avec `GET /scraper/cotes` → états réels **et `gp_id`** · GP suivant de l'accueil en lecture directe · **un seul calcul d'échéance** (§6.4) | |
 | **6** | Résultats : `GET /grands-prix/{id}/resultats` + mes pronostics en direct, puis `?championnat_id=` | |
@@ -2148,6 +2148,20 @@ lu. `meilleure_cote` nulle ⇒ le sous-titre tait le meilleur coup, jamais « 0 
 `numero` nul ⇒ la voiture porte le rang. Le profil d'un membre est projeté de sa ligne :
 **les statistiques que le classement ne sert pas s'affichent « – »** jusqu'à l'étape 4.
 `MembreMock` ne sert plus qu'aux aperçus (jeu d'essai de la piste, §5.6).
+
+**Étape 3, fin (menu « ⋯ » et widget GP).** Le menu est un `Menu` natif à deux entrées.
+« Code d'invitation » ouvre une feuille compacte (`.height(300)`) : le code en grand, et le
+même `ShareLink` que « Créer », phrase comprise. « Quitter le championnat » passe par une
+**alerte de confirmation** — la seule de l'écran, parce que c'est la seule action
+destructive —, puis `DELETE /championnats/{id}/quitter`, `charger(forcer: true)` et le
+retour à l'écran précédent ; un refus s'affiche en alerte, faute de bouton sous lequel
+l'écrire. L'écran reçoit donc `MesChampionnats` de ses quatre appelants. Le widget lit
+`prochain_gp` : **absent ⇒ pas de widget**. Son slug vient de `ProchainGP.slug`,
+transcription de `slugCircuit` (alias compris), et **le bouton « Pronostiquer » n'existe
+que si `pronosticsOuverts`** — `cotesArretees` du web : `cotes_figees` et départ pas encore
+passé, départ inconnu ⇒ ouvert. Sinon le widget annonce « Course le … » ou « Pronostics
+fermés » sans mener nulle part. Le calcul d'échéance reste local au widget jusqu'à
+l'étape 5, qui en fera **un seul**.
 
 ---
 

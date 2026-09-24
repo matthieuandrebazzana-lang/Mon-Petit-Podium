@@ -16,10 +16,27 @@ struct ChampionnatDetailView: View {
 
     let championnat: Championnat
 
+    /// La liste de l'accueil et de l'onglet, rechargée après un départ : sans elle, le
+    /// championnat quitté resterait affiché jusqu'au prochain changement d'onglet.
+    @ObservedObject var mesChampionnats: MesChampionnats
+
     @StateObject private var classement: ClassementChampionnat
 
-    init(championnat: Championnat) {
+    @Environment(\.dismiss) private var dismiss
+
+    /// La feuille du code d'invitation.
+    @State private var codeAffiche = false
+    /// L'alerte qui précède le départ — **la seule confirmation de l'écran** : c'est la
+    /// seule action destructive, et le départ ne se défait pas sans le code.
+    @State private var confirmationDepart = false
+    @State private var departEnCours = false
+    /// Le refus du serveur. Une alerte, par exception à ``ErreurEnLigne`` : le départ part
+    /// d'un menu, et il n'y a pas de bouton sous lequel écrire.
+    @State private var erreurDepart: ErreurAPI?
+
+    init(championnat: Championnat, mesChampionnats: MesChampionnats) {
         self.championnat = championnat
+        self.mesChampionnats = mesChampionnats
         _classement = StateObject(wrappedValue: ClassementChampionnat(championnatId: championnat.id))
     }
 
@@ -119,6 +136,51 @@ struct ChampionnatDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .sheet(isPresented: $codeAffiche) {
+            FeuilleCodeInvitation(championnat: championnat)
+        }
+        .alert("Quitter « \(championnat.nom) » ?", isPresented: $confirmationDepart) {
+            Button("Quitter", role: .destructive) { quitter() }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Tu disparais du classement. Pour revenir, il te faudra de nouveau le code d'invitation.")
+        }
+        .alert("Impossible de quitter le championnat",
+               isPresented: Binding(get: { erreurDepart != nil },
+                                    set: { if !$0 { erreurDepart = nil } }),
+               presenting: erreurDepart) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { erreur in
+            Text(erreur.message)
+        }
+    }
+
+    /// `DELETE /championnats/{id}/quitter`, puis la liste rechargée, puis le retour.
+    ///
+    /// **La tâche n'est pas liée à l'écran** — comme pour « Créer » et « Rejoindre » : le
+    /// départ et le rechargement vont au bout même si l'écran disparaît entre-temps.
+    /// `charger(forcer: true)` parce qu'un chargement en vol, lancé avant l'écriture,
+    /// ramènerait encore le championnat quitté.
+    private func quitter() {
+        guard !departEnCours else { return }
+        departEnCours = true
+        Task {
+            defer { departEnCours = false }
+            do {
+                try await APIClient.partage.envoyer("championnats/\(championnat.id.uuidString.lowercased())/quitter",
+                                                    methode: .delete)
+            } catch is CancellationError {
+                return
+            } catch let erreur as ErreurAPI {
+                erreurDepart = erreur
+                return
+            } catch {
+                erreurDepart = .serveur(statut: nil, message: nil)
+                return
+            }
+            await mesChampionnats.charger(forcer: true)
+            dismiss()
+        }
     }
 
     // MARK: - En-tête
@@ -145,21 +207,40 @@ struct ChampionnatDetailView: View {
         }
     }
 
-    /// Les trois points. **Le menu est vide pour l'instant** — partager le code
-    /// d'invitation, renommer et quitter viendront quand les routes seront câblées — mais
-    /// la zone tactile fait déjà ses 44 × 44 pt : c'est le plancher iOS, et le rajouter
-    /// après coup décalerait tout l'en-tête.
+    /// Les trois points. **Un `Menu` natif** : il s'ouvre depuis son déclencheur et se
+    /// referme vers lui, porte seul l'accessibilité, et range l'action destructive en
+    /// rouge, en dernier — ce que l'utilisateur d'iOS attend sans lire.
+    ///
+    /// Renommer viendra avec `PATCH /championnats/{id}` ; la zone tactile fait déjà ses
+    /// 44 × 44 pt, le plancher iOS.
     private var menuChampionnat: some View {
-        Button {
-            // Destination à câbler : partager le code, renommer, quitter le championnat.
+        Menu {
+            Button {
+                codeAffiche = true
+            } label: {
+                Label("Code d'invitation", systemImage: "person.badge.plus")
+            }
+
+            Button(role: .destructive) {
+                confirmationDepart = true
+            } label: {
+                Label("Quitter le championnat", systemImage: "rectangle.portrait.and.arrow.right")
+            }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(.grisSecondaire)   // 4,71:1 sur le beige
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+            Group {
+                if departEnCours {
+                    ProgressView()
+                        .tint(.grisSecondaire)
+                } else {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundColor(.grisSecondaire)   // 4,71:1 sur le beige
+                }
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(StyleAppui(.bouton))
+        .disabled(departEnCours)
         .accessibilityLabel("Options du championnat")
         // L'icône est centrée sur 44 pt : sans ce décalage, le bouton dépasserait la marge
         // latérale à droite et le sommet du titre à gauche.
@@ -186,8 +267,11 @@ struct ChampionnatDetailView: View {
         ScrollView {
             VStack(spacing: 12) {
                 listeClassement(membres)
-                WidgetGrandPrixSuivant(nom: "GP Pays-Bas", slug: "pays-bas",
-                                       echeance: "Fermeture dans 3 jours")
+                // Le GP de `GET /championnats/moi`. **Aucun GP ⇒ aucun widget** : plus rien
+                // à venir, ou lecture échouée côté serveur — rien à annoncer dans les deux cas.
+                if let prochainGp = championnat.prochainGp {
+                    WidgetGrandPrixSuivant(grandPrix: prochainGp)
+                }
             }
             .padding(.horizontal, margeLaterale)
             .padding(.bottom, 24)
@@ -396,38 +480,84 @@ private struct LigneClassement: View {
 ///
 /// **Le bouton NOMME sa destination** (`docs/swift-app.md` §7) — « Pronostiquer », jamais
 /// « Continuer ».
+///
+/// **Le bouton n'existe que si les pronostics sont ouverts** (``ProchainGP/pronosticsOuverts(le:)``,
+/// la condition de `cotesArretees` côté web) : avant le relevé des cotes, ou après le
+/// départ, le widget annonce le Grand Prix sans mener nulle part — un « Pronostiquer »
+/// vers un formulaire fermé serait une promesse que rien ne tient.
 private struct WidgetGrandPrixSuivant: View {
 
-    let nom: String
+    let grandPrix: ProchainGP
+
+    private var nom: String { grandPrix.nom }
 
     /// La clé des assets du pays hôte. Elle ne peint rien ici, elle **traverse** : c'est
     /// l'en-tête du récapitulatif, au bout du parcours, qui porte le drapeau.
-    let slug: String
+    private var slug: String { grandPrix.slug }
 
-    let echeance: String
+    private var ouvert: Bool { grandPrix.pronosticsOuverts() }
+
+    /// Ce que dit la seconde ligne. Lu à l'affichage : l'écran se recharge à chaque
+    /// apparition, une précision à la minute n'a pas à battre en direct ici.
+    private var echeance: String {
+        let maintenant = Date.now
+        if ouvert {
+            guard let depart = grandPrix.dateCourse else { return "Pronostics ouverts" }
+            return "Fermeture dans \(Self.duree(de: maintenant, a: depart))"
+        }
+        if let depart = grandPrix.dateCourse, depart > maintenant {
+            return "Course le \(depart.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).locale(Locale(identifier: "fr_FR"))))"
+        }
+        return "Pronostics fermés"
+    }
+
+    /// « 3j 14h », « 5h 12min », « 8min » — le format du compte à rebours de l'accueil.
+    private static func duree(de debut: Date, a fin: Date) -> String {
+        let minutes = max(0, Int(fin.timeIntervalSince(debut) / 60))
+        let (j, h, m) = (minutes / 1440, minutes % 1440 / 60, minutes % 60)
+        if j > 0 { return "\(j)j \(h)h" }
+        if h > 0 { return "\(h)h \(m)min" }
+        return "\(max(m, 1))min"
+    }
 
     var body: some View {
-        // **La destination est le tableau des cotes, pas la saisie.** Le parcours passe par
-        // les paris bonus avant les pronostics obligatoires : c'est ce que fait la version
-        // web, et c'est ce que le mode d'emploi de `CotesView` annonce.
-        NavigationLink(value: EtapePronos.cotes(nom: nom, slug: slug, sousTitre: echeance)) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(nom)
-                        .font(.custom("HelveticaNeue-Medium", size: 16))
-                        .foregroundColor(.white)              // 10,88:1 sur #800111
-                        .lineLimit(1)
+        if ouvert {
+            // **La destination est le tableau des cotes, pas la saisie.** Le parcours passe
+            // par les paris bonus avant les pronostics obligatoires : c'est ce que fait la
+            // version web, et c'est ce que le mode d'emploi de `CotesView` annonce.
+            NavigationLink(value: EtapePronos.cotes(nom: nom, slug: slug, sousTitre: echeance)) {
+                aplat
+            }
+            .buttonStyle(StyleAppui(.grandeSurface))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Pronostiquer pour le \(nom). \(echeance).")
+            .accessibilityAddTraits(.isButton)
+        } else {
+            aplat
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Prochain Grand Prix : \(nom). \(echeance).")
+        }
+    }
 
-                    // **`encreSecondaire` (blanc à 70 %, 5,75:1) et non le blanc à 60 % de
-                    // la maquette**, qui compose `#D9B3B8` sur le rouge — 4,47:1, sous le
-                    // plancher de 4,5:1 d'un texte ordinaire.
-                    Text(echeance)
-                        .font(.custom("HelveticaNeue", size: 12))
-                        .foregroundColor(.encreSecondaire)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private var aplat: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(nom)
+                    .font(.custom("HelveticaNeue-Medium", size: 16))
+                    .foregroundColor(.white)              // 10,88:1 sur #800111
+                    .lineLimit(1)
 
+                // **`encreSecondaire` (blanc à 70 %, 5,75:1) et non le blanc à 60 % de
+                // la maquette**, qui compose `#D9B3B8` sur le rouge — 4,47:1, sous le
+                // plancher de 4,5:1 d'un texte ordinaire.
+                Text(echeance)
+                    .font(.custom("HelveticaNeue", size: 12))
+                    .foregroundColor(.encreSecondaire)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if ouvert {
                 HStack(spacing: 6) {
                     Text("Pronostiquer")
                         .font(.custom("HelveticaNeue-Medium", size: 13))
@@ -440,25 +570,75 @@ private struct WidgetGrandPrixSuivant: View {
                 .background(Color.white.opacity(0.20))
                 .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .background {
-                // Aplat de la marque, galbé par la lumière spéculaire comme tous les
-                // aplats de l'app. Pas de damier : le widget est une bande basse, et le
-                // motif y passerait pour du bruit plutôt que pour une texture.
-                ZStack {
-                    Color.primaire
-                    LueurHaute()
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
-            .ombreAplat()                                     // aplat de couleur (§4.7)
         }
-        .buttonStyle(StyleAppui(.grandeSurface))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Pronostiquer pour le \(nom). \(echeance).")
-        .accessibilityAddTraits(.isButton)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .background {
+            // Aplat de la marque, galbé par la lumière spéculaire comme tous les
+            // aplats de l'app. Pas de damier : le widget est une bande basse, et le
+            // motif y passerait pour du bruit plutôt que pour une texture.
+            ZStack {
+                Color.primaire
+                LueurHaute()
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
+        .ombreAplat()                                     // aplat de couleur (§4.7)
+    }
+}
+
+// MARK: - Le code d'invitation
+
+/// Le code, en grand, et le partage système. **Une feuille compacte, pas un écran** : on
+/// vient chercher six caractères, on repart — un glissement vers le bas suffit à la fermer.
+///
+/// Le code se lit aussi à voix haute caractère par caractère : `F1X7K2` prononcé d'un bloc
+/// ne se recopie pas.
+private struct FeuilleCodeInvitation: View {
+
+    let championnat: Championnat
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 20) {
+            VStack(spacing: 6) {
+                Text("Code d'invitation")
+                    .font(.label)
+                    .tracking(Tracking.label)
+                    .textCase(.uppercase)
+                    .foregroundColor(.grisSecondaire)       // 4,71:1 sur le beige
+
+                Text(championnat.codeInvitation)
+                    .font(.scoreLg)
+                    .tracking(6)
+                    .foregroundColor(.texte)                // 15,37:1 sur le beige
+                    .textSelection(.enabled)
+                    .accessibilityLabel(championnat.codeInvitation.map(String.init).joined(separator: " "))
+
+                Text("Partage-le pour qu'on rejoigne « \(championnat.nom) ».")
+                    .font(.corpsSm)
+                    .foregroundColor(.grisSecondaire)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // La même phrase que l'écran « Créer » : l'ami la reçoit à l'identique, d'où
+            // qu'on la lui envoie.
+            ShareLink(item: "Rejoins mon championnat « \(championnat.nom) » sur Greed F1 avec le code \(championnat.codeInvitation).") {
+                Label("Partager", systemImage: "square.and.arrow.up")
+                    .habillageBoutonPrincipal(actif: true)
+            }
+            .buttonStyle(StyleAppui(.bouton))
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 28)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity)
+        .presentationDetents([.height(300)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Color.fondPrincipal)
     }
 }
 
@@ -653,12 +833,14 @@ extension Championnat {
         {"id": "5f0c6a1e-2b7d-4c1a-9e3f-8a2b1c0d9e7f", "nom": "Team Bazzana",
          "code_invitation": "F1X7K2", "cree_par": null,
          "cree_le": "2026-08-13T18:23:31+00:00", "nombre_membres": 8,
-         "est_createur": true, "photo_url": null}
+         "est_createur": true, "photo_url": null,
+         "prochain_gp": {"id": "9a1f0c2e-3b4d-4e5f-8a6b-7c8d9e0f1a2b", "nom": "GP Azerbaïdjan",
+                         "date_course": "2026-12-27T11:00:00+00:00", "statut": "cotes_figees"}}
         """.utf8))
 }
 
 #Preview {
     NavigationStack {
-        ChampionnatDetailView(championnat: .apercu)
+        ChampionnatDetailView(championnat: .apercu, mesChampionnats: MesChampionnats())
     }
 }

@@ -387,7 +387,7 @@ struct RejoindreChampionnatView: View {
     private var boutonRejoindre: some View {
         if let rejoint {
             NavigationLink {
-                ChampionnatDetailView(championnat: rejoint)
+                ChampionnatDetailView(championnat: rejoint, mesChampionnats: mesChampionnats)
             } label: {
                 Text("Voir le championnat")
                     .habillageBoutonPrincipal(actif: true)

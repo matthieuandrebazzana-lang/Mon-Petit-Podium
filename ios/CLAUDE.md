@@ -176,7 +176,7 @@ ios/
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
-    │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste — classement réel · menu « ⋯ » et widget GP mockés
+    │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste, menu « ⋯ » (code, quitter), widget GP — réels
     │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — reçoit le classement
     │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases → `POST /championnats/rejoindre`
