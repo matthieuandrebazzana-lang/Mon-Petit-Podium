@@ -973,8 +973,8 @@ sont documentées ici pour que personne ne les câble par erreur dans le client 
 > confirmation, il n'écrit que ce qui se rattrape — le figeage reste au job du samedi.
 > L'interrupteur « Mode admin actif » (`AuthViewModel.modeAdminActif`, état de session) vaut
 > **prévisualisation** : `modePrevisualisation = estAdmin && modeAdminActif` descend par
-> l'environnement et lève la seule condition `cotesArretees` des deux widgets « Pronostiquer »
-> (accueil, championnat), avec la pastille « Prévisualisation » sur les cotes et la saisie.
+> l'environnement et lève la seule condition `cotesArretees` du widget « Pronostiquer »
+> de l'accueil, avec la pastille « Prévisualisation » sur les cotes et la saisie.
 > Écart assumé avec le web, qui a deux interrupteurs : ici un seul, faute d'autres outils à
 > masquer.
 
@@ -2172,6 +2172,11 @@ que si `pronosticsOuverts`** — `cotesArretees` du web : `cotes_figees` et dép
 passé, départ inconnu ⇒ ouvert. Sinon le widget annonce « Course le … » ou « Pronostics
 fermés » sans mener nulle part. Le calcul d'échéance reste local au widget jusqu'à
 l'étape 5, qui en fera **un seul**.
+
+> **iOS 0.36.1 — le widget du championnat n'est plus cliquable.** Plus de bouton
+> « Pronostiquer » ni de lien : il annonce le Grand Prix et son échéance, rien d'autre. Le
+> chemin vers les pronostics passe par l'accueil. Les avatars du classement sont des
+> `PastilleProfil` — la photo si le membre en a une, l'initiale sur sa teinte sinon.
 
 
 **Étape 4, statistiques.** **Une seule route pour les deux profils** : `GET /profils/{id}/stats`,

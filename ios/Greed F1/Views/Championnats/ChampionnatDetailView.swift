@@ -491,18 +491,13 @@ private struct LigneClassement: View {
             .frame(width: 20, alignment: .leading)
     }
 
-    /// L'initiale sur la teinte du membre. La teinte se tire de son identifiant par
+    /// La photo du membre, ou son initiale sur sa teinte — ``PastilleProfil``, comme dans
+    /// ``ResultatsParGPView``. La teinte se tire de son identifiant par
     /// ``Color/teinteAvatar(pour:)`` : elle est donc **stable d'un lancement à l'autre** et
     /// la même dans tous les championnats où il figure.
     private var avatar: some View {
-        Circle()
-            .fill(Color.teinteAvatar(pour: membre.cleTeinte))
-            .frame(width: 36, height: 36)
-            .overlay {
-                Text(membre.pseudo.first.map { String($0).uppercased() } ?? "?")
-                    .font(.custom("HelveticaNeue-Medium", size: 14))
-                    .foregroundColor(.white)          // ≥ 10,35:1 sur les six teintes
-            }
+        PastilleProfil(pseudo: membre.pseudo, photo: membre.avatarUrl,
+                       fond: .teinteAvatar(pour: membre.cleTeinte), taille: 36)
             .accessibilityHidden(true)
     }
 
@@ -529,30 +524,15 @@ private struct LigneClassement: View {
 
 // MARK: - Le widget du Grand Prix suivant
 
-/// L'aplat rouge qui ferme le classement : quel Grand Prix vient, quand il ferme, et le
-/// bouton qui y mène.
+/// L'aplat rouge qui ferme le classement : quel Grand Prix vient, et quand il ferme.
 ///
-/// **Le bouton NOMME sa destination** (`docs/swift-app.md` §7) — « Pronostiquer », jamais
-/// « Continuer ».
-///
-/// **Le bouton n'existe que si les pronostics sont ouverts** (``ProchainGP/pronosticsOuverts(le:)``,
-/// la condition de `cotesArretees` côté web) : avant le relevé des cotes, ou après le
-/// départ, le widget annonce le Grand Prix sans mener nulle part — un « Pronostiquer »
-/// vers un formulaire fermé serait une promesse que rien ne tient.
+/// **Une carte informative, pas un lien.** Pas de bouton ni de chevron : le chemin vers
+/// les pronostics passe par l'accueil, et une seconde porte ici ferait doublon.
 private struct WidgetGrandPrixSuivant: View {
 
     let grandPrix: ProchainGP
 
     private var nom: String { grandPrix.nom }
-
-    /// La clé des assets du pays hôte. Elle ne peint rien ici, elle **traverse** : c'est
-    /// l'en-tête du récapitulatif, au bout du parcours, qui porte le drapeau.
-    private var slug: String { grandPrix.slug }
-
-    @Environment(\.modePrevisualisation) private var previsualisation
-
-    /// La prévisualisation admin lève cette seule condition (`decisions.md` §15 bis).
-    private var ouvert: Bool { grandPrix.pronosticsOuverts() || previsualisation }
 
     /// Ce que dit la seconde ligne — ``EcheancePronostics/phrase``, **le seul calcul
     /// d'échéance de l'app**. Lu à l'affichage : l'écran se recharge à chaque apparition,
@@ -560,24 +540,9 @@ private struct WidgetGrandPrixSuivant: View {
     private var echeance: String { grandPrix.echeance().phrase }
 
     var body: some View {
-        if ouvert {
-            // **La destination est le tableau des cotes, pas la saisie.** Le parcours passe
-            // par les paris bonus avant les pronostics obligatoires : c'est ce que fait la
-            // version web, et c'est ce que le mode d'emploi de `CotesView` annonce. Une
-            // grille déjà enregistrée ouvre son récapitulatif (``EntreePronosView``).
-            NavigationLink(value: EtapePronos.entree(GrandPrixPronos(
-                id: grandPrix.id, nom: nom, slug: slug, sousTitre: echeance))) {
-                aplat
-            }
-            .buttonStyle(StyleAppui(.grandeSurface))
+        aplat
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Pronostiquer pour le \(nom). \(echeance).")
-            .accessibilityAddTraits(.isButton)
-        } else {
-            aplat
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Prochain Grand Prix : \(nom). \(echeance).")
-        }
+            .accessibilityLabel("Prochain Grand Prix : \(nom). \(echeance).")
     }
 
     private var aplat: some View {
@@ -597,20 +562,6 @@ private struct WidgetGrandPrixSuivant: View {
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            if ouvert {
-                HStack(spacing: 6) {
-                    Text("Pronostiquer")
-                        .font(.custom("HelveticaNeue-Medium", size: 13))
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .frame(minHeight: 36)
-                .background(Color.white.opacity(0.20))
-                .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
-            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
