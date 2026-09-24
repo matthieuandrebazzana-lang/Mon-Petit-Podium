@@ -154,7 +154,8 @@ ios/
     │   ├── StatsProfil.swift    stats d'un profil + `tuiles` — seul endroit qui les met en forme
     │   ├── Championnat.swift    `Championnat`, `ProchainGP`, `PositionMembre`
     │   ├── GrandPrix.swift      `GrandPrixEnBase`, `SlugCircuit`, `EcheancePronostics` — LE calcul d'échéance
-    │   └── Membre.swift         une ligne de classement
+    │   ├── Membre.swift         une ligne de classement
+    │   └── ResultatsGP.swift    résultats d'une course : lignes, nom coupé, mention, livrée
     ├── Services/
     │   ├── SupabaseManager.swift  chemin direct, sous RLS
     │   ├── APIClient.swift        chemin Railway : Bearer, décodage, réessais, réveil
@@ -163,6 +164,7 @@ ios/
     │   ├── StatistiquesProfil.swift  `GET /profils/{id}/stats` — le sien comme celui d'un membre
     │   ├── CalendrierSaison.swift  `GET /scraper/cotes` — états et `gp_id` du calendrier
     │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil, lecture directe `grands_prix`
+    │   ├── ResultatsGrandPrix.swift  `GET /grands-prix/{id}/resultats` — 404 / `disponible: false` ⇒ indisponible
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
     │   ├── ContentView.swift
@@ -190,7 +192,7 @@ ios/
     │   │   ├── DetailGPView.swift     fiche d'un GP à venir : séances, circuit, vainqueurs — statique, état et `gp_id` reçus
     │   │   └── FichesGrandPrix.swift  séances + fiches circuit, transcrites de `GP_2026` et `CIRCUITS`
     │   ├── Resultats/
-    │   │   ├── ResultatsGPView.swift       mes résultats + classement officiel — MOCKÉS
+    │   │   ├── ResultatsGPView.swift       classement officiel réel ; « Mes résultats » non monté
     │   │   └── NationalitesPilotes.swift   pilote → pays, contrepartie de `lib/nationalites.js`
     │   ├── Pronos/
     │   │   ├── CotesView.swift      tableau des cotes + paris bonus, et `EtapePronos` — MOCKÉS

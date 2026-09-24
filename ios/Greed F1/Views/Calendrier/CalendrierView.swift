@@ -179,8 +179,7 @@ struct CalendrierView: View {
                 // vient forcément de la base : il a donc toujours le sien.
                 NavigationLink {
                     if gp.etat == .termine {
-                        ResultatsGPView(resultat: .pour(slug: gp.slug, nom: gp.nom, date: gp.date,
-                                                        gpId: gp.gpId))
+                        ResultatsGPView(nom: gp.nom, date: gp.date, gpId: gp.gpId)
                     } else {
                         DetailGPView(grandPrix: gp)
                     }

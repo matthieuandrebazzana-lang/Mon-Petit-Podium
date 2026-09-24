@@ -1,53 +1,59 @@
 import SwiftUI
 
-/// Les résultats d'un Grand Prix couru — **ce que j'ai marqué**, puis **qui a gagné**.
+/// Les résultats d'un Grand Prix couru — le classement officiel de la course.
 ///
 /// Références visuelles : `maquettes_V2/IMG_3247.PNG` et `IMG_3248.PNG`, la version web sur
 /// iPhone. Le pendant web est `frontend/src/ecrans/ResultatsGp.jsx`, qui reste le
 /// propriétaire des règles reprises ici.
 ///
-/// ## Deux sections, dans l'ordre où l'on se pose les questions
+/// ## Ce qui est branché
 ///
-/// **« Mes résultats »** ouvre l'écran — le total du joueur sur ce Grand Prix, puis un
-/// widget par pronostic joué. **« Résultats du GP »** suit, avec le classement complet de
-/// la course. Les deux portent le même en-tête, un filet bordeaux et un titre, pour se lire
-/// comme deux pairs et non comme un bloc et son annexe.
+/// **« Résultats du GP »** lit `GET /grands-prix/{id}/resultats` (``ResultatsGrandPrix``),
+/// appelée **sans** `championnat_id` : le classement de la course seul. Positions,
+/// abandons, non-partants et disqualifiés viennent de la réponse ; **ni pole ni meilleur
+/// tour** — le backend ne les sert pas, l'écran ne les invente pas.
 ///
-/// > **La troisième section de la version web — le classement des membres du championnat —
-/// > n'est pas ici**, et c'est délibéré : elle n'a de sens qu'ouverte depuis un
-/// > championnat, et l'écran est atteint depuis le calendrier, où il n'y a aucun membre
-/// > à classer. Elle viendra avec le câblage de `GET /grands-prix/{id}/resultats`.
+/// `disponible: false`, classement vide, `404` ou Grand Prix inconnu de la base ⇒
+/// « Résultats non disponibles », **jamais un classement vide**, qui se lirait comme une
+/// course où personne n'aurait fini. Un vrai échec passe par ``EchecChargement``.
 ///
-/// > **Les données sont mockées.** ``ResultatGPMock`` porte les valeurs de la capture ;
-/// > aucun appel réseau ne part de cet écran.
+/// > **« Mes résultats » n'est pas monté** : ses données (mes pronostics en direct) sont
+/// > le reste de l'étape 6. ``SectionMesResultats`` attend, non montée, plutôt que
+/// > d'afficher des pronostics inventés.
 ///
 /// ## Les règles que l'écran ne décide pas
-///
-/// **Les points sont des entiers, jamais une cote** (`CLAUDE.md` §3.1) : « 24 pts », et
-/// nulle part un « ×2,40 ». **`NULL` et `0` ne se confondent jamais** — un pronostic pas
-/// encore jugé porte une pastille beige et une horloge, un pronostic raté une pastille
-/// bordeaux et une croix. Les deux états ne peuvent pas prendre la même couleur, c'est la
-/// seule distinction qu'aucun écran n'a le droit de perdre.
 ///
 /// **`pointsFia` est le seul nombre de l'app qui ne soit pas des points au sens de la règle
 /// 3.1** : ce sont les points du championnat du monde (25, 18, 15…). Il s'écrit donc à la
 /// main, **jamais par ``Swift/Int/enPoints``**, qui est l'habilleur des points de
-/// pronostic : lui confier ce nombre-ci le ferait entrer dans le même vocabulaire, et un
-/// ajustement futur de l'unité se propagerait ici sans que rien ne le dise.
+/// pronostic.
 ///
 /// ## Rien n'anime, et c'est une décision
 ///
-/// Le portier du mouvement pose d'abord la question « cette chose doit-elle animer du tout
-/// ? ». Ici, non : l'écran est une **lecture pure** — aucun geste, aucun état qui change,
-/// vingt-sept cartes qui arrivent déjà remplies. Une entrée en cascade sur vingt-deux
-/// lignes de classement ferait attendre le résultat qu'on vient lire, et un écran de
-/// résultats se consulte plusieurs fois par week-end. Le seul mouvement est celui du
-/// défilement, et le seul retour d'appui celui du chevron de retour natif. **Aucun jeton de
-/// mouvement nouveau n'entre** (`CLAUDE.md` §4).
+/// L'écran est une **lecture pure** — aucun geste, aucun état qui change une fois chargé.
+/// Une entrée en cascade sur vingt-deux lignes ferait attendre le résultat qu'on vient
+/// lire. Le classement remplace le spinner sans transition. **Aucun jeton de mouvement
+/// nouveau n'entre** (`CLAUDE.md` §4).
 struct ResultatsGPView: View {
 
-    /// Le Grand Prix couru, son classement et mes pronostics.
-    let resultat: ResultatGPMock
+    let nom: String
+    /// La date **écrite** du calendrier, jamais dérivée d'une `Date` (voir ``CalendrierView``).
+    let date: String
+
+    @StateObject private var resultats: ResultatsGrandPrix
+
+    init(nom: String, date: String, gpId: UUID?) {
+        self.nom = nom
+        self.date = date
+        _resultats = StateObject(wrappedValue: ResultatsGrandPrix(gpId: gpId))
+    }
+
+    /// Pour les aperçus : un état posé d'avance, aucun appel.
+    init(nom: String, date: String, apercu: ResultatsGrandPrix.Etat) {
+        self.nom = nom
+        self.date = date
+        _resultats = StateObject(wrappedValue: ResultatsGrandPrix(gpId: nil, etat: apercu))
+    }
 
     /// Marge latérale commune à tous les écrans — la même que `CalendrierView`, sans quoi
     /// la carte du calendrier et l'écran qu'elle ouvre ne s'aligneraient pas.
@@ -63,21 +69,11 @@ struct ResultatsGPView: View {
                     entete
 
                     Spacer().frame(height: 24)      // changement de sujet : 24 pt (§4.6)
-                    TitreSectionResultats(titre: "Mes résultats",
-                                          sousTitre: "Ce que tes pronostics ont rapporté")
-
-                    Spacer().frame(height: 12)
-                    blocTotal
-
-                    Spacer().frame(height: 10)
-                    mesPronostics
-
-                    Spacer().frame(height: 24)
                     TitreSectionResultats(titre: "Résultats du GP",
                                           sousTitre: "Classement officiel de la course")
 
                     Spacer().frame(height: 12)
-                    classement
+                    contenu
                 }
                 .padding(.horizontal, margeLaterale)
                 .padding(.top, 8)
@@ -90,13 +86,14 @@ struct ResultatsGPView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .task { await resultats.charger() }
     }
 
     // MARK: - En-tête
 
     private var entete: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(resultat.nom)
+            Text(nom)
                 .font(.titre)
                 .tracking(Tracking.titre)
                 .foregroundColor(.texte)            // 15,37:1 sur le beige
@@ -104,8 +101,9 @@ struct ResultatsGPView: View {
                 .minimumScaleFactor(0.85)
 
             // `grisSecondaire` (4,71:1) et non le `#999999` de la version web (2,52:1) :
-            // le contraste se mesure (`ios/CLAUDE.md` §3).
-            Text("\(resultat.etat) · \(resultat.date)")
+            // le contraste se mesure (`ios/CLAUDE.md` §3). Seul un GP « Terminé » ouvre
+            // cet écran (``CalendrierView``).
+            Text("Terminé · \(date)")
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
         }
@@ -113,14 +111,87 @@ struct ResultatsGPView: View {
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Section 1 — Mes résultats
+    // MARK: - Résultats du GP
 
-    /// Le bloc rouge : le total du joueur sur ce Grand Prix.
-    ///
-    /// **`total` nul ne vaut pas zéro** — c'est « rien n'est encore jugé », et l'écrire
-    /// « 0 » annoncerait un échec qui n'a pas eu lieu (`CLAUDE.md` §3.1). Le tiret le dit,
-    /// et la ligne du dessous compte alors des pronostics en attente plutôt que des
-    /// réussites.
+    @ViewBuilder private var contenu: some View {
+        switch resultats.etat {
+        case .chargement:
+            ProgressView()
+                .tint(.secondaire)
+                .frame(maxWidth: .infinity, minHeight: 120)
+                .accessibilityLabel("Chargement des résultats")
+
+        case .echec(let erreur):
+            EchecChargement(erreur: erreur) {
+                Task { await resultats.charger() }
+            }
+
+        case .indisponible:
+            VStack(spacing: 4) {
+                Text("Résultats non disponibles")
+                    .font(.custom("HelveticaNeue-Medium", size: 15))
+                    .foregroundColor(.texte)        // 15,37:1 sur le beige
+                Text("Ils apparaîtront ici une fois la course récupérée.")
+                    .font(.custom("HelveticaNeue", size: 13))
+                    .foregroundColor(.grisSecondaire)   // 4,71:1 sur le beige
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 120)
+            .accessibilityElement(children: .combine)
+
+        case .pret(let classement):
+            VStack(spacing: 8) {
+                ForEach(classement) { ligne in
+                    LigneClassementGP(ligne: ligne)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Section « Mes résultats » — non montée
+
+/// Le total du joueur sur ce Grand Prix, puis un widget par pronostic joué.
+///
+/// **Non montée** tant que mes pronostics ne sont pas lus en direct (reste de l'étape 6) :
+/// l'afficher sur des valeurs inventées mentirait. Le code est éprouvé contre la capture,
+/// il reste en place (`CLAUDE.md` §6).
+///
+/// **Les points sont des entiers, jamais une cote** (`CLAUDE.md` §3.1). **`NULL` et `0` ne
+/// se confondent jamais** — un pronostic pas encore jugé porte une pastille beige et une
+/// horloge, un pronostic raté une pastille bordeaux et une croix.
+struct SectionMesResultats: View {
+
+    let pronostics: [PronosticJoueMock]
+
+    /// Le total **se lit sur les pronostics**. `nil` tant qu'aucun n'est jugé — « pas
+    /// encore jugé » n'est pas « zéro ».
+    private var total: Int? {
+        let juges = pronostics.compactMap(\.pointsGagnes)
+        return juges.isEmpty ? nil : juges.reduce(0, +)
+    }
+
+    private var juges: Int { pronostics.filter { $0.pointsGagnes != nil }.count }
+    private var reussis: Int { pronostics.filter { ($0.pointsGagnes ?? 0) > 0 }.count }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TitreSectionResultats(titre: "Mes résultats",
+                                  sousTitre: "Ce que tes pronostics ont rapporté")
+            Spacer().frame(height: 12)
+            blocTotal
+            Spacer().frame(height: 10)
+            VStack(spacing: 8) {
+                ForEach(pronostics) { pronostic in
+                    CartePronostic(pronostic: pronostic)
+                }
+            }
+        }
+    }
+
+    /// Le bloc rouge : le total du joueur. **`total` nul ne vaut pas zéro** — le tiret le
+    /// dit, et la ligne du dessous compte alors des pronostics en attente.
     private var blocTotal: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Mes points ce GP")
@@ -131,7 +202,7 @@ struct ResultatsGPView: View {
 
             Spacer().frame(height: 6)
 
-            Text(resultat.total.map(\.enPoints) ?? "—")
+            Text(total.map(\.enPoints) ?? "—")
                 .font(.scoreLg)
                 .tracking(Tracking.scoreLg)
                 .foregroundColor(.white)            // 10,88:1 sur le bordeaux
@@ -150,36 +221,14 @@ struct ResultatsGPView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// « 1 prono réussi sur 5 », ou le décompte de ce qui attend encore d'être jugé.
-    ///
-    /// **Le pluriel est porté par la valeur**, jamais écrit en dur : « 1 pronos réussis »
-    /// se serait lu sur tout Grand Prix à une seule réussite.
+    /// **Le pluriel est porté par la valeur**, jamais écrit en dur.
     private var recapitulatif: String {
-        guard resultat.total != nil else {
-            let n = resultat.pronostics.count
+        guard total != nil else {
+            let n = pronostics.count
             return "\(n) pronostic\(n > 1 ? "s" : "") en attente de validation"
         }
-        let reussis = resultat.reussis
         return "\(reussis) prono\(reussis > 1 ? "s" : "") réussi\(reussis > 1 ? "s" : "") "
-             + "sur \(resultat.juges)"
-    }
-
-    private var mesPronostics: some View {
-        VStack(spacing: 8) {
-            ForEach(resultat.pronostics) { pronostic in
-                CartePronostic(pronostic: pronostic)
-            }
-        }
-    }
-
-    // MARK: - Section 2 — Résultats du GP
-
-    private var classement: some View {
-        VStack(spacing: 8) {
-            ForEach(resultat.classement) { ligne in
-                LigneClassementGP(ligne: ligne)
-            }
-        }
+             + "sur \(juges)"
     }
 }
 
@@ -382,18 +431,16 @@ private struct Verdict: View {
 /// asset — mais il arrivera sur un pilote remplaçant qu'aucune table ne connaît encore.
 private struct LigneClassementGP: View {
 
-    let ligne: LigneClassementMock
+    let ligne: LigneResultat
 
     /// Hauteur de la miniature. Les douze fenêtres de voiture font 141,12 × 288,09, soit un
     /// rapport de 0,49 : à 50 pt de haut la voiture fait 24,5 pt de large.
     private let hauteurVoiture: CGFloat = 50
 
-    /// **Le nom complet, pas le seul nom de famille** : c'est sur son dernier mot que porte
-    /// le garde-fou de la table, et lui passer « Sainz » quand elle attend « Carlos Sainz »
-    /// reviendrait au même, mais lui passer un prénom seul ne dirait rien.
+    /// **Le nom complet d'OpenF1** : c'est sur son dernier mot que porte le garde-fou de
+    /// la table, confronté au numéro.
     private var nationalite: NationalitesPilotes.Nationalite? {
-        NationalitesPilotes.nationalite(numero: ligne.numero,
-                                        nom: "\(ligne.prenom) \(ligne.nom)")
+        NationalitesPilotes.nationalite(numero: ligne.driverNumber, nom: ligne.pilote)
     }
 
     var body: some View {
@@ -410,7 +457,7 @@ private struct LigneClassementGP: View {
             // La vraie livrée de l'écurie, jamais un rond de couleur. Un slug inconnu
             // retombe sur la voiture personnalisable plutôt que de laisser un trou.
             VueVoiture(livree: Livree(mode: .ecurie, ecurie: ligne.ecurieSlug),
-                       numero: ligne.numero.map(String.init) ?? "")
+                       numero: ligne.driverNumber.map(String.init) ?? "")
                 .frame(height: hauteurVoiture)
                 .accessibilityHidden(true)
 
@@ -459,7 +506,7 @@ private struct LigneClassementGP: View {
     /// seul mot** : elles ne peuvent pas se cumuler à l'écran, et l'ordre est celui de la
     /// gravité — un disqualifié a d'abord été classé.
     private var sousLigne: String {
-        [ligne.ecurie, ligne.mention].compactMap { $0 }.joined(separator: " · ")
+        [ligne.equipe, ligne.mention].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var fond: some View {
@@ -523,151 +570,53 @@ struct PronosticJoueMock: Identifiable {
     let pointsGagnes: Int?
 }
 
-/// Une ligne du classement de la course.
-///
-/// **Le prénom et le nom sont deux champs**, pas un nom complet coupé à l'affichage :
-/// OpenF1 écrit son `full_name` avec le nom de famille en capitales (« Max VERSTAPPEN »),
-/// et le découpage est un travail de lecture de la donnée, pas de mise en page. Il vivra
-/// dans le modèle du backend quand l'écran sera câblé.
-struct LigneClassementMock: Identifiable {
-    /// `nil` pour un pilote non classé — l'abandon précoce.
-    let position: Int?
-    /// Le numéro de voiture. Il sert deux fois : peint sur le museau, et **confronté au nom
-    /// de famille** par ``NationalitesPilotes`` avant qu'un drapeau soit posé.
-    let numero: Int?
-    let prenom: String
-    let nom: String
-    let ecurie: String
-    /// Le slug de la livrée — la clé de ``LivreeEcurie``, jamais le libellé affiché.
-    let ecurieSlug: String
-    /// Les points du **championnat du monde** (25, 18, 15…), pas des points de pronostic.
-    let pointsFia: Int
-    /// « Abandon », « Non partant », « Disqualifié » — ou rien.
-    var mention: String?
+#if DEBUG
+extension LigneResultat {
 
-    var id: String { "\(numero ?? 0)-\(nom)" }
+    /// Le GP Espagne de la capture — `maquettes_V2/IMG_3247.PNG` et `IMG_3248.PNG`, dans
+    /// la forme d'OpenF1 (nom de famille en capitales, libellé d'écurie long).
+    static let apercu: [LigneResultat] = [
+        .init(position: 1,  driverNumber: 12, pilote: "Kimi ANTONELLI",   equipe: "Mercedes",        pointsFia: 25),
+        .init(position: 2,  driverNumber: 3,  pilote: "Max VERSTAPPEN",   equipe: "Red Bull Racing", pointsFia: 18),
+        .init(position: 3,  driverNumber: 1,  pilote: "Lando NORRIS",     equipe: "McLaren",         pointsFia: 15),
+        .init(position: 4,  driverNumber: 16, pilote: "Charles LECLERC",  equipe: "Ferrari",         pointsFia: 12),
+        .init(position: 5,  driverNumber: 63, pilote: "George RUSSELL",   equipe: "Mercedes",        pointsFia: 10),
+        .init(position: 6,  driverNumber: 30, pilote: "Liam LAWSON",      equipe: "Racing Bulls",    pointsFia: 8),
+        .init(position: 7,  driverNumber: 43, pilote: "Franco COLAPINTO", equipe: "Alpine",          pointsFia: 6),
+        .init(position: 8,  driverNumber: 81, pilote: "Oscar PIASTRI",    equipe: "McLaren",         pointsFia: 4),
+        .init(position: 9,  driverNumber: 55, pilote: "Carlos SAINZ",     equipe: "Williams",        pointsFia: 2),
+        .init(position: 10, driverNumber: 27, pilote: "Nico HULKENBERG",  equipe: "Audi",            pointsFia: 1),
+        .init(position: 11, driverNumber: 44, pilote: "Lewis HAMILTON",   equipe: "Ferrari",         pointsFia: 0, abandon: true),
+        .init(position: nil, driverNumber: 18, pilote: "Lance STROLL",    equipe: "Aston Martin",    pointsFia: 0, abandon: true),
+        .init(position: nil, driverNumber: 87, pilote: "Oliver BEARMAN",  equipe: "Haas F1 Team",    pointsFia: 0, nonPartant: true)
+    ]
 }
 
-/// Les résultats d'un Grand Prix. Remplacé par le modèle du backend quand l'écran sera
-/// câblé sur `GET /grands-prix/{id}/resultats`.
-struct ResultatGPMock {
+extension PronosticJoueMock {
 
-    let slug: String
-    let nom: String
-    /// L'état du Grand Prix, tel que le calendrier l'écrit — « Terminé ».
-    let etat: String
-    /// La date **écrite**, jamais dérivée d'une `Date` : `2026-09-13` analysée comme une
-    /// date nue vaut minuit UTC, et le quantième reculerait d'un jour à l'ouest de
-    /// Greenwich. C'est la règle de `CalendrierView`, et elle vaut ici à l'identique.
-    let date: String
-
-    let pronostics: [PronosticJoueMock]
-    let classement: [LigneClassementMock]
-
-    /// **L'identifiant réel** du Grand Prix, transmis par le calendrier — c'est lui que
-    /// demandera `GET /grands-prix/{id}/resultats` à l'étape 6. `nil` sur un aperçu.
-    var gpId: UUID? = nil
-
-    /// Le total **se lit sur les pronostics**, il n'est pas écrit à côté : une constante
-    /// aurait divergé de la liste au premier pronostic retouché. `nil` tant qu'aucun
-    /// pronostic n'est jugé — « pas encore jugé » n'est pas « zéro » (`CLAUDE.md` §3.1).
-    var total: Int? {
-        let juges = pronostics.compactMap(\.pointsGagnes)
-        return juges.isEmpty ? nil : juges.reduce(0, +)
-    }
-
-    /// Le nombre de pronostics jugés, et celui qui a rapporté quelque chose.
-    var juges: Int { pronostics.filter { $0.pointsGagnes != nil }.count }
-    var reussis: Int { pronostics.filter { ($0.pointsGagnes ?? 0) > 0 }.count }
-
-    /// Les résultats d'un Grand Prix couru, **pour un mock**.
-    ///
-    /// Les trois Grands Prix derrière nous partagent le classement et les pronostics de la
-    /// capture, et seuls leur nom et leur date changent. C'est assumé : la donnée viendra
-    /// de `GET /grands-prix/{id}/resultats`, et écrire trois classements inventés à la main
-    /// aurait donné trois tables à corriger le jour où une seule doit disparaître.
-    static func pour(slug: String, nom: String, date: String, gpId: UUID?) -> ResultatGPMock {
-        ResultatGPMock(slug: slug, nom: nom, etat: "Terminé", date: date,
-                       pronostics: gpEspagne.pronostics, classement: gpEspagne.classement,
-                       gpId: gpId)
-    }
-
-    /// Le GP Espagne de la capture — `maquettes_V2/IMG_3247.PNG` et `IMG_3248.PNG`.
-    ///
-    /// > **Lawson court pour Red Bull et Hadjar pour Racing Bulls**, ce qui inverse la
-    /// > grille de `frontend/src/lib/ecuries.js`. C'est ce que montre la capture, et c'est
-    /// > elle qui fait foi pour un mock : chaque écurie garde ainsi ses deux pilotes.
-    /// > La table du web reste le propriétaire de la question le jour où l'écran sera
-    /// > câblé — le classement viendra alors d'OpenF1, qui sait qui court pour qui.
-    static let gpEspagne = ResultatGPMock(
-        slug: "espagne",
-        nom: "GP Espagne",
-        etat: "Terminé",
-        date: "13 septembre 2026",
-        pronostics: [
-            PronosticJoueMock(marche: "Vainqueur", choix: "L.Hamilton",
-                              points: 95, pointsGagnes: 0),
-            PronosticJoueMock(marche: "Podium", choix: "L.Norris + AK.Antonelli",
-                              points: 24, pointsGagnes: 24),
-            PronosticJoueMock(marche: "Ecart du gagnant", choix: "Entre 5 et 10 secondes",
-                              points: 41, pointsGagnes: 0),
-            PronosticJoueMock(marche: "Top 10", choix: "P.Gasly",
-                              points: 18, pointsGagnes: 0),
-            PronosticJoueMock(marche: "Nationalité du vainqueur", choix: "Royaume-Uni",
-                              points: 21, pointsGagnes: 0)
-        ],
-        classement: [
-            .init(position: 1,  numero: 12, prenom: "Kimi",     nom: "Antonelli",
-                  ecurie: "Mercedes",     ecurieSlug: "mercedes",     pointsFia: 25),
-            .init(position: 2,  numero: 3,  prenom: "Max",      nom: "Verstappen",
-                  ecurie: "Red Bull Racing", ecurieSlug: "red-bull",  pointsFia: 18),
-            .init(position: 3,  numero: 1,  prenom: "Lando",    nom: "Norris",
-                  ecurie: "McLaren",      ecurieSlug: "mclaren",      pointsFia: 15),
-            .init(position: 4,  numero: 16, prenom: "Charles",  nom: "Leclerc",
-                  ecurie: "Ferrari",      ecurieSlug: "ferrari",      pointsFia: 12),
-            .init(position: 5,  numero: 63, prenom: "George",   nom: "Russell",
-                  ecurie: "Mercedes",     ecurieSlug: "mercedes",     pointsFia: 10),
-            .init(position: 6,  numero: 30, prenom: "Liam",     nom: "Lawson",
-                  ecurie: "Red Bull Racing", ecurieSlug: "red-bull",  pointsFia: 8),
-            .init(position: 7,  numero: 43, prenom: "Franco",   nom: "Colapinto",
-                  ecurie: "Alpine",       ecurieSlug: "alpine",       pointsFia: 6),
-            .init(position: 8,  numero: 81, prenom: "Oscar",    nom: "Piastri",
-                  ecurie: "McLaren",      ecurieSlug: "mclaren",      pointsFia: 4),
-            .init(position: 9,  numero: 41, prenom: "Arvid",    nom: "Lindblad",
-                  ecurie: "Racing Bulls", ecurieSlug: "racing-bulls", pointsFia: 2),
-            .init(position: 10, numero: 6,  prenom: "Isack",    nom: "Hadjar",
-                  ecurie: "Racing Bulls", ecurieSlug: "racing-bulls", pointsFia: 1),
-            .init(position: 11, numero: 44, prenom: "Lewis",    nom: "Hamilton",
-                  ecurie: "Ferrari",      ecurieSlug: "ferrari",      pointsFia: 0),
-            .init(position: 12, numero: 10, prenom: "Pierre",   nom: "Gasly",
-                  ecurie: "Alpine",       ecurieSlug: "alpine",       pointsFia: 0),
-            .init(position: 13, numero: 14, prenom: "Fernando", nom: "Alonso",
-                  ecurie: "Aston Martin", ecurieSlug: "aston-martin", pointsFia: 0),
-            .init(position: 14, numero: 55, prenom: "Carlos",   nom: "Sainz",
-                  ecurie: "Williams",     ecurieSlug: "williams",     pointsFia: 0),
-            .init(position: 15, numero: 23, prenom: "Alexander", nom: "Albon",
-                  ecurie: "Williams",     ecurieSlug: "williams",     pointsFia: 0),
-            .init(position: 16, numero: 27, prenom: "Nico",     nom: "Hulkenberg",
-                  ecurie: "Audi",         ecurieSlug: "audi",         pointsFia: 0),
-            .init(position: 17, numero: 5,  prenom: "Gabriel",  nom: "Bortoleto",
-                  ecurie: "Audi",         ecurieSlug: "audi",         pointsFia: 0),
-            .init(position: 18, numero: 31, prenom: "Esteban",  nom: "Ocon",
-                  ecurie: "Haas",         ecurieSlug: "haas",         pointsFia: 0),
-            .init(position: 19, numero: 87, prenom: "Oliver",   nom: "Bearman",
-                  ecurie: "Haas",         ecurieSlug: "haas",         pointsFia: 0),
-            .init(position: 20, numero: 77, prenom: "Valtteri", nom: "Bottas",
-                  ecurie: "Cadillac",     ecurieSlug: "cadillac",     pointsFia: 0),
-            .init(position: 21, numero: 11, prenom: "Sergio",   nom: "Perez",
-                  ecurie: "Cadillac",     ecurieSlug: "cadillac",     pointsFia: 0),
-            .init(position: nil, numero: 18, prenom: "Lance",   nom: "Stroll",
-                  ecurie: "Aston Martin", ecurieSlug: "aston-martin", pointsFia: 0,
-                  mention: "Abandon")
-        ]
-    )
+    /// Les pronostics de la capture, pour l'aperçu de ``SectionMesResultats``.
+    static let apercu: [PronosticJoueMock] = [
+        PronosticJoueMock(marche: "Vainqueur", choix: "L.Hamilton", points: 95, pointsGagnes: 0),
+        PronosticJoueMock(marche: "Podium", choix: "L.Norris + AK.Antonelli", points: 24, pointsGagnes: 24),
+        PronosticJoueMock(marche: "Top 10", choix: "P.Gasly", points: 18, pointsGagnes: nil)
+    ]
 }
+#endif
 
-#Preview {
+#Preview("Classement") {
     NavigationStack {
-        ResultatsGPView(resultat: .gpEspagne)
+        ResultatsGPView(nom: "GP Espagne", date: "13 septembre 2026",
+                        apercu: .pret(LigneResultat.apercu))
     }
+}
+
+#Preview("Non disponibles") {
+    NavigationStack {
+        ResultatsGPView(nom: "GP Azerbaïdjan", date: "26 septembre 2026", apercu: .indisponible)
+    }
+}
+
+#Preview("Mes résultats") {
+    ScrollView { SectionMesResultats(pronostics: PronosticJoueMock.apercu).padding(16) }
+        .background(Color.fondPrincipal)
 }

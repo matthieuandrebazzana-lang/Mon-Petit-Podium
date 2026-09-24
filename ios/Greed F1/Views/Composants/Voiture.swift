@@ -239,6 +239,43 @@ struct LivreeEcurie: Identifiable {
         guard let slug else { return nil }
         return toutes.first { $0.slug == slug }
     }
+
+    /// La livrée d'une écurie désignée par **n'importe lequel de ses libellés** — « Red
+    /// Bull », « Red Bull Racing », « Oracle Red Bull Racing ». C'est la forme d'OpenF1 que
+    /// reçoit le classement d'une course, et il n'a que ça pour choisir la voiture.
+    ///
+    /// Transcription de `livreeDeLEcurie` + `ALIAS_ECURIES` (`frontend/src/lib/`) —
+    /// **à mettre à jour avec eux, à chaque saison**. `nil` pour un libellé inconnu.
+    static func duLibelle(_ libelle: String?) -> LivreeEcurie? {
+        guard let libelle, !libelle.isEmpty else { return nil }
+        let recu = cle(libelle)
+        if let nom = alias.first(where: { cle($0.key) == recu })?.value {
+            return toutes.first { $0.nom == nom }
+        }
+        return toutes.first { cle($0.nom) == recu }
+    }
+
+    private static let alias: [String: String] = [
+        "Red Bull Racing": "Red Bull", "Oracle Red Bull Racing": "Red Bull",
+        "Haas F1 Team": "Haas", "MoneyGram Haas": "Haas",
+        "Audi F1 Team": "Audi", "Audi Sauber": "Audi", "Sauber": "Audi",
+        "Alpine F1 Team": "Alpine", "BWT Alpine": "Alpine",
+        "Aston Martin Aramco": "Aston Martin",
+        "Visa Cash App RB": "Racing Bulls", "RB": "Racing Bulls",
+        "Cadillac F1 Team": "Cadillac",
+        "Scuderia Ferrari": "Ferrari",
+        "Mercedes AMG": "Mercedes",
+        "Williams Racing": "Williams"
+    ]
+
+    /// La `cle` du web : accents ôtés, minuscules, espaces, points et tirets fondus.
+    private static func cle(_ texte: String) -> String {
+        texte.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .map { ".-".contains($0) ? " " : $0 }
+            .reduce(into: "") { $0.append($1) }
+            .split(separator: " ", omittingEmptySubsequences: true)
+            .joined(separator: " ")
+    }
 }
 
 // MARK: - Ce que porte une voiture

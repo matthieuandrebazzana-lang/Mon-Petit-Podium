@@ -2077,7 +2077,7 @@ ci-dessous ; chaque étape ne dépend que des précédentes.
 | **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | **Fait** (iOS 0.24.0) |
 | **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | **Stats (moi et membre) faites** (iOS 0.25.0) — `PATCH`, avatar, Administration, « Ses Grands Prix » à faire |
 | **5** | Calendrier : liste statique **croisée** avec `GET /scraper/cotes` → états réels **et `gp_id`** · GP suivant de l'accueil en lecture directe · **un seul calcul d'échéance** (§6.4) | **Fait** (iOS 0.26.0) |
-| **6** | Résultats : `GET /grands-prix/{id}/resultats` + mes pronostics en direct, puis `?championnat_id=` | |
+| **6** | Résultats : `GET /grands-prix/{id}/resultats` + mes pronostics en direct, puis `?championnat_id=` | **Classement de course fait** (iOS 0.27.0) — mes pronostics et `?championnat_id=` à faire |
 | **7** | Pronostics : `EtapePronos` porte le `gp_id` · cotes réelles · bonus = favoris serveur · `POST …/pronostics` avec `423` · destination du widget d'accueil | |
 
 **Pourquoi cet ordre.** Les championnats d'abord : les écrans les plus vus, une seule route,
@@ -2205,6 +2205,19 @@ dans `grands_prix` (`Services/ProchainGrandPrix.swift`, `a_venir`/`cotes_figees`
 croissant, inconnu en dernier), silhouette rouge de même hauteur pendant le chargement ;
 aucun GP à venir ⇒ pas de widget (le repli web sur le dernier GP couru n'est pas repris).
 Le widget ne mène aux cotes **que si `cotesArretees`**.
+
+**Étape 6, classement de course.** `Services/ResultatsGrandPrix.swift`, possédé par
+`ResultatsGPView` (`@StateObject`), appelle `GET /grands-prix/{id}/resultats` **sans**
+`championnat_id` à chaque apparition ; `Models/ResultatsGP.swift` ne décode que
+`disponible`, `recupere_le` et `classement` (champs à défaut Pydantic). **Ni pole ni meilleur
+tour** : la route ne les sert pas, l'écran ne les affiche pas. Abandon, non-partant et
+disqualifié donnent la mention de la ligne, `position` nulle un tiret. `disponible: false`,
+classement vide, `404` ou `gp_id` nul ⇒ « Résultats non disponibles » (pas un échec, pas de
+« Réessayer ») ; les autres erreurs passent par `EchecChargement`. Le nom OpenF1
+(« Max VERSTAPPEN ») est coupé comme `couperLeNom` ; l'écurie OpenF1 → livrée par
+`LivreeEcurie.duLibelle`, transcription de `ALIAS_ECURIES` — **à tenir avec le web**.
+**« Mes résultats » n'est plus monté** (`SectionMesResultats`, code conservé) : il
+attend la lecture directe de mes pronostics ; `ResultatGPMock` est supprimé.
 ---
 
 ## 8. Références
