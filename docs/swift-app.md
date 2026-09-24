@@ -2247,6 +2247,12 @@ empilé qu'après le `200`** (`avancer`, passé par `etapesPronos`), avec la gri
 `BlocEcheance` lit `EcheancePronostics` (`TimelineView` à la seconde). `GrilleMock`,
 `PariBonus` et `EcheanceMock` sont supprimés ; il reste `GrillePilotes`, la table
 pilote → écurie.
+**Porte d'entrée** (iOS 0.32.0) : les widgets empilent `EtapePronos.entree`, et
+`EntreePronosView` choisit le premier écran — **récapitulatif** si vainqueur et podium sont
+déjà en base (`GrilleEnregistree(relue:)`, mêmes rapprochements que le préremplissage),
+**tableau des cotes** sinon. Le choix est figé au premier chargement ; le récapitulatif se
+relit à chaque retour. Ouvert d'entrée, son « Modifier mes pronos » empile `.cotes` puis la
+saisie ; après un `200`, il ferme l'écran comme avant. Le chargeur est passé à `CotesView`.
 ---
 
 ## 8. Références

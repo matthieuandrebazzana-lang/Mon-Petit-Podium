@@ -452,17 +452,13 @@ struct PronosView: View {
         // écrit ces identifiants-là, dans une seule transaction.
         let lignesBonus = favorisTries(lu)
             .filter { retenus.contains($0.idOutcomeUnibet) }
-            .map { LigneRecap(genre: .bonus, libelle: $0.libelle ?? "Bonus",
-                              pilote: $0.pilote ?? $0.idOutcomeUnibet, points: $0.points) }
+            .map(LigneRecap.bonus)
         let grille = GrilleEnregistree(
             horaires: lu.gp.horaires,
             obligatoires: [
-                LigneRecap(genre: .vainqueur, libelle: MarcheCote.vainqueur.libelleCourt,
-                           pilote: vainqueur.pilote, points: vainqueur.points),
-                LigneRecap(genre: .podium, libelle: MarcheCote.podium.libelleCourt,
-                           pilote: podium1.pilote, points: podium1.points),
-                LigneRecap(genre: .podium, libelle: MarcheCote.podium.libelleCourt,
-                           pilote: podium2.pilote, points: podium2.points)
+                .obligatoire(.vainqueur, pilote: vainqueur.pilote, points: vainqueur.points),
+                .obligatoire(.podium, pilote: podium1.pilote, points: podium1.points),
+                .obligatoire(.podium, pilote: podium2.pilote, points: podium2.points)
             ],
             bonus: lignesBonus)
         avancer(.recap(grandPrix, grille))

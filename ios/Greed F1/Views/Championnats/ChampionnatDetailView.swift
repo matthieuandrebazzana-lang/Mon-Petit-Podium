@@ -515,8 +515,9 @@ private struct WidgetGrandPrixSuivant: View {
         if ouvert {
             // **La destination est le tableau des cotes, pas la saisie.** Le parcours passe
             // par les paris bonus avant les pronostics obligatoires : c'est ce que fait la
-            // version web, et c'est ce que le mode d'emploi de `CotesView` annonce.
-            NavigationLink(value: EtapePronos.cotes(GrandPrixPronos(
+            // version web, et c'est ce que le mode d'emploi de `CotesView` annonce. Une
+            // grille déjà enregistrée ouvre son récapitulatif (``EntreePronosView``).
+            NavigationLink(value: EtapePronos.entree(GrandPrixPronos(
                 id: grandPrix.id, nom: nom, slug: slug, sousTitre: echeance))) {
                 aplat
             }

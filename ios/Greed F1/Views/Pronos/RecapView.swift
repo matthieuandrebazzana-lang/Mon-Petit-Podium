@@ -36,6 +36,19 @@ struct LigneRecap: Identifiable, Hashable {
     /// blanc y tomberait à 2,2:1. Sur les deux autres aplats, le blanc tient 10,88:1 et
     /// 11,04:1.
     var encre: Color { bonus ? .texte : .white }
+
+    /// Une ligne obligatoire — vainqueur ou podium. **La seule fabrique** des deux chemins
+    /// qui mènent au récapitulatif : après le `200`, et à la relecture d'une grille déjà
+    /// enregistrée.
+    static func obligatoire(_ marche: MarcheCote, pilote: String, points: Int?) -> LigneRecap {
+        LigneRecap(genre: marche == .vainqueur ? .vainqueur : .podium,
+                   libelle: marche.libelleCourt, pilote: pilote, points: points)
+    }
+
+    static func bonus(_ favori: Favori) -> LigneRecap {
+        LigneRecap(genre: .bonus, libelle: favori.libelle ?? "Bonus",
+                   pilote: favori.pilote ?? favori.idOutcomeUnibet, points: favori.points)
+    }
 }
 
 /// La grille **acceptée par le serveur** (`200` de `POST …/pronostics`), et de quoi
@@ -44,6 +57,45 @@ struct GrilleEnregistree: Hashable {
     let horaires: HorairesGP
     let obligatoires: [LigneRecap]
     let bonus: [LigneRecap]
+}
+
+extension GrilleEnregistree {
+
+    /// La grille **déjà en base**, relue sous RLS — `nil` tant qu'il n'y a pas de vainqueur
+    /// et de podium enregistrés : ``EntreePronosView`` ouvre alors le tableau des cotes.
+    ///
+    /// Pilotes et points viennent des cotes chargées, rapprochées par `id_outcome_unibet`,
+    /// comme au préremplissage de la saisie. Une cote retirée depuis garde sa ligne, avec
+    /// `points` à `nil` (« Cote retirée ») — jamais `0`, qui voudrait dire « raté ».
+    init?(relue lu: DonneesPronostics.Donnees) {
+        let miens = lu.miens ?? []
+        guard let vainqueur = miens.first(where: { $0.type == MarcheCotes.vainqueur }),
+              let podium = miens.first(where: { $0.type == MarcheCotes.podium })?.podium
+        else { return nil }
+
+        func ligne(_ marche: MarcheCote, _ id: String) -> LigneRecap {
+            let cote = lu.gp.cote(id)?.cote
+            return .obligatoire(marche, pilote: cote?.pilote ?? "—", points: cote?.points)
+        }
+
+        // Un bonus dépunaisé depuis reste en base jusqu'au prochain envoi : il s'affiche,
+        // reconstitué de sa cote, plutôt que de disparaître en silence.
+        let favoris = miens.filter { $0.type == "bonus" }.map { prono -> Favori in
+            if let favori = lu.favoris.first(where: { $0.idOutcomeUnibet == prono.idOutcomeUnibet }) {
+                return favori
+            }
+            let trouve = lu.gp.cote(prono.idOutcomeUnibet)
+            return Favori(idOutcomeUnibet: prono.idOutcomeUnibet, marche: trouve?.marche.marche,
+                          libelle: trouve?.marche.libelle, pilote: trouve?.cote.pilote,
+                          points: trouve?.cote.points)
+        }
+
+        self.init(horaires: lu.gp.horaires,
+                  obligatoires: [ligne(.vainqueur, vainqueur.idOutcomeUnibet),
+                                 ligne(.podium, podium.0),
+                                 ligne(.podium, podium.1)],
+                  bonus: OrdreMarches.trier(favoris, slug: \.marche).map(LigneRecap.bonus))
+    }
 }
 
 // MARK: - L'écran
@@ -61,12 +113,14 @@ struct GrilleEnregistree: Hashable {
 ///
 /// > **Il n'est empilé qu'après le `200`** de `POST …/pronostics` (``PronosView``) : le
 /// > bandeau « Pronos enregistrés ! » dit donc un enregistrement qui a eu lieu, et la grille
-/// > est exactement celle que le serveur a acceptée.
+/// > est exactement celle que le serveur a acceptée. **Ou d'entrée**, par
+/// > ``EntreePronosView``, quand une grille est déjà en base : elle est alors relue, pas
+/// > supposée (``GrilleEnregistree/init(relue:)``).
 struct RecapView: View {
 
     let grandPrix: GrandPrixPronos
 
-    /// Ce qui vient d'être enregistré.
+    /// Ce qui vient d'être enregistré, ou ce qui l'était déjà.
     let grille: GrilleEnregistree
 
     /// Ce que le bouton de retour **annonce** — « Accueil » depuis l'accueil, le nom du
@@ -77,6 +131,11 @@ struct RecapView: View {
     /// Ce qu'il **fait** : vider le chemin du parcours. Le mot et l'action arrivent
     /// ensemble, d'un seul appelant, et ne peuvent donc pas se contredire.
     let retour: () -> Void
+
+    /// Ce que fait « Modifier mes pronos » quand **aucune saisie n'est dessous** — le
+    /// récapitulatif ouvert d'entrée par ``EntreePronosView`` empile alors le parcours
+    /// (cotes, puis saisie). `nil` après un enregistrement : la saisie est juste en dessous.
+    var modifier: (() -> Void)? = nil
 
     /// Ce qui ferme **ce seul écran**, et ramène donc à la saisie.
     @Environment(\.dismiss) private var fermer
@@ -223,12 +282,13 @@ struct RecapView: View {
         .padding(.horizontal, margeLaterale)
     }
 
-    /// **Il ferme cet écran, il n'en pousse pas un autre.** La saisie est juste dessous
-    /// dans la pile : la rouvrir par-dessus aurait empilé deux copies du même écran, et le
-    /// retour serait passé deux fois par le récapitulatif.
+    /// **Après un enregistrement, il ferme cet écran, il n'en pousse pas un autre.** La
+    /// saisie est juste dessous dans la pile : la rouvrir par-dessus aurait empilé deux
+    /// copies du même écran, et le retour serait passé deux fois par le récapitulatif.
+    /// Ouvert d'entrée, rien n'est dessous : il empile alors le parcours (``modifier``).
     private var boutonModifier: some View {
         Button {
-            fermer()
+            if let modifier { modifier() } else { fermer() }
         } label: {
             Text("Modifier mes pronos")
                 .font(.custom("HelveticaNeue-Medium", size: 16))

@@ -127,7 +127,9 @@ enum MarcheCote: String, CaseIterable, Identifiable {
 // MARK: - Le parcours de pronostics
 
 /// Les trois écrans du parcours, **et l'ordre dans lequel on les traverse** : le tableau
-/// des cotes, la saisie, le récapitulatif.
+/// des cotes, la saisie, le récapitulatif. Le parcours s'ouvre par ``entree`` : le
+/// récapitulatif si une grille est déjà enregistrée, le tableau des cotes sinon
+/// (``EntreePronosView``).
 ///
 /// > **Pourquoi un chemin de navigation plutôt que trois `NavigationLink` posés chacun sur
 /// > sa destination.** Le récapitulatif doit pouvoir revenir d'un coup à l'écran d'où le
@@ -141,6 +143,8 @@ enum MarcheCote: String, CaseIterable, Identifiable {
 /// enregistrés ! » ne peut donc plus annoncer un enregistrement qui n'a pas eu lieu.
 enum EtapePronos: Hashable {
 
+    /// La porte d'entrée des widgets — c'est elle qui choisit le premier écran.
+    case entree(GrandPrixPronos)
     case cotes(GrandPrixPronos)
     case pronos(GrandPrixPronos)
     case recap(GrandPrixPronos, GrilleEnregistree)
@@ -160,6 +164,10 @@ extension View {
                       retour: @escaping () -> Void) -> some View {
         navigationDestination(for: EtapePronos.self) { etape in
             switch etape {
+            case let .entree(gp):
+                EntreePronosView(grandPrix: gp, libelleRetour: libelleRetour,
+                                 avancer: avancer, retour: retour)
+
             case let .cotes(gp):
                 CotesView(grandPrix: gp)
 
@@ -209,10 +217,12 @@ struct CotesView: View {
     /// voient les autres (``AuthViewModel/modePrevisualisation``).
     @Environment(\.modePrevisualisation) private var modeAdmin
 
-    init(grandPrix: GrandPrixPronos) {
+    /// `donnees` est le chargeur d'``EntreePronosView`` quand c'est elle qui l'ouvre : les
+    /// cotes déjà lues s'affichent sans second spinner.
+    init(grandPrix: GrandPrixPronos, donnees: DonneesPronostics? = nil) {
         self.grandPrix = grandPrix
-        _donnees = StateObject(wrappedValue: DonneesPronostics(gpId: grandPrix.id,
-                                                              avecMesPronostics: false))
+        _donnees = StateObject(wrappedValue: donnees
+            ?? DonneesPronostics(gpId: grandPrix.id, avecMesPronostics: false))
     }
 
     private var favoris: [Favori] { donnees.donnees?.favoris ?? [] }

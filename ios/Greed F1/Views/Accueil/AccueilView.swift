@@ -347,8 +347,9 @@ private struct WidgetGrandPrix: View {
         //
         // La destination est celle de la version web : `/cotes`, jamais la saisie — on
         // ajoute ses paris bonus avant de pronostiquer, et un bouton qui sauterait cette
-        // étape mentirait sur son libellé.
-        NavigationLink(value: EtapePronos.cotes(GrandPrixPronos(
+        // étape mentirait sur son libellé. Une grille déjà enregistrée ouvre, elle, son
+        // récapitulatif (``EntreePronosView``).
+        NavigationLink(value: EtapePronos.entree(GrandPrixPronos(
             id: grandPrix.id,
             nom: grandPrix.nom,
             slug: grandPrix.slug,

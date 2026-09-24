@@ -198,9 +198,10 @@ ios/
     │   │   ├── ResultatsGPView.swift       classement officiel réel ; « Mes résultats » non monté
     │   │   └── NationalitesPilotes.swift   pilote → pays, contrepartie de `lib/nationalites.js`
     │   ├── Pronos/
+    │   │   ├── EntreePronosView.swift  porte d'entrée : récap si grille en base, sinon cotes
     │   │   ├── CotesView.swift      tous les marchés réels, étoile = favori serveur, `EtapePronos`
     │   │   ├── PronosView.swift     saisie préremplie, bonus parmi les favoris, `POST` + `423`
-    │   │   └── RecapView.swift      récapitulatif, empilé seulement après le `200`
+    │   │   └── RecapView.swift      récapitulatif, après le `200` ou d'entrée (grille relue)
     │   └── Profil/
     │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`)
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
