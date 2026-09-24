@@ -60,62 +60,33 @@ struct ProchainGP: Codable, Identifiable, Equatable, Hashable {
     /// **`nil` n'est PAS une date passée** : l'horaire n'est pas encore annoncé, le GP
     /// reste ouvert et se trie en fin de liste (§7.4).
     let dateCourse: Date?
-    /// `a_venir`, `cotes_figees`… — gardé brut tant qu'aucun écran ne l'interprète.
+    /// **Pas encore servie par `/championnats/moi`** : décodée si elle arrive, `nil` sinon.
+    /// Sans elle, la phase d'ouverture dit « Ouverture à confirmer » au lieu d'un décompte.
+    let dateQualifications: Date?
+    /// `a_venir`, `cotes_figees` ou `termine`.
     let statut: String
 
     enum CodingKeys: String, CodingKey {
         case id, nom, statut
         case dateCourse = "date_course"
+        case dateQualifications = "date_qualifications"
     }
 }
 
 extension ProchainGP {
 
-    /// La clé des assets `flag-<slug>` / `trace-<slug>` et de ``TeintesDrapeaux``, tirée
-    /// du nom tel qu'il est en base. **Transcription de `slugCircuit`**
-    /// (`frontend/src/composants/TracesCircuits.jsx`) : minuscules, accents retirés,
-    /// préfixe « GP » ôté en tête, le reste en tirets — puis les alias, parce qu'Unibet
-    /// écrit « GP Pays Bas » une semaine et « GP Pays-Bas » la suivante. Un slug inconnu
-    /// est rendu tel quel : c'est à l'écran de constater qu'aucun asset ne lui répond.
-    var slug: String {
-        var texte = nom.lowercased()
-            .folding(options: [.diacriticInsensitive], locale: Locale(identifier: "fr_FR"))
-        texte = texte.replacingOccurrences(of: #"^\s*(grand\s+prix|gp)\b"#, with: "",
-                                           options: .regularExpression)
-        texte = texte.replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
-        texte = texte.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    /// La clé des assets et des teintes — ``SlugCircuit``, le seul propriétaire.
+    var slug: String { SlugCircuit.de(nom) }
 
-        if TeintesDrapeaux.table[texte] != nil { return texte }
-        for (motif, cle) in Self.alias
-        where texte.range(of: motif, options: .regularExpression) != nil {
-            return cle
-        }
-        return texte
+    /// Les pronostics sont ouverts — ``EcheancePronostics/cotesArretees(statut:dateCourse:le:)``.
+    func pronosticsOuverts(le maintenant: Date = .now) -> Bool {
+        EcheancePronostics.cotesArretees(statut: statut, dateCourse: dateCourse, le: maintenant)
     }
 
-    /// Les alias de `ALIAS`, dans le même ordre — le premier qui répond l'emporte.
-    private static let alias: [(String, String)] = [
-        ("zandvoort|hollande|neerland", "pays-bas"),
-        ("monza", "italie"),
-        ("madrid|madring", "espagne"),
-        ("bakou|baku", "azerbaidjan"),
-        ("sepang|malaisi|malaysi|kuala.?lumpur", "malaisie"),
-        ("singapore|marina.?bay", "singapour"),
-        (#"austin|texas|amerique|\busa\b|cota"#, "etats-unis"),
-        ("mexico", "mexique"),
-        ("sao.?paulo|interlagos|bresi", "bresil"),
-        ("vegas", "las-vegas"),
-        ("lusail|losail|doha", "qatar"),
-        ("abou.?dab|abu.?dhab|yas.?marina|emirats", "abu-dhabi")
-    ]
-
-    /// **Les cotes sont arrêtées et les pronostics ouverts** — `cotesArretees` de
-    /// `lib/calendrier.js` (`docs/metier.md`) : statut `cotes_figees` **et** départ pas
-    /// encore passé. **Un départ inconnu laisse ouvert** : aucune fermeture à opposer.
-    func pronosticsOuverts(le maintenant: Date = .now) -> Bool {
-        guard statut == "cotes_figees" else { return false }
-        guard let dateCourse else { return true }
-        return dateCourse > maintenant
+    /// Ce que dit le décompte — ``EcheancePronostics``, jamais un calcul local.
+    func echeance(le maintenant: Date = .now) -> EcheancePronostics {
+        EcheancePronostics.pour(statut: statut, dateCourse: dateCourse,
+                                dateQualifications: dateQualifications, le: maintenant)
     }
 }
 

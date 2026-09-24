@@ -6,8 +6,11 @@ import SwiftUI
 /// Références visuelles : `Ressources/Screenshots/screen-08-calendrier-haut.PNG`,
 /// `screen-09-calendrier-milieu.PNG` et `screen-10-calendrier-bas.PNG`.
 ///
-/// > **Les données sont mockées.** Aucun appel réseau : ``GrandPrixSaisonMock`` porte des
-/// > valeurs en dur, reprises de `frontend/src/lib/calendrier2026.js` et des captures.
+/// > **La liste est statique, les états sont réels.** ``GrandPrixSaison/saison2026`` porte
+/// > les douze cartes ; ``CalendrierSaison`` (`GET /scraper/cotes`) leur ajoute ce que
+/// > seule la base sait — **l'identifiant, le statut et l'existence de cotes**. Le
+/// > rapprochement se fait par ``SlugCircuit``, jamais par le nom brut. L'échec de
+/// > l'appel fait perdre les états, jamais la liste (`docs/swift-app.md` §7.6).
 ///
 /// ## La liste est statique, et c'est un choix
 ///
@@ -32,57 +35,30 @@ struct CalendrierView: View {
     /// ``ancreDefilement``.
     private let espacement: CGFloat = 12
 
-    // MARK: - Données mockées
+    // MARK: - Données
 
-    /// Les douze Grands Prix, dans l'ordre de la saison.
-    ///
-    /// `slug` est la clé de **trois** tables à la fois — l'asset `flag-<slug>`, l'asset
-    /// `trace-<slug>` et la table des teintes de ``TeintesDrapeaux``. Une seule
-    /// normalisation pour les trois : la faire deux fois laisserait les tables se
-    /// désynchroniser sur un libellé qu'Unibet aurait renommé.
-    ///
-    /// **`pays` n'est pas `nom` moins « GP ».** Las Vegas se court aux États-Unis, et le
-    /// drapeau de sa carte est celui des États-Unis : les deux champs sont écrits
-    /// séparément parce qu'ils répondent à deux questions différentes.
-    private let grandsPrix: [GrandPrixSaisonMock] = [
-        .init(slug: "pays-bas", pays: "Pays-Bas", nom: "GP Pays-Bas",
-              circuit: "Zandvoort", jour: "23", mois: "AOÛT", etat: .termine, date: "23 août 2026"),
-        .init(slug: "italie", pays: "Italie", nom: "GP Italie",
-              circuit: "Monza", jour: "6", mois: "SEPT", etat: .termine, date: "6 septembre 2026"),
-        .init(slug: "espagne", pays: "Espagne", nom: "GP Espagne",
-              circuit: "Madrid", jour: "13", mois: "SEPT", etat: .termine, date: "13 septembre 2026"),
-        .init(slug: "azerbaidjan", pays: "Azerbaïdjan", nom: "GP Azerbaïdjan",
-              circuit: "Bakou", jour: "26", mois: "SEPT", etat: .ouvert, date: "26 septembre 2026"),
-        .init(slug: "malaisie", pays: "Malaisie", nom: "GP Malaisie",
-              circuit: "Sepang", jour: "4", mois: "OCT", etat: .aVenir, date: "4 octobre 2026"),
-        .init(slug: "singapour", pays: "Singapour", nom: "GP Singapour",
-              circuit: "Singapour", jour: "11", mois: "OCT", etat: .aVenir, date: "11 octobre 2026"),
-        .init(slug: "etats-unis", pays: "États-Unis", nom: "GP États-Unis",
-              circuit: "Austin", jour: "25", mois: "OCT", etat: .aVenir, date: "25 octobre 2026"),
-        .init(slug: "mexique", pays: "Mexique", nom: "GP Mexique",
-              circuit: "Hermanos Rodríguez", jour: "1", mois: "NOV", etat: .aVenir, date: "1er novembre 2026"),
-        .init(slug: "bresil", pays: "Brésil", nom: "GP Brésil",
-              circuit: "Interlagos", jour: "15", mois: "NOV", etat: .aVenir, date: "15 novembre 2026"),
-        .init(slug: "las-vegas", pays: "États-Unis", nom: "GP Las Vegas",
-              circuit: "Las Vegas", jour: "21", mois: "NOV", etat: .aVenir, date: "21 novembre 2026"),
-        .init(slug: "qatar", pays: "Qatar", nom: "GP Qatar",
-              circuit: "Lusail", jour: "29", mois: "NOV", etat: .aVenir, date: "29 novembre 2026"),
-        .init(slug: "abu-dhabi", pays: "Abu Dhabi", nom: "GP Abu Dhabi",
-              circuit: "Yas Marina", jour: "6", mois: "DÉC", etat: .aVenir, date: "6 décembre 2026")
-    ]
+    /// Possédé par l'écran et rappelé à chaque apparition — pas de cache de session (§7.6).
+    @StateObject private var calendrier = CalendrierSaison()
 
-    /// **Le décompte se lit sur les cartes**, il ne vient pas d'ailleurs : c'est le nombre
-    /// de Grands Prix que l'écran affiche comme n'étant pas derrière nous. Une constante
-    /// écrite à côté aurait divergé de la liste au premier statut retouché.
-    private var restants: Int {
-        grandsPrix.filter { $0.etat != .termine }.count
+    /// Les douze cartes, croisées avec ce que la base sait — ou avec rien, tant qu'elle n'a
+    /// pas répondu : leurs états sont alors **inconnus**, pas « à venir ».
+    private var grandsPrix: [GrandPrixSaison] {
+        GrandPrixSaison.saison2026(croiseeAvec: calendrier.enBase)
     }
 
-    /// Le premier Grand Prix qui n'est pas derrière nous, `nil` si la saison est finie.
-    /// La liste est dans l'ordre de la saison : « le premier non terminé » est bien le
-    /// prochain à courir.
-    private var prochain: GrandPrixSaisonMock? {
-        grandsPrix.first { $0.etat != .termine }
+    /// **Le décompte se lit sur les cartes**, il ne vient pas d'ailleurs. `nil` tant que les
+    /// états sont inconnus : « 12 Grands Prix restants » serait une affirmation non vérifiée.
+    private var restants: Int? {
+        guard calendrier.enBase != nil else { return nil }
+        return grandsPrix.filter { $0.etat != .termine }.count
+    }
+
+    /// Le premier Grand Prix qui n'est pas derrière nous, `nil` si la saison est finie ou
+    /// si les états sont inconnus. La liste est dans l'ordre de la saison : « le premier non
+    /// terminé » est bien le prochain à courir — `indexProchainGpSaison` du web.
+    private var prochain: GrandPrixSaison? {
+        guard calendrier.enBase != nil else { return nil }
+        return grandsPrix.first { $0.etat != .termine }
     }
 
     /// Le défilement ne s'est produit qu'une fois. Sans ce garde-fou, revenir sur l'onglet
@@ -105,19 +81,24 @@ struct CalendrierView: View {
                             entete
 
                             Spacer().frame(height: 16)
+                            etatChargement
                             liste
                         }
                         .padding(.horizontal, margeLaterale)
                         .padding(.top, 8)
                         .padding(.bottom, 24)
                     }
+                    // Le prochain Grand Prix n'est connu qu'après l'appel : le défilement
+                    // attend donc les états, et part dès qu'ils arrivent.
                     .onAppear { ouvrirSurLeProchainGp(lecteur) }
+                    .onChange(of: prochain?.slug) { ouvrirSurLeProchainGp(lecteur) }
                 }
             }
             // Le titre de l'écran est dans le contenu, à 28 pt : la barre système ferait
             // doublon et se contente de nommer le retour des écrans poussés d'ici.
             .navigationTitle("Calendrier")
             .toolbar(.hidden, for: .navigationBar)
+            .task { await calendrier.charger() }
         }
     }
 
@@ -136,12 +117,44 @@ struct CalendrierView: View {
             // `#999999`, qui ne vaut que 2,52:1 sur le beige — sous le plancher de 4,5:1
             // d'un texte ordinaire. `#6B6B6B` y tient 4,71:1 pour un gris que l'œil ne
             // distingue pas du premier. Le contraste se mesure (`ios/CLAUDE.md` §3).
-            Text("Saison 2026 · \(restants) Grand\(restants > 1 ? "s" : "") Prix restant\(restants > 1 ? "s" : "")")
+            Text(sousTitre)
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+    }
+
+    private var sousTitre: String {
+        guard let restants else { return "Saison 2026" }
+        let pluriel = restants > 1 ? "s" : ""
+        return "Saison 2026 · \(restants) Grand\(pluriel) Prix restant\(pluriel)"
+    }
+
+    // MARK: - Chargement et échec
+
+    /// **Au-dessus de la liste, jamais à sa place** : les douze cartes sont statiques et
+    /// restent lisibles pendant l'attente comme après un échec — seuls leurs états
+    /// manquent. Le spinner ne vient qu'au premier chargement ; un rechargement garde les
+    /// états déjà affichés, sans quoi chaque retour sur l'onglet ferait sauter la liste.
+    @ViewBuilder private var etatChargement: some View {
+        switch calendrier.etat {
+        case .chargement:
+            ProgressView()
+                .tint(.secondaire)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .padding(.bottom, espacement)
+                .accessibilityLabel("Chargement des états des Grands Prix")
+
+        case .echec(let erreur):
+            EchecChargement(erreur: erreur) {
+                Task { await calendrier.charger() }
+            }
+            .padding(.bottom, espacement)
+
+        case .pret:
+            EmptyView()
+        }
     }
 
     // MARK: - La liste
@@ -160,9 +173,14 @@ struct CalendrierView: View {
                 // résultats, les trois autres états ouvrent la fiche du week-end. Ces
                 // trois-là tombaient auparavant sur un `Button` à l'action vide — la carte
                 // s'enfonçait sous le doigt et rien ne s'ouvrait.
+                //
+                // **L'identifiant réel du Grand Prix voyage avec la carte** — c'est lui que
+                // les résultats et les pronostics demanderont (étapes 6 et 7). Un « Terminé »
+                // vient forcément de la base : il a donc toujours le sien.
                 NavigationLink {
                     if gp.etat == .termine {
-                        ResultatsGPView(resultat: .pour(slug: gp.slug, nom: gp.nom, date: gp.date))
+                        ResultatsGPView(resultat: .pour(slug: gp.slug, nom: gp.nom, date: gp.date,
+                                                        gpId: gp.gpId))
                     } else {
                         DetailGPView(grandPrix: gp)
                     }
@@ -182,7 +200,7 @@ struct CalendrierView: View {
     /// la couture entre deux cartes est visible, et le défilement vers le haut retrouve son
     /// affordance. C'est la `MARGE_DEFILEMENT` de la version web, obtenue ici sans poser
     /// de marge qui n'existe pas dans la mise en page.
-    private func ancreDefilement(_ gp: GrandPrixSaisonMock) -> String { "ancre-\(gp.slug)" }
+    private func ancreDefilement(_ gp: GrandPrixSaison) -> String { "ancre-\(gp.slug)" }
 
     /// L'écran s'ouvre sur le prochain Grand Prix.
     ///
@@ -195,8 +213,12 @@ struct CalendrierView: View {
     ///
     /// Le prochain Grand Prix est déjà la première carte ? Le haut de la liste est sa
     /// place, et il n'y a rien à faire — l'en-tête resterait sinon hors de l'écran.
+    ///
+    /// **Rien ne part tant que les états sont inconnus** : défiler sur une supposition,
+    /// puis corriger à l'arrivée des données, ferait bouger la liste deux fois.
     private func ouvrirSurLeProchainGp(_ lecteur: ScrollViewProxy) {
-        guard !defilementFait, let prochain, prochain.slug != grandsPrix.first?.slug else {
+        guard !defilementFait, calendrier.enBase != nil else { return }
+        guard let prochain, prochain.slug != grandsPrix.first?.slug else {
             defilementFait = true
             return
         }
@@ -227,7 +249,7 @@ struct CalendrierView: View {
 /// un défaut de calage plutôt qu'une intention.
 private struct CarteGrandPrixSaison: View {
 
-    let grandPrix: GrandPrixSaisonMock
+    let grandPrix: GrandPrixSaison
 
     /// Hauteur de la carte. **Mesurée sur les captures** (595 px à 3×, soit 198 pt) et
     /// écrite une seule fois : la zone d'informations et la bande la partagent.
@@ -264,9 +286,12 @@ private struct CarteGrandPrixSaison: View {
 
     private var apparence: ApparenceDrapeau? { ApparenceDrapeau.pour(slug: grandPrix.slug) }
 
+    /// La bande ne s'affiche que sur un état connu.
+    private var action: String? { grandPrix.etat?.action }
+
     /// Hauteur de la zone d'informations — la carte moins sa bande, quand elle en a une.
     private var hauteurInfos: CGFloat {
-        hauteurCarte - (grandPrix.etat.action == nil ? 0 : hauteurBande)
+        hauteurCarte - (action == nil ? 0 : hauteurBande)
     }
 
     var body: some View {
@@ -377,7 +402,9 @@ private struct CarteGrandPrixSaison: View {
 
             Spacer(minLength: 0)
 
-            pastilleEtat
+            if let etat = grandPrix.etat {
+                pastilleEtat(etat)
+            }
         }
     }
 
@@ -386,15 +413,18 @@ private struct CarteGrandPrixSaison: View {
     /// disputerait la surface avec celui de la carte, et c'est l'encre qui doit distinguer
     /// l'archive de l'urgence. « Pronos ouverts » est la seule exception parce que l'ambre
     /// ne tient pas en encre sur du blanc (2,2:1), là où le noir sur ambre tient 7,86:1.
-    private var pastilleEtat: some View {
-        Text(grandPrix.etat.libelle)
+    ///
+    /// **Absente tant que l'état est inconnu** — pendant le premier chargement ou après un
+    /// échec. Un « À venir » par défaut dirait d'un Grand Prix ouvert qu'il ne l'est pas.
+    private func pastilleEtat(_ etat: EtatGp) -> some View {
+        Text(etat.libelle)
             .font(.custom("HelveticaNeue-Medium", size: 11))
-            .foregroundColor(grandPrix.etat.encrePastille)
+            .foregroundColor(etat.encrePastille)
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(grandPrix.etat.fondPastille)
+            .background(etat.fondPastille)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
@@ -461,7 +491,7 @@ private struct CarteGrandPrixSaison: View {
     /// surface avec celui de la carte ; et translucide, elle laisserait le vert sauge à
     /// 3,45:1 sur le noir d'Abu Dhabi.
     @ViewBuilder private var bandeAction: some View {
-        if let action = grandPrix.etat.action {
+        if let action {
             Text(action)
                 .font(.custom("HelveticaNeue-Medium", size: 15))
                 .foregroundColor(.vertSauge)       // 4,86:1 sur blanc
@@ -481,7 +511,7 @@ private struct CarteGrandPrixSaison: View {
     /// fait ici.
     private var libelleAccessible: String {
         "\(grandPrix.nom), \(grandPrix.circuit), le \(grandPrix.jour) \(grandPrix.mois.lowercased()). "
-        + "\(grandPrix.etat.libelle). "
+        + (grandPrix.etat.map { "\($0.libelle). " } ?? "")
         + (grandPrix.etat == .termine ? "Voir les résultats." : "Voir le week-end.")
     }
 }
@@ -500,7 +530,7 @@ private extension View {
     }
 }
 
-// MARK: - Données mockées
+// MARK: - Les états
 
 /// Les quatre états d'un Grand Prix, et ce que chacun dit.
 ///
@@ -546,32 +576,111 @@ enum EtatGp {
 
     /// Le libellé de la bande, ou `nil` s'il n'y a rien à faire.
     ///
-    /// **Seul « Terminé » en porte une tant que les données sont mockées.** La bande
-    /// « Pronostiquer » de la version web exige des cotes arrêtées, que seule la base
-    /// connaît : la poser ici promettrait un tableau que rien ne remplit. C'est aussi ce
-    /// que montre `screen-09` — la carte d'Azerbaïdjan, pronostics ouverts, n'a pas de
-    /// bande.
+    /// **Seul « Terminé » en porte une tant que le parcours de pronostics est mocké.** La
+    /// bande « Pronostiquer » de la version web mène au tableau des cotes réel, qui n'est
+    /// branché qu'à l'étape 7 ; la poser ici promettrait un tableau que rien ne remplit.
     var action: String? {
         self == .termine ? "Voir les résultats" : nil
     }
 }
 
-/// Un Grand Prix de la saison. Remplacé par le modèle du backend quand l'écran sera câblé.
+extension EtatGp {
+
+    /// L'état d'un Grand Prix de la saison — `etatDuGpSaison` du web.
+    ///
+    /// **Absent de la base ⇒ « À venir », toujours** : on ne sait ni si ses cotes existent,
+    /// ni à quelle heure il part. L'ordre des tests compte — une course courue est terminée
+    /// quoi qu'il arrive, et une fermeture passée l'emporte sur des cotes encore affichées.
+    /// La fermeture est `date_course`, sans marge ; un départ inconnu n'est jamais passé.
+    static func pour(_ enBase: GrandPrixEnBase?, le maintenant: Date = .now) -> EtatGp {
+        guard let enBase else { return .aVenir }
+        if enBase.statut == "termine" { return .termine }
+        if let depart = enBase.dateCourse, depart <= maintenant { return .ferme }
+        if enBase.cotesDisponibles { return .ouvert }
+        return .aVenir
+    }
+}
+
+/// Un Grand Prix de la saison : la part **statique** — pays, circuit, date écrite — et ce
+/// que la base en sait, quand elle a répondu.
 ///
 /// Le jour et le mois sont des **chaînes**, pas une `Date` : voir l'en-tête de
 /// ``CalendrierView``.
-struct GrandPrixSaisonMock {
+struct GrandPrixSaison {
     let slug: String
     let pays: String
     let nom: String
     let circuit: String
     let jour: String
     let mois: String
-    let etat: EtatGp
     /// La date complète, **écrite** — l'en-tête de ``ResultatsGPView`` la porte telle
     /// quelle. Elle n'est pas recomposée depuis ``jour`` et ``mois`` : la même règle que
     /// ces deux-là, et pour la même raison. Voir l'en-tête de ``CalendrierView``.
     let date: String
+    /// La ligne de `grands_prix` qui lui répond, `nil` si la base ne la connaît pas.
+    var enBase: GrandPrixEnBase? = nil
+    /// Faux tant que la base n'a pas répondu : l'état est alors **inconnu**.
+    var etatConnu = false
+
+    /// **L'identifiant réel** — `nil` pour tout Grand Prix que le scraper n'a pas encore
+    /// rencontré. C'est lui que demanderont les résultats et les pronostics.
+    var gpId: UUID? { enBase?.id }
+
+    /// L'état de la carte, `nil` s'il est inconnu.
+    var etat: EtatGp? { etatConnu ? EtatGp.pour(enBase) : nil }
+
+    /// La liste statique croisée avec la base — `enrichir` du web.
+    ///
+    /// **Le nom affiché reste celui de la liste**, pas celui d'Unibet : le calendrier doit
+    /// se lire pareil d'une semaine à l'autre, y compris quand le bookmaker change
+    /// l'orthographe d'un pays.
+    static func saison2026(croiseeAvec enBase: [GrandPrixEnBase]?) -> [GrandPrixSaison] {
+        guard let enBase else { return saison2026 }
+        let parSlug = Dictionary(enBase.map { ($0.slug, $0) }, uniquingKeysWith: { premier, _ in premier })
+        return saison2026.map { gp in
+            var croise = gp
+            croise.enBase = parSlug[gp.slug]
+            croise.etatConnu = true
+            return croise
+        }
+    }
+
+    /// Les douze Grands Prix, dans l'ordre de la saison — transcription de `GP_2026`
+    /// (`frontend/src/lib/calendrier2026.js`).
+    ///
+    /// `slug` est la clé de **trois** tables à la fois — l'asset `flag-<slug>`, l'asset
+    /// `trace-<slug>` et la table des teintes de ``TeintesDrapeaux`` — et celle du
+    /// croisement avec la base, par ``SlugCircuit``.
+    ///
+    /// **`pays` n'est pas `nom` moins « GP ».** Las Vegas se court aux États-Unis, et le
+    /// drapeau de sa carte est celui des États-Unis : les deux champs sont écrits
+    /// séparément parce qu'ils répondent à deux questions différentes.
+    static let saison2026: [GrandPrixSaison] = [
+        .init(slug: "pays-bas", pays: "Pays-Bas", nom: "GP Pays-Bas",
+              circuit: "Zandvoort", jour: "23", mois: "AOÛT", date: "23 août 2026"),
+        .init(slug: "italie", pays: "Italie", nom: "GP Italie",
+              circuit: "Monza", jour: "6", mois: "SEPT", date: "6 septembre 2026"),
+        .init(slug: "espagne", pays: "Espagne", nom: "GP Espagne",
+              circuit: "Madrid", jour: "13", mois: "SEPT", date: "13 septembre 2026"),
+        .init(slug: "azerbaidjan", pays: "Azerbaïdjan", nom: "GP Azerbaïdjan",
+              circuit: "Bakou", jour: "26", mois: "SEPT", date: "26 septembre 2026"),
+        .init(slug: "malaisie", pays: "Malaisie", nom: "GP Malaisie",
+              circuit: "Sepang", jour: "4", mois: "OCT", date: "4 octobre 2026"),
+        .init(slug: "singapour", pays: "Singapour", nom: "GP Singapour",
+              circuit: "Singapour", jour: "11", mois: "OCT", date: "11 octobre 2026"),
+        .init(slug: "etats-unis", pays: "États-Unis", nom: "GP États-Unis",
+              circuit: "Austin", jour: "25", mois: "OCT", date: "25 octobre 2026"),
+        .init(slug: "mexique", pays: "Mexique", nom: "GP Mexique",
+              circuit: "Hermanos Rodríguez", jour: "1", mois: "NOV", date: "1er novembre 2026"),
+        .init(slug: "bresil", pays: "Brésil", nom: "GP Brésil",
+              circuit: "Interlagos", jour: "15", mois: "NOV", date: "15 novembre 2026"),
+        .init(slug: "las-vegas", pays: "États-Unis", nom: "GP Las Vegas",
+              circuit: "Las Vegas", jour: "21", mois: "NOV", date: "21 novembre 2026"),
+        .init(slug: "qatar", pays: "Qatar", nom: "GP Qatar",
+              circuit: "Lusail", jour: "29", mois: "NOV", date: "29 novembre 2026"),
+        .init(slug: "abu-dhabi", pays: "Abu Dhabi", nom: "GP Abu Dhabi",
+              circuit: "Yas Marina", jour: "6", mois: "DÉC", date: "6 décembre 2026")
+    ]
 }
 
 #Preview {

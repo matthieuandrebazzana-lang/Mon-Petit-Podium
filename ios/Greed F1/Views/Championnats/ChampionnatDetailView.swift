@@ -497,28 +497,10 @@ private struct WidgetGrandPrixSuivant: View {
 
     private var ouvert: Bool { grandPrix.pronosticsOuverts() }
 
-    /// Ce que dit la seconde ligne. Lu à l'affichage : l'écran se recharge à chaque
-    /// apparition, une précision à la minute n'a pas à battre en direct ici.
-    private var echeance: String {
-        let maintenant = Date.now
-        if ouvert {
-            guard let depart = grandPrix.dateCourse else { return "Pronostics ouverts" }
-            return "Fermeture dans \(Self.duree(de: maintenant, a: depart))"
-        }
-        if let depart = grandPrix.dateCourse, depart > maintenant {
-            return "Course le \(depart.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).locale(Locale(identifier: "fr_FR"))))"
-        }
-        return "Pronostics fermés"
-    }
-
-    /// « 3j 14h », « 5h 12min », « 8min » — le format du compte à rebours de l'accueil.
-    private static func duree(de debut: Date, a fin: Date) -> String {
-        let minutes = max(0, Int(fin.timeIntervalSince(debut) / 60))
-        let (j, h, m) = (minutes / 1440, minutes % 1440 / 60, minutes % 60)
-        if j > 0 { return "\(j)j \(h)h" }
-        if h > 0 { return "\(h)h \(m)min" }
-        return "\(max(m, 1))min"
-    }
+    /// Ce que dit la seconde ligne — ``EcheancePronostics/phrase``, **le seul calcul
+    /// d'échéance de l'app**. Lu à l'affichage : l'écran se recharge à chaque apparition,
+    /// une précision à la minute n'a pas à battre en direct ici.
+    private var echeance: String { grandPrix.echeance().phrase }
 
     var body: some View {
         if ouvert {

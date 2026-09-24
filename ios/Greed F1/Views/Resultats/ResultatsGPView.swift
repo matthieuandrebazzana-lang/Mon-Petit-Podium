@@ -564,6 +564,10 @@ struct ResultatGPMock {
     let pronostics: [PronosticJoueMock]
     let classement: [LigneClassementMock]
 
+    /// **L'identifiant réel** du Grand Prix, transmis par le calendrier — c'est lui que
+    /// demandera `GET /grands-prix/{id}/resultats` à l'étape 6. `nil` sur un aperçu.
+    var gpId: UUID? = nil
+
     /// Le total **se lit sur les pronostics**, il n'est pas écrit à côté : une constante
     /// aurait divergé de la liste au premier pronostic retouché. `nil` tant qu'aucun
     /// pronostic n'est jugé — « pas encore jugé » n'est pas « zéro » (`CLAUDE.md` §3.1).
@@ -582,9 +586,10 @@ struct ResultatGPMock {
     /// capture, et seuls leur nom et leur date changent. C'est assumé : la donnée viendra
     /// de `GET /grands-prix/{id}/resultats`, et écrire trois classements inventés à la main
     /// aurait donné trois tables à corriger le jour où une seule doit disparaître.
-    static func pour(slug: String, nom: String, date: String) -> ResultatGPMock {
+    static func pour(slug: String, nom: String, date: String, gpId: UUID?) -> ResultatGPMock {
         ResultatGPMock(slug: slug, nom: nom, etat: "Terminé", date: date,
-                       pronostics: gpEspagne.pronostics, classement: gpEspagne.classement)
+                       pronostics: gpEspagne.pronostics, classement: gpEspagne.classement,
+                       gpId: gpId)
     }
 
     /// Le GP Espagne de la capture — `maquettes_V2/IMG_3247.PNG` et `IMG_3248.PNG`.

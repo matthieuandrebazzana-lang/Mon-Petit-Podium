@@ -2076,7 +2076,7 @@ ci-dessous ; chaque étape ne dépend que des précédentes.
 | **2** | Créer / rejoindre, puis la photo (Storage + `PATCH`). Navigation vers le championnat obtenu, liste de l'étape 1 invalidée | **Créer / rejoindre faits** (iOS 0.22.0) — photo à faire |
 | **3** | Détail : `classement` remplace `MembreMock`, **la piste reçoit le même tableau** · menu « ⋯ » (code, `quitter`) · widget GP = `prochain_gp` de l'étape 1 | **Fait** (iOS 0.24.0) |
 | **4** | Profils : `GET /profils/{id}` + `/stats` (membre et moi), `PATCH /profils/moi`, avatar, Administration (`POST /admin/action`), « Ses Grands Prix » en dernier | **Stats (moi et membre) faites** (iOS 0.25.0) — `PATCH`, avatar, Administration, « Ses Grands Prix » à faire |
-| **5** | Calendrier : liste statique **croisée** avec `GET /scraper/cotes` → états réels **et `gp_id`** · GP suivant de l'accueil en lecture directe · **un seul calcul d'échéance** (§6.4) | |
+| **5** | Calendrier : liste statique **croisée** avec `GET /scraper/cotes` → états réels **et `gp_id`** · GP suivant de l'accueil en lecture directe · **un seul calcul d'échéance** (§6.4) | **Fait** (iOS 0.26.0) |
 | **6** | Résultats : `GET /grands-prix/{id}/resultats` + mes pronostics en direct, puis `?championnat_id=` | |
 | **7** | Pronostics : `EtapePronos` porte le `gp_id` · cotes réelles · bonus = favoris serveur · `POST …/pronostics` avec `423` · destination du widget d'accueil | |
 
@@ -2178,6 +2178,33 @@ s'affiche d'abord de sa ligne de classement (meilleur coup compris), seules les 
 un appel ; `gp_joues` remplit « Ses Grands Prix » (`0` ⇒ « Saison 2026 »). Profil illisible
 au lancement ⇒ relu une fois, puis échec rejouable plutôt qu'un spinner sans fin.
 
+
+**Étape 5, mise en œuvre (calendrier, GP suivant, échéance).** **Il n'existe pas de
+`GET /gp`** : la liste statique ``GrandPrixSaison.saison2026`` est croisée avec
+`GET /scraper/cotes` (publique) par `Services/CalendrierSaison.swift`, possédé par
+`CalendrierView` et rappelé à chaque apparition. Les statuts en base sont `a_venir`,
+`cotes_figees` et `termine` (contrainte `check`) — **pas d'`en_cours`** ; les quatre états
+affichés en sont dérivés par `EtatGp.pour`, pendant d'`etatDuGpSaison` (absent de la base ⇒
+« À venir », `date_course` passée ⇒ « Fermé », cotes présentes ⇒ « Pronos ouverts »). Le
+rapprochement se fait par `SlugCircuit` (`Models/GrandPrix.swift`), désormais **seul
+propriétaire** du slug — `ProchainGP.slug` y délègue. Les douze cartes s'affichent toujours :
+pendant le premier chargement un spinner au-dessus de la liste, après un échec
+`EchecChargement` au même endroit, et **aucune pastille tant que l'état est inconnu** — un
+« À venir » par défaut mentirait sur un GP ouvert. Le défilement vers le prochain GP attend
+les états. `GrandPrixSaison.gpId` (l'`id` réel, `nil` hors base) est transmis à
+`DetailGPView` et à `ResultatsGPView` (`ResultatGPMock.gpId`) pour les étapes 6 et 7 ; fiches
+circuit et séances restent statiques.
+**Un seul calcul d'échéance** : `EcheancePronostics` (`Models/GrandPrix.swift`), pendant
+d'`etatPronostics` + `cotesArretees` — deux phases, décompte « 2j 14h 32min » puis
+« 32min 10s », `phrase` pour les surfaces à une ligne. Le widget d'un championnat
+(`phrase`) et celui de l'accueil (deux cases, `TimelineView` à la seconde, aucune animation)
+le lisent ; `ProchainGP.pronosticsOuverts` y délègue. `/championnats/moi` ne sert pas
+`date_qualifications` : avant l'ouverture, le widget d'un championnat dit donc « Ouverture à
+confirmer » (il disait « Course le … »). Le GP suivant de l'accueil est lu **directement**
+dans `grands_prix` (`Services/ProchainGrandPrix.swift`, `a_venir`/`cotes_figees`, départ
+croissant, inconnu en dernier), silhouette rouge de même hauteur pendant le chargement ;
+aucun GP à venir ⇒ pas de widget (le repli web sur le dernier GP couru n'est pas repris).
+Le widget ne mène aux cotes **que si `cotesArretees`**.
 ---
 
 ## 8. Références

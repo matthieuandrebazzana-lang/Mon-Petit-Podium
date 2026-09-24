@@ -5,9 +5,10 @@ import SwiftUI
 /// Référence visuelle : `Ressources/Screenshots/screen-04-accueil_haut.PNG` et
 /// `screen-05-accueil-bas.PNG`, écran par écran.
 ///
-/// > **Les championnats sont réels** (``MesChampionnats``, `GET /championnats/moi`). Le
-/// > Grand Prix suivant est encore mocké : ``GrandPrixMock`` est une valeur en dur, reprise
-/// > des captures pour que le rendu se compare à elles.
+/// > **Tout est réel.** Les championnats viennent de ``MesChampionnats``
+/// > (`GET /championnats/moi`), le Grand Prix suivant de ``ProchainGrandPrix`` — une
+/// > lecture **directe** de Supabase, qui n'attend pas le réveil de Railway. Son décompte
+/// > est celui d'``EcheancePronostics``, le seul calcul d'échéance de l'app.
 ///
 /// **Rien n'est dessiné en SwiftUI de ce qui existe en SVG** (`ios/CLAUDE.md` §3) : le
 /// drapeau, le tracé du circuit, le damier et les deux logos d'action sont des assets,
@@ -21,16 +22,8 @@ struct AccueilView: View {
     /// deux écrans ne s'aligneraient pas au passage de l'un à l'autre.
     private let margeLaterale: CGFloat = 16
 
-    // MARK: - Données mockées
-
-    private let grandPrix = GrandPrixMock(
-        slug: "azerbaidjan",
-        nom: "GP Azerbaïdjan",
-        date: "26 septembre 2026",
-        heureDepart: "07h00",
-        libelleEcheance: "Ouverture dans",
-        echeance: "4j 14h 48min"
-    )
+    /// Possédé par l'écran, relu à chaque apparition — pas de cache de session (§7.6).
+    @StateObject private var prochainGP = ProchainGrandPrix()
 
     /// Grands Prix restants — une **constante**, comme sur la version web : la base ne
     /// contient que les Grands Prix déjà relevés par le scraper, et les compter annoncerait
@@ -58,9 +51,8 @@ struct AccueilView: View {
                         entete
 
                         Spacer().frame(height: 12)
-                        WidgetGrandPrix(grandPrix: grandPrix)
+                        blocGrandPrix
 
-                        Spacer().frame(height: 24)   // changement de sujet : 24 pt (§4.6)
                         titreSection("Mes championnats")
 
                         Spacer().frame(height: 10)
@@ -86,6 +78,7 @@ struct AccueilView: View {
             .etapesPronos(libelleRetour: "Accueil") { cheminPronos.removeAll() }
             // Rechargée à chaque apparition, pas de cache de session (§7.6).
             .task { await mesChampionnats.charger() }
+            .task { await prochainGP.charger() }
         }
     }
 
@@ -129,6 +122,32 @@ struct AccueilView: View {
     /// trou à la place d'un nom.
     private var pseudoAffiche: String {
         viewModel.pseudo.isEmpty ? "pilote" : viewModel.pseudo
+    }
+
+    // MARK: - Le Grand Prix suivant
+
+    /// Le widget, sa silhouette pendant le premier chargement, ou l'échec rejouable. **Aucun
+    /// Grand Prix à venir ⇒ rien du tout**, espacement compris : un bloc vide promettrait
+    /// une course que la base ne connaît pas.
+    @ViewBuilder private var blocGrandPrix: some View {
+        switch prochainGP.etat {
+        case .chargement:
+            SilhouetteWidget()
+            Spacer().frame(height: 24)
+
+        case .echec(let erreur):
+            EchecChargement(erreur: erreur) {
+                Task { await prochainGP.charger() }
+            }
+            Spacer().frame(height: 24)
+
+        case .pret(let gp?):
+            WidgetGrandPrix(grandPrix: gp)
+            Spacer().frame(height: 24)   // changement de sujet : 24 pt (§4.6)
+
+        case .pret(nil):
+            Spacer().frame(height: 12)
+        }
     }
 
     // MARK: - Sections
@@ -244,7 +263,7 @@ private struct Avatar: View {
 /// vive que celle du bas, et l'œil lisait un défaut de calage plutôt qu'une intention.
 private struct WidgetGrandPrix: View {
 
-    let grandPrix: GrandPrixMock
+    let grandPrix: GrandPrixEnBase
 
     /// Hauteur de la bande du tracé. C'est la moitié du widget : la réduire ferait sauter
     /// l'accueil au moment précis où le joueur le regarde.
@@ -255,7 +274,60 @@ private struct WidgetGrandPrix: View {
 
     private var apparence: ApparenceDrapeau? { ApparenceDrapeau.pour(slug: grandPrix.slug) }
 
-    var body: some View {
+    /// « 26 septembre 2026 », **en heure locale du téléphone** (§7.4) — c'est un instant
+    /// servi par la base, pas une date nue : le formater est juste.
+    private var date: String {
+        grandPrix.dateCourse?.formatted(.dateTime.day().month(.wide).year()
+            .locale(Locale(identifier: "fr_FR"))) ?? "Date à confirmer"
+    }
+
+    /// « 07h00 » — l'écriture du projet, avec le « h ».
+    private var heureDepart: String {
+        grandPrix.dateCourse.map { Self.heure.string(from: $0) } ?? "À confirmer"
+    }
+
+    private static let heure: DateFormatter = {
+        let formateur = DateFormatter()
+        formateur.locale = Locale(identifier: "fr_FR")
+        formateur.dateFormat = "HH'h'mm"
+        return formateur
+    }()
+
+    private func echeance(le maintenant: Date = .now) -> EcheancePronostics {
+        EcheancePronostics.pour(statut: grandPrix.statut, dateCourse: grandPrix.dateCourse,
+                                dateQualifications: grandPrix.dateQualifications, le: maintenant)
+    }
+
+    /// **Le bouton n'existe que si les pronostics sont ouverts** — la même condition que le
+    /// décompte « Fermeture dans ». Avant le relevé des cotes, ou après le départ, le widget
+    /// annonce le Grand Prix sans mener nulle part.
+    private var ouvert: Bool {
+        EcheancePronostics.cotesArretees(statut: grandPrix.statut, dateCourse: grandPrix.dateCourse)
+    }
+
+    @ViewBuilder var body: some View {
+        if ouvert {
+            lien
+        } else {
+            surface
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    "Prochain Grand Prix, \(grandPrix.nom), le \(date). "
+                    + "Départ à \(heureDepart). \(echeance().phrase)."
+                )
+        }
+    }
+
+    private var surface: some View {
+        contenu
+            .padding(rembourrage)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background { fond }
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
+            .ombreAplat()
+    }
+
+    private var lien: some View {
         // **Le widget EST le bouton « Pronostiquer » de l'accueil.** La version web pose un
         // bouton nommé à l'intérieur du bloc ; ici c'est le bloc entier qui mène au tableau
         // des cotes, et le libellé accessible ci-dessous le nomme. Un bouton dans un bouton
@@ -267,21 +339,15 @@ private struct WidgetGrandPrix: View {
         NavigationLink(value: EtapePronos.cotes(
             nom: grandPrix.nom,
             slug: grandPrix.slug,
-            sousTitre: "\(grandPrix.date) · Départ \(grandPrix.heureDepart)"
+            sousTitre: "\(date) · Départ \(heureDepart)"
         )) {
-            contenu
-                .padding(rembourrage)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background { fond }
-                .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
-                .ombreAplat()
+            surface
         }
         .buttonStyle(StyleAppui(.grandeSurface))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "Prochain Grand Prix, \(grandPrix.nom), le \(grandPrix.date). "
-            + "Départ à \(grandPrix.heureDepart). "
-            + "\(grandPrix.libelleEcheance) \(grandPrix.echeance)."
+            "Prochain Grand Prix, \(grandPrix.nom), le \(date). "
+            + "Départ à \(heureDepart). \(echeance().phrase)."
         )
         .accessibilityHint("Pronostiquer")
         .accessibilityAddTraits(.isButton)
@@ -344,7 +410,7 @@ private struct WidgetGrandPrix: View {
 
             Spacer(minLength: 8)
 
-            Text(grandPrix.date)
+            Text(date)
                 .font(.custom(encreDouceGrasse ? "HelveticaNeue-Medium" : "HelveticaNeue", size: 11))
                 .foregroundColor(encreDouce)
                 .ombrePortee(apparence?.ombreNom ?? false)
@@ -396,10 +462,17 @@ private struct WidgetGrandPrix: View {
     /// Deux cases plutôt qu'une phrase : un chiffre posé sous son label se lit d'un coup
     /// d'œil, là où « Pronos ouverts · Fermeture dans 2j 14h 32min » demande de lire une
     /// ligne entière pour en extraire la même information.
+    ///
+    /// **Le décompte bat la seconde**, parce qu'il en affiche dans la dernière heure. Seul
+    /// le texte change : aucune animation — un chiffre qui bouge toutes les secondes n'a
+    /// pas à attirer l'œil davantage (portier `/animate`, aucun jeton nouveau).
     private var cases: some View {
-        HStack(spacing: 8) {
-            caseStatut(label: "Départ", valeur: grandPrix.heureDepart)
-            caseStatut(label: grandPrix.libelleEcheance, valeur: grandPrix.echeance)
+        TimelineView(.periodic(from: .now, by: 1)) { contexte in
+            let echeance = echeance(le: contexte.date)
+            HStack(spacing: 8) {
+                caseStatut(label: "Départ", valeur: heureDepart)
+                caseStatut(label: echeance.label, valeur: echeance.texte ?? echeance.substitut)
+            }
         }
     }
 
@@ -442,23 +515,27 @@ private extension View {
     }
 }
 
-// MARK: - Données mockées
+// MARK: - Silhouette
 
-/// Le Grand Prix suivant. Remplacé par le modèle du backend quand l'écran sera câblé ; la
-/// date et le compte à rebours sont ici des textes, pas des `Date` — rien ne les calcule.
-///
-/// `slug` est la clé des deux assets — `flag-<slug>` et `trace-<slug>` — et celle de la
-/// table des teintes. **Une seule normalisation pour les trois** : la faire deux fois
-/// laisserait les tables se désynchroniser sur un libellé qu'Unibet aurait renommé.
-private struct GrandPrixMock {
-    let slug: String
-    let nom: String
-    let date: String
-    let heureDepart: String
-    /// « Ouverture dans » avant les qualifications, « Fermeture dans » après : la case ne
-    /// choisit pas son échéance, elle la reçoit.
-    let libelleEcheance: String
-    let echeance: String
+/// Le widget pendant son premier chargement. **Il garde l'aplat rouge et la hauteur du
+/// vrai** : c'est le seul aplat de couleur de l'accueil, et le voir passer au gris puis
+/// revenir au rouge ferait clignoter l'écran d'entrée — la hauteur tenue évite que la
+/// liste des championnats ne saute de 360 pt à l'arrivée des données.
+private struct SilhouetteWidget: View {
+    var body: some View {
+        ZStack {
+            Color.primaire
+            LueurHaute()
+            ProgressView()
+                .tint(.white)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 360)
+        .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
+        .ombreAplat()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Chargement du prochain Grand Prix")
+    }
 }
 
 #Preview {

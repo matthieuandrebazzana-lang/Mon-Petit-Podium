@@ -153,6 +153,7 @@ ios/
     │   ├── Profil.swift         `Profil` + `ModeLivree`
     │   ├── StatsProfil.swift    stats d'un profil + `tuiles` — seul endroit qui les met en forme
     │   ├── Championnat.swift    `Championnat`, `ProchainGP`, `PositionMembre`
+    │   ├── GrandPrix.swift      `GrandPrixEnBase`, `SlugCircuit`, `EcheancePronostics` — LE calcul d'échéance
     │   └── Membre.swift         une ligne de classement
     ├── Services/
     │   ├── SupabaseManager.swift  chemin direct, sous RLS
@@ -160,6 +161,8 @@ ios/
     │   ├── MesChampionnats.swift  `GET /championnats/moi` — propriétaire unique, accueil + onglet
     │   ├── ClassementChampionnat.swift  `GET /championnats/{id}/classement` — un appel, deux segments
     │   ├── StatistiquesProfil.swift  `GET /profils/{id}/stats` — le sien comme celui d'un membre
+    │   ├── CalendrierSaison.swift  `GET /scraper/cotes` — états et `gp_id` du calendrier
+    │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil, lecture directe `grands_prix`
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
     │   ├── ContentView.swift
@@ -167,7 +170,7 @@ ios/
     │   │   ├── BarreNavigation.swift  TabView à 4 onglets + apparence de la barre
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
     │   ├── Accueil/
-    │   │   ├── AccueilView.swift       championnats réels, GP suivant mocké, cartes → `ChampionnatDetailView`
+    │   │   ├── AccueilView.swift       championnats et GP suivant réels, cartes → `ChampionnatDetailView`
     │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Composants/
@@ -183,8 +186,8 @@ ios/
     │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases → `POST /championnats/rejoindre`
     │   ├── Calendrier/
-    │   │   ├── CalendrierView.swift   liste de la saison — terminé → résultats, sinon → fiche
-    │   │   ├── DetailGPView.swift     fiche d'un GP à venir : séances, circuit, vainqueurs — MOCKÉE
+    │   │   ├── CalendrierView.swift   liste statique × états réels, `gp_id` transmis — terminé → résultats, sinon → fiche
+    │   │   ├── DetailGPView.swift     fiche d'un GP à venir : séances, circuit, vainqueurs — statique, état et `gp_id` reçus
     │   │   └── FichesGrandPrix.swift  séances + fiches circuit, transcrites de `GP_2026` et `CIRCUITS`
     │   ├── Resultats/
     │   │   ├── ResultatsGPView.swift       mes résultats + classement officiel — MOCKÉS

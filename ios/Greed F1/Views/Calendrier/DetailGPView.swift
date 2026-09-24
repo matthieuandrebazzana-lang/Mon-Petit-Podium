@@ -17,9 +17,11 @@ import SwiftUI
 /// 2. **Le circuit** — le tracé en grand, puis quatre chiffres.
 /// 3. **Le palmarès** — les derniers vainqueurs, qu'on parcourt sans but précis.
 ///
-/// > **Les données sont mockées.** ``FichesGrandPrix`` transcrit `GP_2026` et `CIRCUITS` ;
-/// > aucun appel réseau ne part de cet écran. Le bouton « Voir les cotes » de la version
-/// > web n'est pas là : il exige des cotes arrêtées, que seule la base connaît.
+/// > **La fiche reste statique, l'état et l'identifiant sont réels.** ``FichesGrandPrix``
+/// > transcrit `GP_2026` et `CIRCUITS` — séances, circuit, palmarès ne viennent d'aucun
+/// > serveur. Le ``GrandPrixSaison`` reçu porte l'état croisé par ``CalendrierView`` et
+/// > l'**identifiant réel** du Grand Prix (``GrandPrixSaison/gpId``), que le bouton
+/// > « Voir les cotes » demandera à l'étape 7. Aucun appel ne part de cet écran.
 ///
 /// ## Rien n'anime, et c'est une décision
 ///
@@ -30,7 +32,7 @@ import SwiftUI
 /// nouveau** (`CLAUDE.md` §4).
 struct DetailGPView: View {
 
-    let grandPrix: GrandPrixSaisonMock
+    let grandPrix: GrandPrixSaison
 
     @Environment(\.dismiss) private var fermer
 
@@ -127,17 +129,20 @@ struct DetailGPView: View {
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
 
-            Spacer().frame(height: 6)
-
             // **Le mot et la couleur viennent d'``EtatGp``**, jamais d'ici : le calendrier
-            // et la fiche doivent dire le même mot avec la même couleur.
-            Text(grandPrix.etat.libelle)
-                .font(.custom("HelveticaNeue-Medium", size: 11))
-                .foregroundColor(grandPrix.etat.encrePastille)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(grandPrix.etat.fondPastille)
-                .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
+            // et la fiche doivent dire le même mot avec la même couleur. État inconnu (la
+            // base n'a pas répondu) ⇒ pas de pastille, comme sur la carte.
+            if let etat = grandPrix.etat {
+                Spacer().frame(height: 6)
+
+                Text(etat.libelle)
+                    .font(.custom("HelveticaNeue-Medium", size: 11))
+                    .foregroundColor(etat.encrePastille)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(etat.fondPastille)
+                    .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -445,8 +450,6 @@ private struct CarteVainqueur: View {
 
 #Preview {
     NavigationStack {
-        DetailGPView(grandPrix: .init(slug: "azerbaidjan", pays: "Azerbaïdjan",
-                                      nom: "GP Azerbaïdjan", circuit: "Bakou", jour: "26",
-                                      mois: "SEPT", etat: .ouvert, date: "26 septembre 2026"))
+        DetailGPView(grandPrix: GrandPrixSaison.saison2026[3])
     }
 }
