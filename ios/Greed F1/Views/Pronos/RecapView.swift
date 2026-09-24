@@ -98,6 +98,46 @@ extension GrilleEnregistree {
     }
 }
 
+// MARK: - Une section de l'accordéon
+
+/// Un **marché** du récapitulatif : son libellé, ses pronostics, et ce qu'ils rapporteraient.
+///
+/// Le podium y réunit ses deux pilotes, et deux paris bonus sur un même marché se
+/// rangent sous le même en-tête : l'accordéon se lit marché par marché.
+struct SectionRecap: Identifiable {
+
+    let libelle: String
+    let lignes: [LigneRecap]
+
+    var id: String { lignes.first.map { "\($0.genre.rawValue):\(libelle)" } ?? libelle }
+
+    /// L'aplat et l'encre de la pastille — ceux de la première ligne, les lignes d'une
+    /// section partageant toutes le même genre.
+    var aplat: Color { lignes.first?.aplat ?? .accent }
+    var encre: Color { lignes.first?.encre ?? .texte }
+
+    /// Les points potentiels du marché. `nil` seulement si **toutes** ses cotes ont été
+    /// retirées — « Cote retirée », jamais `0`, qui voudrait dire « raté ».
+    var points: Int? {
+        let connus = lignes.compactMap(\.points)
+        return connus.isEmpty ? nil : connus.reduce(0, +)
+    }
+
+    /// Regroupe des lignes par marché, **dans l'ordre de leur première apparition**.
+    static func regrouper(_ lignes: [LigneRecap]) -> [SectionRecap] {
+        var ordre: [String] = []
+        var parMarche: [String: [LigneRecap]] = [:]
+        for ligne in lignes {
+            let cle = "\(ligne.genre.rawValue):\(ligne.libelle)"
+            if parMarche[cle] == nil { ordre.append(cle) }
+            parMarche[cle, default: []].append(ligne)
+        }
+        return ordre.compactMap { cle in
+            parMarche[cle].map { SectionRecap(libelle: $0[0].libelle, lignes: $0) }
+        }
+    }
+}
+
 // MARK: - L'écran
 
 /// **Récapitulatif** — ce que la grille vaut une fois validée, et de quoi revenir la
@@ -139,6 +179,11 @@ struct RecapView: View {
 
     /// Ce qui ferme **ce seul écran**, et ramène donc à la saisie.
     @Environment(\.dismiss) private var fermer
+
+    @Environment(\.accessibilityReduceMotion) private var mouvementReduit
+
+    /// La section dépliée — **une seule à la fois**, et aucune à l'arrivée.
+    @State private var ouverte: SectionRecap.ID?
 
     private let margeLaterale: CGFloat = 16
 
@@ -309,31 +354,29 @@ struct RecapView: View {
 
     // MARK: - La carte de résumé
 
-    /// Ce qui a été pronostiqué, marché par marché, et ce que ça vaut en tout.
+    /// Ce qui a été pronostiqué, **en accordéon** : un en-tête par marché — son libellé, ses
+    /// points potentiels —, le détail des pilotes au toucher.
     ///
-    /// > **Pas de séparateur entre deux rangées**, contrairement à ce que la consigne
-    /// > demandait : `screen-28-recap-bas.PNG` n'en montre qu'aux **ruptures de section**
-    /// > — avant « Bonus » et avant le total. Un filet toutes les trois lignes découpe ce
-    /// > qui doit se lire comme une liste ; posé aux deux endroits où le sujet change, il
-    /// > dit quelque chose.
+    /// > **Des filets aux seules ruptures de section**, comme sur `screen-28-recap-bas.PNG` :
+    /// > avant « Bonus » et avant le total. Les en-têtes, eux, se séparent par leur rythme.
     private var carteResume: some View {
         VStack(alignment: .leading, spacing: 0) {
             titreSection("Obligatoires")
 
-            Spacer().frame(height: 14)
-            rangees(obligatoires)
+            Spacer().frame(height: 6)
+            accordeon(SectionRecap.regrouper(obligatoires))
 
             if !lignesBonus.isEmpty {
-                Spacer().frame(height: 20)
+                Spacer().frame(height: 14)
                 separateur
                 Spacer().frame(height: 16)
                 titreSection("Bonus")
 
-                Spacer().frame(height: 14)
-                rangees(lignesBonus)
+                Spacer().frame(height: 6)
+                accordeon(SectionRecap.regrouper(lignesBonus))
             }
 
-            Spacer().frame(height: 20)
+            Spacer().frame(height: 14)
             separateur
             Spacer().frame(height: 16)
             rangeeTotal
@@ -354,9 +397,26 @@ struct RecapView: View {
             .foregroundColor(.grisSecondaire)         // 5,33:1 sur le blanc
     }
 
-    private func rangees(_ lignes: [LigneRecap]) -> some View {
-        VStack(spacing: 18) {
-            ForEach(lignes) { RangeeRecap(ligne: $0) }
+    private func accordeon(_ sections: [SectionRecap]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(sections) { section in
+                SectionAccordeon(section: section, ouverte: ouverte == section.id) {
+                    basculer(section.id)
+                }
+            }
+        }
+    }
+
+    /// Ouvre une section et ferme la précédente **dans la même transaction** : les deux
+    /// mouvements partent ensemble, et la carte ne sursaute pas entre les deux.
+    ///
+    /// La courbe est celle des entrées, à la durée de l'ouverture quand quelque chose
+    /// s'ouvre, de la fermeture sinon. Mouvement réduit : l'état change sans déplacement.
+    private func basculer(_ id: SectionRecap.ID) {
+        let cible: SectionRecap.ID? = ouverte == id ? nil : id
+        let duree = cible == nil ? Mouvement.accordeonFermeture : Mouvement.accordeonOuverture
+        withAnimation(mouvementReduit ? nil : Mouvement.entree(duree)) {
+            ouverte = cible
         }
     }
 
@@ -405,9 +465,97 @@ struct RecapView: View {
     }
 }
 
+// MARK: - Une section de l'accordéon
+
+/// L'en-tête d'un marché — libellé, points potentiels, chevron — et, dépliée, **le détail
+/// des pilotes** avec les points de chacun.
+///
+/// > **Pas de cote dans le détail**, bien que la consigne en demandait une : `CLAUDE.md`
+/// > §3.1 interdit d'afficher une cote brute, et `LigneRecap` n'en porte d'ailleurs pas —
+/// > seulement des points. Le détail dit donc le pilote et ses points.
+private struct SectionAccordeon: View {
+
+    let section: SectionRecap
+    let ouverte: Bool
+    let basculer: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: basculer) { entete }
+                .buttonStyle(StyleAppui(.grandeSurface))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(section.libelle), \(formaterPoints(section.points))")
+                .accessibilityValue(ouverte ? "Déplié" : "Replié")
+                .accessibilityHint(ouverte ? "Masquer le détail" : "Afficher le détail")
+
+            if ouverte {
+                detail
+                    // Le détail descend de son en-tête : quelques points de glissement
+                    // disent d'où il vient, l'opacité fait le reste.
+                    .transition(.opacity.combined(with: .offset(y: -6)))
+            }
+        }
+    }
+
+    /// **52 pt de haut** : au-dessus des 44 d'une zone tactile, et toute la largeur de la
+    /// carte se touche (`contentShape`), pas seulement le texte.
+    private var entete: some View {
+        HStack(spacing: 12) {
+            Text(section.libelle)
+                .font(.custom("HelveticaNeue-Medium", size: 15))
+                .foregroundColor(.texte)              // 15,37:1 sur le blanc
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(formaterPoints(section.points))
+                .font(.custom("HelveticaNeue-Medium", size: 14))
+                .foregroundColor(section.encre)
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(section.aplat)
+                .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.grisSecondaire)     // 5,33:1 — au-dessus des 3:1 d'un glyphe
+                .rotationEffect(.degrees(ouverte ? 90 : 0))
+                .accessibilityHidden(true)
+        }
+        .frame(minHeight: 52)
+        .contentShape(Rectangle())
+    }
+
+    private var detail: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(section.lignes) { ligne in
+                HStack(spacing: 12) {
+                    Text(ligne.pilote)
+                        .font(.custom("HelveticaNeue", size: 15))
+                        .foregroundColor(.texte)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(formaterPoints(ligne.points))
+                        .font(.custom("HelveticaNeue-Medium", size: 14))
+                        .foregroundColor(.grisSecondaire)   // 5,33:1 sur le blanc
+                        .lineLimit(1)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.leading, 12)
+        .padding(.bottom, 12)
+    }
+}
+
 // MARK: - Une rangée
 
 /// Le marché au-dessus, le pilote en dessous, les points au bout.
+///
+/// > **Non montée depuis l'accordéon** (``SectionAccordeon``) ; gardée, éprouvée.
 ///
 /// **Le marché est écrit au-dessus de chaque nom et non une fois par groupe** : le podium
 /// occupe deux rangées, et un titre unique aurait laissé croire que la seconde dépend de la
