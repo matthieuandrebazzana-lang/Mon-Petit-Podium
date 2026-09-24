@@ -201,7 +201,7 @@ ios/
     │   │   ├── EntreePronosView.swift  porte d'entrée : récap si grille en base, sinon cotes
     │   │   ├── CotesView.swift      tous les marchés réels, étoile = favori serveur, `EtapePronos`
     │   │   ├── PronosView.swift     saisie préremplie, bonus parmi les favoris, `POST` + `423`
-    │   │   └── RecapView.swift      récapitulatif en accordéon par marché, après le `200` ou d'entrée
+    │   │   └── RecapView.swift      récapitulatif, après le `200` ou d'entrée (grille relue)
     │   └── Profil/
     │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`)
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles

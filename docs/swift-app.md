@@ -2253,13 +2253,6 @@ déjà en base (`GrilleEnregistree(relue:)`, mêmes rapprochements que le prére
 **tableau des cotes** sinon. Le choix est figé au premier chargement ; le récapitulatif se
 relit à chaque retour. Ouvert d'entrée, son « Modifier mes pronos » empile `.cotes` puis la
 saisie ; après un `200`, il ferme l'écran comme avant. Le chargeur est passé à `CotesView`.
-**Accordéon** (iOS 0.33.0) : la carte de résumé de `RecapView` n'est plus une liste plate.
-Un en-tête par marché (`SectionRecap.regrouper`) — Vainqueur, Podium (ses deux pilotes
-réunis), puis un par marché bonus —, libellé à gauche, points potentiels et chevron à droite.
-Au toucher il se déplie sur le pilote et les points de chacun ; **une seule section ouverte**,
-toutes fermées à l'arrivée. `Mouvement.accordeonOuverture` / `accordeonFermeture` (240 / 170
-ms, courbe d'entrée), chevron pivoté à 90°, rien d'animé sous mouvement réduit. **Pas de
-cote dans le détail** (§ racine 3.1) : seulement des points.
 ---
 
 ## 8. Références
