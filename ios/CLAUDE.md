@@ -199,7 +199,7 @@ ios/
     │   │   └── NationalitesPilotes.swift   pilote → pays, contrepartie de `lib/nationalites.js`
     │   ├── Pronos/
     │   │   ├── EntreePronosView.swift  porte d'entrée : récap si grille en base, sinon cotes
-    │   │   ├── CotesView.swift      tous les marchés réels, étoile = favori serveur, `EtapePronos`
+    │   │   ├── CotesView.swift      marchés réels en accordéon, étoile = favori serveur, `EtapePronos`
     │   │   ├── PronosView.swift     saisie préremplie, bonus parmi les favoris, `POST` + `423`
     │   │   └── RecapView.swift      récapitulatif, après le `200` ou d'entrée (grille relue)
     │   └── Profil/

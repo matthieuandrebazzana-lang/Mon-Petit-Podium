@@ -2253,6 +2253,11 @@ déjà en base (`GrilleEnregistree(relue:)`, mêmes rapprochements que le prére
 **tableau des cotes** sinon. Le choix est figé au premier chargement ; le récapitulatif se
 relit à chaque retour. Ouvert d'entrée, son « Modifier mes pronos » empile `.cotes` puis la
 saisie ; après un `200`, il ferme l'écran comme avant. Le chargeur est passé à `CotesView`.
+**Accordéon des cotes** (iOS 0.35.0) : dans `CotesView`, chaque marché Unibet est une
+section dépliante. L'en-tête coloré (libellé, pastille du nombre de favoris, chevron) se
+touche ; la grille de ses cotes se déplie dessous. **Un seul marché ouvert**, aucun à
+l'arrivée. `Mouvement.accordeonOuverture` / `accordeonFermeture` (240 / 170 ms, courbe
+d'entrée), chevron pivoté à 90°, rien d'animé sous mouvement réduit.
 ---
 
 ## 8. Références

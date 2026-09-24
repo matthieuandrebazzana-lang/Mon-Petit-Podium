@@ -211,6 +211,10 @@ struct CotesView: View {
     /// Le refus d'un épinglage, posé sous la rangée des favoris — jamais une alerte.
     @State private var erreurFavori: ErreurAPI?
 
+    /// Le marché déplié — **un seul à la fois**, et aucun à l'arrivée : la liste des
+    /// marchés Unibet se lit d'abord comme un sommaire.
+    @State private var marcheOuvert: MarcheCotes.ID?
+
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
     /// Prévisualisation admin — la pastille rappelle que ce qu'on voit n'est pas ce que
@@ -387,28 +391,53 @@ struct CotesView: View {
 
     // MARK: - Un marché
 
+    /// Un marché **en accordéon** : l'en-tête se touche, la grille de ses cotes se déplie
+    /// dessous. Les marchés Unibet sont trop nombreux pour être tous dépliés d'un coup.
     private func sectionMarche(_ marche: MarcheCotes) -> some View {
-        VStack(spacing: 12) {
-            enTeteMarche(marche)
+        let ouvert = marcheOuvert == marche.id
 
-            LazyVGrid(columns: [GridItem(spacing: 12), GridItem(spacing: 12)], spacing: 12) {
-                ForEach(marche.cotes) { cote in
-                    CarteCote(
-                        nom: cote.pilote,
-                        points: cote.points,
-                        couleurEcurie: GrillePilotes.couleurEcurie(de: cote.pilote),
-                        retenu: estEpingle(cote)
-                    ) {
-                        basculer(cote, dans: marche)
+        return VStack(spacing: 12) {
+            Button { deplier(marche.id) } label: { enTeteMarche(marche, ouvert: ouvert) }
+                .buttonStyle(StyleAppui(.grandeSurface))
+
+            if ouvert {
+                LazyVGrid(columns: [GridItem(spacing: 12), GridItem(spacing: 12)], spacing: 12) {
+                    ForEach(marche.cotes) { cote in
+                        CarteCote(
+                            nom: cote.pilote,
+                            points: cote.points,
+                            couleurEcurie: GrillePilotes.couleurEcurie(de: cote.pilote),
+                            retenu: estEpingle(cote)
+                        ) {
+                            basculer(cote, dans: marche)
+                        }
                     }
                 }
+                // La grille descend de son en-tête : quelques points de glissement disent
+                // d'où elle vient, l'opacité fait le reste.
+                .transition(.opacity.combined(with: .offset(y: -6)))
             }
+        }
+    }
+
+    /// Ouvre un marché et ferme le précédent **dans la même transaction** : les deux
+    /// mouvements partent ensemble. Courbe d'entrée, à la durée de l'ouverture quand quelque
+    /// chose s'ouvre, de la fermeture sinon. Mouvement réduit : l'état change sans déplacement.
+    private func deplier(_ id: MarcheCotes.ID) {
+        let cible: MarcheCotes.ID? = marcheOuvert == id ? nil : id
+        let duree = cible == nil ? Mouvement.accordeonFermeture : Mouvement.accordeonOuverture
+        withAnimation(mouvementReduit ? nil : Mouvement.entree(duree)) {
+            marcheOuvert = cible
         }
     }
 
     /// L'en-tête du marché. **La pastille est toujours rendue, y compris à zéro** : une
     /// pastille qui apparaîtrait au premier favori ferait sauter l'en-tête sous le doigt.
-    private func enTeteMarche(_ marche: MarcheCotes) -> some View {
+    /// Elle dit, marché replié, ce qui y est déjà épinglé.
+    ///
+    /// Le chevron pivote de 90° à l'ouverture ; **52 pt minimum** de haut, toute la largeur
+    /// se touche.
+    private func enTeteMarche(_ marche: MarcheCotes, ouvert: Bool) -> some View {
         let compte = favoris.filter { $0.marche == marche.marche }.count
         let libelle = MarcheCote.libelle(de: marche)
         let aplat = MarcheCote.aplat(slug: marche.marche)
@@ -437,10 +466,17 @@ struct CotesView: View {
             .padding(.vertical, 5)
             .background(Color.surface)
             .clipShape(Capsule())
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white)          // ≥ 10,88:1 sur les trois aplats
+                .rotationEffect(.degrees(ouvert ? 90 : 0))
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        .contentShape(Rectangle())
         .background {
             ZStack {
                 aplat
@@ -451,6 +487,8 @@ struct CotesView: View {
         .ombreAplat()                             // aplat de couleur (§4.7)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Marché \(libelle). \(compte) favori\(compte > 1 ? "s" : "").")
+        .accessibilityValue(ouvert ? "Déplié" : "Replié")
+        .accessibilityHint(ouvert ? "Masquer les cotes" : "Afficher les cotes")
     }
 
     // MARK: - Barre d'action

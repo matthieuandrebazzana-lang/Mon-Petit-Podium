@@ -46,6 +46,11 @@ enum Mouvement {
 
     /// Passage d'écran.
     static let passageEcran: TimeInterval = 0.20
+
+    /// Accordéon — **l'ouverture est plus lente que la fermeture** (240 / 170 ms) : on
+    /// regarde ce qui arrive, on ne regarde pas ce qui s'en va.
+    static let accordeonOuverture: TimeInterval = 0.24
+    static let accordeonFermeture: TimeInterval = 0.17
 }
 
 // MARK: - Retour d'appui
