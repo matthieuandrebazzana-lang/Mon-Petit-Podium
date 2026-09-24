@@ -1669,3 +1669,26 @@ toute modification.
 - **Un bouton d'enregistrement qui se contente de l'écran ment** : il affiche « enregistré »
   sans écrire. Tant que la route n'est pas branchée, il reste éteint.
 - La voiture du compte connecté ne se lit **jamais** dans une ligne de classement.
+
+---
+
+## 37. iOS — les photos de profil n'apparaissaient pas dans le cockpit sur la piste (`ios 0.30.1`)
+
+**Symptôme.** Vue Piste d'un championnat : chaque cockpit montrait l'initiale sur la
+teinte du membre, même quand celui-ci a une photo de profil.
+
+**Cause réelle.** Ni l'URL ni le chargement. `GET /championnats/{id}/classement` sert bien
+`avatar_url`, `Membre` le décode, et `VueVoiture` sait découper la photo dans le cockpit
+(disque teinté + initiale dessous, `AsyncImage` par-dessus, placeholder transparent qui
+laisse l'initiale visible pendant le chargement et en cas d'erreur). **`VuePisteView` ne
+passait simplement pas `photo:`** à `VueVoiture` — paramètre facultatif, donc aucune
+erreur de compilation.
+
+**Correctif.** `VuePisteView` passe `photo: placement.membre.avatarUrl`. Et
+`Membre.avecVoiture(de:)` prend aussi la photo **du profil** pour la ligne du compte
+connecté, comme le reste de sa voiture (§36).
+
+### Ce qu'il ne faut pas refaire
+
+- Un paramètre facultatif d'un composant partagé se vérifie **à chaque site d'appel** :
+  l'oublier ne casse rien, ça éteint une fonction en silence.

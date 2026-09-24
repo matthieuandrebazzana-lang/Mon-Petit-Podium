@@ -246,6 +246,7 @@ struct VuePisteView: View {
             VueVoiture(livree: placement.membre.livree,
                        numero: placement.membre.numeroAffiche,
                        nom: placement.membre.pseudo,
+                       photo: placement.membre.avatarUrl,
                        teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte))
                 .frame(width: largeurVoiture, height: hauteurVoiture)
 

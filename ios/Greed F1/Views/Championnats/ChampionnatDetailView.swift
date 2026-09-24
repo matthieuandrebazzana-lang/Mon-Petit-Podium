@@ -635,7 +635,8 @@ private struct FeuilleCodeInvitation: View {
 
 extension Membre {
     /// La ligne, avec **la voiture du profil** quand c'est celle du compte connecté —
-    /// livrée, couleurs et numéro. Le reste (points, rang) reste celui du serveur.
+    /// livrée, couleurs, numéro et photo du cockpit. Le reste (points, rang) reste celui
+    /// du serveur.
     /// Sans profil, ou pour un autre membre, la ligne est rendue telle quelle.
     func avecVoiture(de profil: Profil?) -> Membre {
         guard let profil, profil.id == profilId else { return self }
@@ -645,7 +646,7 @@ extension Membre {
                       couleur1: profil.couleur1, couleur2: profil.couleur2,
                       couleurTexte: profil.couleurTexte, numero: profil.numero,
                       livreeMode: profil.livreeMode, livreeEcurie: profil.livreeEcurie,
-                      avatarUrl: avatarUrl)
+                      avatarUrl: profil.avatarUrl)
     }
 
     /// Ce que porte sa voiture. Un slug d'écurie inconnu retombe sur la livrée perso à
