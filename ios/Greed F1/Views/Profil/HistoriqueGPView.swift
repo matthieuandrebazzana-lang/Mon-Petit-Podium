@@ -3,9 +3,9 @@ import SwiftUI
 /// **Ses Grands Prix** — ce qu'un membre a joué sur la saison, Grand Prix par Grand Prix.
 ///
 /// Ouvert depuis ``ProfilMembreView`` et depuis ``ProfilView``, par la même ligne
-/// (``LigneGrandsPrix``). Pas de maquette : l'écran assemble le vocabulaire existant — le
-/// bloc bordeaux de ``SectionMesResultats``, le drapeau à 15 % des lignes de résultats,
-/// ``PastillePoints`` et ``Verdict``.
+/// (``LigneGrandsPrix``). Pas de maquette : chaque carte reprend l'empilement du widget
+/// GP de l'accueil (drapeau · tracé · voile · contenu), le détail reprend ``PastillePoints``
+/// et ``Verdict``.
 ///
 /// > *Écart signalé (`CLAUDE.md` §3.2).* Le type et la route portent « historique », terme
 /// > proscrit du vocabulaire. **Rien de ce qui s'affiche ne le dit** : l'écran s'intitule
@@ -162,11 +162,20 @@ struct HistoriqueGPView: View {
 
 // MARK: - Une carte de Grand Prix
 
+/// Une carte par Grand Prix joué, **sur le modèle du widget de l'accueil** : le même
+/// empilement de calques, dans le même ordre — drapeau · tracé · voile · contenu.
+///
+/// La partie haute a une hauteur fixe : les cartes s'alignent en colonne régulière, et
+/// l'ouverture de l'une ne décale jamais le contenu des autres, seulement leur position.
+/// La partie basse, blanche, se déplie dessous et partage le rayon de la carte.
 private struct CarteGrandPrixJoue: View {
 
     let gp: GrandPrixJoue
     let ouvert: Bool
     let basculer: () -> Void
+
+    private let hauteur: CGFloat = 160
+    private let rembourrage: CGFloat = 16
 
     var body: some View {
         VStack(spacing: 0) {
@@ -189,81 +198,129 @@ private struct CarteGrandPrixJoue: View {
 
     // MARK: La partie haute
 
-    /// **Sur le drapeau à 15 %, aucun gris ne tient** — `grisSecondaire` y tombe à
-    /// 3,76:1 sur le pire substrat (le noir). La date et le compte des réussis passent donc
-    /// au marron `secondaire` (7,46:1), comme les lignes de résultats.
     private var haut: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(gp.fiche?.nom ?? gp.slug)
-                    .font(.custom("HelveticaNeue-Medium", size: 15))
-                    .foregroundColor(.texte)
-                    .lineLimit(1)
-                Text(gp.fiche?.date ?? "")
-                    .font(.custom("HelveticaNeue", size: 12))
-                    .foregroundColor(.secondaire)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(spacing: 10) {
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(gp.fiche?.nom ?? gp.slug)
+                            .font(.custom("HelveticaNeue-Medium", size: 16))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                        Text(gp.fiche?.date ?? "")
+                            .font(.custom("HelveticaNeue", size: 12))
+                            .foregroundColor(.encreSecondaire)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            VStack(alignment: .trailing, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(gp.pointsGagnes.map(\.enPoints) ?? "—")
-                        .font(.custom("HelveticaNeue-Medium", size: 22))
-                        .foregroundColor(.primaire)       // 7,68:1 sur le pire substrat
-                    Text("pts")
-                        .font(.custom("HelveticaNeue", size: 12))
-                        .foregroundColor(.primaire)
+                    badgeStatut
                 }
-                Text("\(gp.reussis)/\(gp.pronostics.count) réussis")
-                    .font(.custom("HelveticaNeue", size: 11))
-                    .foregroundColor(.secondaire)
+
+                Spacer(minLength: 0)
+
+                HStack(alignment: .lastTextBaseline, spacing: 12) {
+                    Text("\(gp.reussis)/\(gp.pronostics.count) pronos réussis")
+                        .font(.custom("HelveticaNeue", size: 12))
+                        .foregroundColor(.encreSecondaire)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text(gp.pointsGagnes.map(\.enPoints) ?? "—")
+                            .font(.custom("HelveticaNeue-Medium", size: 28))
+                            .tracking(Tracking.titre)     // −0,02em × 28, /apple-design §15
+                            .foregroundColor(.white)
+                        Text("pts")
+                            .font(.custom("HelveticaNeue", size: 14))
+                            .foregroundColor(.white)
+                    }
+                    .fixedSize()
+                }
             }
-            .fixedSize()
 
             Image(systemName: "chevron.down")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.secondaire)
+                .foregroundColor(.white)
                 .rotationEffect(.degrees(ouvert ? 180 : 0))
                 .frame(width: 16)
                 .accessibilityHidden(true)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .frame(minHeight: 44)
-        .background { drapeau }
+        .padding(rembourrage)
+        .frame(maxWidth: .infinity)
+        .frame(height: hauteur)
+        .background { fond }
+        .clipped()
+        // Le drapeau en `scaledToFill` déborde : la cible est la surface visible, rien d'autre.
         .contentShape(Rectangle())
     }
 
-    /// Le drapeau du pays hôte, étiré comme les lignes de résultats : un recadrage
-    /// garderait la bande centrale et perdrait le pays.
-    @ViewBuilder private var drapeau: some View {
+    /// Tous les Grands Prix de l'écran sont terminés — il ne liste que ceux qui ont été
+    /// joués et jugés.
+    private var badgeStatut: some View {
+        Text("Terminé")
+            .font(.custom("HelveticaNeue", size: 11))
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.20))
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
+            .fixedSize()
+    }
+
+    /// **L'ordre des calques est celui du widget de l'accueil, et il ne se défait pas.**
+    ///
+    /// 1. Le drapeau, en `scaledToFill` — il couvre toute la carte, rogné sur son plus
+    ///    grand côté, jamais déformé (`object-fit: cover`).
+    /// 2. Le tracé, centré, blanc à 30 % : un filigrane — le nom dit déjà de quel circuit
+    ///    il s'agit.
+    /// 3. Le voile noir à 25 %, sur toute la surface — jamais sur une bande seule, sinon
+    ///    un drapeau à bandes se lirait coupé en deux.
+    ///
+    /// **Des `overlay` et non un `ZStack`** : un `ZStack` prend la taille de son plus grand
+    /// enfant — le drapeau débordant — et le tracé s'ajustait alors à cette boîte trop
+    /// grande. Chaque `overlay` reçoit, lui, la taille exacte de la carte.
+    @ViewBuilder private var fond: some View {
         if gp.fiche != nil {
-            Image("flag-\(gp.slug)")
-                .resizable()
-                .opacity(0.15)
+            Color.clear
+                .overlay {
+                    Image("flag-\(gp.slug)")
+                        .resizable()
+                        .scaledToFill()
+                }
+                .overlay {
+                    Image("trace-\(gp.slug)")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundColor(.white.opacity(0.30))
+                        .padding(.vertical, 20)
+                }
+                .overlay { Color.black.opacity(0.25) }
+                .clipped()
                 .accessibilityHidden(true)
+        } else {
+            // GP hors calendrier statique : l'aplat de la marque, sans drapeau à voiler.
+            Color.primaire
         }
     }
 
     private var libelleAccessible: String {
-        "\(gp.fiche?.nom ?? gp.slug), \(gp.fiche?.date ?? ""). "
-            + "\(gp.pointsGagnes ?? 0) points, \(gp.reussis) sur \(gp.pronostics.count) réussis."
+        "\(gp.fiche?.nom ?? gp.slug), \(gp.fiche?.date ?? ""), terminé. "
+            + "\(gp.pointsGagnes ?? 0) points, \(gp.reussis) sur \(gp.pronostics.count) pronostics réussis."
     }
 
     // MARK: La partie basse
 
     private var detail: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Le séparateur est un aplat beige de 1 pt, pas un trait gris : il sépare le
-            // drapeau du blanc, rien de plus.
-            Color.fondPrincipal.frame(height: 1)
-
             VStack(spacing: 12) {
                 ForEach(gp.pronostics) { RangeeHistorique(pronostic: $0) }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 14)
+            .padding(.top, 16)
 
             if gp.podium.count == 3 {
                 Text("Résultat réel")
@@ -272,7 +329,7 @@ private struct CarteGrandPrixJoue: View {
                     .textCase(.uppercase)
                     .foregroundColor(.grisSecondaire)     // 5,33:1 sur le blanc
                     .padding(.horizontal, 16)
-                    .padding(.top, 18)
+                    .padding(.top, 20)
                     .accessibilityAddTraits(.isHeader)
 
                 HStack(spacing: 8) {
@@ -286,6 +343,7 @@ private struct CarteGrandPrixJoue: View {
 
             Spacer().frame(height: 16)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

@@ -209,7 +209,7 @@ ios/
     │   └── Profil/
     │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`)
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
-    │       ├── HistoriqueGPView.swift   « Ses / Mes Grands Prix » : résumé saison, un GP par carte en accordéon — données d'aperçu
+    │       ├── HistoriqueGPView.swift   « Ses / Mes Grands Prix » : résumé saison, cartes GP drapeau + tracé en accordéon — données d’aperçu
     │       └── ComposantsProfil.swift   pastille, en-tête, grille, `BlocStatistiques`, `LigneGrandsPrix`, PARTAGÉS
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)
