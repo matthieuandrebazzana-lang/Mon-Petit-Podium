@@ -62,6 +62,12 @@ extension Color {
     /// états, et c'est lui qui a fixé l'opacité de la bande. Sur le beige de l'app elle
     /// tombe à 4,34:1 et ne passe plus le plancher d'un texte ordinaire.
     static let vertSauge = Color(hexadecimal: 0x4A7C59)
+
+    /// Ambre clair — `#FFF8E1`. **Le fond de la tuile du vainqueur**, et d'elle seule : le
+    /// 1er se distingue des deux marches du podium, posées sur ``fondPrincipal``.
+    ///
+    /// Un fond, jamais une encre. `texte` y tient **16,5:1**, `secondaire` **11,0:1**.
+    static let ambreClair = Color(hexadecimal: 0xFFF8E1)
 }
 
 // MARK: - Teintes de championnat

@@ -140,99 +140,14 @@ struct ProfilMembreView: View {
 
     // MARK: - Ses Grands Prix
 
-    /// La seule sortie de l'écran : ce que ce membre a joué, Grand Prix par Grand Prix.
-    ///
-    /// `NavigationLink` et non `Button` : c'est lui qui porte le glissement d'écran natif et
-    /// le geste de retour par le bord, qu'un `Button` poussant un état ne donne pas.
     private var sesGrandsPrix: some View {
-        NavigationLink {
-            SesGrandsPrixView(pseudo: membre.pseudo)
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "flag.checkered")
-                    .font(.system(size: 19, weight: .medium))
-                    .foregroundColor(.white)              // 10,88:1 sur #800111
-                    .frame(width: 44, height: 44)
-                    .background(Color.primaire)
-                    .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Ses Grands Prix")
-                        .font(.custom("HelveticaNeue-Medium", size: 15))
-                        .tracking(-0.30)                  // −0,02 em × 15
-                        .foregroundColor(.texte)          // 15,37:1 sur le blanc
-                        .lineLimit(1)
-
-                    // `grisSecondaire` (5,33:1 sur le blanc) et non le `#999999` de la
-                    // capture, qui n'y vaut que 2,85:1.
-                    Text(sousTitreGrandsPrix)
-                        .font(.custom("HelveticaNeue", size: 13))
-                        .foregroundColor(.grisSecondaire)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.grisSecondaire)     // 5,33:1 sur le blanc
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity)
-            .background(Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
-            .ombreCarte()
+        LigneGrandsPrix(titre: "Ses Grands Prix", sousTitre: sousTitreGrandsPrix) {
+            HistoriqueGPView(titre: "Ses Grands Prix")
         }
-        .buttonStyle(StyleAppui(.grandeSurface))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Ses Grands Prix. \(sousTitreGrandsPrix).")
-        .accessibilityAddTraits(.isButton)
     }
 
     private var sousTitreGrandsPrix: String {
-        guard let joues = statistiques.stats?.gpJoues ?? membre.grandsPrixJoues,
-              joues > 0
-        else { return "Saison 2026" }
-        return "\(joues) \(joues > 1 ? "GP joués" : "GP joué") cette saison"
-    }
-}
-
-// MARK: - L'écran d'attente
-
-/// Ce que ce membre a joué, Grand Prix par Grand Prix. **Il dit ce qui manque**, plutôt que
-/// de laisser un blanc qui se lirait comme un chargement en panne — le même parti que la
-/// vue piste d'un championnat.
-///
-/// > *Écart signalé (`CLAUDE.md` §6).* La demande écrivait « Historique GP — à venir ».
-/// > **« historique » est un terme proscrit** (`CLAUDE.md` §3.2, tableau du vocabulaire
-/// > imposé) : l'écran garde donc le nom de la ligne qui y mène, « Ses Grands Prix ».
-private struct SesGrandsPrixView: View {
-
-    let pseudo: String
-
-    var body: some View {
-        ZStack {
-            Color.fondPrincipal
-                .ignoresSafeArea()
-
-            VStack(spacing: 8) {
-                Text("Ses Grands Prix")
-                    .font(.custom("HelveticaNeue-Medium", size: 17))
-                    .tracking(-0.34)
-                    .foregroundColor(.texte)              // 15,37:1 sur le beige
-
-                Text("À venir")
-                    .font(.corpsSm)
-                    .foregroundColor(.secondaire)         // 9,32:1 sur le beige
-            }
-            .accessibilityElement(children: .combine)
-        }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        StatsProfil.sousTitreGrandsPrix(joues: statistiques.stats?.gpJoues ?? membre.grandsPrixJoues)
     }
 }
 

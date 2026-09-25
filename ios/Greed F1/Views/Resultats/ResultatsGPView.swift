@@ -337,7 +337,7 @@ private struct CartePronostic: View {
 /// | réussi (`> 0`) | vert sauge | blanc | **4,86:1** |
 /// | raté (`0`) | bordeaux | blanc | **10,88:1** |
 /// | en attente (`nil`) | beige | marron | **9,32:1** |
-private struct PastillePoints: View {
+struct PastillePoints: View {
 
     let pointsGagnes: Int?
     let points: Int
@@ -370,7 +370,7 @@ private struct PastillePoints: View {
 /// > élément graphique porteur de sens — et celui-ci en porte un, il dit « pas encore
 /// > jugé ». `#6B6B6B` y tient **4,71:1** pour un gris que l'œil ne distingue pas du
 /// > premier.
-private struct Verdict: View {
+struct Verdict: View {
 
     let pointsGagnes: Int?
 

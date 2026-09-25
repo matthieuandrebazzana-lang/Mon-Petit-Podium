@@ -84,6 +84,12 @@ struct ProfilView: View {
                     grilleStatistiques
 
                     Spacer().frame(height: 12)
+                    LigneGrandsPrix(titre: "Mes Grands Prix",
+                                    sousTitre: StatsProfil.sousTitreGrandsPrix(joues: statistiques.stats?.gpJoues)) {
+                        HistoriqueGPView(titre: "Mes Grands Prix")
+                    }
+
+                    Spacer().frame(height: 12)
                     blocLivree
 
                     // **`estAdmin`, et non `modePrevisualisation`, et ce n'est pas un

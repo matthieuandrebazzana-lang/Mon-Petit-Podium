@@ -157,7 +157,8 @@ ios/
     │   ├── Membre.swift         une ligne de classement
     │   ├── ResultatsGP.swift    résultats d'une course : lignes, nom coupé, mention, livrée
     │   ├── PronosticsChampionnat.swift  GP du calendrier d'un championnat, paris de chaque membre, tri par GP
-    │   └── Pronostics.swift     cotes, favoris, mes pronostics, corps du POST, `ClePilote`, `OrdreMarches`
+    │   ├── Pronostics.swift     cotes, favoris, mes pronostics, corps du POST, `ClePilote`, `OrdreMarches`
+    │   └── HistoriqueGP.swift   GP joués d'un membre + `apercu` — `GET /membres/{id}/historique` pas encore servi
     ├── Services/
     │   ├── SupabaseManager.swift  chemin direct, sous RLS
     │   ├── APIClient.swift        chemin Railway : Bearer, décodage, réessais, réveil
@@ -208,7 +209,8 @@ ios/
     │   └── Profil/
     │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`)
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
-    │       └── ComposantsProfil.swift   pastille, en-tête, grille et `BlocStatistiques` (chargement/échec), PARTAGÉS
+    │       ├── HistoriqueGPView.swift   « Ses / Mes Grands Prix » : résumé saison, un GP par carte en accordéon — données d'aperçu
+    │       └── ComposantsProfil.swift   pastille, en-tête, grille, `BlocStatistiques`, `LigneGrandsPrix`, PARTAGÉS
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)
     │   ├── Assets.xcassets/      les assets de §6

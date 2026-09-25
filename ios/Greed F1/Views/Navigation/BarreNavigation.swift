@@ -32,7 +32,8 @@ struct BarreNavigation: View {
             CalendrierView()
                 .tabItem { Label("Calendrier", image: "icone-calendrier") }
 
-            ProfilView(viewModel: viewModel)
+            // La pile porte « Mes Grands Prix » (``HistoriqueGPView``).
+            NavigationStack { ProfilView(viewModel: viewModel) }
                 .tabItem { Label("Profil", image: "icone-profil") }
         }
         .tint(.primaire)

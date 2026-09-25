@@ -227,3 +227,72 @@ struct GrilleStatistiques: View {
         }
     }
 }
+
+// MARK: - La ligne « Ses Grands Prix »
+
+/// La ligne qui ouvre ``HistoriqueGPView`` — **la même sur les deux profils**, seul le
+/// possessif change.
+///
+/// `NavigationLink` et non `Button` : c'est lui qui porte le glissement d'écran natif et
+/// le geste de retour par le bord, qu'un `Button` poussant un état ne donne pas.
+struct LigneGrandsPrix<Destination: View>: View {
+
+    let titre: String
+    let sousTitre: String
+    @ViewBuilder let destination: () -> Destination
+
+    var body: some View {
+        NavigationLink(destination: destination) {
+            HStack(spacing: 14) {
+                Image(systemName: "flag.checkered")
+                    .font(.system(size: 19, weight: .medium))
+                    .foregroundColor(.white)              // 10,88:1 sur #800111
+                    .frame(width: 44, height: 44)
+                    .background(Color.primaire)
+                    .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(titre)
+                        .font(.custom("HelveticaNeue-Medium", size: 15))
+                        .tracking(-0.30)                  // −0,02 em × 15
+                        .foregroundColor(.texte)          // 15,37:1 sur le blanc
+                        .lineLimit(1)
+
+                    // `grisSecondaire` (5,33:1 sur le blanc) et non le `#999999` de la
+                    // capture, qui n'y vaut que 2,85:1.
+                    Text(sousTitre)
+                        .font(.custom("HelveticaNeue", size: 13))
+                        .foregroundColor(.grisSecondaire)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.grisSecondaire)     // 5,33:1 sur le blanc
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
+            .ombreCarte()
+        }
+        .buttonStyle(StyleAppui(.grandeSurface))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(titre). \(sousTitre).")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+extension StatsProfil {
+    /// Le sous-titre de ``LigneGrandsPrix`` — la saison seule tant que rien n'est joué,
+    /// plutôt qu'un « 0 GP joué » qui se lirait comme un bilan.
+    static func sousTitreGrandsPrix(joues: Int?) -> String {
+        guard let joues, joues > 0 else { return "Saison 2026" }
+        return "\(joues) \(joues > 1 ? "GP joués" : "GP joué") cette saison"
+    }
+}
