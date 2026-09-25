@@ -154,7 +154,7 @@ ios/
     │   ├── StatsProfil.swift    stats d'un profil + `tuiles` — seul endroit qui les met en forme
     │   ├── Championnat.swift    `Championnat`, `ProchainGP`, `PositionMembre`
     │   ├── GrandPrix.swift      `GrandPrixEnBase`, `SlugCircuit`, `EcheancePronostics` — LE calcul d'échéance
-    │   ├── GPRestants.swift     décompte des GP restants (à venir + ouverts) — accueil, championnats, calendrier
+    │   ├── GPRestants.swift     décompte des GP non terminés (statut, sinon date écrite) — accueil, championnats, calendrier
     │   ├── Membre.swift         une ligne de classement
     │   ├── ResultatsGP.swift    résultats d'une course : lignes, nom coupé, mention, livrée
     │   ├── PronosticsChampionnat.swift  GP du calendrier d'un championnat, paris de chaque membre, tri par GP
@@ -179,7 +179,7 @@ ios/
     │   │   ├── BarreNavigation.swift  TabView à 4 onglets + apparence de la barre
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
     │   ├── Accueil/
-    │   │   ├── AccueilView.swift       championnats et GP suivant réels, cartes → `ChampionnatDetailView`
+    │   │   ├── AccueilView.swift       championnats et GP suivant réels, pastille + bouton selon l’état — `pronosValides` mocké
     │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Composants/

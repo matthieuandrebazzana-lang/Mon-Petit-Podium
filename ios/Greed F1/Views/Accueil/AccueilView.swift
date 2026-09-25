@@ -141,7 +141,9 @@ struct AccueilView: View {
             Spacer().frame(height: 24)
 
         case .pret(let gp?):
-            WidgetGrandPrix(grandPrix: gp)
+            // **Maquette** : `true` tant que la passe réseau n'a pas branché la lecture de
+            // la grille enregistrée — basculer à `false` pour voir « Valider mes pronos ».
+            WidgetGrandPrix(grandPrix: gp, pronosValides: true)
             Spacer().frame(height: 24)   // changement de sujet : 24 pt (§4.6)
 
         case .pret(nil):
@@ -265,6 +267,9 @@ private struct Avatar: View {
 private struct WidgetGrandPrix: View {
 
     let grandPrix: GrandPrixEnBase
+    /// Une grille est déjà enregistrée pour ce Grand Prix. Ne décide que du libellé du
+    /// bouton : la destination, ``EntreePronosView``, choisit seule entre cotes et récap.
+    let pronosValides: Bool
 
     @Environment(\.modePrevisualisation) private var previsualisation
 
@@ -284,6 +289,12 @@ private struct WidgetGrandPrix: View {
             .locale(Locale(identifier: "fr_FR"))) ?? "Date à confirmer"
     }
 
+    /// « 26 sept. 2026 » — l'en-tête quand la pastille « Pronos ouverts » y est posée.
+    private var dateAbregee: String {
+        grandPrix.dateCourse?.formatted(.dateTime.day().month(.abbreviated).year()
+            .locale(Locale(identifier: "fr_FR"))) ?? "À confirmer"
+    }
+
     /// « 07h00 » — l'écriture du projet, avec le « h ».
     private var heureDepart: String {
         grandPrix.dateCourse.map { Self.heure.string(from: $0) } ?? "À confirmer"
@@ -301,9 +312,8 @@ private struct WidgetGrandPrix: View {
                                 dateQualifications: grandPrix.dateQualifications, le: maintenant)
     }
 
-    /// **Le bouton n'existe que si les pronostics sont ouverts** — la même condition que le
-    /// décompte « Fermeture dans ». Avant le relevé des cotes, ou après le départ, le widget
-    /// annonce le Grand Prix sans mener nulle part.
+    /// **Les pronostics sont ouverts** — la même condition que le décompte « Fermeture
+    /// dans », et celle de la pastille « Pronos ouverts ».
     ///
     /// La prévisualisation admin lève cette seule condition, comme `cotesArretees(gp) ||
     /// previsualisation` côté web — rien d'autre (`decisions.md` §15 bis).
@@ -312,9 +322,30 @@ private struct WidgetGrandPrix: View {
             || previsualisation
     }
 
+    /// L'état du widget, dans le vocabulaire du calendrier — ``EtatGp``. Pas
+    /// ``EtatGp/pour(_:le:)`` : la lecture directe ne ramène pas les marchés, et c'est
+    /// ``ouvert`` qui fait foi ici, comme pour le décompte.
+    private var etat: EtatGp {
+        if grandPrix.statut == "termine" { return .termine }
+        if ouvert { return .ouvert }
+        if let depart = grandPrix.dateCourse, depart <= .now { return .ferme }
+        return .aVenir
+    }
+
+    /// Le libellé du bouton du bas, `nil` quand il n'y a rien à faire — course partie,
+    /// résultats pas encore tombés.
+    private var libelleBouton: String? {
+        switch etat {
+        case .ouvert: return pronosValides ? "Voir mes pronos" : "Valider mes pronos"
+        case .aVenir: return "Pronostiquer"
+        case .termine: return "Voir les résultats"
+        case .ferme: return nil
+        }
+    }
+
     @ViewBuilder var body: some View {
-        if ouvert {
-            lien
+        if let libelleBouton {
+            lien(libelleBouton)
         } else {
             surface
                 .accessibilityElement(children: .ignore)
@@ -337,7 +368,24 @@ private struct WidgetGrandPrix: View {
             .ombreAplat()
     }
 
-    private var lien: some View {
+    @ViewBuilder private func lien(_ libelle: String) -> some View {
+        if etat == .termine {
+            NavigationLink {
+                ResultatsGPView(nom: grandPrix.nom, date: date, gpId: grandPrix.id)
+            } label: {
+                surface
+            }
+            .buttonStyle(StyleAppui(.grandeSurface))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Dernier Grand Prix, \(grandPrix.nom), le \(date).")
+            .accessibilityHint(libelle)
+            .accessibilityAddTraits(.isButton)
+        } else {
+            lienPronos(libelle)
+        }
+    }
+
+    private func lienPronos(_ libelle: String) -> some View {
         // **Le widget EST le bouton « Pronostiquer » de l'accueil.** La version web pose un
         // bouton nommé à l'intérieur du bloc ; ici c'est le bloc entier qui mène au tableau
         // des cotes, et le libellé accessible ci-dessous le nomme. Un bouton dans un bouton
@@ -361,7 +409,7 @@ private struct WidgetGrandPrix: View {
             "Prochain Grand Prix, \(grandPrix.nom), le \(date). "
             + "Départ à \(heureDepart). \(echeance().phrase)."
         )
-        .accessibilityHint("Pronostiquer")
+        .accessibilityHint(libelle)
         .accessibilityAddTraits(.isButton)
     }
 
@@ -405,7 +453,26 @@ private struct WidgetGrandPrix: View {
 
             Spacer().frame(height: 16)
             cases
+
+            if let libelleBouton {
+                Spacer().frame(height: 12)
+                bouton(libelleBouton)
+            }
         }
+    }
+
+    /// Le bouton du bas. **Un habillage, pas un `Button`** : le widget entier est déjà la
+    /// cible (voir ``lienPronos(_:)``), et un bouton dans un bouton se disputerait le doigt.
+    /// Blanc sur le drapeau, encre de la marque : 10,88:1.
+    private func bouton(_ libelle: String) -> some View {
+        Text("\(libelle) →")
+            .font(.custom("HelveticaNeue-Medium", size: 15))
+            .foregroundColor(.primaire)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
     }
 
     private var enTete: some View {
@@ -415,18 +482,39 @@ private struct WidgetGrandPrix: View {
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .fixedSize()
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(apparence?.pastille ?? Color.white.opacity(0.20))
                 .clipShape(Capsule())
 
+            if etat == .ouvert {
+                // La pastille du calendrier — ``EtatGp/fondPastille`` et
+                // ``EtatGp/encrePastille`` : noir sur ambre, 7,86:1.
+                Text(EtatGp.ouvert.libelle)
+                    .font(.labelSm)
+                    .tracking(Tracking.label)
+                    .textCase(.uppercase)
+                    .foregroundColor(EtatGp.ouvert.encrePastille)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(EtatGp.ouvert.fondPastille)
+                    .clipShape(Capsule())
+            }
+
             Spacer(minLength: 8)
 
-            Text(date)
+            // Les deux pastilles côte à côte ne laissent pas la place au mois écrit en
+            // entier : « 26 sept. 2026 » plutôt qu'une date tronquée.
+            Text(etat == .ouvert ? dateAbregee : date)
                 .font(.custom(encreDouceGrasse ? "HelveticaNeue-Medium" : "HelveticaNeue", size: 11))
                 .foregroundColor(encreDouce)
                 .ombrePortee(apparence?.ombreNom ?? false)
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
     }
 
