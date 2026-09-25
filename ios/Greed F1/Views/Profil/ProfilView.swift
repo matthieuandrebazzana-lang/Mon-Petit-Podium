@@ -242,27 +242,25 @@ struct ProfilView: View {
                 grilleSkins
             }
 
-            // **Les trois couleurs ne concernent que la livrée personnelle.** Sur une
-            // livrée d'écurie elles ne peindraient rien : les onze voitures ont leurs
-            // couleurs, et les rangées disparaissent plutôt que de rester sans effet.
-            if livree.mode == .perso {
-                rangee(.coque, libelle: "Coque", valeur: PaletteVoiture.nom(de: livree.coque)) {
-                    pastille(livree.coque)
-                } contenu: {
-                    grilleCouleurs(choisie: livree.coque) { livree.coque = $0 }
-                }
+            // **Les trois couleurs restent visibles quel que soit le skin.** La couleur du
+            // texte peint aussi une livrée d'écurie ; la coque et les ailerons restent en
+            // base et reviennent dès que le membre rebascule sur « Ma livrée ».
+            rangee(.coque, libelle: "Coque", valeur: PaletteVoiture.nom(de: livree.coque)) {
+                pastille(livree.coque)
+            } contenu: {
+                grilleCouleurs(choisie: livree.coque) { livree.coque = $0 }
+            }
 
-                rangee(.ailerons, libelle: "Ailerons", valeur: PaletteVoiture.nom(de: livree.ailerons)) {
-                    pastille(livree.ailerons)
-                } contenu: {
-                    grilleCouleurs(choisie: livree.ailerons) { livree.ailerons = $0 }
-                }
+            rangee(.ailerons, libelle: "Ailerons", valeur: PaletteVoiture.nom(de: livree.ailerons)) {
+                pastille(livree.ailerons)
+            } contenu: {
+                grilleCouleurs(choisie: livree.ailerons) { livree.ailerons = $0 }
+            }
 
-                rangee(.texte, libelle: "Couleur du texte", valeur: PaletteVoiture.nom(de: couleurTexteAffichee)) {
-                    pastille(couleurTexteAffichee)
-                } contenu: {
-                    grilleCouleurs(choisie: couleurTexteAffichee) { livree.couleurTexte = $0 }
-                }
+            rangee(.texte, libelle: "Couleur du texte", valeur: PaletteVoiture.nom(de: couleurTexteAffichee)) {
+                pastille(couleurTexteAffichee)
+            } contenu: {
+                grilleCouleurs(choisie: couleurTexteAffichee) { livree.couleurTexte = $0 }
             }
 
             Spacer().frame(height: 16)
@@ -401,11 +399,12 @@ struct ProfilView: View {
 
     /// La pastille du skin : les **deux** couleurs, coupées en deux — c'est ce que le
     /// réglage fabrique, et une seule des deux n'en dirait que la moitié. Sur une livrée
-    /// d'écurie, c'est sa teinte, pleine.
+    /// d'écurie, c'est **sa vignette de casque**, découpée de la planche comme dans la
+    /// grille — une teinte seule ne distinguait pas les écuries à dominante claire.
     @ViewBuilder
     private var pastilleDuSkin: some View {
         if let ecurie = livree.ecurieChoisie {
-            pastille(ecurie.teinte)
+            VignetteEcurie(livree: ecurie)
         } else {
             ZStack {
                 Circle().fill(EncreSVG.couleur(livree.coque) ?? .primaire)
@@ -579,11 +578,11 @@ struct ProfilView: View {
     private var modificationVoiture: ModificationVoiture {
         var corps = ModificationVoiture(livreeMode: livree.mode == .ecurie ? .ecurie : .perso,
                                         livreeEcurie: livree.ecurie)
-        if livree.mode == .perso {
-            corps.couleur1 = livree.coque
-            corps.couleur2 = livree.ailerons
-            corps.couleurTexte = livree.couleurTexte
-        }
+        // Les couleurs partent aussi en mode écurie : leurs rangées y sont réglables, et le
+        // backend les conserve pour le retour à « Ma livrée ».
+        corps.couleur1 = livree.coque
+        corps.couleur2 = livree.ailerons
+        corps.couleurTexte = livree.couleurTexte
         if let valeur = Int(numero) {
             corps.numero = valeur
         } else {
