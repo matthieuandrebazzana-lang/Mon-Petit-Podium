@@ -322,21 +322,25 @@ private struct CarteGrandPrixJoue: View {
 
     private var detail: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // **Toutes les entrées, sans plafond** : vainqueur, podium, puis les bonus.
             VStack(spacing: 12) {
-                ForEach(gp.pronostics) { RangeeHistorique(pronostic: $0) }
+                ForEach(obligatoires) { RangeeHistorique(pronostic: $0) }
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
 
+            if !bonus.isEmpty {
+                titreSection("Bonus")
+
+                VStack(spacing: 12) {
+                    ForEach(bonus) { RangeeHistorique(pronostic: $0) }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+
             if gp.podium.count == 3 {
-                Text("Résultat réel")
-                    .font(.labelSm)
-                    .tracking(Tracking.label)
-                    .textCase(.uppercase)
-                    .foregroundColor(.grisSecondaire)     // 5,33:1 sur le blanc
-                    .padding(.horizontal, 16)
-                    .padding(.top, 20)
-                    .accessibilityAddTraits(.isHeader)
+                titreSection("Résultat réel")
 
                 HStack(spacing: 8) {
                     ForEach(Array(gp.podium.enumerated()), id: \.offset) { index, pilote in
@@ -350,6 +354,20 @@ private struct CarteGrandPrixJoue: View {
             Spacer().frame(height: 16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var obligatoires: [PronosticMembre] { gp.pronostics.filter { $0.type != "bonus" } }
+    private var bonus: [PronosticMembre] { gp.pronostics.filter { $0.type == "bonus" } }
+
+    private func titreSection(_ texte: String) -> some View {
+        Text(texte)
+            .font(.labelSm)
+            .tracking(Tracking.label)
+            .textCase(.uppercase)
+            .foregroundColor(.grisSecondaire)             // 5,33:1 sur le blanc
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

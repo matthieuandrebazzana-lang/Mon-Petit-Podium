@@ -97,18 +97,20 @@ extension HistoriqueSaison {
     /// **Données inventées**, cohérentes entre elles — le total est la somme des points
     /// gagnés, les réussis le compte des pronostics gagnants. Remplacées à la passe réseau.
     static let apercu: HistoriqueSaison = {
-        func prono(_ type: String, _ libelle: String, pilote: String? = nil,
-                   podium: (String, String)? = nil, points: Int, gagnes: Int) -> PronosticMembre {
+        func prono(_ type: String, _ libelle: String, pilote: String,
+                   points: Int, gagnes: Int) -> PronosticMembre {
             PronosticMembre(id: UUID(), type: type, pilote: pilote, libelle: libelle,
-                            points: points, pointsGagnes: gagnes,
-                            podium: podium.map { .init(nom1: $0.0, nom2: $0.1) })
+                            points: points, pointsGagnes: gagnes, podium: nil)
         }
+        // **Cinq pronostics par GP** : le vainqueur, les deux pilotes du podium — deux paris
+        // jugés chacun pour son compte (`docs/metier.md` §2) —, puis deux bonus.
         let gps = [
             GrandPrixJoue(slug: "pays-bas", pronostics: [
                 prono("vainqueur", "Vainqueur", pilote: "O.Piastri", points: 31, gagnes: 0),
-                prono("podium", "2e et 3e du podium", podium: ("L.Norris", "M.Verstappen"),
-                      points: 22, gagnes: 22),
-                prono("bonus", "Pole position", pilote: "L.Norris", points: 24, gagnes: 24)
+                prono("podium", "Podium", pilote: "L.Norris", points: 12, gagnes: 12),
+                prono("podium", "Podium", pilote: "M.Verstappen", points: 10, gagnes: 10),
+                prono("bonus", "Pole position", pilote: "L.Norris", points: 24, gagnes: 24),
+                prono("bonus", "Meilleur tour", pilote: "M.Verstappen", points: 30, gagnes: 0)
             ], podium: [
                 PiloteClasse(prenom: "Lando", nom: "Norris", ecurie: "McLaren"),
                 PiloteClasse(prenom: "Max", nom: "Verstappen", ecurie: "Red Bull"),
@@ -116,8 +118,10 @@ extension HistoriqueSaison {
             ]),
             GrandPrixJoue(slug: "italie", pronostics: [
                 prono("vainqueur", "Vainqueur", pilote: "C.Leclerc", points: 34, gagnes: 34),
-                prono("podium", "2e et 3e du podium", podium: ("L.Norris", "G.Russell"),
-                      points: 36, gagnes: 36)
+                prono("podium", "Podium", pilote: "L.Norris", points: 16, gagnes: 16),
+                prono("podium", "Podium", pilote: "G.Russell", points: 20, gagnes: 20),
+                prono("bonus", "Pole position", pilote: "C.Leclerc", points: 38, gagnes: 0),
+                prono("bonus", "Top 6", pilote: "K.Antonelli", points: 18, gagnes: 18)
             ], podium: [
                 PiloteClasse(prenom: "Charles", nom: "Leclerc", ecurie: "Ferrari"),
                 PiloteClasse(prenom: "Lando", nom: "Norris", ecurie: "McLaren"),
@@ -125,9 +129,10 @@ extension HistoriqueSaison {
             ]),
             GrandPrixJoue(slug: "espagne", pronostics: [
                 prono("vainqueur", "Vainqueur", pilote: "M.Verstappen", points: 28, gagnes: 28),
-                prono("podium", "2e et 3e du podium", podium: ("L.Hamilton", "G.Russell"),
-                      points: 41, gagnes: 0),
-                prono("bonus", "Meilleur tour", pilote: "C.Leclerc", points: 55, gagnes: 0)
+                prono("podium", "Podium", pilote: "L.Hamilton", points: 19, gagnes: 19),
+                prono("podium", "Podium", pilote: "G.Russell", points: 22, gagnes: 0),
+                prono("bonus", "Meilleur tour", pilote: "C.Leclerc", points: 55, gagnes: 0),
+                prono("bonus", "Pole position", pilote: "M.Verstappen", points: 26, gagnes: 26)
             ], podium: [
                 PiloteClasse(prenom: "Max", nom: "Verstappen", ecurie: "Red Bull"),
                 PiloteClasse(prenom: "Lewis", nom: "Hamilton", ecurie: "Ferrari"),
