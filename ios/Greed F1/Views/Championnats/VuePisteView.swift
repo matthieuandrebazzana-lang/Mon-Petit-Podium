@@ -68,8 +68,16 @@ struct VuePisteView: View {
     /// (`--piste-retour-h`, `--piste-bandeau-h`) : partagées en une seule, il faudrait
     /// réserver la largeur du bouton **des deux côtés** pour que le nom reste centré sur la
     /// piste, et il ne resterait plus de quoi écrire un nom de championnat.
+    ///
+    /// La rangée du nom porte aussi l'effectif et la saison : **80 pt**, pour que le bandeau
+    /// pèse comme l'en-tête d'un écran et non comme une simple barre.
     private static let hauteurRetour: CGFloat = 38
-    private static let hauteurNom: CGFloat = 54
+    private static let hauteurNom: CGFloat = 80
+
+    /// **Le rayon des coins de la planche** — le `rx` de son aplat, 62,7 unités. Les kerbs
+    /// s'y arrondissent et leurs bandes s'arrêtent avant : posé tel quel, le bas de l'écran
+    /// montrait un kerb rouge uni, sans damier, sur une vingtaine de points.
+    private static let rayonPlanche: CGFloat = 62.7
 
     /// Les quatre segments de la ligne médiane. **La planche les peint à 11 %**, et
     /// ``PlancheSVG`` ne lit que `fill` : l'opacité passe donc par la substitution d'encre,
@@ -89,9 +97,16 @@ struct VuePisteView: View {
                 // comprises. `etiree` — l'équivalent de `preserveAspectRatio="none"` : la
                 // piste couvre l'écran quel que soit son rapport de forme, et ses kerbs
                 // gardent une largeur proportionnelle à celle de la piste.
+                //
+                // **Le bas de la planche passe sous l'écran**, de la hauteur de son arrondi :
+                // les kerbs gardent leur damier jusqu'au bord, et l'arrondi du dessin laisse
+                // la place à celui de l'écran. Le haut n'en a pas besoin, le bandeau le couvre.
                 VuePlanche(planche: "vue_piste", fenetre: Self.planche,
                            substitutions: Self.substitutions, etiree: true)
                     .ignoresSafeArea()
+                    .padding(.bottom, -debordBas(ecran: bloc.size.height
+                                                 + bloc.safeAreaInsets.top
+                                                 + bloc.safeAreaInsets.bottom))
 
                 VStack(spacing: 0) {
                     if !integree { bandeau }
@@ -121,6 +136,13 @@ struct VuePisteView: View {
         }
     }
 
+    /// Ce que la planche doit dépasser sous l'écran pour que son arrondi en sorte. Étirée,
+    /// elle fait `ecran + d` de haut, et son arrondi `rayon × (ecran + d) / hauteur` :
+    /// égaler `d` à ce dernier donne `d = rayon × ecran / (hauteur − rayon)`.
+    private func debordBas(ecran: CGFloat) -> CGFloat {
+        Self.rayonPlanche * ecran / (Self.planche.height - Self.rayonPlanche)
+    }
+
     // MARK: - Le bandeau
 
     /// L'aplat de la teinte du championnat, son damier, le retour, le nom.
@@ -139,16 +161,24 @@ struct VuePisteView: View {
                 .frame(height: Self.hauteurRetour, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(championnat.nom)
-                .font(.titre)
-                .tracking(Tracking.titre)
-                .foregroundColor(.white)                  // ≥ 10,35:1 sur les six teintes
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .padding(.horizontal, 24)
-                .frame(maxWidth: .infinity)
-                .frame(height: Self.hauteurNom)
-                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: 4) {
+                Text(championnat.nom)
+                    .font(.custom("HelveticaNeue-Medium", size: 22))
+                    .tracking(-0.44)                          // `-0,02 × 22`, la règle des titres
+                    .foregroundColor(.white)                  // ≥ 10,35:1 sur les six teintes
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .accessibilityAddTraits(.isHeader)
+
+                Text("\(effectif) \(effectif > 1 ? "membres" : "membre") · Saison 2026")
+                    .font(.custom("HelveticaNeue", size: 13))
+                    .foregroundColor(.encreSecondaire)        // blanc à 70 %, réglé pour un aplat
+                    .lineLimit(1)
+            }
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 24)
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.hauteurNom)
         }
         .background {
             // **L'aplat porte les deux calques en `overlay`, jamais en `ZStack`.** Le
@@ -168,6 +198,13 @@ struct VuePisteView: View {
                 )
                 .ignoresSafeArea(edges: .top)
         }
+    }
+
+    /// L'effectif du sous-titre. **Celui du classement reçu** dès qu'il a des lignes — la
+    /// même règle que l'en-tête de ``ChampionnatDetailView`` : annoncer huit membres
+    /// au-dessus de sept voitures serait le défaut discret par excellence.
+    private var effectif: Int {
+        membres.isEmpty ? championnat.nombreMembres : membres.count
     }
 
     /// Le retour, et rien d'autre. **Un chevron et le nom de sa destination** — « d'où je
