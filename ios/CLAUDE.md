@@ -191,7 +191,7 @@ ios/
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
-    │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste, menu « ⋯ » (code, quitter), widget GP — réels
+    │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste, menu « ⋯ » (code, photo si créateur, quitter) — réels
     │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — reçoit le classement
     │   │   ├── ResultatsParGPView.swift     résultats par GP : sélecteur des GP terminés, paris de chacun en accordéon
     │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée

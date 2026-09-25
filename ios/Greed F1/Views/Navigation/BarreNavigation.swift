@@ -21,20 +21,33 @@ struct BarreNavigation: View {
     /// l'onglet Championnats lisent la même liste (``MesChampionnats``).
     @StateObject private var mesChampionnats = MesChampionnats()
 
+    /// L'onglet affiché. **Explicite** pour que l'avatar de l'accueil puisse mener au profil.
+    @State private var ongletActif: Onglet = .accueil
+
+    /// Les quatre onglets, dans l'ordre de la barre.
+    enum Onglet: Hashable {
+        case accueil, championnats, calendrier, profil
+    }
+
     var body: some View {
-        TabView {
-            AccueilView(viewModel: viewModel, mesChampionnats: mesChampionnats)
+        TabView(selection: $ongletActif) {
+            AccueilView(viewModel: viewModel, mesChampionnats: mesChampionnats,
+                        ongletActif: $ongletActif)
                 .tabItem { Label("Accueil", image: "icone-accueil") }
+                .tag(Onglet.accueil)
 
             ChampionnatsView(mesChampionnats: mesChampionnats)
                 .tabItem { Label("Championnats", image: "icone-championnats") }
+                .tag(Onglet.championnats)
 
             CalendrierView()
                 .tabItem { Label("Calendrier", image: "icone-calendrier") }
+                .tag(Onglet.calendrier)
 
             // La pile porte « Mes Grands Prix » (``HistoriqueGPView``).
             NavigationStack { ProfilView(viewModel: viewModel) }
                 .tabItem { Label("Profil", image: "icone-profil") }
+                .tag(Onglet.profil)
         }
         .tint(.primaire)
         // La voiture du compte connecté, pour les écrans qui peignent le classement :

@@ -17,6 +17,8 @@ struct AccueilView: View {
 
     @ObservedObject var viewModel: AuthViewModel
     @ObservedObject var mesChampionnats: MesChampionnats
+    /// L'onglet de ``BarreNavigation`` : l'avatar de l'en-tête y bascule sur le profil.
+    @Binding var ongletActif: BarreNavigation.Onglet
 
     /// Marge latérale commune à tous les blocs — la même que `LandingView`, sans quoi les
     /// deux écrans ne s'aligneraient pas au passage de l'un à l'autre.
@@ -90,9 +92,17 @@ struct AccueilView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Spacer()
-                Avatar(pseudo: pseudoAffiche, photo: viewModel.photoProfil)
+                // Un bouton qui **change d'onglet**, pas un lien qui pousse : le profil a
+                // sa place dans la barre, et un second exemplaire empilé ici ferait deux
+                // chemins de retour vers le même écran.
+                Button {
+                    ongletActif = .profil
+                } label: {
+                    Avatar(pseudo: pseudoAffiche, photo: viewModel.photoProfil)
+                }
+                .buttonStyle(StyleAppui(.bouton))
             }
-            .frame(height: 44)   // plancher tactile iOS : l'avatar mènera au profil
+            .frame(height: 44)   // plancher tactile iOS
 
             Spacer().frame(height: 12)
 
@@ -639,5 +649,6 @@ private struct SilhouetteWidget: View {
 }
 
 #Preview {
-    AccueilView(viewModel: AuthViewModel(), mesChampionnats: MesChampionnats())
+    AccueilView(viewModel: AuthViewModel(), mesChampionnats: MesChampionnats(),
+                ongletActif: .constant(.accueil))
 }

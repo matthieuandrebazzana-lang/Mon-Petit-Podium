@@ -2175,6 +2175,15 @@ passé, départ inconnu ⇒ ouvert. Sinon le widget annonce « Course le … » 
 fermés » sans mener nulle part. Le calcul d'échéance reste local au widget jusqu'à
 l'étape 5, qui en fera **un seul**.
 
+**Menu « ⋯ », photo ; widget GP retiré (iOS 0.39.8).** Une troisième entrée, « Modifier la
+photo », **visible du seul créateur** (`est_createur`), ouvre la photothèque
+(`.photosPicker`, images seules). La photo passe par `DepotPhoto` (compartiment
+`championnats`, dossier = id du championnat), puis `PATCH /championnats/{id}` avec
+`photo_url`, puis `charger(forcer: true)` — ce sont les cartes qui la peignent. Un refus
+s'affiche en alerte, comme le départ. Le widget GP de l'onglet Classement est **démonté**
+sans remplacement (`WidgetGrandPrixSuivant` reste en place, non monté). À l'accueil,
+l'avatar bascule sur l'onglet Profil (`BarreNavigation.Onglet`, sélection explicite).
+
 > **iOS 0.36.1 — le widget du championnat n'est plus cliquable.** Plus de bouton
 > « Pronostiquer » ni de lien : il annonce le Grand Prix et son échéance, rien d'autre. Le
 > chemin vers les pronostics passe par l'accueil. Les avatars du classement sont des

@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// Le détail d'un championnat : son classement, et la porte de la vue piste.
@@ -38,6 +39,17 @@ struct ChampionnatDetailView: View {
     /// Le refus du serveur. Une alerte, par exception à ``ErreurEnLigne`` : le départ part
     /// d'un menu, et il n'y a pas de bouton sous lequel écrire.
     @State private var erreurDepart: ErreurAPI?
+
+    /// La photothèque, ouverte depuis le menu — **créateur seulement** (`est_createur`,
+    /// calculé par le serveur ; le `PATCH` le revérifie de toute façon). Puis le dépôt en
+    /// vol et son refus, en alerte pour la même raison que le départ : il part d'un menu.
+    @State private var selecteurPhoto = false
+    @State private var choixPhoto: PhotosPickerItem?
+    @State private var envoiPhoto = false
+    @State private var erreurPhoto: ErreurAPI?
+
+    /// Une écriture en vol : le menu se ferme et son déclencheur devient un indicateur.
+    private var occupe: Bool { departEnCours || envoiPhoto }
 
     init(championnat: Championnat, mesChampionnats: MesChampionnats) {
         self.championnat = championnat
@@ -159,6 +171,58 @@ struct ChampionnatDetailView: View {
         } message: { erreur in
             Text(erreur.message)
         }
+        .photosPicker(isPresented: $selecteurPhoto, selection: $choixPhoto,
+                      matching: .images, photoLibrary: .shared())
+        .onChange(of: choixPhoto) { _, choix in
+            guard let choix else { return }
+            envoyerPhoto(choix)
+        }
+        .alert("Impossible de changer la photo",
+               isPresented: Binding(get: { erreurPhoto != nil },
+                                    set: { if !$0 { erreurPhoto = nil } }),
+               presenting: erreurPhoto) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { erreur in
+            Text(erreur.message)
+        }
+    }
+
+    /// Charge la photo choisie, la dépose sous le dossier du championnat
+    /// (``DepotPhoto``, comme l'avatar), enregistre son URL par `PATCH /championnats/{id}`,
+    /// puis recharge la liste — c'est elle qui peint la photo sur les cartes.
+    ///
+    /// **Tâche non liée à l'écran**, comme ``quitter()`` : l'envoi va au bout même si l'on
+    /// revient en arrière entre-temps. La sélection est remise à `nil` à la fin : choisir
+    /// deux fois la même photo doit relancer l'envoi.
+    private func envoyerPhoto(_ choix: PhotosPickerItem) {
+        guard !envoiPhoto else { return }
+        envoiPhoto = true
+        erreurPhoto = nil
+        Task {
+            defer {
+                envoiPhoto = false
+                choixPhoto = nil
+            }
+            do {
+                guard let donnees = try await choix.loadTransferable(type: Data.self) else {
+                    throw ErreurAPI.serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+                }
+                let url = try await DepotPhoto.deposer(donnees, dans: .championnats,
+                                                       proprietaire: championnat.id.uuidString)
+                try await APIClient.partage.envoyer("championnats/\(championnat.id.uuidString.lowercased())",
+                                                    methode: .patch,
+                                                    corps: ModificationChampionnat(photoUrl: url))
+            } catch is CancellationError {
+                return
+            } catch let erreur as ErreurAPI {
+                erreurPhoto = erreur
+                return
+            } catch {
+                erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+                return
+            }
+            await mesChampionnats.charger(forcer: true)
+        }
     }
 
     /// `DELETE /championnats/{id}/quitter`, puis la liste rechargée, puis le retour.
@@ -227,6 +291,14 @@ struct ChampionnatDetailView: View {
                 Label("Code d'invitation", systemImage: "person.badge.plus")
             }
 
+            if championnat.estCreateur {
+                Button {
+                    selecteurPhoto = true
+                } label: {
+                    Label("Modifier la photo", systemImage: "photo")
+                }
+            }
+
             Button(role: .destructive) {
                 confirmationDepart = true
             } label: {
@@ -234,7 +306,7 @@ struct ChampionnatDetailView: View {
             }
         } label: {
             Group {
-                if departEnCours {
+                if occupe {
                     ProgressView()
                         .tint(.grisSecondaire)
                 } else {
@@ -246,8 +318,8 @@ struct ChampionnatDetailView: View {
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
         }
-        .disabled(departEnCours)
-        .accessibilityLabel("Options du championnat")
+        .disabled(occupe)
+        .accessibilityLabel(envoiPhoto ? "Envoi de la photo" : "Options du championnat")
         // L'icône est centrée sur 44 pt : sans ce décalage, le bouton dépasserait la marge
         // latérale à droite et le sommet du titre à gauche.
         .padding(.trailing, -10)
@@ -273,11 +345,6 @@ struct ChampionnatDetailView: View {
         ScrollView {
             VStack(spacing: 12) {
                 listeClassement(membres)
-                // Le GP de `GET /championnats/moi`. **Aucun GP ⇒ aucun widget** : plus rien
-                // à venir, ou lecture échouée côté serveur — rien à annoncer dans les deux cas.
-                if let prochainGp = championnat.prochainGp {
-                    WidgetGrandPrixSuivant(grandPrix: prochainGp)
-                }
                 lienResultats
             }
             .padding(.horizontal, margeLaterale)
@@ -524,7 +591,10 @@ private struct LigneClassement: View {
 
 // MARK: - Le widget du Grand Prix suivant
 
-/// L'aplat rouge qui ferme le classement : quel Grand Prix vient, et quand il ferme.
+/// L'aplat rouge qui fermait le classement : quel Grand Prix vient, et quand il ferme.
+///
+/// > **Non monté.** Retiré de l'onglet Classement, sans remplacement : l'accueil annonce
+/// > déjà le Grand Prix suivant. Le composant reste en place (`CLAUDE.md` §6).
 ///
 /// **Une carte informative, pas un lien.** Pas de bouton ni de chevron : le chemin vers
 /// les pronostics passe par l'accueil, et une seconde porte ici ferait doublon.

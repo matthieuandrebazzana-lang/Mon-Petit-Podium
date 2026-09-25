@@ -53,6 +53,19 @@ struct Championnat: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
+/// Le corps de `PATCH /championnats/{id}` — aujourd'hui la photo seule, réservée au
+/// créateur. L'URL est celle que rend ``DepotPhoto`` ; le backend la rapproche du dossier
+/// du championnat modifié (`app/api/stockage.py`).
+struct ModificationChampionnat: Encodable, Equatable {
+    var photoUrl: String?
+    var retirerPhoto: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case photoUrl = "photo_url"
+        case retirerPhoto = "retirer_photo"
+    }
+}
+
 /// Le Grand Prix à venir annoncé sur une carte de championnat.
 struct ProchainGP: Codable, Identifiable, Equatable, Hashable {
     let id: UUID
