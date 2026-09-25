@@ -50,7 +50,7 @@ struct CalendrierView: View {
     /// états sont inconnus : « 12 Grands Prix restants » serait une affirmation non vérifiée.
     private var restants: Int? {
         guard calendrier.enBase != nil else { return nil }
-        return grandsPrix.filter { $0.etat != .termine }.count
+        return GPRestants.compte(dans: grandsPrix)
     }
 
     /// Le premier Grand Prix qui n'est pas derrière nous, `nil` si la saison est finie ou
@@ -127,8 +127,7 @@ struct CalendrierView: View {
 
     private var sousTitre: String {
         guard let restants else { return "Saison 2026" }
-        let pluriel = restants > 1 ? "s" : ""
-        return "Saison 2026 · \(restants) Grand\(pluriel) Prix restant\(pluriel)"
+        return GPRestants.libelle(restants)
     }
 
     // MARK: - Chargement et échec

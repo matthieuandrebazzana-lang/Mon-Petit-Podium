@@ -154,6 +154,7 @@ ios/
     │   ├── StatsProfil.swift    stats d'un profil + `tuiles` — seul endroit qui les met en forme
     │   ├── Championnat.swift    `Championnat`, `ProchainGP`, `PositionMembre`
     │   ├── GrandPrix.swift      `GrandPrixEnBase`, `SlugCircuit`, `EcheancePronostics` — LE calcul d'échéance
+    │   ├── GPRestants.swift     décompte des GP restants (à venir + ouverts) — accueil, championnats, calendrier
     │   ├── Membre.swift         une ligne de classement
     │   ├── ResultatsGP.swift    résultats d'une course : lignes, nom coupé, mention, livrée
     │   ├── PronosticsChampionnat.swift  GP du calendrier d'un championnat, paris de chaque membre, tri par GP

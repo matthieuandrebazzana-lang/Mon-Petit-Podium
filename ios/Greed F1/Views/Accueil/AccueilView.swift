@@ -25,10 +25,8 @@ struct AccueilView: View {
     /// Possédé par l'écran, relu à chaque apparition — pas de cache de session (§7.6).
     @StateObject private var prochainGP = ProchainGrandPrix()
 
-    /// Grands Prix restants — une **constante**, comme sur la version web : la base ne
-    /// contient que les Grands Prix déjà relevés par le scraper, et les compter annoncerait
-    /// « 1 Grand Prix restant » au milieu d'une saison qui en compte douze.
-    private let grandsPrixRestants = 12
+    /// Grands Prix restants — lus sur la liste de la saison, voir ``GPRestants``.
+    private var grandsPrixRestants: Int { GPRestants.compte }
 
     /// Le chemin du parcours de pronostics — voir ``EtapePronos``.
     @State private var cheminPronos: [EtapePronos] = []
@@ -191,7 +189,7 @@ struct AccueilView: View {
     /// La ligne qui ferme l'écran. Elle répond à un vrai défaut de composition — sous une
     /// liste d'un ou deux championnats, le bas de l'écran restait vide sur toute sa moitié.
     private var blocSaison: some View {
-        Text("Saison 2026 · \(grandsPrixRestants) Grands Prix restants")
+        Text(GPRestants.libelle(grandsPrixRestants))
             .font(.custom("HelveticaNeue-Medium", size: 13))
             .foregroundColor(.secondaire)       // 9,32:1 sur le beige
             .frame(maxWidth: .infinity)
