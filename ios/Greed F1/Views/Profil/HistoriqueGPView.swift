@@ -28,11 +28,13 @@ struct HistoriqueGPView: View {
 
     private let margeLaterale: CGFloat = 16
 
-    /// Du plus récent au plus ancien — l'ordre du calendrier, retourné.
+    /// Du plus ancien au plus récent — l'ordre du calendrier. **Le tri se fait ici**, quel
+    /// que soit l'ordre dans lequel l'API renverra la liste ; un GP hors calendrier
+    /// statique ferme la marche.
     private var grandsPrix: [GrandPrixJoue] {
         let ordre = GrandPrixSaison.saison2026.map(\.slug)
         return historique.grandsPrix.sorted {
-            (ordre.firstIndex(of: $0.slug) ?? -1) > (ordre.firstIndex(of: $1.slug) ?? -1)
+            (ordre.firstIndex(of: $0.slug) ?? .max) < (ordre.firstIndex(of: $1.slug) ?? .max)
         }
     }
 
@@ -204,14 +206,16 @@ private struct CarteGrandPrixJoue: View {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(gp.fiche?.nom ?? gp.slug)
-                            .font(.custom("HelveticaNeue-Medium", size: 16))
+                            .font(.custom("HelveticaNeue-Medium", size: 18))
                             .foregroundColor(.white)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
+                            .ombreTexteDrapeau()
                         Text(gp.fiche?.date ?? "")
-                            .font(.custom("HelveticaNeue", size: 12))
-                            .foregroundColor(.encreSecondaire)
+                            .font(.custom("HelveticaNeue", size: 13))
+                            .foregroundColor(.white)
                             .lineLimit(1)
+                            .ombreTexteDrapeau()
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -222,21 +226,23 @@ private struct CarteGrandPrixJoue: View {
 
                 HStack(alignment: .lastTextBaseline, spacing: 12) {
                     Text("\(gp.reussis)/\(gp.pronostics.count) pronos réussis")
-                        .font(.custom("HelveticaNeue", size: 12))
-                        .foregroundColor(.encreSecondaire)
+                        .font(.custom("HelveticaNeue-Medium", size: 14))
+                        .foregroundColor(.white)
                         .lineLimit(1)
+                        .ombreTexteDrapeau()
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
                         Text(gp.pointsGagnes.map(\.enPoints) ?? "—")
-                            .font(.custom("HelveticaNeue-Medium", size: 28))
-                            .tracking(Tracking.titre)     // −0,02em × 28, /apple-design §15
+                            .font(.custom("HelveticaNeue-Medium", size: 34))
+                            .tracking(-0.85)              // grand chiffre : −0,025em × 34
                             .foregroundColor(.white)
                         Text("pts")
                             .font(.custom("HelveticaNeue", size: 14))
                             .foregroundColor(.white)
                     }
                     .fixedSize()
+                    .ombreTexteDrapeau()
                 }
             }
 
@@ -344,6 +350,15 @@ private struct CarteGrandPrixJoue: View {
             Spacer().frame(height: 16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// L'ombre du texte posé sur le drapeau. **Le texte s'impose par sa propre force, pas
+/// par un voile** — même principe que les noms de pays du calendrier, en plus appuyé :
+/// le texte de la carte est plus grand, et le drapeau couvre toute la surface.
+private extension View {
+    func ombreTexteDrapeau() -> some View {
+        self.shadow(color: .black.opacity(0.6), radius: 4, x: 0, y: 2)
     }
 }
 

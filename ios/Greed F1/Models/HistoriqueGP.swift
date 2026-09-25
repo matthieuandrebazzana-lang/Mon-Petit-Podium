@@ -104,15 +104,15 @@ extension HistoriqueSaison {
                             podium: podium.map { .init(nom1: $0.0, nom2: $0.1) })
         }
         let gps = [
-            GrandPrixJoue(slug: "espagne", pronostics: [
-                prono("vainqueur", "Vainqueur", pilote: "M.Verstappen", points: 28, gagnes: 28),
-                prono("podium", "2e et 3e du podium", podium: ("L.Hamilton", "G.Russell"),
-                      points: 41, gagnes: 0),
-                prono("bonus", "Meilleur tour", pilote: "C.Leclerc", points: 55, gagnes: 0)
+            GrandPrixJoue(slug: "pays-bas", pronostics: [
+                prono("vainqueur", "Vainqueur", pilote: "O.Piastri", points: 31, gagnes: 0),
+                prono("podium", "2e et 3e du podium", podium: ("L.Norris", "M.Verstappen"),
+                      points: 22, gagnes: 22),
+                prono("bonus", "Pole position", pilote: "L.Norris", points: 24, gagnes: 24)
             ], podium: [
+                PiloteClasse(prenom: "Lando", nom: "Norris", ecurie: "McLaren"),
                 PiloteClasse(prenom: "Max", nom: "Verstappen", ecurie: "Red Bull"),
-                PiloteClasse(prenom: "Lewis", nom: "Hamilton", ecurie: "Ferrari"),
-                PiloteClasse(prenom: "Kimi", nom: "Antonelli", ecurie: "Mercedes")
+                PiloteClasse(prenom: "Oscar", nom: "Piastri", ecurie: "McLaren")
             ]),
             GrandPrixJoue(slug: "italie", pronostics: [
                 prono("vainqueur", "Vainqueur", pilote: "C.Leclerc", points: 34, gagnes: 34),
@@ -123,15 +123,15 @@ extension HistoriqueSaison {
                 PiloteClasse(prenom: "Lando", nom: "Norris", ecurie: "McLaren"),
                 PiloteClasse(prenom: "George", nom: "Russell", ecurie: "Mercedes")
             ]),
-            GrandPrixJoue(slug: "pays-bas", pronostics: [
-                prono("vainqueur", "Vainqueur", pilote: "O.Piastri", points: 31, gagnes: 0),
-                prono("podium", "2e et 3e du podium", podium: ("L.Norris", "M.Verstappen"),
-                      points: 22, gagnes: 22),
-                prono("bonus", "Pole position", pilote: "L.Norris", points: 24, gagnes: 24)
+            GrandPrixJoue(slug: "espagne", pronostics: [
+                prono("vainqueur", "Vainqueur", pilote: "M.Verstappen", points: 28, gagnes: 28),
+                prono("podium", "2e et 3e du podium", podium: ("L.Hamilton", "G.Russell"),
+                      points: 41, gagnes: 0),
+                prono("bonus", "Meilleur tour", pilote: "C.Leclerc", points: 55, gagnes: 0)
             ], podium: [
-                PiloteClasse(prenom: "Lando", nom: "Norris", ecurie: "McLaren"),
                 PiloteClasse(prenom: "Max", nom: "Verstappen", ecurie: "Red Bull"),
-                PiloteClasse(prenom: "Oscar", nom: "Piastri", ecurie: "McLaren")
+                PiloteClasse(prenom: "Lewis", nom: "Hamilton", ecurie: "Ferrari"),
+                PiloteClasse(prenom: "Kimi", nom: "Antonelli", ecurie: "Mercedes")
             ])
         ]
         return HistoriqueSaison(
