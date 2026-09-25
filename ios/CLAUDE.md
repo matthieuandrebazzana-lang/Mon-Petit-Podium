@@ -253,6 +253,7 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 | `icone-creer` | Croix + coupe — carte « Créer un championnat », 40 × 40 pt, *template* |
 | `icone-rejoindre` | Deux casques — carte « Rejoindre un championnat », 40 × 40 pt, *template* |
 | `icone-etoile` | Étoile — bouton « pari bonus » de `CotesView`, 22 × 22 pt, *template* |
+| `icone-drapeau-damier` | Drapeau à damier — cellule « Mes / Ses Grands Prix » du profil, 24,22 × 22 pt, *template* |
 | `texture-hexa` | Damier en filigrane des cartes — monté par ``Damier``, jamais en direct |
 | `flag-<slug>` | Les 12 drapeaux des pays hôtes. **Pas de rendu *template*** : ils gardent leurs couleurs |
 | `drapeau-<code>` | Les 17 drapeaux de **nationalité** — les 16 de la grille 2026, plus l'Autriche du palmarès —, en ISO alpha-2 — `drapeau-gb`, `drapeau-nl`… Fond des lignes de résultats **et des cartes « Derniers vainqueurs »**. Pas *template* non plus |
@@ -362,9 +363,10 @@ tracé : elle ne s'utilise jamais telle quelle, elle se découpe.
 Les deux logos du haut de `logo.svg` sont découpés (`icone-creer`, `icone-rejoindre`), et
 l'étoile de `logoV2.svg` depuis `CotesView` (`icone-etoile`) — **sur la fenêtre de
 `frontend/src/composants/icones/IconeEtoileLogo.jsx`**, qui est la vraie boîte englobante
-élargie à un carré de 88 unités, jamais une tranche arithmétique de la planche. Les trois
-autres dessins de `logoV2.svg` ne sont pas encore découpés : le jour où un écran en a
-besoin, une ligne au manifeste suffit.
+élargie à un carré de 88 unités, jamais une tranche arithmétique de la planche. Le drapeau
+à damier l'est aussi (`icone-drapeau-damier`), sur sa boîte englobante **non carrée** : la
+planche embarque une image raster à partir de x 457,38, qu'un carré centré ferait entrer.
+Le chronomètre et les deux pilotes ne sont pas encore découpés : une ligne au manifeste suffit.
 
 **Les trois planches ne sont jamais installées telles quelles** : `ajouter-assets.sh` les
 saute, et c'est délibéré — posées dans le catalogue elles n'affichent rien d'utilisable et

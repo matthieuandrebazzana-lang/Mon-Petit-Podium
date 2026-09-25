@@ -25,3 +25,9 @@ logo        icone-rejoindre    14.02   137.93  106      106      40
 # planche : `frontend/src/composants/icones/IconeEtoileLogo.jsx` en donne l'arbitrage et
 # les coordonnées, résolues sur les cubiques. Les deux applications cadrent donc pareil.
 logoV2      icone-etoile       143.09  4.72    88       88       22
+
+# Le drapeau à damier de `logoV2.svg` — la cellule « Mes / Ses Grands Prix » du profil.
+# Fenêtre = la vraie boîte englobante (x 355.95 → 457.32, y 9.17 → 100.98, résolue sur
+# les cubiques) avec une marge d'un quart d'unité. Elle n'est PAS carrée : la planche
+# embarque une image raster qui commence à x 457.38, et un carré centré la ferait entrer.
+logoV2      icone-drapeau-damier 355.70 8.92  101.64   92.31    22

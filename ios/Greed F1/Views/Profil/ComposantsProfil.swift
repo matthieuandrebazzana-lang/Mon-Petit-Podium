@@ -244,8 +244,8 @@ struct LigneGrandsPrix<Destination: View>: View {
     var body: some View {
         NavigationLink(destination: destination) {
             HStack(spacing: 14) {
-                Image(systemName: "flag.checkered")
-                    .font(.system(size: 19, weight: .medium))
+                Image("icone-drapeau-damier")
+                    .renderingMode(.template)
                     .foregroundColor(.white)              // 10,88:1 sur #800111
                     .frame(width: 44, height: 44)
                     .background(Color.primaire)
