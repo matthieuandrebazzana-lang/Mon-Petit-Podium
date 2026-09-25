@@ -242,19 +242,21 @@ struct ProfilView: View {
                 grilleSkins
             }
 
-            // **Les trois couleurs restent visibles quel que soit le skin.** La couleur du
-            // texte peint aussi une livrée d'écurie ; la coque et les ailerons restent en
-            // base et reviennent dès que le membre rebascule sur « Ma livrée ».
-            rangee(.coque, libelle: "Coque", valeur: PaletteVoiture.nom(de: livree.coque)) {
-                pastille(livree.coque)
-            } contenu: {
-                grilleCouleurs(choisie: livree.coque) { livree.coque = $0 }
-            }
+            // **La coque et les ailerons ne concernent que « Ma livrée ».** Sur une livrée
+            // d'écurie ils ne peindraient rien ; ils restent en base et reviennent dès que le
+            // membre rebascule. La couleur du texte, elle, peint aussi une écurie : toujours là.
+            if livree.mode == .perso {
+                rangee(.coque, libelle: "Coque", valeur: PaletteVoiture.nom(de: livree.coque)) {
+                    pastille(livree.coque)
+                } contenu: {
+                    grilleCouleurs(choisie: livree.coque) { livree.coque = $0 }
+                }
 
-            rangee(.ailerons, libelle: "Ailerons", valeur: PaletteVoiture.nom(de: livree.ailerons)) {
-                pastille(livree.ailerons)
-            } contenu: {
-                grilleCouleurs(choisie: livree.ailerons) { livree.ailerons = $0 }
+                rangee(.ailerons, libelle: "Ailerons", valeur: PaletteVoiture.nom(de: livree.ailerons)) {
+                    pastille(livree.ailerons)
+                } contenu: {
+                    grilleCouleurs(choisie: livree.ailerons) { livree.ailerons = $0 }
+                }
             }
 
             rangee(.texte, libelle: "Couleur du texte", valeur: PaletteVoiture.nom(de: couleurTexteAffichee)) {
