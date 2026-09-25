@@ -1628,23 +1628,25 @@ quand un groupe s'élargit, c'est le **pas** de l'éventail, jamais le dessin : 
 voisines à deux tailles différentes laissaient croire que la taille voulait dire quelque
 chose.
 
-#### La hauteur est proportionnelle au score, et le bas de la piste vaut zéro
+#### L'échelle est tendue sur les scores réels — comme `Piste.jsx`
 
 ```
-y = (1 − points / meilleur score) × hauteur disponible
+y = bas − (points − minimum) / (maximum − minimum) × (bas − haut)
 ```
 
-Le meilleur tient toujours le haut de la piste, un membre à `0` point toujours le bas, et la
-distance à la ligne du leader se lit directement comme la fraction de points qui manque.
+Le meilleur tient **toujours** le haut de la zone de jeu, le moins bon **toujours** le bas,
+et un score élevé donne un `y` petit. `haut` et `bas` tombent autour de 10 % et 90 % de la
+piste, mais ils sont **calculés** : la place d'une voiture et de son score, en haut comme en
+bas.
 
-**L'échelle ne se tend pas sur le minimum.** Un championnat dont le dernier a 24 points sur
-168 pose sa voiture aux sept huitièmes de la piste, pas tout en bas. C'est ce qui rend deux
-captures d'un même championnat comparables d'un Grand Prix à l'autre — une échelle tendue sur
-le minimum redistribue tout le monde dès que le dernier marque un point.
+**Un seul membre** se pose en haut : il mène. **Tout le monde à égalité** (avant le premier
+Grand Prix) se pose à mi-hauteur, et la résolution des chevauchements en fait une grille de
+départ sur plusieurs voies.
 
-**Personne n'a encore marqué** et la formule n'a pas de diviseur : toute la grille se pose
-alors sur la ligne du bas, qui est sa place exacte, et la résolution des chevauchements en
-fait une grille de départ sur plusieurs voies.
+> **Jusqu'à la version iOS `0.39.3`, le bas de la piste valait zéro point** : un dernier à
+> 24 sur 168 restait aux sept huitièmes de la piste, et à 93 sur 168 vers le milieu. Le web
+> tendait déjà sur le minimum ; iOS s'aligne. Seul écart restant : le web centre un membre
+> seul (`maximum === minimum`), iOS le pose en haut.
 
 > **Jeu d'essai** : `168, 93, 66, 50, 47, 26, 24, 0`, les scores de
 > `maquettes_V2/screen-14-vue-piste.PNG`. Ils restent dans `MembreMock.exemples`, qui ne sert

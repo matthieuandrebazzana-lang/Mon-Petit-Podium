@@ -103,6 +103,9 @@ struct VuePisteView: View {
                 // la place à celui de l'écran. Le haut n'en a pas besoin, le bandeau le couvre.
                 VuePlanche(planche: "vue_piste", fenetre: Self.planche,
                            substitutions: Self.substitutions, etiree: true)
+                    // Un décor qui déborde de son cadre ne doit rien intercepter : intégrée,
+                    // la piste est posée sous le sélecteur « Classement / Piste ».
+                    .allowsHitTesting(false)
                     .ignoresSafeArea()
                     .padding(.bottom, -debordBas(ecran: bloc.size.height
                                                  + bloc.safeAreaInsets.top
@@ -388,27 +391,33 @@ enum DispositionPiste {
 
     // MARK: Passe 1 — l'échelle verticale
 
-    /// **La hauteur est proportionnelle au score, et le bas de la piste vaut zéro point.**
+    /// **L'échelle est tendue sur les scores réels** — la passe 1 de `Piste.jsx`.
     ///
     /// ```
-    /// y = (1 − points / meilleur score) × hauteur disponible
+    /// y = bas − (points − minimum) / (maximum − minimum) × (bas − haut)
     /// ```
     ///
-    /// Le meilleur score tient donc toujours le haut de la piste, et un membre à `0` point
-    /// toujours le bas. Entre les deux, la distance à la ligne du leader se lit directement
-    /// comme la fraction de points qui manque : à mi-piste, la moitié de ses points.
+    /// Le meilleur score se pose **toujours** tout en haut de la zone de jeu, le moins bon
+    /// **toujours** tout en bas, et chaque score intermédiaire proportionnellement entre
+    /// les deux. Un score élevé donne un `y` petit : le haut de l'écran.
     ///
-    /// > ### Ce que cette échelle-ci ne fait pas
+    /// Les bornes `haut` et `bas` tombent autour de 10 % et 90 % de la piste, mais elles
+    /// sont **calculées**, pas choisies en pourcentage : c'est la place qu'il faut à une
+    /// voiture et à son score pour ne sortir ni en haut ni en bas.
+    ///
+    /// > ### Pourquoi plus « le bas de la piste vaut zéro »
     /// >
-    /// > Elle **ne se tend pas sur le minimum**. Un championnat dont le dernier a 24 points
-    /// > sur 168 pose sa voiture aux sept huitièmes de la piste, pas tout en bas : le bas
-    /// > de la piste est le zéro absolu, pas « le dernier ». C'est ce qui rend deux
-    /// > captures d'un même championnat comparables d'un Grand Prix à l'autre — une échelle
-    /// > tendue sur le minimum redistribue tout le monde dès que le dernier marque un point.
+    /// > Jusqu'à la version `0.39.3`, l'échelle allait de zéro au meilleur score : un
+    /// > championnat dont le dernier avait 24 points sur 168 posait sa voiture aux sept
+    /// > huitièmes de la piste, et le bas restait vide. Le web, lui, tendait déjà sur le
+    /// > minimum — deux placements écrits séparément avaient divergé.
     ///
-    /// **Personne n'a encore marqué** — le cas d'avant le premier Grand Prix — et la
-    /// formule n'a pas de diviseur : toute la grille se pose alors sur la ligne du bas, qui
-    /// est sa place exacte. La passe 2 en fait une grille de départ sur plusieurs voies.
+    /// Deux cas sans échelle à tendre :
+    ///
+    /// - **Un seul membre** : il mène, il se pose en haut.
+    /// - **Tout le monde à égalité** — le cas d'avant le premier Grand Prix : la grille se
+    ///   pose à mi-hauteur. La coller en haut ou en bas dirait quelque chose de faux, et la
+    ///   passe 2 en fait une grille de départ sur plusieurs voies.
     ///
     /// Les hauteurs sortent d'ici **exactes**, sans correction d'écart : deux scores
     /// identiques rendent exactement la même valeur, et c'est ce qui garantit que deux
@@ -420,11 +429,13 @@ enum DispositionPiste {
         let haut = margeHaute + hauteurVoiture / 2
         let bas = max(haut, hauteur - margeBasse - hauteurLegende - hauteurVoiture / 2)
 
-        guard let meilleur = points.max() else { return [] }
-        guard meilleur > 0 else { return points.map { _ in bas } }
+        guard let maximum = points.max(), let minimum = points.min() else { return [] }
+        if points.count == 1 { return [haut] }
+        guard maximum > minimum else { return points.map { _ in (haut + bas) / 2 } }
 
+        let etendue = CGFloat(maximum - minimum)
         return points.map { valeur in
-            haut + (1 - CGFloat(valeur) / CGFloat(meilleur)) * (bas - haut)
+            bas - CGFloat(valeur - minimum) / etendue * (bas - haut)
         }
     }
 
