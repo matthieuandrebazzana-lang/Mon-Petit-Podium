@@ -166,6 +166,21 @@ final class AuthViewModel: ObservableObject {
         await rechargerProfil()
     }
 
+    /// Change la photo de profil : dépôt direct dans Storage (``DepotPhoto``), puis l'URL
+    /// par `PATCH /profils/moi`, puis relecture — même chemin que la voiture.
+    ///
+    /// **Le dossier est l'identifiant de la session**, jamais celui d'un profil en cache :
+    /// la RLS du compartiment et le backend le comparent tous deux au jeton.
+    ///
+    /// - Throws: une ``ErreurAPI`` dont le message est affichable.
+    func enregistrerPhoto(_ donnees: Data) async throws {
+        guard let id = try? await supabase.auth.session.user.id else { throw ErreurAPI.session }
+        let url = try await DepotPhoto.deposer(donnees, dans: .avatars, proprietaire: id.uuidString)
+        try await APIClient.partage.envoyer("profils/moi", methode: .patch,
+                                            corps: ModificationPhoto(avatarUrl: url))
+        await rechargerProfil()
+    }
+
     /// Efface tout ce qui appartient au compte (§2.6) : deux personnes qui se relaient
     /// sur le même téléphone ne voient jamais les données de l'autre.
     private func oublierCompte() {

@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// Onglet **Profil** — identité, statistiques, livrée, déconnexion.
@@ -41,6 +42,12 @@ struct ProfilView: View {
     @State private var envoiVoiture = false
     @State private var erreurVoiture: ErreurAPI?
 
+    /// La photo choisie dans la photothèque, puis son dépôt en vol et son refus — dit sous
+    /// l'en-tête (``ErreurEnLigne``), jamais en alerte.
+    @State private var choixPhoto: PhotosPickerItem?
+    @State private var envoiPhoto = false
+    @State private var erreurPhoto: ErreurAPI?
+
     @StateObject private var statistiques = StatistiquesProfil()
 
     /// **Un seul réglage déplié à la fois.** Quatre grilles ouvertes ensemble feraient du
@@ -74,6 +81,11 @@ struct ProfilView: View {
 
                     Spacer().frame(height: 12)
                     entete
+
+                    if let erreurPhoto {
+                        Spacer().frame(height: 10)
+                        ErreurEnLigne(erreur: erreurPhoto)
+                    }
 
                     if viewModel.photoProfil != nil {
                         Spacer().frame(height: 10)
@@ -116,6 +128,10 @@ struct ProfilView: View {
         // Relancé quand le compte arrive : un profil lu après l'ouverture de l'onglet
         // n'attend pas le prochain passage pour ses statistiques.
         .task(id: viewModel.profil?.id) { await chargerStatistiques() }
+        .onChange(of: choixPhoto) { _, choix in
+            guard let choix else { return }
+            Task { await envoyerPhoto(choix) }
+        }
     }
 
     // MARK: - Chargement
@@ -167,13 +183,22 @@ struct ProfilView: View {
     /// La pastille du compte, et le bouton qui change la photo. **L'appareil photo est posé
     /// sur le bord du disque, pas à côté** : le contrôle touche ce qu'il modifie, ce qui
     /// dispense de l'expliquer.
+    ///
+    /// **Le sélecteur enveloppe le disque ET l'appareil photo** : les deux ouvrent la
+    /// photothèque, l'icône n'étant que l'indication de ce que fait le disque.
     private var avatar: some View {
-        Button {
-            // Le choix d'une photo arrivera avec la couche réseau ; la cible tactile,
-            // elle, est déjà à sa place et à sa taille.
-        } label: {
+        PhotosPicker(selection: $choixPhoto, matching: .images, photoLibrary: .shared()) {
             ZStack(alignment: .bottomTrailing) {
                 PastilleProfil(pseudo: pseudoAffiche, photo: viewModel.photoProfil)
+                    .overlay {
+                        if envoiPhoto {
+                            // Un matériau plutôt qu'un voile coloré : l'écran ne déclare
+                            // pas sa propre couleur.
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .overlay { ProgressView().tint(.primaire) }
+                        }
+                    }
 
                 Image(systemName: "camera.fill")
                     .font(.system(size: 11, weight: .medium))
@@ -184,9 +209,33 @@ struct ProfilView: View {
             // Le disque fait 64 pt, le bouton 66 : le plancher tactile de 44 pt est tenu
             // par le disque lui-même, l'icône n'est qu'une indication.
             .frame(width: 66, height: 66, alignment: .topLeading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(StyleAppui(.bouton))
+        .disabled(envoiPhoto)
         .accessibilityLabel("Changer ma photo de profil")
+    }
+
+    /// Charge la photo choisie, la dépose et enregistre son URL (``AuthViewModel/enregistrerPhoto(_:)``).
+    /// La sélection est remise à `nil` à la fin : choisir deux fois la même photo doit
+    /// relancer l'envoi, ce qu'un `onChange` sur une valeur inchangée ne ferait pas.
+    private func envoyerPhoto(_ choix: PhotosPickerItem) async {
+        envoiPhoto = true
+        erreurPhoto = nil
+        defer {
+            envoiPhoto = false
+            choixPhoto = nil
+        }
+        do {
+            guard let donnees = try await choix.loadTransferable(type: Data.self) else {
+                throw ErreurAPI.serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+            }
+            try await viewModel.enregistrerPhoto(donnees)
+        } catch let erreur as ErreurAPI {
+            erreurPhoto = erreur
+        } catch {
+            erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+        }
     }
 
     private var supprimerLaPhoto: some View {

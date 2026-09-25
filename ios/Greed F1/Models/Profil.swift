@@ -111,3 +111,15 @@ struct ModificationVoiture: Encodable, Equatable {
         case livreeEcurie = "livree_ecurie"
     }
 }
+
+/// Le corps de `PATCH /profils/moi` pour la photo (`docs/swift-app.md` §3.2). L'URL est
+/// celle que rend ``DepotPhoto`` — le backend la vérifie en cinq points (§3.8).
+struct ModificationPhoto: Encodable, Equatable {
+    var avatarUrl: String?
+    var retirerAvatar: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case avatarUrl = "avatar_url"
+        case retirerAvatar = "retirer_avatar"
+    }
+}

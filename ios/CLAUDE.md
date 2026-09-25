@@ -172,6 +172,7 @@ ios/
     │   ├── ResultatsParGrandPrix.swift  `GET /championnats/{id}/calendrier` puis `GET /grands-prix/{gp}/pronostics/championnat/{id}`, un GP à la fois
     │   ├── DonneesPronostics.swift  cotes + favoris (+ mes pronos en direct), bascule de favori, `POST …/pronostics`
     │   ├── Administration.swift   `POST /admin/action` — scraper sans figeage, jamais le secret
+    │   ├── DepotPhoto.swift       photo réduite (800 px, JPEG 0,85) → Supabase Storage, rend l'URL `?v=`
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
     │   ├── ContentView.swift
