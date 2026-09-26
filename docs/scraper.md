@@ -504,6 +504,39 @@ l'une, et **non jugé** si une option sœur est illisible et pouvait donc être 
 « premier-abandon » est volontairement **non reconnu** tant que la règle d'égalité n'est
 pas écrite : il demande de savoir *qui* a abandonné le premier, pas *si*.
 
+### Les tests de non-régression
+
+Le seul code du dépôt couvert par des tests. Ils rejouent `calculer()` sur les quatre GP
+2026 terminés (Pays-Bas, Italie, Espagne, Azerbaïdjan), sans base ni réseau.
+
+```bash
+cd backend
+.venv/bin/pip install -r requirements-dev.txt   # une fois
+.venv/bin/python -m pytest                      # toute la suite, moins d'une seconde
+.venv/bin/python -m pytest tests/test_marches.py -k egalite   # un sous-ensemble
+```
+
+| Fichier | Vérifie |
+|---|---|
+| `tests/test_verdicts_gp.py` | un test par GP : `calculer()` rend les verdicts de la base ; les 2 pronos de Bakou encore en attente |
+| `tests/test_marches.py` | les 39 slugs vus en base ont un évaluateur ou une entrée dans `points.NON_EVALUABLES` ; l'égalité McLaren/Mercedes à 33 pts des Pays-Bas |
+| `tests/test_direction_de_course.py` | safety car, VSC, drapeau rouge et meilleur tour sur les vrais messages `race_control` |
+| `tests/fixtures/gp/*.json` | `donnees_brutes`, cotes, pronostics et verdicts attendus ; provenance dans la clé `source` |
+
+> **Les défauts connus sont marqués `xfail`**, avec la cause de `audit-evaluation.md` §4.3
+> en raison (C1, C3, C6). `pytest.ini` règle `xfail_strict = true` : un test `xfail` qui
+> se met à passer **fait échouer la suite**. Corriger un défaut, c'est donc aussi retirer
+> son marqueur — sinon la CI le signale.
+
+**Un slug nouveau vu chez Unibet s'ajoute à `SLUGS_EN_BASE`** (`test_marches.py`). Le
+test échoue tant que le marché n'a ni évaluateur ni entrée « non évaluable ».
+
+**Les fixtures ne se régénèrent pas** : elles figent les verdicts corrigés à la main au
+2026-09-26. Les identifiants `fixture-NNN` des cotes sont inventés (second pilote d'un
+podium, issues sœurs) ; les issues pronostiquées gardent leurs identifiants réels. Les
+qualifications de Bakou (`donnees_brutes.qualification`) n'existent pas encore en
+production : elles servent au triplé, qui attend l'étape 2 de l'audit.
+
 ---
 
 ## 12. Le job de résultats
