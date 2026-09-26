@@ -48,7 +48,7 @@ BASE = "https://api.openf1.org/v1"
 DELAI = httpx.Timeout(30.0, connect=10.0)
 
 # OpenF1 refuse au-delà de 3 requêtes par seconde (`429 Rate limit exceeded`).
-# Une récupération complète en enchaîne six : sans cette pause, les trois
+# Une récupération complète en enchaîne huit : sans cette pause, les trois
 # dernières sont refusées. 0,4 s tient large sous la limite, et une récupération
 # ne se produit qu'une fois par Grand Prix.
 PAUSE_ENTRE_APPELS = 0.4
@@ -220,6 +220,79 @@ async def session_de_course(
     return session
 
 
+# Nom de la session de qualification chez OpenF1. `session_type=Qualifying`
+# couvre aussi « Sprint Qualifying » : c'est le NOM qui désigne celle du samedi,
+# la seule qui attribue la pole du Grand Prix.
+SESSION_QUALIFICATION = "Qualifying"
+
+
+def _meeting_de(donnees: dict) -> object:
+    """Le `meeting_key` du week-end, lu dans la session ou dans le classement."""
+    session = donnees.get("session") or {}
+    if session.get("meeting_key") is not None:
+        return session["meeting_key"]
+    for ligne in donnees.get("session_result") or []:
+        if isinstance(ligne, dict) and ligne.get("meeting_key") is not None:
+            return ligne["meeting_key"]
+    return None
+
+
+async def _qualification(client: httpx.AsyncClient, nom_gp: str, meeting: object) -> list[dict]:
+    """Le `session_result` des qualifications du même week-end.
+
+    Lève `ErreurOpenF1` si la session est introuvable ou sans classement :
+    l'appelant décide si c'est bloquant (ça ne l'est jamais — seul le marché
+    « triplé » en dépend, et il reste en attente sans elle).
+    """
+    if meeting is None:
+        raise ErreurOpenF1(f"{nom_gp} : aucun `meeting_key` pour retrouver les qualifications.")
+
+    sessions = await _appeler(
+        client, "sessions", {"meeting_key": meeting, "session_name": SESSION_QUALIFICATION}
+    )
+    if len(sessions) != 1 or sessions[0].get("session_key") is None:
+        raise ErreurOpenF1(
+            f"{nom_gp} : {len(sessions)} session(s) « {SESSION_QUALIFICATION} » pour "
+            f"le meeting {meeting}, une seule attendue."
+        )
+
+    classement = await _appeler(
+        client, "session_result", {"session_key": sessions[0]["session_key"]}
+    )
+    if not any(ligne.get("position") == 1 for ligne in classement):
+        raise ErreurOpenF1(
+            f"{nom_gp} : qualifications {sessions[0]['session_key']} sans premier classé."
+        )
+    return classement
+
+
+async def completer_qualification(nom_gp: str, donnees: dict) -> bool:
+    """Ajoute les qualifications à des `donnees_brutes` qui ne les ont pas.
+
+    Rend `True` si `donnees` a été complété — à l'appelant de le réécrire en
+    base. Sert aux GP récupérés avant la `0.77.0` (Bakou compris), et à ceux
+    dont la première lecture des qualifications a échoué. Un échec est
+    journalisé et rend `False` : les pronostics qui en dépendent restent en
+    attente, rien d'autre n'est bloqué.
+    """
+    if donnees.get("qualification"):
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=DELAI) as client:
+            donnees["qualification"] = await _qualification(
+                client, nom_gp, _meeting_de(donnees)
+            )
+    except ErreurOpenF1 as erreur:
+        logger.warning("[openf1] %s : qualifications indisponibles (%s).", nom_gp, erreur)
+        return False
+    logger.info(
+        "[openf1] %s : qualifications ajoutées (%d ligne(s)).",
+        nom_gp,
+        len(donnees["qualification"]),
+    )
+    return True
+
+
 def _index_pilotes(pilotes: list[dict]) -> dict[str, dict]:
     """Construit l'index { numéro de voiture → nom, écurie } du classement.
 
@@ -308,6 +381,15 @@ async def recuperer(nom_gp: str, depart: datetime) -> dict:
             logger.warning("[openf1] %s : grille de départ indisponible (%s).", nom_gp, erreur)
             grille = []
 
+        # Les qualifications du même week-end : la pole du marché « triplé ».
+        # Comme la grille, leur échec n'emporte pas la récupération —
+        # `completer_qualification` réessaiera au prochain passage.
+        try:
+            qualification = await _qualification(client, nom_gp, session.get("meeting_key"))
+        except ErreurOpenF1 as erreur:
+            logger.warning("[openf1] %s : qualifications indisponibles (%s).", nom_gp, erreur)
+            qualification = []
+
     donnees = {
         "source": "openf1",
         "recupere_le": datetime.now(UTC).isoformat(),
@@ -316,6 +398,7 @@ async def recuperer(nom_gp: str, depart: datetime) -> dict:
         "drivers": pilotes,
         "race_control": controle,
         "starting_grid": grille,
+        "qualification": qualification,
         # Réduit au meilleur tour par pilote : voir CHAMPS_TOUR ci-dessus.
         "laps": _meilleurs_tours(tours),
         "pilotes": _index_pilotes(pilotes),

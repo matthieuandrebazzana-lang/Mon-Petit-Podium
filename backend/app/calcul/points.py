@@ -114,6 +114,10 @@ class Course:
     virtual_safety_car: bool = False
     drapeau_rouge: bool = False
     meilleur_tour: int | None = None
+    # Le poleman, lu dans le classement des qualifications (`qualification` de
+    # `donnees_brutes`). `None` quand la session n'a pas été récupérée : les
+    # GP courus avant la `0.77.0` ne l'ont pas, jusqu'au prochain passage du job.
+    pole: int | None = None
 
     # Index de rapprochement, construits une fois pour toutes.
     _par_nom: dict[str, int] = field(default_factory=dict)
@@ -317,6 +321,10 @@ def _indexer_pilotes(course: Course) -> None:
             course._par_equipe[normaliser(equipe)] = equipe
 
 
+# « VSC DEPLOYED », « VSC ENDING » : l'abréviation seule, en mot entier.
+_VSC = re.compile(r"\bVSC\b")
+
+
 def _lire_direction_de_course(course: Course, messages: list[dict]) -> None:
     """Safety car, safety car virtuel et drapeau rouge (règle 4.4).
 
@@ -327,8 +335,12 @@ def _lire_direction_de_course(course: Course, messages: list[dict]) -> None:
 
     Deux précautions :
 
-    - le test « VIRTUAL » passe **avant** celui du safety car ordinaire, la
+    - le test du VSC passe **avant** celui du safety car ordinaire, la
       chaîne « SAFETY CAR » étant contenue dans « VIRTUAL SAFETY CAR » ;
+    - **OpenF1 écrit le VSC en abrégé** — « VSC DEPLOYED », « VSC ENDING » — et
+      jamais « VIRTUAL SAFETY CAR » sur les quatre GP 2026 rejoués. Les deux
+      formes sont reconnues ; seule la longue l'était jusqu'à la `0.77.0`, si
+      bien que le VSC n'était jamais détecté (audit, cause C6) ;
     - seuls les messages de déploiement comptent. La séquence complète d'une
       neutralisation est « … DEPLOYED », « … IN THIS LAP », « … ENDING » :
       compter les trois ferait croire à trois interventions, et surtout un
@@ -344,7 +356,7 @@ def _lire_direction_de_course(course: Course, messages: list[dict]) -> None:
         texte = str(message.get("message") or "").upper()
 
         if categorie == "SafetyCar":
-            if "VIRTUAL SAFETY CAR" in texte:
+            if "VIRTUAL SAFETY CAR" in texte or _VSC.search(texte):
                 if "DEPLOYED" in texte:
                     course.virtual_safety_car = True
             elif "SAFETY CAR" in texte:
@@ -415,7 +427,22 @@ def analyser(donnees: dict) -> Course:
             min(tours, key=lambda tour: tour["lap_duration"]).get("driver_number")
         )
 
+    course.pole = _poleman(donnees.get("qualification") or [])
+
     return course
+
+
+def _poleman(classement: list[dict]) -> int | None:
+    """Le numéro du premier des qualifications, ou `None`.
+
+    `qualification` est le `session_result` de la session « Qualifying » du
+    même week-end (`scraper/openf1.py`). C'est le classement des qualifications,
+    pas la grille de départ : une pénalité de grille ne retire pas la pole.
+    """
+    for ligne in classement:
+        if isinstance(ligne, dict) and _entier(ligne.get("position")) == 1:
+            return _entier(ligne.get("driver_number"))
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -806,106 +833,290 @@ def _les_deux_voitures_dans_le_top(ecurie: str, rang: int):
     return valider
 
 
-def validateur(marche: str, options: Sequence[str] = ()):
-    """Rend le validateur d'un marché, ou `None` si le marché n'est pas reconnu.
+# --------------------------------------------------------------------------- #
+#  Marchés ajoutés en 0.77.0 (audit, causes C1 et C3)
+# --------------------------------------------------------------------------- #
 
-    `None` n'est pas un échec : c'est la réponse honnête pour un marché que le
-    code ne sait pas encore juger. L'appelant laisse alors le pronostic à NULL
-    et le journalise.
 
-    La reconnaissance porte sur le **slug** du marché, celui que
-    `scraper.unibet.slug()` fabrique à partir du libellé Unibet. L'ordre des
-    tests compte : « ecurie-vainqueur » contient « vainqueur », et un marché de
-    safety car virtuel contient « safety car ».
+@dataclass(frozen=True)
+class Partage:
+    """Issue gagnante à égalité avec d'autres : la cote est divisée entre elles.
 
-    Seuls « vainqueur », « podium » et « ecurie-vainqueur » ont été observés en
-    vrai — Unibet n'ouvre les marchés complets qu'à l'approche de la course
-    (section 3.1). Les autres reconnaissances sont écrites d'après les libellés
-    annoncés en section 4.4 et **restent à confronter aux vrais marchés**. C'est
-    exactement pour cela qu'un marché non reconnu laisse le pronostic à NULL au
-    lieu de le déclarer perdu.
-
-    « {écurie} / les 2 voitures dans le top 10 » entre dans la liste en version
-    `0.73.0`, avec les GP Italie et Espagne 2026 pour premiers vrais marchés —
-    onze par Grand Prix, et aucun n'était reconnu. C'est la **première famille
-    dont le slug porte le sujet du pari** : le nom de l'écurie et le rang y sont
-    lus, là où tous les autres marchés se nomment d'un slug fixe.
-
-        « écart du gagnant » entre dans la liste en version `0.54.0`. Il n'y était
-    **pas** : ses pronostics ne tombaient pas d'une comparaison ratée, ils
-    n'étaient jamais comparés du tout — le marché sortait d'ici en `None` et
-    restait à NULL (`bugs-connus.md` §20). C'est aussi le premier marché dont
-    l'issue n'est ni un pilote ni un oui/non, mais **un intervalle de secondes**.
-
-    `options` porte **les libellés de toutes les issues du marché pour ce Grand
-    Prix**. Un seul validateur s'en sert — celui de la nationalité, dont l'issue
-    « Autres » n'a de sens que par rapport aux nationalités listées à côté d'elle
-    (version `0.56.0`). Il est facultatif et vide par défaut : un appelant qui
-    l'ignore obtient exactement le comportement d'avant, « Autres » restant alors
-    non jugé plutôt que mal jugé.
+    Règle des bookmakers (*dead heat*) : quand `diviseur` issues finissent à
+    égalité en tête, chacune rapporte sa cote divisée par `diviseur`, arrondie à
+    l'entier. Seule « l'écurie qui marque le plus de points » la produit.
     """
-    slug = (marche or "").strip().lower()
-    if not slug:
+
+    diviseur: int
+
+
+def points_partages(valeur: int, diviseur: int) -> int:
+    """`valeur / diviseur`, arrondi à l'entier le plus proche (demi vers le haut).
+
+    En arithmétique entière : `round()` de Python arrondit un demi au pair
+    (`round(12.5) == 12`), ce qu'aucun joueur ne comprendrait.
+    """
+    return (2 * valeur + diviseur) // (2 * diviseur)
+
+
+def _ecurie_la_plus_marquante(course: Course, libelle: str) -> bool | Partage | None:
+    """L'écurie désignée est-elle celle qui marque le plus de points FIA ?
+
+    Somme des `points` de `session_result` par écurie, l'écurie de chaque pilote
+    lue dans `/drivers` du Grand Prix (jamais dans la grille statique). En cas
+    d'égalité en tête, l'issue gagne **à partage** (`Partage`) : aux Pays-Bas
+    2026, McLaren et Mercedes finissent à 33 points chacune.
+
+    Un pilote qui marque sans écurie connue laisse le marché non jugé : une
+    somme incomplète pourrait désigner la mauvaise écurie.
+    """
+    equipe = course.equipe_du_libelle(libelle)
+    if equipe is None:
         return None
 
-    if slug == MARCHE_VAINQUEUR:
-        return _vainqueur
-    if slug == MARCHE_PODIUM:
-        return _podium
+    totaux: dict[str, int] = {}
+    for numero, ligne in course.lignes.items():
+        if ligne.points_fia <= 0:
+            continue
+        ecurie = (course.pilotes.get(numero) or {}).get("equipe")
+        if not ecurie:
+            return None
+        cle = normaliser(ecurie)
+        totaux[cle] = totaux.get(cle, 0) + ligne.points_fia
 
-    # Un « top N » porte son rang dans son nom : il est traité à part, le rang
-    # ne pouvant pas être connu à l'avance.
-    top = re.fullmatch(r"(?:dans-le-)?top-?(\d+)", slug)
-    if top:
-        return _top(int(top.group(1)))
+    if not totaux:
+        return None
 
-    # « {écurie} / Les 2 voitures dans le top 10 ». Le test vient ICI, entre le
-    # « top N » et le préfixe « ecurie » du bas : le premier ne le prend pas —
-    # son `fullmatch` exige que le slug ne soit QU'un rang — et le second le
-    # prendrait pour « écurie vainqueur » le jour où Unibet écrirait
-    # « Ecurie Ferrari / Les 2 voitures dans le top 10 ».
-    deux_voitures = _DEUX_VOITURES.fullmatch(slug)
-    if deux_voitures:
-        return _les_deux_voitures_dans_le_top(
-            deux_voitures.group("ecurie"), int(deux_voitures.group("rang"))
-        )
+    meilleur = max(totaux.values())
+    en_tete = [cle for cle, total in totaux.items() if total == meilleur]
+    if normaliser(equipe) not in en_tete:
+        return False
+    if len(en_tete) == 1:
+        return True
+    return Partage(len(en_tete))
 
-    # « écart du gagnant », « écart du vainqueur », « marge de victoire » — le
-    # même marché sous trois noms possibles, et c'est bien un seul : l'écart
-    # entre P1 et P2. Il est testé AVANT « vainqueur » n'apparaisse ailleurs et
-    # avant le préfixe « ecurie » : « ecart-du-vainqueur » contient « vainqueur »
-    # et commence par « eca », deux voisinages assez proches pour qu'un jour
-    # quelqu'un les confonde.
-    if "ecart" in slug or ("marge" in slug and "victoire" in slug):
-        return _ecart_du_gagnant
 
-    # « nationalité du vainqueur » — l'autre marché dont l'issue n'est pas un
-    # pilote. Il porte le même piège de voisinage que le précédent : le slug
-    # CONTIENT « vainqueur », et seule l'égalité stricte du test plus haut
-    # l'empêche d'être pris pour le marché obligatoire. C'est aussi pourquoi il
-    # est reconnu ici, en compagnie de l'écart, et non parmi les préfixes du bas.
-    if "nationalite" in slug or (
-        "pays" in slug and ("vainqueur" in slug or "gagnant" in slug)
-    ):
-        return _nationalite_du_vainqueur(options)
+def _ecurie_du_meilleur_tour(course: Course, libelle: str) -> bool | None:
+    """L'écurie désignée est-elle celle du pilote qui signe le meilleur tour ?"""
+    if course.meilleur_tour is None:
+        return None
+    equipe = course.equipe_du_libelle(libelle)
+    if equipe is None:
+        return None
+    auteur = (course.pilotes.get(course.meilleur_tour) or {}).get("equipe")
+    if not auteur:
+        return None
+    return normaliser(auteur) == normaliser(equipe)
 
-    if "virtual" in slug and "safety" in slug:
-        return _safety_car_virtuel
-    if "safety" in slug and "car" in slug:
-        return _safety_car
-    if "drapeau" in slug and "rouge" in slug:
-        return _drapeau_rouge
-    if "meilleur" in slug and "tour" in slug:
-        return _meilleur_tour
-    if slug.startswith(("ecurie", "equipe", "constructeur")):
-        return _ecurie_gagnante
-    # « premier-abandon » demande de savoir QUI a abandonné le premier, pas SI un
-    # pilote a abandonné : ce n'est pas le même marché, et il est laissé non
-    # reconnu tant que la règle d'égalité de la section 4.4 n'est pas écrite.
-    if slug.startswith("abandon") or slug.endswith("abandonne"):
-        return _abandon
+
+def _voiture_du_meilleur_tour(course: Course, libelle: str) -> bool | None:
+    """« Voiture réalisant le tour le plus rapide » : un pilote ou une écurie.
+
+    Aucune issue de ce marché n'a été relevée en base : Unibet peut y nommer la
+    voiture par son pilote ou par son écurie. Les deux lectures sont tentées,
+    pilote d'abord ; un libellé qui n'est ni l'un ni l'autre reste non jugé.
+    """
+    if course.pilote_du_libelle(libelle) is not None:
+        return _meilleur_tour(course, libelle)
+    return _ecurie_du_meilleur_tour(course, libelle)
+
+
+def _triple(course: Course, libelle: str) -> bool | None:
+    """« Vainqueur course, qualification et tour le plus rapide » — oui / non.
+
+    « Oui » gagne si un même pilote signe la pole, la victoire et le meilleur
+    tour. La pole se lit dans les qualifications (`Course.pole`) : sans elles,
+    le marché reste en attente, jamais perdu.
+    """
+    reponse = _reponse_binaire(libelle)
+    if reponse is None:
+        return None
+    tete = course.par_position(1)
+    if tete is None or course.pole is None or course.meilleur_tour is None:
+        return None
+    return (tete.numero == course.pole == course.meilleur_tour) == reponse
+
+
+def _les_deux_voitures_sur_le_podium(course: Course, libelle: str) -> bool | None:
+    """L'écurie désignée place-t-elle ses deux voitures sur le podium ?
+
+    L'issue nomme une écurie (le marché n'est pas un oui/non). La paire se lit
+    dans les résultats, comme pour « les 2 voitures dans le top N ».
+    """
+    equipe = course.equipe_du_libelle(libelle)
+    if equipe is None:
+        return None
+    numeros = course.voitures_de(equipe)
+    if len(numeros) != 2:
+        return None
+    return all(_numero_au_plus(course, numero, 3) for numero in numeros)
+
+
+def _vainqueur_du_duel(course: Course, a: int, b: int) -> int | None:
+    """Le gagnant d'un face-à-face, ou `None` si rien ne les départage.
+
+    1. Les deux classés : le mieux classé gagne.
+    2. Un seul classé : il gagne.
+    3. Aucun classé : celui qui a bouclé le plus de tours gagne. Un pilote sans
+       ligne de résultat compte zéro tour. À tours égaux, rien n'est décidé.
+    """
+    ligne_a, ligne_b = course.lignes.get(a), course.lignes.get(b)
+    classe_a = ligne_a is not None and ligne_a.classe
+    classe_b = ligne_b is not None and ligne_b.classe
+
+    if classe_a and classe_b:
+        return a if ligne_a.position < ligne_b.position else b
+    if classe_a:
+        return a
+    if classe_b:
+        return b
+
+    tours_a = ligne_a.tours if ligne_a else 0
+    tours_b = ligne_b.tours if ligne_b else 0
+    if tours_a == tours_b:
+        return None
+    return a if tours_a > tours_b else b
+
+
+def _face_a_face(options: Sequence[str] = ()):
+    """Rend le validateur d'un marché « face-à-face ».
+
+    Le slug nomme le duel (`face-a-face-o-piastri-l-norris`) sous une forme
+    qu'aucune règle ne découpe sûrement en deux pilotes. Les deux adversaires se
+    lisent donc dans les **issues du marché**, comme « Autres » pour la
+    nationalité : exactement deux libellés, chacun rapproché d'un pilote
+    différent, sans quoi rien n'est jugé.
+    """
+    libelles = tuple(dict.fromkeys(libelle for libelle in options if libelle))
+
+    def valider(course: Course, libelle: str) -> bool | None:
+        numeros = {course.pilote_du_libelle(option) for option in libelles}
+        if len(libelles) != 2 or len(numeros) != 2 or None in numeros:
+            logger.warning(
+                "[points] Face-à-face : issues %s non rapprochées de deux pilotes "
+                "distincts. Pronostic laissé non jugé.",
+                " / ".join(libelles) or "absentes",
+            )
+            return None
+
+        choisi = course.pilote_du_libelle(libelle)
+        if choisi not in numeros:
+            return None
+
+        a, b = sorted(numeros)
+        gagnant = _vainqueur_du_duel(course, a, b)
+        if gagnant is None:
+            logger.warning(
+                "[points] Face-à-face #%s / #%s : aucun classé, tours égaux. "
+                "Pronostic laissé non jugé.",
+                a,
+                b,
+            )
+            return None
+        return gagnant == choisi
+
+    return valider
+
+
+# --------------------------------------------------------------------------- #
+#  Registre des évaluateurs
+# --------------------------------------------------------------------------- #
+
+# Chaque marché est désigné par son slug EXACT (`scraper.unibet.slug()` du
+# libellé Unibet), ou par une famille déclarée en `fullmatch`. **Aucune
+# reconnaissance par préfixe ni par sous-chaîne** : c'est elle qui laissait
+# passer les marchés renommés (C1) et capturait les marchés voisins — trois
+# marchés différents jugés « écurie du vainqueur » parce que leur slug commençait
+# par « ecurie » ou « equipe » (C3).
+#
+# Un slug absent d'ici n'est pas évaluable : le scraper ne l'enregistre pas, et
+# un pronostic qui le porterait déjà passe `non_evaluable`. Ajouter un marché,
+# c'est ajouter une ligne ici, et son slug à `tests/test_marches.py`.
+#
+# Chaque entrée reçoit les issues sœurs du marché (`options`) ; seules la
+# nationalité et le face-à-face s'en servent.
+_EXACTS = {
+    MARCHE_VAINQUEUR: lambda options: _vainqueur,
+    MARCHE_PODIUM: lambda options: _podium,
+    "ecurie-vainqueur": lambda options: _ecurie_gagnante,
+    # Même marché sous deux noms : Unibet a renommé le premier en second.
+    "ecart-du-gagnant": lambda options: _ecart_du_gagnant,
+    "marge-du-vainqueur": lambda options: _ecart_du_gagnant,
+    "nationalite-du-vainqueur": _nationalite_du_vainqueur,
+    # Même marché sous deux noms, jugé sur la somme des points FIA.
+    "ecurie-qui-marque-le-plus-de-points": lambda options: _ecurie_la_plus_marquante,
+    "equipe-qui-marque-le-plus-de-points": lambda options: _ecurie_la_plus_marquante,
+    "tour-le-plus-rapide": lambda options: _meilleur_tour,
+    "tour-le-plus-rapide-vainqueur": lambda options: _meilleur_tour,
+    "ecurie-realisant-le-tour-le-plus-rapide": lambda options: _ecurie_du_meilleur_tour,
+    "voiture-realisant-le-tour-le-plus-rapide": lambda options: _voiture_du_meilleur_tour,
+    "vainqueur-course-qualification-et-tour-le-plus-rapide": lambda options: _triple,
+    "les-2-voitures-sur-le-podium": lambda options: _les_deux_voitures_sur_le_podium,
+}
+
+# Familles : le slug porte un paramètre (rang, écurie, duel).
+_FAMILLES = (
+    (
+        re.compile(r"(?:dans-le-)?top-?(?P<rang>\d+)"),
+        lambda m, options: _top(int(m.group("rang"))),
+    ),
+    (
+        _DEUX_VOITURES,
+        lambda m, options: _les_deux_voitures_dans_le_top(
+            m.group("ecurie"), int(m.group("rang"))
+        ),
+    ),
+    (
+        re.compile(r"face-a-face-[a-z0-9-]+"),
+        lambda m, options: _face_a_face(options),
+    ),
+)
+
+# Marchés connus et volontairement NON évalués, parce que leur règle n'est pas
+# écrite. Ils ne s'en distinguent pas à l'usage d'un slug inconnu — ni l'un ni
+# l'autre n'est enregistré par le scraper — mais leur présence ici dit que
+# l'absence d'évaluateur est une décision, pas un oubli.
+#
+# - `premier-abandon` : la règle d'égalité (deux abandons au même tour) n'est
+#   pas écrite (`metier.md` §4).
+#
+# `_safety_car`, `_safety_car_virtuel`, `_drapeau_rouge` et `_abandon` existent
+# mais n'ont aucun slug : aucun marché de ce genre n'a encore été vu chez
+# Unibet. Le jour où le scraper en écarte un, son slug exact s'ajoute à
+# `_EXACTS`.
+NON_EVALUABLES = frozenset({"premier-abandon"})
+
+
+def validateur(marche: str, options: Sequence[str] = ()):
+    """Rend le validateur d'un marché, ou `None` s'il n'est pas évaluable.
+
+    La recherche se fait dans le registre ci-dessus, par slug exact puis par
+    famille en `fullmatch`. Un slug que rien ne reconnaît rend `None` : le
+    pronostic est `non_evaluable`, jamais jugé par un évaluateur voisin.
+
+    `options` porte les libellés de toutes les issues du marché pour ce Grand
+    Prix (`issues_du_marche`). Facultatif : sans lui, « Autres » et les
+    face-à-face restent non jugés plutôt que mal jugés.
+    """
+    slug = (marche or "").strip().lower()
+    if not slug or slug in NON_EVALUABLES:
+        return None
+
+    fabrique = _EXACTS.get(slug)
+    if fabrique is not None:
+        return fabrique(options)
+
+    for motif, fabrique_famille in _FAMILLES:
+        correspondance = motif.fullmatch(slug)
+        if correspondance:
+            return fabrique_famille(correspondance, options)
 
     return None
+
+
+def evaluable(marche: str) -> bool:
+    """Le backend sait-il juger ce marché ? Consulté par le scraper."""
+    return validateur(marche) is not None
 
 
 # --------------------------------------------------------------------------- #
@@ -913,14 +1124,33 @@ def validateur(marche: str, options: Sequence[str] = ()):
 # --------------------------------------------------------------------------- #
 
 
+# Statuts d'évaluation d'un pronostic (`pronostics.statut_evaluation`, migration
+# `20260926120000`). `en_attente` n'est jamais écrit par le calcul : c'est l'état
+# par défaut, celui d'un pronostic que rien n'a encore pu juger.
+EN_ATTENTE = "en_attente"
+NON_EVALUABLE = "non_evaluable"
+GAGNE = "gagne"
+PERDU = "perdu"
+
+
 @dataclass
 class Attribution:
-    """Ce qu'un pronostic rapporte, et pourquoi."""
+    """Ce qu'un pronostic rapporte, et pourquoi.
+
+    `points` est `None` pour un pronostic `non_evaluable` : aucun évaluateur ne
+    porte son marché, il n'y a rien à payer ni à refuser. La base en tient le
+    statut, sans toucher à `points_gagnes`.
+    """
 
     pronostic_id: str
-    points: int
+    points: int | None
     reussi: bool
     detail: str
+    statut: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.statut:
+            self.statut = GAGNE if self.reussi else PERDU
 
 
 def issues_du_marche(cotes: dict[str, dict], marche: str) -> tuple[str, ...]:
@@ -1049,7 +1279,19 @@ def points_du_pronostic(pronostic: dict, cotes: dict[str, dict], course: Course)
     marche = str(cote.get("marche") or "")
     juger = validateur(marche, issues_du_marche(cotes, marche))
     if juger is None:
-        return None, f"marché « {marche} » non reconnu"
+        # Aucun évaluateur : ce n'est pas une donnée qui manque, c'est le code.
+        # Le statut le dit, et `points_gagnes` reste NULL — un évaluateur livré
+        # plus tard le rattrapera au prochain passage.
+        return (
+            Attribution(
+                pronostic_id=str(pronostic["id"]),
+                points=None,
+                reussi=False,
+                detail=f"{marche} — aucun évaluateur",
+                statut=NON_EVALUABLE,
+            ),
+            "",
+        )
 
     # Un pronostic obligatoire ne peut venir que de son marché — la route de
     # l'étape 5 le garantit à la saisie, ce contrôle-ci le garantit au calcul,
@@ -1062,15 +1304,20 @@ def points_du_pronostic(pronostic: dict, cotes: dict[str, dict], course: Course)
         return None, f"issue « {cote.get('pilote')} » non rapprochée ({marche})"
 
     valeur = int(cote.get("valeur") or 0)
+    if isinstance(reussi, Partage):
+        # Gagné à égalité : la cote est divisée entre les issues ex æquo.
+        points = points_partages(valeur, reussi.diviseur)
+        verdict = f"réussi à égalité (÷{reussi.diviseur}), {points} pts"
+    else:
+        points = valeur if reussi else 0
+        verdict = f"réussi, {points} pts" if reussi else "raté"
+
     return (
         Attribution(
             pronostic_id=str(pronostic["id"]),
-            points=valeur if reussi else 0,
-            reussi=bool(reussi),
-            detail=(
-                f"{marche} — {cote.get('pilote')} : "
-                f"{'réussi, ' + str(valeur) + ' pts' if reussi else 'raté'}"
-            ),
+            points=points,
+            reussi=points > 0,
+            detail=f"{marche} — {cote.get('pilote')} : {verdict}",
         ),
         "",
     )
@@ -1081,8 +1328,8 @@ def calculer(
 ) -> tuple[list[Attribution], list[str]]:
     """Note tous les pronostics d'un GP.
 
-    Rend les attributions à écrire et la liste des pronostics laissés en
-    attente, avec leur raison. La seconde liste est aussi importante que la
+    Rend les attributions à écrire — `gagne`, `perdu` ou `non_evaluable` — et
+    la liste des pronostics laissés en attente, avec leur raison. La seconde liste est aussi importante que la
     première : c'est elle qui dit ce que le code n'a pas su juger, et c'est elle
     qu'on relit pour décider d'écrire un validateur de plus.
     """
@@ -1098,19 +1345,30 @@ def calculer(
         else:
             attributions.append(attribution)
 
-    reussis = sum(1 for attribution in attributions if attribution.reussi)
+    reussis = sum(1 for attribution in attributions if attribution.statut == GAGNE)
+    rates = sum(1 for attribution in attributions if attribution.statut == PERDU)
+    non_evaluables = [a for a in attributions if a.statut == NON_EVALUABLE]
     logger.info(
-        "[points] %d pronostic(s) noté(s) — %d réussi(s), %d raté(s), %d en attente. "
-        "Course : safety car %s, VSC %s, drapeau rouge %s, meilleur tour #%s.",
-        len(attributions),
+        "[points] %d pronostic(s) noté(s) — %d réussi(s), %d raté(s), %d non "
+        "évaluable(s), %d en attente. Course : safety car %s, VSC %s, drapeau "
+        "rouge %s, meilleur tour #%s, pole #%s.",
+        reussis + rates,
         reussis,
-        len(attributions) - reussis,
+        rates,
+        len(non_evaluables),
         len(en_attente),
         course.safety_car,
         course.virtual_safety_car,
         course.drapeau_rouge,
         course.meilleur_tour,
+        course.pole,
     )
+    if non_evaluables:
+        logger.warning(
+            "[points] %d pronostic(s) sur un marché sans évaluateur : %s",
+            len(non_evaluables),
+            " ; ".join(f"{a.pronostic_id} ({a.detail})" for a in non_evaluables),
+        )
     if en_attente:
         logger.warning(
             "[points] %d pronostic(s) laissé(s) sans points, à rattraper : %s",

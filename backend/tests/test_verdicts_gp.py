@@ -8,7 +8,7 @@ est une régression de l'évaluation.
 import pytest
 
 from app.calcul.points import calculer
-from conftest import AUDIT, GPS, charger_gp
+from conftest import GPS, charger_gp
 
 # Les deux pronostics de Bakou que la base laisse en attente (audit §4.1).
 TRIPLE = "80cc59ee-ef2a-466c-ae18-fcb1b013f04d"
@@ -43,14 +43,12 @@ def test_chaque_pronostic_a_un_verdict_attendu():
         assert {p["id"] for p in gp["pronostics"]} == set(gp["attendus"])
 
 
-@pytest.mark.xfail(reason=f"{AUDIT} C1 — aucun évaluateur pour le triplé course + pole + meilleur tour")
 def test_bakou_triple_oui_gagne():
     # Russell : pole (qualifications, session 11373), victoire et meilleur tour.
     _, obtenus, _ = _rejouer("azerbaidjan")
     assert obtenus.get(TRIPLE) == 50
 
 
-@pytest.mark.xfail(reason=f"{AUDIT} C1 — « marge-du-vainqueur » non reconnu (le code exige « marge » + « victoire »)")
 def test_bakou_marge_plus_de_10_secondes_perdue():
     # Verstappen finit à 0,196 s de Russell.
     _, obtenus, _ = _rejouer("azerbaidjan")

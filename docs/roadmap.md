@@ -160,6 +160,30 @@ enfin un tableau de contrôle : **la colonne `ecart` est celle qui parle**, douz
 > est bien retrouvée, et les onze instants finaux concordent au caractère près avec
 > `GP_2026.seances.qualifications` — croisés par script, pas relus à l'œil.
 
+### 1.3 quinquies Appliquer la migration 24, puis rattraper Bakou — **avant le backend `0.77.0`**
+
+`20260926120000_statut_evaluation` ajoute `pronostics.statut_evaluation` et remplace
+`attribuer_points` (`database.md` §6). **Elle se joue avant le déploiement Railway** : dans
+l'ordre inverse rien ne casse, mais aucun pronostic n'est marqué `non_evaluable`.
+
+Ensuite, **Bakou ne se rattrape pas tout seul** : le GP est `termine`, donc hors de la
+boucle du scheduler. Un déclenchement manuel, **sans** `forcer` (les deux pronostics sont
+à `NULL`), récupère les qualifications et les juge :
+
+```bash
+curl -X POST https://<railway>/jobs/resultats/3bf1ef36-f97c-446c-a8c6-e605f9750cd4 \
+  -H "X-Admin-Secret: <valeur>"
+```
+
+Attendu : `80cc59ee` (triplé) → 50 pts, `8cd836f1` (marge) → 0, `en_attente` vide.
+
+### 1.3 sexies Servir `statut_evaluation` aux écrans
+
+La colonne existe (migration 24) mais `pronostics_du_joueur` et
+`pronostics_du_championnat` ne la lisent pas : un `non_evaluable` s'affiche « en attente »
+sur le web et sur iOS. Le filtrage au scraping rend le cas rare ; le servir demande de
+remplacer ces deux fonctions, donc une migration de plus et son conflit d'ordre avec la 18.
+
 ### 1.4 Vérifier les migrations appliquées
 
 **La liste des migrations appliquées est à revérifier dans le SQL Editor.** Une lecture
@@ -264,10 +288,13 @@ Demi-pas en place : OpenF1 expose `is_cancelled`, et `session_de_course()` le **
 
 Reste : le statut, l'effacement, et la reprise après report.
 
-### 2.2 Trois marchés annoncés, non implémentés
+### 2.2 Deux marchés annoncés, non implémentés
 
-**Duels entre pilotes**, **premier abandon**, **classement exact**. En l'état ils tombent
-dans le filet « marché non reconnu » et laissent `NULL`.
+**Premier abandon**, **classement exact**. Ils ne sont pas dans le registre de
+`points.py` : le scraper ne les enregistre pas (`scraper.md` §7).
+
+> ~~**Duels entre pilotes**~~ — **livrés en `0.77.0`** (famille `face-a-face-*`,
+> `metier.md` §4).
 
 > ~~**Marge de victoire**~~ — **livrée en `0.54.0`** sous son vrai nom, « écart du
 > gagnant ». Elle n'était pas « à écrire » : elle était **écrite nulle part**, et le filet
@@ -280,8 +307,11 @@ dans le filet « marché non reconnu » et laissent `NULL`.
 
 ### 2.3 Confronter le calcul aux vrais marchés
 
-`app/calcul/points.py` reconnaît dix familles ; **trois seulement ont été confrontées à de
-vrais libellés Unibet**. Les sept autres sont écrites d'après le cahier des charges.
+*Mis à jour en `0.77.0`* : le registre de `app/calcul/points.py` couvre les 39 slugs vus
+en base, rejoués sur les quatre GP 2026 (`backend/tests/`). Restent **sans issue relevée** :
+`tour-le-plus-rapide-vainqueur`, `voiture-realisant-le-tour-le-plus-rapide`,
+`les-2-voitures-sur-le-podium` et les `face-a-face-*` — aucun pronostic n'y a encore été
+posé. Le texte qui suit date d'avant les premiers GP.
 
 > **« Écart du gagnant » est le plus urgent des sept**, et c'est le seul dont l'issue n'est
 > ni un pilote ni un oui/non : `_intervalle_secondes()` doit reconnaître les vraies
@@ -295,7 +325,7 @@ les marchés complets apparaissent (après les qualifications), un essai dit imm
 lesquels restent non reconnus.
 
 Après le premier vrai GP : relire les avertissements `[points] … laissé(s) sans points`,
-compléter `validateur()`, puis rejouer `POST /jobs/resultats/{gp_id}` — qui ne remplit que
+compléter le registre de `points.py`, puis rejouer `POST /jobs/resultats/{gp_id}` — qui ne remplit que
 les `NULL` restants.
 
 ### 2.4 Relire les logs du premier samedi de qualifications
@@ -536,9 +566,10 @@ commentaire comme le fait `pilotes.py`. Et **retirer la note d'écart** en tête
 ### 3.8 quater bis Aucun test ne garde la concordance des grilles
 
 `docs/ecuries.md` décrivait un test qui lit `backend/app/calcul/pilotes.py` et compare les
-pilotes ligne à ligne. **Il n'existe pas** : le dépôt ne porte aucune infrastructure de
-test — ni `vitest` ni `pytest` dans les dépendances, aucun fichier de test dans l'arbre ni
-dans l'historique. Vérifié, pas supposé.
+pilotes ligne à ligne. **Il n'existe pas.** Le backend a une suite `pytest` depuis la
+`0.76.3` (`backend/tests/`, `scraper.md` §11), mais elle ne porte que sur l'évaluation des
+pronostics ; le frontend n'a aucune infrastructure de test (pas de `vitest`). La place
+naturelle du test manquant est désormais `backend/tests/`, pour la moitié Python.
 
 C'est précisément ce trou qui a laissé §3.8 quinquies s'ouvrir, puis §3.8 sexies. Les
 trois tables — `pilotes.py`, `lib/ecuries.js`, `lib/nationalites.js` — décrivent les mêmes

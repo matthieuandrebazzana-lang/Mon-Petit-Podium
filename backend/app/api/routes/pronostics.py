@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import utilisateur_courant
 from app.api.journal import journaliser_echecs
+from app.calcul.points import normaliser
 from app.supabase_client import (
     ErreurSupabase,
     appeler_fonction,
@@ -279,6 +280,29 @@ def exiger_marche(cote: dict, attendu: str, role: str) -> None:
         )
 
 
+def exiger_bonus_distincts_des_obligatoires(
+    cotes: dict[str, dict], bonus: list[str], obligatoires: tuple[str, ...]
+) -> None:
+    """Refuse un bonus qui reprend le vainqueur ou un pilote du podium (audit, C4).
+
+    Seuls les bonus pris dans les marchés `vainqueur` et `podium` sont concernés :
+    un « top 6 » sur le même pilote est un autre pari. La comparaison porte sur
+    le **libellé**, jamais sur l'identifiant d'issue, qui diffère d'un marché à
+    l'autre pour un même pilote (`metier.md` §2). Sans cette règle, un joueur
+    pouvait se faire payer deux fois le même événement.
+    """
+    pris = {normaliser(cotes[outcome].get("pilote")) for outcome in obligatoires}
+    for choix in bonus:
+        cote = cotes[choix]
+        if cote.get("marche") not in (MARCHE_VAINQUEUR, MARCHE_PODIUM):
+            continue
+        if normaliser(cote.get("pilote")) in pris:
+            raise refuser(
+                f"Ton bonus « {cote.get('pilote')} » reprend un pilote déjà choisi "
+                f"pour la victoire ou le podium. Choisis un autre bonus."
+            )
+
+
 # --------------------------------------------------------------------------- #
 #  Favoris
 # --------------------------------------------------------------------------- #
@@ -419,6 +443,7 @@ async def enregistrer(
     exiger_marche(exiger_cote(cotes, pilote_2, "podium"), MARCHE_PODIUM, "podium")
     for choix in bonus:
         exiger_cote(cotes, choix, "bonus")
+    exiger_bonus_distincts_des_obligatoires(cotes, bonus, (vainqueur, pilote_1, pilote_2))
 
     # Règle 4.2 : les bonus se choisissent parmi les favoris. Le contrôle est
     # fait ici plutôt qu'en base pour pouvoir nommer la cote fautive — « ce

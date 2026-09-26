@@ -27,7 +27,12 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from app.calcul import points as calcul
-from app.scraper.openf1 import ErreurOpenF1, ResultatsIndisponibles, recuperer
+from app.scraper.openf1 import (
+    ErreurOpenF1,
+    ResultatsIndisponibles,
+    completer_qualification,
+    recuperer,
+)
 from app.supabase_client import (
     ErreurSupabase,
     appeler_fonction,
@@ -217,6 +222,15 @@ async def traiter(gp: dict, forcer: bool = False) -> dict:
             "gp_id",
         )
         logger.info("[resultats] %s : résultats OpenF1 enregistrés.", nom)
+    elif await completer_qualification(nom, donnees):
+        # Seule exception à « jamais relus chez OpenF1 » : les qualifications,
+        # absentes des GP récupérés avant la 0.77.0. Le reste de `donnees` est
+        # réécrit tel qu'il était.
+        await upserter(
+            "resultats_gp",
+            [{"gp_id": gp_id, "donnees_brutes": donnees}],
+            "gp_id",
+        )
 
     # Après la récupération, avant la lecture : les pronostics doivent être lus
     # une fois qu'ils sont revenus à NULL, sans quoi le filtre
@@ -230,23 +244,44 @@ async def traiter(gp: dict, forcer: bool = False) -> dict:
         cotes = await cotes_du_gp(gp_id)
         attributions, en_attente = calcul.calculer(pronostics, cotes, donnees)
 
+        # Les pronostics que le calcul n'a pas pu juger repartent `en_attente`
+        # explicitement : un pronostic `non_evaluable` dont l'évaluateur vient
+        # d'être livré, mais dont la donnée manque encore, doit quitter ce statut.
+        juges = {attribution.pronostic_id for attribution in attributions}
+        a_rattraper = [
+            {"pronostic_id": str(p["id"]), "points": None, "statut": calcul.EN_ATTENTE}
+            for p in pronostics
+            if str(p["id"]) not in juges
+        ]
+
         ecrit = await appeler_fonction(
             "attribuer_points",
             {
                 "p_gp": gp_id,
                 "p_attributions": [
-                    {"pronostic_id": attribution.pronostic_id, "points": attribution.points}
+                    {
+                        "pronostic_id": attribution.pronostic_id,
+                        "points": attribution.points,
+                        "statut": attribution.statut,
+                    }
                     for attribution in attributions
-                ],
+                ]
+                + a_rattraper,
             },
         )
         rapport["attribues"] = (ecrit or {}).get("attribues", 0)
         rapport["restants"] = (ecrit or {}).get("restants", 0)
         rapport["en_attente"] = en_attente
+        rapport["non_evaluables"] = [
+            attribution.pronostic_id
+            for attribution in attributions
+            if attribution.statut == calcul.NON_EVALUABLE
+        ]
     else:
         rapport["attribues"] = 0
         rapport["restants"] = 0
         rapport["en_attente"] = []
+        rapport["non_evaluables"] = []
 
     # Le GP passe à `termine` même s'il reste des pronostics sans points : la
     # course est courue, et laisser le GP dans la boucle ferait rappeler OpenF1

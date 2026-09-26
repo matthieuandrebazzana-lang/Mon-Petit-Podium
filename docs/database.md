@@ -218,7 +218,8 @@ PK `(profil_id, gp_id, id_outcome_unibet)`, cascade, `cree_le`.
 ### `public.pronostics`
 
 `id`, `profil_id`, `gp_id`, `id_outcome_unibet`, `type` (`vainqueur`|`podium`|`bonus`),
-`points_gagnes` (integer **nullable**, `>= 0`), `cree_le`, `modifie_le`.
+`points_gagnes` (integer **nullable**, `>= 0`), `statut_evaluation` (migration 24),
+`cree_le`, `modifie_le`.
 
 **Trois index PARTIELS, pas un index unique sur `(profil_id, gp_id, type)`** — celui-ci
 interdirait aussi d'avoir plus d'un bonus, alors que la règle en demande trois :
@@ -245,6 +246,24 @@ plusieurs lignes) : c'est le trigger `pronostics_max_trois_bonus`.
 > `NULL` se voit dans les logs, s'affiche « en attente », et se rattrape par un second
 > passage.
 
+> ### `statut_evaluation` — ce que `NULL` ne disait pas (migration 24, v`0.77.0`)
+>
+> | Statut | `points_gagnes` | Posé par |
+> |---|---|---|
+> | `en_attente` (défaut) | `NULL` | défaut ; `attribuer_points` quand une donnée manque |
+> | `non_evaluable` | `NULL` | `attribuer_points`, quand aucun évaluateur ne porte le marché |
+> | `gagne` | `> 0` | **trigger** `pronostics_statut_derive` |
+> | `perdu` | `0` | **trigger** `pronostics_statut_derive` |
+>
+> **`gagne` et `perdu` ne s'écrivent jamais, ils se dérivent** de `points_gagnes`, avant
+> chaque insertion ou mise à jour. Des points remis à `NULL` (`?forcer=true`, migration 15
+> rejouée) ramènent donc le statut à `en_attente` sans que le code appelant le sache. La
+> contrainte `pronostics_statut_evaluation_coherent` refuse toute autre combinaison.
+>
+> Le statut n'est **pas encore servi** aux écrans : `pronostics_du_joueur` et
+> `pronostics_du_championnat` ne le lisent pas, et un `non_evaluable` s'affiche « en
+> attente » comme avant. Voir `roadmap.md`.
+
 ### `public.pronostic_podium`
 
 `pronostic_id` (PK, cascade), `pilote_1`, `pilote_2`, `points_gagnes`.
@@ -267,8 +286,11 @@ dont `pilote_1` diverge du parent, et `attribuer_points` dérive systématiqueme
 > le calcul sans rappeler OpenF1**, donc de corriger un validateur ou d'en ajouter un
 > pour un marché resté à `NULL`, des semaines après la course.
 
-Objet `{ session, session_result, drivers, race_control, laps, starting_grid, pilotes }`.
-**`laps` est réduit au meilleur tour par pilote** — la réponse complète pèse 654 Ko par GP.
+Objet `{ session, session_result, drivers, race_control, laps, starting_grid, qualification,
+pilotes }`. **`laps` est réduit au meilleur tour par pilote** — la réponse complète pèse
+654 Ko par GP. **`qualification`** (v`0.77.0`) est le `session_result` des qualifications du
+week-end, qui donne la pole : c'est **la seule clé que le job ajoute après coup** à une
+ligne existante, quand elle manque (`scraper.md` §10).
 
 ---
 
@@ -385,7 +407,10 @@ Objet `{ session, session_result, drivers, race_control, laps, starting_grid, pi
 
 > **`attribuer_points` n'écrit QUE les pronostics dont `points_gagnes` est encore `NULL`.**
 > C'est la base qui porte l'idempotence, pas le code appelant : appelée dix fois avec des
-> valeurs différentes, elle n'attribue rien deux fois. Ouverte à `authenticated`, elle
+> valeurs différentes, elle n'attribue rien deux fois. Depuis la migration 24, une entrée
+> sans points porte un `statut` (`en_attente` ou `non_evaluable`), posé lui aussi sur un
+> pronostic encore à `NULL` seulement ; elle rend `attribues`, `restants` (`en_attente`) et
+> `non_evaluables`. Ouverte à `authenticated`, elle
 > laisserait n'importe qui s'attribuer le score de son choix.
 
 > **`slug_gp` ne remplace JAMAIS `id_unibet` comme clé de rapprochement.** Elle sert à
@@ -516,7 +541,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les vingt-trois migrations
+## 6. Les vingt-quatre migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -543,6 +568,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 21 | `20260827_audit_rls` | **audit RLS** : lecture des profils bornée, `is_admin` non modifiable, fenêtre de fermeture sur les pronostics, deux politiques `insert` retirées, cotes réservées aux connectés | 1, 2, 3, 5, 8, 12, 14 |
 | 22 | `20260913_storage_rls_extension` | **contrainte d'extension sur les dépôts** : `nom_de_photo_valide`, et les quatre politiques `insert`/`update` de Storage amendées par `alter policy` | **16** |
 | 23 | `20260918_fermeture_au_depart` | **retire la marge de cinq minutes** : `pronostics_fermes` ferme à `date_course`, plus à `date_course − 5 min` | **5** |
+| 24 | `20260926120000_statut_evaluation` | **`statut_evaluation`** sur `pronostics`, trigger de dérivation, `attribuer_points` qui écrit `non_evaluable` / `en_attente`. **À appliquer avant le backend `0.77.0`** | 5, **6** |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -567,6 +593,7 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **3** après **21** | les cotes, de nouveau lisibles sans session | rejouer 21 |
 | **16** après **22** | la contrainte d'extension sur les dépôts de photos | rejouer 22 |
 | **5** après **23** | la marge de cinq minutes, restaurée en base seule | rejouer 23 |
+| **6** après **24** | l'écriture de `non_evaluable` par `attribuer_points` (le trigger garde `gagne` / `perdu` / `en_attente` cohérents) | rejouer 24 |
 
 **La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12
 et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre les écrans
@@ -682,6 +709,10 @@ contraintes fautives.
 > un `create extension` refusé ne s'exécute pas du tout.
 
 ### Non éprouvées sur un PostgreSQL jetable
+
+> **La 24 non plus** : ni démon Docker ni PostgreSQL local au moment de son écriture. Son
+> bloc de contrôle final lève si le trigger manque ou si une ligne a un statut incohérent
+> avec ses points. **À surveiller au premier passage dans le SQL Editor.**
 
 Les migrations **12, 13 et 14** n'ont pas été jouées contre un Docker (démon indisponible
 au moment de leur écriture), contrairement aux onze premières. La 13 a été comparée ligne

@@ -1,13 +1,13 @@
 """Safety car, VSC, drapeau rouge et meilleur tour, sur les vrais messages OpenF1.
 
 OpenF1 écrit « VSC DEPLOYED » / « VSC ENDING », jamais « VIRTUAL SAFETY CAR » :
-c'est la cause C6 de l'audit.
+c'est la cause C6 de l'audit, corrigée en 0.77.0.
 """
 
 import pytest
 
 from app.calcul import points as P
-from conftest import AUDIT, GPS, charger_gp
+from conftest import GPS, charger_gp
 
 # Constaté dans race_control et dans `laps` (audit §4.2 et §4.4).
 ATTENDU = {
@@ -17,8 +17,6 @@ ATTENDU = {
     "espagne": (False, True, False, 63),
     "azerbaidjan": (True, False, False, 63),
 }
-
-XFAIL_C6 = pytest.mark.xfail(reason=f"{AUDIT} C6 — « VSC DEPLOYED » non reconnu, VSC jamais détecté")
 
 
 def _course(nom: str) -> P.Course:
@@ -45,10 +43,7 @@ def test_safety_car(nom):
     assert _course(nom).safety_car is ATTENDU[nom][0]
 
 
-@pytest.mark.parametrize(
-    "nom",
-    [pytest.param(nom, marks=XFAIL_C6) if ATTENDU[nom][1] else nom for nom in GPS],
-)
+@pytest.mark.parametrize("nom", GPS)
 def test_safety_car_virtuel(nom):
     assert _course(nom).virtual_safety_car is ATTENDU[nom][1]
 
@@ -63,10 +58,19 @@ def test_meilleur_tour(nom):
     assert _course(nom).meilleur_tour == ATTENDU[nom][3]
 
 
-@pytest.mark.parametrize(
-    ("issue", "gagne"),
-    [pytest.param("Oui", True, marks=XFAIL_C6), pytest.param("Non", False, marks=XFAIL_C6)],
-)
+@pytest.mark.parametrize(("issue", "gagne"), [("Oui", True), ("Non", False)])
 def test_pari_vsc_pays_bas(issue, gagne):
     # Deux VSC aux Pays-Bas : « Oui » gagne, « Non » perd.
     assert P._safety_car_virtuel(_course("pays-bas"), issue) is gagne
+
+
+def test_vsc_forme_longue_toujours_reconnue():
+    course = P.analyser(
+        {"race_control": [{"category": "SafetyCar", "message": "VIRTUAL SAFETY CAR DEPLOYED"}]}
+    )
+    assert course.virtual_safety_car and not course.safety_car
+
+
+def test_vsc_ending_seul_ne_compte_pas():
+    course = P.analyser({"race_control": [{"category": "SafetyCar", "message": "VSC ENDING"}]})
+    assert not course.virtual_safety_car

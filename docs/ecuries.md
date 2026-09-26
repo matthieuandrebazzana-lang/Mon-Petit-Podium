@@ -177,10 +177,11 @@ ambiguïtés, et une clé ambiguë est *retirée* de l'index, donc coûte un rap
 
 > ### Le garde-fou — À ÉCRIRE, il n'existe pas
 > Ce document décrivait un test qui **lit `backend/app/calcul/pilotes.py`** et compare les
-> pilotes ligne à ligne. **Le dépôt ne porte aucun test**, ni côté frontend (pas de
-> `vitest`) ni côté backend (pas de `pytest`) — vérifié sur l'arbre et sur l'historique.
-> La concordance des deux fichiers est donc tenue **à la main**, et rien ne l'annonce
-> quand elle casse. `roadmap.md`.
+> pilotes ligne à ligne. **Ce test n'existe pas.** Le backend a une suite `pytest`
+> (`backend/tests/`, depuis la `0.76.3`), mais elle ne couvre que l'évaluation des
+> pronostics ; le frontend n'a toujours aucun test (pas de `vitest`). La concordance des
+> deux fichiers est donc tenue **à la main**, et rien ne l'annonce quand elle casse.
+> `roadmap.md`.
 
 **Les deux fichiers sont à mettre à jour ensemble** — chaque saison, et désormais à chaque
 remplacement en cours de saison. Une table périmée ne fait aucun dégât silencieux : un

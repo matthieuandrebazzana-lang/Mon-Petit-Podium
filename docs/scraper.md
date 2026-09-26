@@ -282,6 +282,24 @@ illisible fait échouer le GP** plutôt que d'enregistrer des cotes fausses.
 Le compte rendu porte `gp_id` et `id_unibet` — c'est par `gp_id` que le job retrouve le GP
 qu'il voulait figer. Se fier au nom ne tiendrait pas.
 
+### Un marché non évaluable n'est pas enregistré (v`0.77.0`)
+
+`unibet.filtrer_evaluables` écarte, avant l'écriture, toute cote dont le marché n'a pas
+d'évaluateur. Le registre consulté est **celui du calcul** (`calcul.points.evaluable`) :
+une seule source répond à « sait-on juger ce marché ? », au scraping comme après la course.
+
+> **Pourquoi au scraping.** Jusqu'ici, un joueur pouvait parier sur un marché qu'Unibet
+> venait de renommer : l'écart ne se voyait qu'après la course, pronostic à `NULL`
+> (`audit-evaluation.md`, cause C1). Un marché écarté n'est plus jamais proposé.
+
+Les marchés écartés sont journalisés en `warning`, libellé et slug :
+`[scraper] GP … : 2 marché(s) écarté(s), sans évaluateur (5 cote(s)) : Premier abandon
+[premier-abandon] ; …`. **C'est dans ce log qu'on repère un marché nouveau** : son slug
+exact s'ajoute au registre de `points.py` et à `SLUGS_EN_BASE` des tests.
+
+> Le filtre n'efface rien : une cote déjà en base avant la `0.77.0` y reste. Les 39 slugs
+> connus ont tous un évaluateur, le cas ne concerne donc que des cotes qui n'existent pas.
+
 ---
 
 ## 8. Le job de scraping
@@ -374,7 +392,20 @@ configuré » à qui n'a pas le bon secret lui apprendrait quelque chose pour ri
 | `/race_control` | safety car, drapeau rouge |
 | `/laps` | meilleur tour |
 | `/drivers` | pilote → écurie |
-| `/starting_grid` | pole position |
+| `/starting_grid` | grille de départ (conservée, non lue) |
+| `/sessions` + `/session_result` de « Qualifying » | pole position — `donnees_brutes.qualification` |
+
+> ### Les qualifications (v`0.77.0`)
+> La pole se lit dans le **classement des qualifications**, pas dans `/starting_grid`
+> (vide à Bakou) : la session est retrouvée par `meeting_key` et `session_name =
+> "Qualifying"` — le nom, parce que `session_type = Qualifying` couvre aussi la
+> qualification du sprint. Son `session_result` est conservé tel quel dans
+> `donnees_brutes.qualification`.
+>
+> **Son échec n'emporte jamais la récupération** : seul le marché « triplé » en dépend,
+> et il reste en attente. `completer_qualification` la retente à chaque passage de
+> `traiter` sur un GP dont les données brutes ne l'ont pas — c'est ce qui la fait
+> arriver sur les GP récupérés avant la `0.77.0`, Bakou compris.
 
 ### Trois écarts avec le cahier des charges
 
@@ -461,15 +492,40 @@ importe ce module, l'importer en retour ferait un cycle.
 `id_outcome_unibet` change à chaque GP **et à chaque marché**. Ce qui est statique, c'est
 `driver_number` → **libellé Unibet**.
 
-### Marchés reconnus
+### Le registre des évaluateurs (v`0.77.0`)
 
-vainqueur, podium, top N (rang lu dans le nom), écurie gagnante, abandon, safety car,
-safety car virtuel, drapeau rouge, meilleur tour, **écart du gagnant**,
-**nationalité du vainqueur**.
+`validateur(slug, options)` cherche le marché dans un **registre** : slug exact
+(`_EXACTS`), puis famille déclarée en `fullmatch` (`_FAMILLES`). **Aucune reconnaissance
+par préfixe ni par sous-chaîne** — c'est elle qui laissait passer les marchés renommés
+(C1) et jugeait trois marchés différents comme « écurie du vainqueur » parce que leur slug
+commençait par `ecurie` ou `equipe` (C3).
 
-> **Seuls « vainqueur », « podium » et « ecurie-vainqueur » ont été observés en vrai.**
-> Les autres sont écrits d'après le cahier des charges et **restent à confronter**.
-> C'est exactement pour cela qu'un marché non reconnu laisse `NULL`.
+| Slug | Évaluateur |
+|---|---|
+| `vainqueur`, `podium`, `ecurie-vainqueur` | position 1, position ≤ 3, écurie du P1 |
+| `ecart-du-gagnant`, `marge-du-vainqueur` | intervalle sur l'écart du P2 |
+| `nationalite-du-vainqueur` | table statique, « Autres » contre les issues sœurs |
+| `ecurie-qui-marque-le-plus-de-points`, `equipe-…` | somme des points FIA, **partage** en cas d'égalité |
+| `tour-le-plus-rapide`, `tour-le-plus-rapide-vainqueur` | pilote du meilleur tour |
+| `ecurie-realisant-le-tour-le-plus-rapide` | écurie du meilleur tour |
+| `voiture-realisant-le-tour-le-plus-rapide` | pilote **ou** écurie du meilleur tour |
+| `vainqueur-course-qualification-et-tour-le-plus-rapide` | oui/non : pole + victoire + meilleur tour |
+| `les-2-voitures-sur-le-podium` | l'écurie désignée a ses deux voitures dans le top 3 |
+| famille `top-N` | position ≤ N |
+| famille `{écurie}-les-2-voitures-dans-le-top-N` | oui/non |
+| famille `face-a-face-{a}-{b}` | duel, adversaires lus dans les issues sœurs |
+
+**Un slug absent du registre n'est pas évaluable** : le scraper ne l'enregistre pas (§7),
+et un pronostic qui le porterait passe `non_evaluable`. `NON_EVALUABLES` liste les marchés
+connus **volontairement** non jugés (`premier-abandon`). `_safety_car`,
+`_safety_car_virtuel`, `_drapeau_rouge` et `_abandon` existent sans slug : aucun marché de
+ce genre n'a été vu chez Unibet. Leur slug exact s'ajoute le jour où le scraper en écarte un.
+
+> **`tour-le-plus-rapide-vainqueur` et `voiture-…` n'ont aucune issue relevée en base.**
+> Le premier est lu comme un marché de pilotes ; une issue « Oui »/« Non » n'y serait
+> rapprochée de personne et resterait en attente — jamais un `0`.
+
+Les règles de chaque marché sont dans `metier.md` §4.
 
 **Le podium paie pilote par pilote** (v`0.54.0`) : chaque sélection est jugée pour son
 propre compte, et le pronostic rapporte la somme des cotes gagnées — deux, une, ou zéro.
@@ -477,8 +533,8 @@ Une jambe non jugeable laisse le **pronostic entier** à `NULL`, jamais un total
 l'idempotence de `attribuer_points` figerait pour toujours (`bugs-connus.md` §22).
 
 **« Écart du gagnant » est le premier marché dont l'issue n'est ni un pilote ni un
-oui/non**, mais un intervalle de secondes. Slug reconnu sur « ecart », ou sur « marge » +
-« victoire ». Il se juge sur le `gap_to_leader` **du deuxième**, avec des bornes
+oui/non**, mais un intervalle de secondes. Slugs `ecart-du-gagnant` et
+`marge-du-vainqueur` (renommage Unibet). Il se juge sur le `gap_to_leader` **du deuxième**, avec des bornes
 `[bas, haut[`. Formes d'issue reconnues : « moins de N », « - de N », « jusqu'à N »,
 « N - M », « entre N et M », « plus de N », « + de N ». **Aucune n'a été confrontée à un
 vrai libellé** : une issue non reconnue est journalisée et laisse `NULL`. Passer par
@@ -487,8 +543,7 @@ vrai libellé** : une issue non reconnue est journalisée et laisse `NULL`. Pass
 **« Nationalité du vainqueur » est le seul marché dont la réponse n'est pas dans les
 données de course** (v`0.55.0`). Elle vient de `calcul/pilotes.py`, parce que
 `country_code` de `/drivers` est déprécié — le choix était déjà écrit en §10, il est
-maintenant tenu. Slug reconnu sur « nationalite », ou sur « pays » + « vainqueur/gagnant » ;
-le libellé accepte le peuple comme le pays (« Néerlandais », « Pays-Bas »), accents et casse
+maintenant tenu. Slug `nationalite-du-vainqueur` ; le libellé accepte le peuple comme le pays (« Néerlandais », « Pays-Bas »), accents et casse
 indifférents. Les deux inconnues — nationalité du vainqueur, forme du libellé — sont
 journalisées **séparément** : c'est ce qui dira s'il faut mettre la grille à jour ou ajouter
 une forme à `NATIONALITES`. Le garde-fou de saison est celui d'`alias_unibet` : numéro **et**
@@ -501,12 +556,12 @@ cotes déjà chargé par `issues_du_marche`, sans lecture supplémentaire. « Au
 si la nationalité du vainqueur n'est dans **aucune** option listée, raté si elle est dans
 l'une, et **non jugé** si une option sœur est illisible et pouvait donc être la sienne.
 
-« premier-abandon » est volontairement **non reconnu** tant que la règle d'égalité n'est
-pas écrite : il demande de savoir *qui* a abandonné le premier, pas *si*.
+« premier-abandon » est volontairement **non évaluable** (`NON_EVALUABLES`) tant que la
+règle d'égalité n'est pas écrite : il demande de savoir *qui* a abandonné le premier, pas *si*.
 
 ### Les tests de non-régression
 
-Le seul code du dépôt couvert par des tests. Ils rejouent `calculer()` sur les quatre GP
+Le seul code du dépôt couvert par des tests (`backend/tests/`). Ils rejouent `calculer()` sur les quatre GP
 2026 terminés (Pays-Bas, Italie, Espagne, Azerbaïdjan), sans base ni réseau.
 
 ```bash
@@ -518,13 +573,14 @@ cd backend
 
 | Fichier | Vérifie |
 |---|---|
-| `tests/test_verdicts_gp.py` | un test par GP : `calculer()` rend les verdicts de la base ; les 2 pronos de Bakou encore en attente |
-| `tests/test_marches.py` | les 39 slugs vus en base ont un évaluateur ou une entrée dans `points.NON_EVALUABLES` ; l'égalité McLaren/Mercedes à 33 pts des Pays-Bas |
+| `tests/test_verdicts_gp.py` | un test par GP : `calculer()` rend les verdicts de la base ; les 2 pronos de Bakou (triplé 50, marge 0) |
+| `tests/test_marches.py` | les 39 slugs vus en base ont un évaluateur ou une entrée dans `points.NON_EVALUABLES` ; l'égalité McLaren/Mercedes à 33 pts des Pays-Bas, payée à partage |
+| `tests/test_evaluateurs.py` | registre (aucun préfixe), marchés de la `0.77.0`, filtrage au scraping, bonus identique à un obligatoire |
 | `tests/test_direction_de_course.py` | safety car, VSC, drapeau rouge et meilleur tour sur les vrais messages `race_control` |
 | `tests/fixtures/gp/*.json` | `donnees_brutes`, cotes, pronostics et verdicts attendus ; provenance dans la clé `source` |
 
-> **Les défauts connus sont marqués `xfail`**, avec la cause de `audit-evaluation.md` §4.3
-> en raison (C1, C3, C6). `pytest.ini` règle `xfail_strict = true` : un test `xfail` qui
+> **Un défaut connu se marque `xfail`**, avec la cause de `audit-evaluation.md` §4.3 en
+> raison. Ceux de C1, C3 et C6 ont été retirés en `0.77.0`. `pytest.ini` règle `xfail_strict = true` : un test `xfail` qui
 > se met à passer **fait échouer la suite**. Corriger un défaut, c'est donc aussi retirer
 > son marqueur — sinon la CI le signale.
 
@@ -534,8 +590,8 @@ test échoue tant que le marché n'a ni évaluateur ni entrée « non évaluable
 **Les fixtures ne se régénèrent pas** : elles figent les verdicts corrigés à la main au
 2026-09-26. Les identifiants `fixture-NNN` des cotes sont inventés (second pilote d'un
 podium, issues sœurs) ; les issues pronostiquées gardent leurs identifiants réels. Les
-qualifications de Bakou (`donnees_brutes.qualification`) n'existent pas encore en
-production : elles servent au triplé, qui attend l'étape 2 de l'audit.
+qualifications de Bakou (`donnees_brutes.qualification`, session 11373) ont été relevées
+pour l'audit ; en production, le job les ajoute au prochain passage sur ce GP.
 
 ---
 
@@ -563,10 +619,18 @@ journalisée **une seule fois** (garde-fou en mémoire).
 courue, et le laisser dans la boucle ferait rappeler OpenF1 toutes les cinq minutes pour
 rien. Les `NULL` se rattrapent par un déclenchement manuel.
 
+> ### Le statut écrit par le job (v`0.77.0`, migration 24)
+> `attribuer_points` reçoit, pour chaque pronostic sans points, soit ses points (le
+> statut `gagne` / `perdu` en est **dérivé** par trigger), soit un statut :
+> `non_evaluable` (aucun évaluateur) ou `en_attente` (donnée manquante). Le rapport de
+> `POST /jobs/resultats/{gp_id}` liste `en_attente` et `non_evaluables` séparément.
+> Détail dans `database.md`.
+
 ### Trois étages d'idempotence
 
 1. **Récupération** — `resultats_gp.gp_id` est `unique`. Une ligne existante ⇒ OpenF1
-   n'est pas rappelée, le calcul est rejoué sur le JSON conservé.
+   n'est pas rappelée, le calcul est rejoué sur le JSON conservé. **Seule exception : les
+   qualifications**, ajoutées si elles manquent (§10) ; le reste est réécrit à l'identique.
 2. **Attribution** — `attribuer_points` n'écrit **que** les `points_gagnes` encore `NULL`.
    **C'est la base qui porte la garantie, pas le code appelant.**
 3. **Surveillance** — un GP passé à `termine` sort du champ de la boucle.

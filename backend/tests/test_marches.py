@@ -10,7 +10,7 @@ from collections import Counter
 import pytest
 
 from app.calcul import points as P
-from conftest import AUDIT, charger_gp
+from conftest import charger_gp
 
 EVALUES = (
     "vainqueur",
@@ -34,14 +34,14 @@ EVALUES = (
 )
 
 # C3 : capturés par le préfixe « ecurie » / « equipe » et jugés comme « écurie
-# du vainqueur ».
+# du vainqueur » jusqu'à la 0.77.0. Ils ont désormais leur propre évaluateur.
 MAL_EVALUES = (
     "ecurie-qui-marque-le-plus-de-points",
     "equipe-qui-marque-le-plus-de-points",
     "ecurie-realisant-le-tour-le-plus-rapide",
 )
 
-# C1 : aucun évaluateur.
+# C1 : aucun évaluateur jusqu'à la 0.77.0.
 SANS_EVALUATEUR = (
     "marge-du-vainqueur",
     "vainqueur-course-qualification-et-tour-le-plus-rapide",
@@ -65,26 +65,16 @@ SANS_EVALUATEUR = (
 
 SLUGS_EN_BASE = EVALUES + MAL_EVALUES + SANS_EVALUATEUR
 
-XFAIL_C1 = pytest.mark.xfail(reason=f"{AUDIT} C1 — marché sans évaluateur ni entrée « non évaluable »")
-XFAIL_C3 = pytest.mark.xfail(reason=f"{AUDIT} C3 — mauvais évaluateur choisi par préfixe")
-
-
 def test_inventaire_complet():
     assert len(SLUGS_EN_BASE) == len(set(SLUGS_EN_BASE)) == 39
 
 
-@pytest.mark.parametrize(
-    "slug",
-    [pytest.param(s, marks=XFAIL_C1) if s in SANS_EVALUATEUR else s for s in SLUGS_EN_BASE],
-)
+@pytest.mark.parametrize("slug", SLUGS_EN_BASE)
 def test_slug_evaluable_ou_declare_non_evaluable(slug):
-    # Le registre explicite des marchés non évaluables n'existe pas encore
-    # (audit §5.2) : l'étape 2 l'expose sous ce nom.
-    non_evaluables = getattr(P, "NON_EVALUABLES", frozenset())
-    assert P.validateur(slug) is not None or slug in non_evaluables
+    assert P.validateur(slug) is not None or slug in P.NON_EVALUABLES
 
 
-@pytest.mark.parametrize("slug", [pytest.param(s, marks=XFAIL_C3) for s in MAL_EVALUES])
+@pytest.mark.parametrize("slug", MAL_EVALUES)
 def test_slug_pas_juge_comme_ecurie_du_vainqueur(slug):
     assert P.validateur(slug) is not P._ecurie_gagnante
 
@@ -131,12 +121,11 @@ def test_pays_bas_ecurie_hors_egalite_perdue():
     assert _juger_ecurie_la_plus_marquante("Ferrari") == 0
 
 
-@pytest.mark.xfail(reason=f"{AUDIT} C3 — jugé « écurie du vainqueur » : Mercedes, à égalité en tête, déclarée perdue")
-def test_pays_bas_egalite_mercedes_non_jugee():
-    # Règle d'égalité d'Unibet non décidée : une égalité vaut NULL, jamais 0.
-    assert _juger_ecurie_la_plus_marquante("Mercedes") is None
+# Règle des bookmakers (dead heat) : à égalité en tête, les points sont divisés
+# par le nombre d'écuries ex æquo, arrondis à l'entier.
+def test_pays_bas_egalite_mercedes_partagee():
+    assert _juger_ecurie_la_plus_marquante("Mercedes") == 15  # 30 ÷ 2
 
 
-@pytest.mark.xfail(reason=f"{AUDIT} C3 — jugé « écurie du vainqueur » : McLaren gagne sans que l'égalité soit tranchée")
-def test_pays_bas_egalite_mclaren_non_jugee():
-    assert _juger_ecurie_la_plus_marquante("McLaren") is None
+def test_pays_bas_egalite_mclaren_partagee():
+    assert _juger_ecurie_la_plus_marquante("McLaren") == 10  # 20 ÷ 2

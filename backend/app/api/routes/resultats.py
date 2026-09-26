@@ -102,6 +102,8 @@ class RapportJob(BaseModel):
     attribues: int = 0
     restants: int = 0
     en_attente: list[str] = []
+    # Pronostics dont le marché n'a aucun évaluateur (statut `non_evaluable`).
+    non_evaluables: list[str] = []
     erreur: str | None = None
 
 
@@ -186,6 +188,9 @@ class PronosticTeste(BaseModel):
     # il veut dire « le calcul n'a pas su juger », et `raison` dit pourquoi.
     points_gagnes: int | None = None
     reussi: bool | None = None
+    # `gagne`, `perdu`, `non_evaluable` (aucun évaluateur) ou `en_attente`
+    # (donnée manquante) — le statut que le vrai job écrirait.
+    statut: str | None = None
     detail: str | None = None
     raison: str | None = None
     # Ce que la base contient réellement, laissé intact par cet appel. C'est la
@@ -545,7 +550,12 @@ async def tester_resultats(
                 pilote=pilote or None,
                 points=potentiel,
                 points_gagnes=attribution.points if attribution else None,
-                reussi=attribution.reussi if attribution else None,
+                reussi=(
+                    attribution.reussi
+                    if attribution and attribution.points is not None
+                    else None
+                ),
+                statut=attribution.statut if attribution else calcul.EN_ATTENTE,
                 detail=attribution.detail if attribution else None,
                 raison=raison or None,
                 points_en_base=pronostic.get("points_gagnes"),

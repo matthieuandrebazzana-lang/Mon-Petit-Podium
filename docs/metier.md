@@ -88,6 +88,20 @@ emplacements suivants (exclusion croisée).
 > l'ancien aux listes, **sans vider les sélections déjà faites**. Une sélection devenue
 > conflictuelle reste affichée et la validation la nomme.
 
+> ### Un bonus ne reprend pas un pronostic obligatoire (v`0.77.0`)
+> La route d'enregistrement refuse un bonus pris dans les marchés `vainqueur` ou `podium`
+> dont le **libellé** est celui du vainqueur ou d'un des deux pilotes du podium du même
+> joueur, avec un message en français que le web et l'app iOS affichent tels quels.
+> Sans cette règle, un joueur se faisait payer deux fois le même événement (Pays-Bas,
+> Espagne, Bakou 2026 : `audit-evaluation.md` C4).
+>
+> Le libellé et non l'identifiant, pour la même raison que l'exclusion croisée : un
+> même pilote change d'identifiant d'un marché à l'autre. Les deux marchés sont croisés —
+> un bonus « Antonelli vainqueur » est refusé à qui a déjà Antonelli au podium. **Un bonus
+> sur un autre marché reste libre** : « Antonelli dans le top 6 » est un autre pari.
+>
+> Les pronostics déjà payés deux fois (Pays-Bas) ne sont pas modifiés.
+
 **Le contrôle des marchés obligatoires est strict** : le vainqueur doit venir du marché
 `vainqueur`, les deux pilotes du podium du marché `podium`. Un pronostic « vainqueur »
 désignant en réalité une écurie serait impossible à valider, et le joueur ne le
@@ -287,32 +301,75 @@ groupe.
 
 **Via `race_control`** : safety car, drapeau rouge.
 **Via `laps`** : meilleur tour (minimum de `lap_duration`).
+**Via les qualifications** (`donnees_brutes.qualification`) : pole position.
+
+> ### Les marchés ajoutés en v`0.77.0`
+>
+> | Marché | Règle |
+> |---|---|
+> | **Marge du vainqueur** | même marché que l'écart du gagnant, renommé par Unibet : même règle |
+> | **Tour le plus rapide** (pilote) | le pilote du meilleur tour |
+> | **Écurie / voiture réalisant le tour le plus rapide** | l'écurie de ce pilote ; « voiture » accepte un pilote ou une écurie |
+> | **Vainqueur course, qualification et tour le plus rapide** | « Oui » si un même pilote signe la pole, la victoire et le meilleur tour. Sans qualifications, en attente |
+> | **Les 2 voitures sur le podium** | l'écurie désignée place ses deux voitures dans le top 3 |
+> | **Face-à-face** | voir « Duel » plus bas |
+> | **Écurie qui marque le plus de points** | somme des points FIA de chaque écurie ; égalité → partage |
+>
+> ### L'égalité se paie à partage (règle des bookmakers)
+> Quand plusieurs écuries finissent à égalité en tête, l'issue de chacune est **gagnante
+> à partage** : ses points sont divisés par le nombre d'écuries ex æquo, **arrondis à
+> l'entier** (un demi vers le haut). Aux Pays-Bas 2026, McLaren et Mercedes finissent à
+> 33 points : « Mercedes » à 30 pts aurait rapporté 15, « McLaren » à 20 pts, 10.
+>
+> *Jusqu'à la `0.77.0`, ce marché était jugé « écurie du vainqueur »* : son slug commençait
+> par `ecurie`. Les verdicts écrits étaient justes par coïncidence (`audit-evaluation.md` C3).
 
 > ### Safety Car vs Virtual Safety Car — le seul parsing de texte du système
 > Les deux remontent avec `category=SafetyCar` ; seul le `message` les distingue.
-> **Deux précautions :** le test « VIRTUAL » passe **avant** celui du safety car
-> ordinaire (la chaîne « SAFETY CAR » est contenue dans « VIRTUAL SAFETY CAR ») ; et
+> **Trois précautions :** le test du VSC passe **avant** celui du safety car
+> ordinaire (la chaîne « SAFETY CAR » est contenue dans « VIRTUAL SAFETY CAR ») ;
 > **seuls les messages `DEPLOYED` comptent** — la séquence complète est DEPLOYED,
-> IN THIS LAP, ENDING, et compter les trois ferait croire à trois interventions.
+> IN THIS LAP, ENDING, et compter les trois ferait croire à trois interventions ; et
+> **OpenF1 écrit le VSC en abrégé**, `VSC DEPLOYED` / `VSC ENDING`. Les deux formes sont
+> reconnues depuis la `0.77.0` — avant, le VSC n'était jamais détecté (audit C6).
 > Tout message non reconnu est journalisé.
 
 **Premier abandon** — `session_result` ne donne pas l'heure mais donne `number_of_laps` :
 l'abandonné avec le moins de tours a abandonné en premier. Gérer l'égalité.
 **Volontairement NON implémenté** tant que la règle d'égalité n'est pas écrite.
 
-**Duel avec abandon** — un pilote classé bat toujours un abandonné. Si les deux
-abandonnent, celui qui a parcouru le plus de tours l'emporte.
+**Duel (face-à-face)** — le pilote le mieux classé gagne. Si un seul des deux est classé,
+il gagne. Si aucun ne l'est, celui qui a bouclé le plus de tours gagne ; à tours égaux,
+rien n'est décidé et le pronostic reste en attente. « Classé » veut dire une position au
+classement : un pilote peut abandonner et rester classé. Les deux adversaires se lisent
+dans les **deux issues du marché**, le slug ne se découpant pas sûrement en deux noms.
 
-> ### Un marché non reconnu laisse `NULL`, jamais `0`
-> Les marchés Unibet varient d'un GP à l'autre : ce cas n'est pas une hypothèse d'école.
-> Seuls **vainqueur, podium, ecurie-vainqueur** et **les 2 voitures dans le top 10** ont
-> été confrontés à de vrais libellés ; les sept autres familles — **écart du gagnant**
-> compris — sont écrites d'après cette section et **restent à vérifier**.
+> ### Un marché se désigne par son slug exact, jamais par un morceau (v`0.77.0`)
+> Chaque marché évaluable est inscrit dans un **registre** (`calcul/points.py`) : slug
+> exact, ou famille déclarée en entier (`top-N`, `{écurie}-les-2-voitures-dans-le-top-N`,
+> `face-a-face-{a}-{b}`). Un slug que le registre ne connaît pas **n'est jugé par aucun
+> évaluateur voisin**. La reconnaissance par préfixe ou sous-chaîne est retirée : elle
+> laissait passer les marchés renommés et jugeait « l'écurie qui marque le plus de
+> points » comme « l'écurie du vainqueur ».
 >
-> **C'est ce filet qui a caché l'écart du gagnant pendant six versions** : le marché
-> n'était pas reconnu, donc il laissait `NULL`, donc il ne criait pas. Le filet a fait
-> exactement son travail — la leçon n'est pas de le retirer, c'est de **relire les
-> avertissements `[points] … laissé(s) sans points` après chaque Grand Prix**.
+> **Le même registre filtre le scraping** : un marché non évaluable n'est plus enregistré,
+> donc plus jamais proposé aux joueurs (`scraper.md` §7).
+
+> ### Quatre statuts, et `NULL` ≠ `0` tient toujours
+> Chaque pronostic porte un `statut_evaluation` distinct de `points_gagnes`
+> (`database.md`, migration 24) :
+>
+> | Statut | `points_gagnes` | Sens |
+> |---|---|---|
+> | `en_attente` | `NULL` | une donnée manque (pilote non rapproché, qualifications absentes…) — rattrapable au prochain passage |
+> | `non_evaluable` | `NULL` | aucun évaluateur pour ce marché — rattrapable par une livraison de code |
+> | `gagne` | `> 0` | réussi, y compris à partage |
+> | `perdu` | `0` | raté |
+>
+> Un marché qu'on ne sait pas juger ne vaut **jamais** `0`. Ce qui change : il ne faut
+> plus relire les logs pour distinguer « pas encore » de « jamais ». **Relire quand même
+> les avertissements `[points]` après chaque Grand Prix** — c'est ce filet qui a caché
+> l'écart du gagnant pendant six versions.
 
 > ### Le filet ne protège que ce qu'il n'a pas jugé
 > `NULL` se rattrape ; `0` **ne se rattrape pas**. `attribuer_points` ne réécrit que les

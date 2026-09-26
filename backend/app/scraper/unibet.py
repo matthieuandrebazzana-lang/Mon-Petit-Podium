@@ -59,6 +59,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from app.calcul import points as calcul
 from app.supabase_client import (
     ErreurSupabase,
     mettre_a_jour,
@@ -491,6 +492,32 @@ def url_evenement(gp: GrandPrix, categorie: str) -> str:
     )
 
 
+def filtrer_evaluables(nom_gp: str, cotes: list[Cote]) -> list[Cote]:
+    """Écarte les cotes des marchés que le backend ne sait pas juger.
+
+    Le registre consulté est celui du calcul (`calcul.points.evaluable`) : un
+    marché qu'aucun évaluateur ne porte n'est jamais enregistré, donc jamais
+    proposé aux joueurs. Sans ce filtre, un joueur pouvait parier sur un marché
+    renommé par Unibet, et l'écart ne se voyait qu'après la course (audit, C1).
+
+    Les marchés écartés sont journalisés, libellé et slug : c'est dans ce log
+    qu'on repère un marché nouveau à ajouter au registre.
+    """
+    gardees = [cote for cote in cotes if calcul.evaluable(cote.marche)]
+    ecartes = sorted({(cote.libelle_marche, cote.marche) for cote in cotes} - {
+        (cote.libelle_marche, cote.marche) for cote in gardees
+    })
+    if ecartes:
+        logger.warning(
+            "[scraper] %s : %d marché(s) écarté(s), sans évaluateur (%d cote(s)) : %s",
+            nom_gp,
+            len(ecartes),
+            len(cotes) - len(gardees),
+            " ; ".join(f"{libelle} [{marche}]" for libelle, marche in ecartes),
+        )
+    return gardees
+
+
 async def marches(client: httpx.AsyncClient, gp: GrandPrix) -> list[Cote]:
     """Récupère tous les marchés d'un GP, et leurs issues converties en points.
 
@@ -561,6 +588,8 @@ async def marches(client: httpx.AsyncClient, gp: GrandPrix) -> list[Cote]:
             gp.nom,
             illisibles,
         )
+
+    cotes = filtrer_evaluables(gp.nom, cotes)
 
     if not cotes:
         raise ErreurScraper(f"Aucune cote exploitable pour {gp.nom}.")
