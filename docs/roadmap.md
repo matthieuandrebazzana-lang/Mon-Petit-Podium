@@ -198,6 +198,23 @@ sauf si le triplé et la marge n'avaient pas encore été rattrapés (1.3 quinqu
 > la 18. Il n'en faut qu'une : `pronostics_du_championnat` appelle `pronostics_du_joueur`
 > pour chaque membre et hérite du champ sans être touchée.
 
+### 1.3 septies Appliquer la migration 26 — **avant le backend `0.79.0`**
+
+`20260926230000_identifiants_issues` ajoute `cotes.numero_pilote` et `cotes.ecurie_id`,
+la table `alertes_admin`, `rattacher_issues` et `noter_echec_definitif`
+(`database.md` §6). **Ordre : 26, puis le déploiement Railway `0.79.0`, puis le frontend
+`0.79.0`.** Aucune fonction existante n'est remplacée : pas de conflit d'ordre.
+
+Le backend tolère la migration absente (figeage non bloqué, calcul par libellé,
+`GET /admin/alertes` rend `disponible: false`), mais il n'écrit alors ni identifiant ni
+alerte. **Non éprouvée sur un PostgreSQL jetable** (démon Docker indisponible) : son bloc
+de contrôle final lève si une colonne manque ou si `alertes_admin` porte une politique.
+
+Attendu au prochain figeage : `[rattachement] … : N issue(s) rattachée(s), 0 non
+reconnue(s)` dans les logs Railway, et `numero_pilote` / `ecurie_id` renseignés sur les
+cotes pilote et écurie du GP. Le GP déjà figé avant le déploiement n'a pas d'identifiants
+(repli sur les libellés) ; `POST /scraper/rattacher/{gp_id}` les pose à la demande.
+
 ### 1.4 Vérifier les migrations appliquées
 
 **La liste des migrations appliquées est à revérifier dans le SQL Editor.** Une lecture
@@ -553,6 +570,11 @@ correspondance que §3.15 dit de ne pas deviner.
 
 ### 3.8 sexies `ecuries.js` ignore les remplacements Lawson / Tsunoda (`0.66.0`)
 
+> **Mise à jour `0.79.0`.** Les baquets ont changé de nouveau à Bakou : Hadjar (6) est
+> revenu chez Red Bull Racing, Lawson (30) chez Racing Bulls, Tsunoda (22) est sans volant.
+> `pilotes.py` le suit ; `lib/ecuries.js` n'a pas été touché. Aucun verdict n'en dépend :
+> les engagés viennent désormais de la session de qualification d'OpenF1.
+
 La version `0.66.0` a porté les deux remplacements temporaires dans
 `backend/app/calcul/pilotes.py` — Lawson (30) chez Red Bull à la place de Hadjar (6),
 Tsunoda (22) chez Racing Bulls à la place de Lawson. **Le commit est backend seul**, parce
@@ -728,12 +750,18 @@ veille pour le comprendre.
 Une colonne `recalcule_le` sur `grands_prix`, ou une ligne d'audit par verdict modifié,
 coûtera moins cher que la question posée le jour où un classement bougera sans explication.
 
-### 3.17 Le définitif réessaie sans fin si OpenF1 ne répond plus
+### 3.17 ~~Le définitif réessaie sans fin si OpenF1 ne répond plus~~ — **SIGNALÉ (`0.79.0`)**
 
-La boucle du définitif n'a pas de fenêtre : tant qu'OpenF1 échoue, elle retente toutes les
-15 minutes et journalise un avertissement à chaque tour. Le GP reste provisoire, ses points
-comptés — rien n'est perdu, mais les logs se remplissent. À borner (par exemple : après
-J+3, alerte unique et consolidation sur les données conservées) si le cas se présente.
+La boucle réessaie toujours sans fin, par choix : le GP reste provisoire, ses points
+comptés. Mais chaque échec est désormais **compté en base** (`noter_echec_definitif`), et
+à partir de **3 échecs consécutifs** le GP apparaît dans le profil admin avec le nombre de
+tentatives et la dernière erreur. Un succès efface l'alerte. Reste ouvert : consolider sur
+les données conservées au-delà de J+3, si le cas se présente.
+
+### 3.18 Les alertes admin n'existent que sur le web
+
+`GET /admin/alertes` est lu par `SectionAdmin.jsx` seulement. L'app iOS
+(`Services/Administration.swift`) ne l'affiche pas encore.
 
 ## 4. Dettes techniques
 

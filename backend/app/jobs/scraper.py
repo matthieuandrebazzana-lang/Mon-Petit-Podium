@@ -52,6 +52,7 @@ dédié — exactement la même note qu'en tête de `app/jobs/resultats.py`.
 import logging
 from datetime import UTC, datetime, timedelta
 
+from app.jobs.rattachement import rattacher_sans_echec
 from app.scraper.unibet import ErreurScraper, scraper
 from app.supabase_client import ErreurSupabase, mettre_a_jour, selectionner
 
@@ -206,6 +207,10 @@ async def scraper_et_figer(gp_id: str, nom: str) -> dict:
         return {"gp": nom, "gp_id": gp_id, "fige": False, "rapport": rapport}
 
     fige = await figer(gp_id, nom)
+    if fige:
+        # Le figeage ouvre les pronostics : c'est le moment de rattacher chaque
+        # issue à un engagé, et de signaler celles qui n'en désignent aucun.
+        await rattacher_sans_echec(gp_id, nom)
     return {
         "gp": nom,
         "gp_id": gp_id,
@@ -309,8 +314,10 @@ async def declencher_en_tache_de_fond(figer_apres: bool = True) -> None:
             # Déjà figé (le refus a été journalisé par le scraper), ou rien
             # d'écrit : dans les deux cas il n'y a pas de succès à entériner.
             continue
+        gp_id, nom = str(ligne["gp_id"]), str(ligne.get("nom") or ligne["gp_id"])
         try:
-            await figer(str(ligne["gp_id"]), str(ligne.get("nom") or ligne["gp_id"]))
+            if await figer(gp_id, nom):
+                await rattacher_sans_echec(gp_id, nom)
         except ErreurSupabase:
             logger.exception(
                 "[scraper-job] %s : cotes enregistrées mais statut non figé.",

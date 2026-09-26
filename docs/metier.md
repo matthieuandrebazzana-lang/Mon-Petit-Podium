@@ -392,6 +392,31 @@ dans les **deux issues du marché**, le slug ne se découpant pas sûrement en d
 > C'est la règle du **calcul provisoire** seulement. Le **définitif** (ci-dessous) et le
 > recalcul admin réécrivent tout le GP.
 
+### Qui désigne une issue : rattachée au figeage (v`0.79.0`)
+
+Au **figeage des cotes** — qualifications + 2 h, l'ouverture des pronostics — chaque
+issue qui nomme un **pilote** ou une **écurie** est rattachée à un engagé du Grand Prix :
+son numéro de pilote ou son identifiant d'écurie est écrit sur la cote. Les engagés sont
+ceux de la **session de qualification** d'OpenF1 : les baquets du week-end, jamais une
+grille statique.
+
+| Issue | Rattachée à |
+|---|---|
+| pilote (vainqueur, podium, top N, meilleur tour, face-à-face) | numéro de pilote |
+| écurie (écurie vainqueur, écurie la plus marquante, écurie du meilleur tour, 2 voitures sur le podium) | identifiant d'écurie |
+| « voiture du meilleur tour » | l'un ou l'autre, pilote d'abord |
+| oui/non, tranche d'écart, nationalité, « {écurie} / les 2 voitures dans le top N » | rien |
+
+**Au calcul, l'identifiant l'emporte ; le libellé reste le repli** — pour les cotes d'avant
+la `0.79.0`, et pour une issue non rattachée. Les verdicts sont les mêmes sur les quatre GP
+rejoués.
+
+> **Un libellé qui ne désigne aucun engagé ne bloque pas le figeage.** Il est journalisé et
+> remonte dans le profil admin, avec le GP et le libellé exact, **le samedi** — plus le
+> dimanche soir. Les pronostics restent possibles : le jour de la course, l'issue est jugée
+> sur son libellé, et reste `en_attente` (jamais `0`) si rien ne la reconnaît. Le remède est
+> un alias dans `calcul/pilotes.py`, puis `POST /scraper/rattacher/{gp_id}`.
+
 ### Résultats provisoires, puis définitifs à J+1 (v`0.78.0`)
 
 Le classement publié à l'arrivée précède les décisions des commissaires : à Bakou 2026,

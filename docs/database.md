@@ -8,7 +8,7 @@ Schéma PostgreSQL (Supabase), politiques RLS, fonctions et migrations.
 
 ---
 
-## 1. Les neuf tables
+## 1. Les dix tables
 
 ```
 auth.users
@@ -27,6 +27,7 @@ public.grands_prix
     │ 1─N (cascade)          1─1 (cascade, unique)
     ├──► public.cotes        └──► public.resultats_gp
     ├──► public.favoris
+    ├──► public.alertes_admin
     └──► public.pronostics ──1─1(cascade)──► public.pronostic_podium
 ```
 
@@ -215,6 +216,16 @@ toute la table sans lui.
 Index : `cotes_gp_outcome_idx` **unique** sur `(gp_id, id_outcome_unibet)` — il porte
 seul l'idempotence du scraper ; `cotes_gp_marche_idx` sur `(gp_id, marche)`.
 
+> ### `numero_pilote`, `ecurie_id` — l'engagé que désigne l'issue (migration 26, v`0.79.0`)
+>
+> Posés **au figeage** par `rattacher_issues`, à partir des engagés de la session de
+> qualification d'OpenF1 (`scraper.md` §8). `numero_pilote` pour une issue pilote,
+> `ecurie_id` pour une issue écurie — le nom OpenF1 de l'écurie en slug
+> (`red-bull-racing`, `haas-f1-team`), **pas** le slug de livrée du frontend. `NULL` pour
+> les issues qui ne désignent ni l'un ni l'autre (oui/non, tranches, nationalités), pour
+> les cotes antérieures, et pour une issue non reconnue. Le calcul les préfère au libellé,
+> qui reste le repli. Le scraper ne les écrit jamais : son upsert ne porte pas ces colonnes.
+
 > **`libelle_marche` est un ajout assumé.** Sans lui, l'interface reconstituerait un nom
 > depuis le slug et afficherait « Ecurie vainqueur » au mieux, « Top x » au pire. Le
 > bookmaker est la seule source légitime du nom d'un marché.
@@ -292,6 +303,21 @@ La redondance avec `pronostics.id_outcome_unibet` (qui porte `pilote_1`) est ten
 **deux triggers, pas par une convention** : `pronostic_podium_coherent` refuse un détail
 dont `pilote_1` diverge du parent, et `attribuer_points` dérive systématiquement
 `points_gagnes` de la colonne parente. **Ne jamais l'écrire depuis le code applicatif.**
+
+### `public.alertes_admin`
+
+`id`, `gp_id` (cascade), `type`, `cle`, `marche`, `libelle`, `tentatives`,
+`derniere_erreur`, `cree_le`, `modifie_le`. Unique `(gp_id, type, cle)`. Migration 26.
+
+| `type` | Écrite par | `cle` | Effacée par |
+|---|---|---|---|
+| `libelle_non_reconnu` | `rattacher_issues` — une ligne par issue | `id_outcome_unibet` | le rattachement suivant du GP |
+| `rattachement_impossible` | le backend, OpenF1 muette au figeage | `''` | le rattachement suivant du GP |
+| `definitif_en_echec` | `noter_echec_definitif`, `tentatives + 1` par échec | `''` | le backend, au succès du définitif |
+
+> **RLS activée, aucune politique, `revoke` pour `anon` et `authenticated`.** Seul le
+> backend la lit (`GET /admin/alertes`, garde `exiger_admin`), qui ne sert un
+> `definitif_en_echec` qu'à partir de 3 tentatives.
 
 ### `public.resultats_gp`
 
@@ -413,6 +439,8 @@ admin la remplace de nouveau seulement s'il est demandé avec `relire=true`.
 | `classement_du_grand_prix(gp)` | classement de la course |
 | `slug_gp(nom)` | `immutable` — empreinte stable d'un nom de GP (migration 19) |
 | `adopter_grand_prix(placeholder, id_unibet)` | fait porter son vrai identifiant à une ligne posée à la main |
+| `rattacher_issues(gp, rattachements, non_reconnus)` | pose `numero_pilote` / `ecurie_id` sur les cotes du GP et **remplace** ses alertes de libellé, une transaction (migration 26) |
+| `noter_echec_definitif(gp, erreur)` | incrémente le compteur d'échecs du définitif, rend le total (migration 26) |
 
 > **Pourquoi `security definer` + `service_role` sur les fonctions de lecture agrégée.**
 > Paramétrées par un championnat ou un profil, elles lisent forcément les pronostics
@@ -570,7 +598,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les vingt-cinq migrations
+## 6. Les vingt-six migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -599,6 +627,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 23 | `20260918_fermeture_au_depart` | **retire la marge de cinq minutes** : `pronostics_fermes` ferme à `date_course`, plus à `date_course − 5 min` | **5** |
 | 24 | `20260926120000_statut_evaluation` | **`statut_evaluation`** sur `pronostics`, trigger de dérivation, `attribuer_points` qui écrit `non_evaluable` / `en_attente`. **À appliquer avant le backend `0.77.0`** | 5, **6** |
 | 25 | `20260926200000_resultats_provisoires` | **`grands_prix.statut_resultats`**, les quatre GP courus marqués, **`remplacer_verdicts`**, `pronostics_du_joueur` qui sert `statut_evaluation`. **À appliquer avant le backend `0.78.0`** | 3, 6, **24** |
+| 26 | `20260926230000_identifiants_issues` | **`cotes.numero_pilote`, `cotes.ecurie_id`**, table `alertes_admin`, `rattacher_issues`, `noter_echec_definitif`. **À appliquer avant le backend `0.79.0`**. Ne remplace aucune fonction | 3 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -740,6 +769,9 @@ contraintes fautives.
 > un `create extension` refusé ne s'exécute pas du tout.
 
 ### Non éprouvées sur un PostgreSQL jetable
+
+> **La 26 non plus** (démon Docker arrêté) : son bloc de contrôle final lève si une colonne
+> d'identifiant manque ou si `alertes_admin` porte une politique RLS.
 
 > **La 24 non plus** : ni démon Docker ni PostgreSQL local au moment de son écriture. Son
 > bloc de contrôle final lève si le trigger manque ou si une ligne a un statut incohérent

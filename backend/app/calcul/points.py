@@ -32,7 +32,7 @@ import logging
 import math
 import re
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
 from app.calcul import pilotes as grille
@@ -122,6 +122,10 @@ class Course:
     # Index de rapprochement, construits une fois pour toutes.
     _par_nom: dict[str, int] = field(default_factory=dict)
     _par_equipe: dict[str, str] = field(default_factory=dict)
+    # Identifiants posés sur les cotes au figeage (`rattacher_identifiants`),
+    # par libellé normalisé. Consultés AVANT le rapprochement par nom.
+    _rattaches_pilotes: dict[str, int] = field(default_factory=dict)
+    _rattaches_ecuries: dict[str, str] = field(default_factory=dict)
 
     def par_position(self, position: int) -> Ligne | None:
         for ligne in self.lignes.values():
@@ -183,8 +187,13 @@ class Course:
         historique) rendraient « Verstappen » ambigu : la clé est alors retirée
         de l'index, et le pronostic reste non validé plutôt que d'être attribué
         au mauvais pilote.
+
+        Le numéro posé sur la cote au figeage (`cotes.numero_pilote`) passe en
+        premier ; le rapprochement par nom n'est plus qu'un repli, pour les cotes
+        d'avant la migration 26 et les issues non rattachées.
         """
-        return self._par_nom.get(normaliser(libelle))
+        cle = normaliser(libelle)
+        return self._rattaches_pilotes.get(cle) or self._par_nom.get(cle)
 
     def equipe_du_libelle(self, libelle: str) -> str | None:
         """Retrouve une écurie OpenF1 derrière un libellé Unibet.
@@ -197,6 +206,8 @@ class Course:
         cle = normaliser(libelle)
         if not cle:
             return None
+        if cle in self._rattaches_ecuries:
+            return self._rattaches_ecuries[cle]
         if cle in self._par_equipe:
             return self._par_equipe[cle]
 
@@ -1135,6 +1146,181 @@ def evaluable(marche: str) -> bool:
 
 
 # --------------------------------------------------------------------------- #
+#  Identifiants canoniques des issues (audit §5.1, migration 26)
+# --------------------------------------------------------------------------- #
+
+# Ce que désigne l'issue d'un marché : un pilote, une écurie, l'un ou l'autre.
+# Les marchés absents d'ici n'ont pas besoin d'identifiant — oui/non, tranches
+# d'écart, nationalités, et « {écurie} / les 2 voitures dans le top N », dont
+# l'écurie est dans le slug et l'issue un oui/non.
+PILOTE = "pilote"
+ECURIE = "ecurie"
+PILOTE_OU_ECURIE = "pilote_ou_ecurie"
+
+# Une entrée par slug exact du registre, `None` compris : le test
+# `test_chaque_marche_exact_declare_sa_nature` exige que les deux tables
+# avancent ensemble.
+_NATURES_EXACTES: dict[str, str | None] = {
+    MARCHE_VAINQUEUR: PILOTE,
+    MARCHE_PODIUM: PILOTE,
+    "ecurie-vainqueur": ECURIE,
+    "ecart-du-gagnant": None,
+    "marge-du-vainqueur": None,
+    "nationalite-du-vainqueur": None,
+    "ecurie-qui-marque-le-plus-de-points": ECURIE,
+    "equipe-qui-marque-le-plus-de-points": ECURIE,
+    "tour-le-plus-rapide": PILOTE,
+    "tour-le-plus-rapide-vainqueur": PILOTE,
+    "ecurie-realisant-le-tour-le-plus-rapide": ECURIE,
+    "voiture-realisant-le-tour-le-plus-rapide": PILOTE_OU_ECURIE,
+    "vainqueur-course-qualification-et-tour-le-plus-rapide": None,
+    "les-2-voitures-sur-le-podium": ECURIE,
+}
+
+# Familles : même ordre et mêmes motifs que `_FAMILLES`.
+_NATURES_FAMILLES: tuple[str | None, ...] = (PILOTE, None, PILOTE)
+
+
+def nature_des_issues(marche: str) -> str | None:
+    """`PILOTE`, `ECURIE`, `PILOTE_OU_ECURIE`, ou `None` si l'issue n'en désigne pas."""
+    slug = (marche or "").strip().lower()
+    if slug in _NATURES_EXACTES:
+        return _NATURES_EXACTES[slug]
+    for (motif, _), nature in zip(_FAMILLES, _NATURES_FAMILLES):
+        if motif.fullmatch(slug):
+            return nature
+    return None
+
+
+def identifiant_ecurie(nom: object) -> str | None:
+    """L'identifiant d'une écurie : son nom OpenF1 en slug (« red-bull-racing »).
+
+    **Le nom d'OpenF1, pas le slug de livrée du frontend** (« red-bull ») : c'est
+    celui que portent les données de course, donc le seul que le calcul puisse
+    retrouver sans table de correspondance à tenir à jour.
+    """
+    if not isinstance(nom, str):
+        return None
+    sans_accents = "".join(
+        caractere
+        for caractere in unicodedata.normalize("NFD", nom)
+        if unicodedata.category(caractere) != "Mn"
+    )
+    slug = re.sub(r"[^a-z0-9]+", "-", sans_accents.lower()).strip("-")
+    return slug or None
+
+
+@dataclass
+class Correspondance:
+    """Le rattachement des issues d'un GP aux engagés, calculé au figeage.
+
+    `rattachements` : une entrée par issue reconnue, prête pour
+    `rattacher_issues` (`id_outcome_unibet`, `numero_pilote`, `ecurie_id`).
+    `non_reconnus` : les issues pilote ou écurie qui ne désignent aucun engagé.
+    """
+
+    rattachements: list[dict] = field(default_factory=list)
+    non_reconnus: list[dict] = field(default_factory=list)
+
+
+def correspondance(cotes: Iterable[dict], engages: dict) -> Correspondance:
+    """Rattache chaque issue pilote ou écurie à un engagé du GP.
+
+    `engages` est l'index `{numéro: identité}` des pilotes de la session de
+    qualification (`openf1._index_pilotes`), jamais la grille statique. Le
+    rapprochement est **celui du calcul** (`Course.pilote_du_libelle`,
+    `Course.equipe_du_libelle`) : une seule règle répond à « qui est ce
+    libellé ? », au figeage comme après la course.
+    """
+    course = analyser({"pilotes": engages})
+    resultat = Correspondance()
+
+    for cote in cotes:
+        marche = str(cote.get("marche") or "")
+        nature = nature_des_issues(marche)
+        if nature is None:
+            continue
+
+        libelle = str(cote.get("pilote") or "")
+        numero = (
+            course.pilote_du_libelle(libelle)
+            if nature in (PILOTE, PILOTE_OU_ECURIE)
+            else None
+        )
+        equipe = (
+            course.equipe_du_libelle(libelle)
+            if numero is None and nature in (ECURIE, PILOTE_OU_ECURIE)
+            else None
+        )
+
+        if numero is None and equipe is None:
+            resultat.non_reconnus.append(
+                {
+                    "id_outcome_unibet": cote.get("id_outcome_unibet"),
+                    "marche": marche,
+                    "libelle": libelle,
+                    "nature": nature,
+                }
+            )
+            continue
+
+        resultat.rattachements.append(
+            {
+                "id_outcome_unibet": cote.get("id_outcome_unibet"),
+                "numero_pilote": numero,
+                "ecurie_id": identifiant_ecurie(equipe),
+            }
+        )
+
+    return resultat
+
+
+def rattacher_identifiants(course: Course, cotes: Iterable[dict]) -> None:
+    """Enregistre dans `course` les identifiants posés sur les cotes au figeage.
+
+    Un numéro n'est retenu que si le pilote figure dans les données de la
+    course, un identifiant d'écurie que s'il désigne une écurie de la course :
+    sinon le libellé reprend la main, et le verdict est celui d'avant la
+    migration 26. Un même libellé rattaché à deux identifiants différents n'est
+    rattaché à aucun.
+    """
+    equipes = {
+        identifiant_ecurie(pilote.get("equipe")): pilote["equipe"]
+        for pilote in course.pilotes.values()
+        if pilote.get("equipe")
+    }
+
+    def poser(index: dict, cle: str, valeur, ecartees: set[str]) -> None:
+        if cle in ecartees:
+            return
+        if index.get(cle, valeur) != valeur:
+            logger.warning(
+                "[points] Le libellé « %s » porte deux identifiants (%s, %s) : "
+                "rapprochement par nom.",
+                cle,
+                index[cle],
+                valeur,
+            )
+            del index[cle]
+            ecartees.add(cle)
+            return
+        index[cle] = valeur
+
+    ecartes_pilotes: set[str] = set()
+    ecartees_ecuries: set[str] = set()
+    for cote in cotes:
+        cle = normaliser(cote.get("pilote"))
+        if not cle:
+            continue
+        numero = _entier(cote.get("numero_pilote"))
+        if numero is not None and numero in course.pilotes:
+            poser(course._rattaches_pilotes, cle, numero, ecartes_pilotes)
+        equipe = equipes.get(cote.get("ecurie_id"))
+        if equipe:
+            poser(course._rattaches_ecuries, cle, equipe, ecartees_ecuries)
+
+
+# --------------------------------------------------------------------------- #
 #  Points d'un pronostic
 # --------------------------------------------------------------------------- #
 
@@ -1349,6 +1535,7 @@ def calculer(
     qu'on relit pour décider d'écrire un validateur de plus.
     """
     course = analyser(donnees)
+    rattacher_identifiants(course, cotes.values())
 
     attributions: list[Attribution] = []
     en_attente: list[str] = []

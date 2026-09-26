@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Bouton from "./Bouton.jsx";
 import Alerte from "./Alerte.jsx";
-import { declencherScraper } from "../lib/admin.js";
+import { chargerAlertes, declencherScraper } from "../lib/admin.js";
 import { useAuth } from "../auth/AuthContexte.jsx";
 
 /**
@@ -164,6 +164,86 @@ export function BasculePrevisualisation({ actif, onBasculer, disabled = false })
   );
 }
 
+/**
+ * Ce que dit chaque type d'alerte, en une ligne. Le GP et le libellé exact sont
+ * affichés tels quels : c'est eux qu'on recopie dans `calcul/pilotes.py` ou
+ * dans la route de rattrapage.
+ */
+function descriptionAlerte(alerte) {
+  if (alerte.type === "libelle_non_reconnu") {
+    return {
+      titre: `« ${alerte.libelle ?? "?"} » ne désigne aucun engagé`,
+      detail: `Marché ${alerte.marche ?? "?"}. Il sera jugé sur son libellé, et restera en attente s'il n'est toujours pas reconnu.`,
+    };
+  }
+  if (alerte.type === "rattachement_impossible") {
+    return {
+      titre: "Issues non rattachées au figeage",
+      detail: alerte.derniere_erreur ?? "OpenF1 n'a pas répondu.",
+    };
+  }
+  if (alerte.type === "definitif_en_echec") {
+    return {
+      titre: `Calcul définitif en échec · ${alerte.tentatives} tentatives`,
+      detail: `Il continue de réessayer. Dernière erreur : ${alerte.derniere_erreur ?? "inconnue"}`,
+    };
+  }
+  return { titre: alerte.type, detail: alerte.derniere_erreur ?? "" };
+}
+
+/**
+ * La liste des alertes, en lecture seule — aucune animation : ce sont des
+ * données qu'on lit, affichées en même temps que le reste de la section.
+ *
+ * `alertes` vaut `null` pendant le chargement, `{ erreur }` sur un échec,
+ * `{ disponible, liste }` sinon.
+ */
+export function ListeAlertes({ alertes }) {
+  let contenu;
+  if (alertes === null) {
+    contenu = <p className="text-corps-sm text-texte-doux">Chargement…</p>;
+  } else if (alertes.erreur) {
+    contenu = <p className="text-corps-sm text-secondaire">{alertes.erreur}</p>;
+  } else if (!alertes.disponible) {
+    contenu = (
+      <p className="text-corps-sm text-texte-doux">
+        Alertes indisponibles : la migration 26 n&apos;est pas appliquée.
+      </p>
+    );
+  } else if (alertes.liste.length === 0) {
+    contenu = <p className="text-corps-sm text-texte-doux">Aucune alerte.</p>;
+  } else {
+    contenu = (
+      <ul className="flex flex-col gap-3">
+        {alertes.liste.map((alerte) => {
+          const { titre, detail } = descriptionAlerte(alerte);
+          return (
+            <li
+              key={`${alerte.type}-${alerte.gp_id}-${alerte.marche ?? ""}-${alerte.libelle ?? ""}`}
+              className="flex flex-col gap-0.5"
+            >
+              <span className="text-label-sm text-texte-doux uppercase">
+                {alerte.gp || "Grand Prix inconnu"}
+              </span>
+              <span className="text-corps-sm text-texte font-medium">{titre}</span>
+              <span className="text-label-sm text-texte-doux normal-case">
+                {detail}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="border-squelette mt-3 border-t pt-3">
+      <p className="text-corps-sm text-texte mb-2 font-medium">Alertes</p>
+      {contenu}
+    </div>
+  );
+}
+
 /** Les quatre phases de l'indicateur de statut. */
 export const REPOS = "repos";
 export const EN_COURS = "encours";
@@ -185,6 +265,7 @@ export function VueAdmin({
   confirmation = false,
   etat = { phase: REPOS },
   tentative = 0,
+  alertes = null,
   onDemanderFigeage,
   onFiger,
   onSansFiger,
@@ -227,6 +308,10 @@ export function VueAdmin({
               disabled={enCours}
             />
           </div>
+
+          {/* Les alertes avant les boutons : c'est ce qu'on vient d'abord
+              vérifier, et elles disent souvent s'il faut appuyer. */}
+          <ListeAlertes alertes={alertes} />
 
           <p className="text-corps-sm text-secondaire mt-3.5">
             Le scraping tourne déjà tout seul, deux heures après les
@@ -346,6 +431,27 @@ export default function SectionAdmin() {
   // Rejoue la secousse d'`Alerte` à chaque tentative : sans elle, réessayer et
   // retomber sur le même message donnerait l'impression que rien n'est parti.
   const [tentative, setTentative] = useState(0);
+  const [alertes, setAlertes] = useState(null);
+
+  // Relues à chaque allumage du mode admin, jamais en arrière-plan : la section
+  // est un outil qu'on ouvre, pas un tableau de bord.
+  useEffect(() => {
+    if (!modeAdminActif) return undefined;
+    const controleur = new AbortController();
+    setAlertes(null);
+    chargerAlertes({ signal: controleur.signal }).then((resultat) => {
+      if (controleur.signal.aborted) return;
+      setAlertes(
+        resultat.ok
+          ? {
+              disponible: resultat.donnees?.disponible !== false,
+              liste: resultat.donnees?.alertes ?? [],
+            }
+          : { erreur: resultat.message },
+      );
+    });
+    return () => controleur.abort();
+  }, [modeAdminActif]);
 
   async function lancer(figer) {
     setConfirmation(false);
@@ -396,6 +502,7 @@ export default function SectionAdmin() {
       confirmation={confirmation}
       etat={etat}
       tentative={tentative}
+      alertes={alertes}
       onDemanderFigeage={() => setConfirmation(true)}
       onFiger={() => lancer(true)}
       onSansFiger={() => lancer(false)}

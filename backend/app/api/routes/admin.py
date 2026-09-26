@@ -35,6 +35,7 @@ bouton ou d'un `curl`.
 """
 
 import logging
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -45,6 +46,8 @@ from app.api.deps import exiger_admin
 from app.api.journal import journaliser_echecs
 from app.api.routes.resultats import RapportJob, traiter_grand_prix
 from app.api.routes.scraper import lancer_scraping
+from app.jobs.resultats import DEFINITIF_EN_ECHEC, SEUIL_ALERTE_DEFINITIF
+from app.supabase_client import ErreurSupabase, selectionner
 
 router = APIRouter(tags=["admin"])
 
@@ -159,3 +162,73 @@ async def executer_action(
         profil_id,
     )
     return await _EXECUTANTS[demande.action](demande)
+
+
+class AlerteAdmin(BaseModel):
+    """Une alerte du profil admin (`alertes_admin`, migration 26).
+
+    Trois types : `libelle_non_reconnu` (une issue pilote ou écurie ne désigne
+    aucun engagé au figeage — `marche` et `libelle` la nomment),
+    `rattachement_impossible` (OpenF1 muette au figeage) et
+    `definitif_en_echec` (`tentatives` échecs consécutifs du calcul définitif).
+    Chaque champ a une valeur par défaut (règle 3.3 du `CLAUDE.md`).
+    """
+
+    type: str = ""
+    gp_id: str = ""
+    gp: str = ""
+    marche: str | None = None
+    libelle: str | None = None
+    tentatives: int = 0
+    derniere_erreur: str | None = None
+    modifie_le: datetime | None = None
+
+
+class ReponseAlertes(BaseModel):
+    # `False` quand la table manque (migration 26 non appliquée) : l'écran le
+    # dit plutôt que d'afficher « aucune alerte ».
+    disponible: bool = True
+    alertes: list[AlerteAdmin] = []
+
+
+@router.get("/admin/alertes", response_model=ReponseAlertes)
+@journaliser_echecs(DOMAINE, "Chargement des alertes")
+async def alertes(profil_id: str = Depends(exiger_admin)) -> ReponseAlertes:
+    """Ce que l'administrateur doit voir sans lire les logs Railway.
+
+    Un échec du définitif n'est servi qu'à partir de `SEUIL_ALERTE_DEFINITIF`
+    tentatives consécutives : un hoquet d'OpenF1 rattrapé au tour suivant n'a
+    rien à faire ici.
+    """
+    try:
+        lignes = await selectionner(
+            "alertes_admin",
+            {
+                "select": "type,gp_id,marche,libelle,tentatives,derniere_erreur,"
+                "modifie_le,grands_prix(nom)",
+                "order": "modifie_le.desc",
+            },
+        )
+    except ErreurSupabase as erreur:
+        # `42P01` / `PGRST205` : table absente, la migration 26 n'est pas jouée.
+        if erreur.code in ("42P01", "PGRST205"):
+            logger.warning("[%s] Table alertes_admin absente : migration 26 à appliquer.", DOMAINE)
+            return ReponseAlertes(disponible=False)
+        raise
+
+    servies: list[AlerteAdmin] = []
+    for ligne in lignes:
+        if ligne.get("type") == DEFINITIF_EN_ECHEC and (
+            ligne.get("tentatives") or 0
+        ) < SEUIL_ALERTE_DEFINITIF:
+            continue
+        gp = ligne.get("grands_prix") or {}
+        if isinstance(gp, list):
+            gp = gp[0] if gp else {}
+        servies.append(
+            AlerteAdmin(
+                **{cle: valeur for cle, valeur in ligne.items() if cle != "grands_prix"},
+                gp=str(gp.get("nom") or ""),
+            )
+        )
+    return ReponseAlertes(alertes=servies)

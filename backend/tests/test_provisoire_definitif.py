@@ -69,6 +69,7 @@ class BaseSimulee:
         }
         self.resultats: dict | None = None
         self.appels: list[str] = []
+        self.alertes: dict[str, dict] = {}
 
     # -- supabase_client ---------------------------------------------------- #
 
@@ -98,8 +99,18 @@ class BaseSimulee:
         self.gp.update(valeurs)
         return [dict(self.gp)]
 
+    async def supprimer(self, table: str, _filtre: dict) -> list[dict]:
+        assert table == "alertes_admin"
+        supprimees = list(self.alertes.values())
+        self.alertes.clear()
+        return supprimees
+
     async def appeler_fonction(self, nom: str, arguments: dict):
         self.appels.append(nom)
+        if nom == "noter_echec_definitif":
+            alerte = self.alertes.setdefault(arguments["p_gp"], {"tentatives": 0})
+            alerte.update(tentatives=alerte["tentatives"] + 1, derniere_erreur=arguments["p_erreur"])
+            return alerte["tentatives"]
         entrees = {a["pronostic_id"]: a for a in arguments["p_attributions"]}
         if nom == "attribuer_points":
             for pid, entree in entrees.items():
@@ -151,7 +162,7 @@ def bakou(monkeypatch):
     async def completer_qualification(_nom, _donnees):
         return False
 
-    for nom in ("selectionner", "upserter", "mettre_a_jour", "appeler_fonction"):
+    for nom in ("selectionner", "upserter", "mettre_a_jour", "appeler_fonction", "supprimer"):
         monkeypatch.setattr(job, nom, getattr(base, nom))
     monkeypatch.setattr(job, "recuperer", recuperer)
     monkeypatch.setattr(job, "completer_qualification", completer_qualification)
@@ -231,3 +242,28 @@ def test_recalcul_admin_reserve_aux_gp_definitifs(bakou):
     assert rapport["modifies"] == 1
     assert bakou.points()[PARI_BORTOLETO] == 0
     assert _position(bakou.resultats, BORTOLETO) == 15
+
+
+def test_echecs_repetes_du_definitif_comptes_puis_effaces(bakou, monkeypatch):
+    """`roadmap.md` §3.17 : le définitif réessaie sans fin, mais chaque échec est
+    compté en base ; un succès efface l'alerte."""
+    asyncio.run(job.traiter(dict(bakou.gp)))
+
+    async def muette(_nom, _depart):
+        raise job.ErreurOpenF1("session_result : statut 502.")
+
+    recuperer = job.recuperer
+    monkeypatch.setattr(job, "recuperer", muette)
+    for _ in range(job.SEUIL_ALERTE_DEFINITIF):
+        asyncio.run(job.consolider_echus())
+
+    assert bakou.gp["statut_resultats"] == job.PROVISOIRE
+    assert bakou.alertes[GP_ID] == {
+        "tentatives": job.SEUIL_ALERTE_DEFINITIF,
+        "derniere_erreur": "session_result : statut 502.",
+    }
+
+    monkeypatch.setattr(job, "recuperer", recuperer)
+    asyncio.run(job.consolider_echus())
+    assert bakou.gp["statut_resultats"] == job.DEFINITIF
+    assert bakou.alertes == {}

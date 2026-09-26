@@ -3,7 +3,7 @@
 Comment les données entrent dans la base, et pourquoi c'est écrit ainsi.
 
 Fichiers : `backend/app/scraper/unibet.py`, `openf1.py`, `backend/app/jobs/scraper.py`,
-`jobs/resultats.py`, `backend/app/calcul/points.py`, `pilotes.py`.
+`jobs/resultats.py`, `jobs/rattachement.py`, `backend/app/calcul/points.py`, `pilotes.py`.
 
 ---
 
@@ -338,6 +338,30 @@ tour suivant réessaie.
    resterait candidat jusqu'à ce qu'il passe à `termine`, et une erreur par heure noierait
    les logs. Le silence est rattrapable manuellement.
 
+### Le rattachement des issues, juste après le figeage (v`0.79.0`)
+
+Le figeage ouvre les pronostics : c'est le moment où un libellé Unibet inconnu doit se
+voir. Dès que `figer` a réussi — job horaire **ou** déclenchement manuel —,
+`rattachement.rattacher_sans_echec` :
+
+1. lit les **engagés** du GP chez OpenF1 : `/drivers` de la session de qualification
+   (`session_name = "Qualifying"`) la plus proche de `date_qualifications` (à défaut de
+   `date_course`), refusée au-delà de 36 h (`openf1.engages`) ;
+2. rattache chaque issue pilote ou écurie à un engagé (`points.correspondance`, **la même
+   règle de rapprochement que le calcul**, alias de `pilotes.py` compris) ;
+3. écrit `numero_pilote` / `ecurie_id` sur les cotes et remplace les alertes de libellé
+   du GP, en une transaction (`rattacher_issues`, migration 26).
+
+Ce qui ne désigne aucun engagé est journalisé
+(`[rattachement] GP … : 1 issue(s) ne désignent aucun engagé : « X.Truc » [vainqueur]`) et
+remonte au profil admin avec le GP et le libellé exact. **Rien de tout cela ne bloque le
+figeage**, qui a déjà eu lieu : un échec d'OpenF1 laisse les cotes sans identifiant, crée
+une alerte `rattachement_impossible`, et le calcul retombe sur les libellés.
+
+Quelles issues sont rattachées — la **nature** de chaque marché — est déclarée à côté du
+registre des évaluateurs (`points._NATURES_EXACTES`, `_NATURES_FAMILLES`) ; un test exige
+qu'un slug exact du registre y figure.
+
 ---
 
 ## 9. Le déclenchement manuel
@@ -391,7 +415,7 @@ configuré » à qui n'a pas le bon secret lui apprendrait quelque chose pour ri
 | `/session_result` | résultats officiels — source principale |
 | `/race_control` | safety car, drapeau rouge |
 | `/laps` | meilleur tour |
-| `/drivers` | pilote → écurie |
+| `/drivers` | pilote → écurie ; celui de la **qualification** donne les engagés au figeage (§8) |
 | `/starting_grid` | grille de départ (conservée, non lue) |
 | `/sessions` + `/session_result` de « Qualifying » | pole position — `donnees_brutes.qualification` |
 
@@ -464,6 +488,13 @@ l'API. C'est ce qui permet de rejouer un calcul des semaines après la course.
 
 ### Le rapprochement des noms — le point le plus fragile
 
+> **Depuis la `0.79.0`, l'identifiant passe avant le nom.** `rattacher_identifiants`
+> enregistre dans la `Course` le `numero_pilote` et l'`ecurie_id` posés au figeage (§8) ;
+> `pilote_du_libelle` et `equipe_du_libelle` les consultent d'abord. Un numéro absent des
+> données de course, ou un identifiant d'écurie inconnu, rend la main au libellé — le
+> verdict est alors celui d'avant. Un même libellé rattaché à deux identifiants différents
+> n'est rattaché à aucun. Ce qui suit reste la règle du repli, **et celle du figeage**.
+
 Isolé dans `Course.pilote_du_libelle`. Cinq clés sont indexées par pilote : nom complet,
 nom de famille, acronyme, initiale + nom, prénom + nom.
 
@@ -484,6 +515,14 @@ favori du GP à 28 pts, tous ses pronostics seraient restés à `NULL`) et **`C.
 > pronostic reste non validé, ce qui se voit dans les logs.
 >
 > **À mettre à jour à chaque saison.**
+
+> **`pilotes.py` ne dit plus qui est engagé** (v`0.79.0`) : les engagés viennent de la
+> qualification OpenF1 au figeage, de `/drivers` de la course au calcul. Le module sert
+> encore aux **alias** (au figeage comme au calcul), aux **nationalités** et au **banc
+> d'essai**. Sa grille suit les baquets de Bakou (Hadjar chez Red Bull, Lawson chez Racing
+> Bulls, Tsunoda sans volant), mais une écurie périmée n'y fausse plus aucun verdict. Après
+> une alerte « libellé non reconnu », l'alias s'ajoute ici, puis
+> `POST /scraper/rattacher/{gp_id}`.
 
 *Note :* `_cle()` duplique volontairement `points.normaliser` en deux lignes — `points`
 importe ce module, l'importer en retour ferait un cycle.
@@ -576,8 +615,10 @@ cd backend
 | `tests/test_verdicts_gp.py` | un test par GP : `calculer()` rend les verdicts de la base ; les 2 pronos de Bakou (triplé 50, marge 0) |
 | `tests/test_marches.py` | les 39 slugs vus en base ont un évaluateur ou une entrée dans `points.NON_EVALUABLES` ; l'égalité McLaren/Mercedes à 33 pts des Pays-Bas, payée à partage |
 | `tests/test_evaluateurs.py` | registre (aucun préfixe), marchés de la `0.77.0`, filtrage au scraping, bonus sur la même issue du même marché, face-à-face à partage |
-| `tests/test_provisoire_definitif.py` | Bakou provisoire (Bortoleto 13ᵉ) puis définitif (15ᵉ) sur une base simulée : le verdict déjà écrit bascule en un seul appel à `remplacer_verdicts` ; pas de définitif avant 24 h ; plus de recalcul automatique ensuite ; recalcul admin réservé aux GP définitifs |
+| `tests/test_provisoire_definitif.py` | Bakou provisoire (Bortoleto 13ᵉ) puis définitif (15ᵉ) sur une base simulée : le verdict déjà écrit bascule en un seul appel à `remplacer_verdicts` ; pas de définitif avant 24 h ; plus de recalcul automatique ensuite ; recalcul admin réservé aux GP définitifs ; échecs répétés du définitif comptés puis effacés au succès |
 | `tests/test_direction_de_course.py` | safety car, VSC, drapeau rouge et meilleur tour sur les vrais messages `race_control` |
+| `tests/test_identifiants.py` | rattachement au figeage sur les 4 GP (`AK.Antonelli`, `C.Sainz Jr`, `Franco Colapinto`, Hadjar/Lawson selon la session), libellé inventé non reconnu, mêmes verdicts par identifiant que par libellé, identifiant prioritaire, job de rattachement et son échec OpenF1 |
+| `tests/test_alertes_admin.py` | `GET /admin/alertes` : GP et libellé servis, seuil des échecs du définitif, table absente |
 | `tests/fixtures/gp/*.json` | `donnees_brutes`, cotes, pronostics et verdicts attendus ; provenance dans la clé `source` |
 
 > **Un défaut connu se marque `xfail`**, avec la cause de `audit-evaluation.md` §4.3 en
@@ -624,8 +665,14 @@ Deux boucles depuis la `0.78.0` : le **provisoire** à l'arrivée, le **définit
 > provisoire, ses points comptés, et le tour suivant réessaie.
 >
 > **Un GP `definitif` n'est plus jamais recalculé automatiquement.**
+>
+> **Ses échecs sont comptés** (v`0.79.0`, `roadmap.md` §3.17). Chaque échec —
+> `ResultatsIndisponibles` compris, anormal à J+1 — incrémente `alertes_admin.tentatives`
+> (`noter_echec_definitif`). À partir de `SEUIL_ALERTE_DEFINITIF` (3) échecs consécutifs,
+> un `ALERTE` est journalisé et le GP apparaît dans le profil admin, tentatives et dernière
+> erreur. La boucle continue de réessayer ; un succès efface l'alerte.
 
-> **La fenêtre est calculée depuis `date_course`, SANS état conservé nulle part.** Un
+> **La fenêtre du provisoire est calculée depuis `date_course`, SANS état conservé nulle part.** Un
 > compteur de tentatives en base dirait la même chose au prix d'une colonne et d'une
 > écriture par essai, et se désynchroniserait au premier redéploiement.
 
@@ -698,6 +745,16 @@ curl -X POST "https://<railway>/jobs/resultats/<gp_id>/recalcul?relire=true" -H 
 > définitif avant l'heure le priverait de la relecture de J+1. Le scheduler ne l'emprunte
 > jamais. `POST /admin/action` ne l'expose pas : un champ `forcer` qu'un vieux client
 > enverrait encore est ignoré.
+
+```bash
+# RATTACHEMENT des issues aux engagés, rejoué à la main. SYNCHRONE.
+curl -X POST https://<railway>/scraper/rattacher/<gp_id> -H "X-Admin-Secret: <valeur>"
+```
+
+> Le job le fait seul après le figeage (§8). La route sert après un alias ajouté à
+> `pilotes.py`, ou quand OpenF1 était muette ce jour-là. Elle remplace les identifiants et
+> les alertes de libellé du GP ; `502` si OpenF1 ne répond pas. La réponse liste les
+> issues non reconnues.
 
 ```bash
 # BANC D'ESSAI — n'écrit RIEN. À utiliser AVANT la course.

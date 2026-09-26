@@ -11,7 +11,13 @@ Le rapprochement se fait donc par le nom, et il est fait dans
 `app/calcul/points.py` — jamais ici. Ce module ne fournit que **la matière** :
 qui court en 2026, sous quel numéro, et sous quels libellés Unibet l'écrit.
 
-Deux usages, et le second est celui qui a motivé le module :
+> **La liste des engagés ne vient PLUS d'ici** (v`0.79.0`). Au figeage, les
+> issues sont rattachées aux pilotes de la session de qualification d'OpenF1
+> (`jobs/rattachement.py`), et après la course à ceux de `/drivers`. La grille
+> ci-dessous ne sert qu'à trois choses : les alias, les nationalités, et le banc
+> d'essai. Une écurie périmée ici ne fausse aucun verdict.
+
+Trois usages :
 
 1. **Compléter le rapprochement de noms.** Cinq clés sont dérivées
    automatiquement de chaque pilote OpenF1 (nom complet, nom de famille,
@@ -21,7 +27,11 @@ Deux usages, et le second est celui qui a motivé le module :
    écrit « C.Sainz Jr ». Ces écarts sont irréductibles par une règle : ils sont
    donc listés un par un, en `alias`.
 
-2. **Fabriquer un index de pilotes sans appeler OpenF1**, pour le banc d'essai
+2. **La nationalité de chaque pilote** (`NATIONALITES`, `nationalite_du_pilote`),
+   pour le marché « nationalité du vainqueur » : `country_code` de `/drivers`
+   est déprécié.
+
+3. **Fabriquer un index de pilotes sans appeler OpenF1**, pour le banc d'essai
    `POST /jobs/resultats/{gp_id}/test` : injecter des résultats fictifs suppose
    de savoir qui porte le numéro 12, et l'API n'a rien à en dire avant la course.
 
@@ -32,12 +42,9 @@ Deux usages, et le second est celui qui a motivé le module :
 > absent laisse simplement le pronostic non validé (`points_gagnes = NULL`) au
 > lieu d'être attribué au mauvais.
 
-> **Et à revérifier à CHAQUE Grand Prix, pas seulement à chaque saison.** Les
-> numéros ne bougent qu'entre deux saisons, les baquets bougent en cours de
-> route. Deux baquets le sont aujourd'hui, ce qui touche trois lignes (numéros
-> 6, 22 et 30) : le titulaire remplacé
-> **reste dans la table**, à son écurie de contrat, marqué en commentaire. Voir
-> la note de `GRILLE`.
+> **Les baquets bougent en cours de route** : un pilote sans volant **reste dans
+> la table**, marqué en commentaire (Tsunoda, 22, depuis Bakou). Voir la note de
+> `GRILLE`.
 
 Les libellés Unibet ci-dessous ont été relevés sur les vraies cotes du GP Pays
 Bas 2026 (22 pilotes, marchés « Vainqueur » et « Podium »), les numéros et
@@ -82,27 +89,21 @@ class Pilote:
 # Vainqueur » doit retrouver, et `points.equipe_du_libelle` sait déjà ramener
 # « Red Bull » et « Haas » sur elle.
 #
-# **Elle décrit la grille EFFECTIVE, pas les contrats.** Deux baquets sont tenus
-# par un remplaçant — relevé sur les données OpenF1 du GP d'Espagne 2026, où
-# Lawson court chez Red Bull Racing et Tsunoda chez Racing Bulls. L'écurie écrite
-# ici est celle où le pilote court **réellement**, parce que c'est elle que le
-# banc d'essai (`index_pilotes`) doit reproduire.
+# **Elle décrit la grille EFFECTIVE, pas les contrats**, relevée sur `/drivers`
+# du GP d'Azerbaïdjan 2026 : Hadjar (6) a retrouvé Red Bull Racing, Lawson (30)
+# est revenu chez Racing Bulls. L'écurie écrite ici est celle où le pilote court
+# **réellement**, parce que c'est elle que le banc d'essai (`index_pilotes`)
+# doit reproduire.
 #
-# **Le titulaire remplacé reste dans la table**, à son écurie de contrat, marqué
-# en commentaire. Il n'y court pas aujourd'hui, donc OpenF1 ne sert jamais son
-# numéro, donc aucune de ses réponses n'est sollicitée : ni `alias_unibet` ni
-# `nationalite_du_pilote` ne répondent sur un numéro absent du classement, et
-# `points.voitures_de` ne compte que les pilotes **ayant une ligne de
-# classement** — Red Bull porte donc bien deux voitures, jamais trois. Son
-# retour ne coûte qu'un commentaire à retirer.
+# **Un pilote sans volant reste dans la table**, marqué en commentaire. OpenF1 ne
+# sert pas son numéro, donc aucune de ses réponses n'est sollicitée : ni
+# `alias_unibet` ni `nationalite_du_pilote` ne répondent sur un numéro absent du
+# classement, et `points.voitures_de` ne compte que les pilotes **ayant une
+# ligne de classement**. Son retour ne coûte qu'un commentaire à retirer.
 GRILLE: tuple[Pilote, ...] = (
     Pilote(1, "Lando", "Norris", "NOR", "McLaren", "GBR"),
     Pilote(3, "Max", "Verstappen", "VER", "Red Bull Racing", "NED"),
     Pilote(5, "Gabriel", "Bortoleto", "BOR", "Audi", "BRA"),
-    # **PROVISOIRE — remplacé chez Red Bull par Liam Lawson (30).** Il garde sa
-    # ligne, à son écurie de contrat : il ne prend pas le départ, donc le numéro
-    # 6 n'apparaît dans aucun classement et rien ici n'est interrogé. Le jour où
-    # il reprend le baquet, il n'y a que ce commentaire à retirer.
     Pilote(6, "Isack", "Hadjar", "HAD", "Red Bull Racing", "FRA"),
     Pilote(10, "Pierre", "Gasly", "GAS", "Alpine", "FRA"),
     Pilote(11, "Sergio", "Perez", "PER", "Cadillac", "MEX"),
@@ -116,11 +117,9 @@ GRILLE: tuple[Pilote, ...] = (
     Pilote(14, "Fernando", "Alonso", "ALO", "Aston Martin", "ESP"),
     Pilote(16, "Charles", "Leclerc", "LEC", "Ferrari", "MON"),
     Pilote(18, "Lance", "Stroll", "STR", "Aston Martin", "CAN"),
-    # **PROVISOIRE — remplaçant de Liam Lawson (30) chez Racing Bulls.** Il ne
-    # figurait pas dans les vingt-deux libellés du GP Pays Bas 2026, d'où son
-    # absence jusqu'ici — mais il COURT, et c'est le marché « nationalité du
-    # vainqueur » qui en dépendait : sans cette ligne, une victoire Tsunoda
-    # laissait `nationalite_du_pilote` muette et le pronostic à `NULL`.
+    # **SANS VOLANT depuis Bakou** : Lawson (30) a repris son baquet chez Racing
+    # Bulls. La ligne reste, à sa dernière écurie, pour le jour où il revient —
+    # une victoire Tsunoda laisserait sinon `nationalite_du_pilote` muette.
     #
     # Aucun alias : Unibet écrit « Y.Tsunoda », et la clé « initiale + nom »
     # dérivée par `points._indexer_pilotes` donne déjà « ytsunoda » des deux
@@ -128,11 +127,7 @@ GRILLE: tuple[Pilote, ...] = (
     Pilote(22, "Yuki", "Tsunoda", "TSU", "Racing Bulls", "JPN"),
     Pilote(23, "Alexander", "Albon", "ALB", "Williams", "THA"),
     Pilote(27, "Nico", "Hulkenberg", "HUL", "Audi", "GER"),
-    # **PROVISOIRE — remplaçant d'Isack Hadjar (6) chez Red Bull.** Son écurie de
-    # CONTRAT reste Racing Bulls ; c'est son baquet là-bas que tient Yuki
-    # Tsunoda (22). L'écurie écrite est celle où il court, pas celle qui le
-    # paie — le retour de Hadjar la ramènera à « Racing Bulls ».
-    Pilote(30, "Liam", "Lawson", "LAW", "Red Bull Racing", "NZL"),
+    Pilote(30, "Liam", "Lawson", "LAW", "Racing Bulls", "NZL"),
     Pilote(31, "Esteban", "Ocon", "OCO", "Haas F1 Team", "FRA"),
     Pilote(41, "Arvid", "Lindblad", "LIN", "Racing Bulls", "GBR"),
     Pilote(43, "Franco", "Colapinto", "COL", "Alpine", "ARG"),

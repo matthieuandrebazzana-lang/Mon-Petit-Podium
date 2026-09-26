@@ -314,6 +314,61 @@ def _index_pilotes(pilotes: list[dict]) -> dict[str, dict]:
     return index
 
 
+async def engages(nom_gp: str, reference: datetime) -> dict[str, dict]:
+    """Les pilotes engagés au GP, lus dans `/drivers` de ses qualifications.
+
+    Appelé au figeage des cotes, deux heures après les qualifications : la course
+    n'a pas encore de `/drivers`, la qualification si. C'est la liste des engagés
+    **de ce week-end**, baquets du jour compris — jamais la grille statique.
+
+    La session est retrouvée par sa date, comme la course (`session_de_course`) :
+    la qualification (`session_name = "Qualifying"`, pas celle du sprint) la plus
+    proche de `reference` — l'heure des qualifications en base, à défaut celle
+    du départ —, refusée au-delà de `ECART_MAXIMAL`.
+
+    Rend l'index `{numéro: identité}` de `_index_pilotes`, celui que
+    `calcul.points.correspondance` consomme.
+    """
+    async with httpx.AsyncClient(timeout=DELAI) as client:
+        sessions = await _appeler(
+            client,
+            "sessions",
+            {"year": reference.year, "session_name": SESSION_QUALIFICATION},
+        )
+        candidates = [
+            (abs(debut - reference), session)
+            for session in sessions
+            if (debut := _en_datetime(session.get("date_start"))) is not None
+            and session.get("session_key") is not None
+        ]
+        if not candidates:
+            raise ErreurOpenF1(f"{nom_gp} : aucune qualification OpenF1 en {reference.year}.")
+
+        ecart, session = min(candidates, key=lambda couple: couple[0])
+        if ecart > ECART_MAXIMAL:
+            raise ErreurOpenF1(
+                f"{nom_gp} : la qualification OpenF1 la plus proche "
+                f"({session.get('country_name')}, {session.get('date_start')}) est à "
+                f"{ecart}, au-delà des {ECART_MAXIMAL} tolérées."
+            )
+
+        pilotes = await _appeler(client, "drivers", {"session_key": session["session_key"]})
+
+    index = _index_pilotes(pilotes)
+    if not index:
+        raise ErreurOpenF1(
+            f"{nom_gp} : `/drivers` vide pour la qualification {session['session_key']}."
+        )
+    logger.info(
+        "[openf1] %s : %d engagé(s), qualification %s (%s).",
+        nom_gp,
+        len(index),
+        session["session_key"],
+        session.get("date_start"),
+    )
+    return index
+
+
 def _meilleurs_tours(tours: list[dict]) -> list[dict]:
     """Réduit `/laps` au meilleur tour de chaque pilote.
 

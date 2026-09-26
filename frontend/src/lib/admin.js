@@ -56,3 +56,15 @@ export function declencherScraper({ figer = true } = {}) {
     corps: { action: "scraper", figer },
   });
 }
+
+/**
+ * Les alertes que l'administrateur doit voir sans lire les logs Railway
+ * (`GET /admin/alertes`, backend `0.79.0`) : libellé Unibet non reconnu au
+ * figeage, rattachement impossible, calcul définitif en échec répété.
+ *
+ * `donnees.disponible` vaut `false` tant que la migration 26 n'est pas jouée :
+ * l'écran le dit, plutôt que d'afficher « aucune alerte ».
+ */
+export function chargerAlertes({ signal } = {}) {
+  return appelApi("/admin/alertes", { signal });
+}

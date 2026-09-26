@@ -24,7 +24,9 @@ from pydantic import BaseModel
 
 from app.api import journal
 from app.api.deps import exiger_configuration, exiger_secret
+from app.jobs.rattachement import rattacher
 from app.jobs.scraper import declencher_en_tache_de_fond
+from app.scraper.openf1 import ErreurOpenF1
 from app.supabase_client import appeler_fonction, selectionner
 
 router = APIRouter(tags=["scraper"])
@@ -158,6 +160,47 @@ async def declencher(
     # pas configuré » à un appelant qui n'a pas donné le bon secret lui
     # apprendrait quelque chose sur l'état du serveur pour rien.
     return await lancer_scraping(figer)
+
+
+class IssueNonReconnue(BaseModel):
+    id_outcome_unibet: str | None = None
+    marche: str = ""
+    libelle: str = ""
+
+
+class RapportRattachement(BaseModel):
+    gp: str = ""
+    gp_id: str = ""
+    engages: int = 0
+    rattachees: int = 0
+    non_reconnues: list[IssueNonReconnue] = []
+
+
+@router.post("/scraper/rattacher/{grand_prix_id}", response_model=RapportRattachement)
+@journaliser_echecs("Rattachement des issues")
+async def rattacher_issues(
+    grand_prix_id: UUID,
+    x_admin_secret: str | None = Header(default=None),
+) -> RapportRattachement:
+    """Rejoue le rattachement des issues d'un GP à ses engagés. SYNCHRONE.
+
+    Le job le fait seul, juste après le figeage (`jobs/rattachement.py`). Cette
+    route sert à le rejouer : OpenF1 muette ce jour-là, alias ajouté à
+    `calcul/pilotes.py` après une alerte « libellé non reconnu ». Elle remplace
+    les identifiants et les alertes de libellé du GP, sans toucher aux cotes.
+    """
+    exiger_secret(x_admin_secret, DOMAINE)
+    exiger_configuration()
+    try:
+        rapport = await rattacher(str(grand_prix_id))
+    except ValueError as erreur:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(erreur)) from erreur
+    except ErreurOpenF1 as erreur:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"OpenF1 : {erreur}",
+        ) from erreur
+    return RapportRattachement(**rapport)
 
 
 async def _grands_prix_servis(filtre: dict[str, str]) -> list[GrandPrixServi]:

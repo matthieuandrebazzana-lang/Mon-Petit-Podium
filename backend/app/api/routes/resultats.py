@@ -568,6 +568,7 @@ async def tester_resultats(
     cotes = await job.cotes_du_gp(str(gp_id))
 
     course = calcul.analyser(donnees)
+    calcul.rattacher_identifiants(course, cotes.values())
 
     lignes: list[PronosticTeste] = []
     for pronostic in pronostics:

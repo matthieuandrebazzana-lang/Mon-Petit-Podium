@@ -33,6 +33,12 @@ Le définitif est idempotent autrement : c'est un calcul pur des données, des
 cotes et des pronostics, et `remplacer_verdicts` écrit le même état à chaque
 rejeu. Un GP `definitif` sort de sa boucle.
 
+Le définitif n'a pas de fenêtre : il réessaie jusqu'au succès. Chaque échec est
+compté en base (`noter_echec_definitif`, migration 26) ; à partir de
+`SEUIL_ALERTE_DEFINITIF` échecs consécutifs, le GP apparaît dans le profil
+admin avec le nombre de tentatives et la dernière erreur. Un succès efface
+l'alerte.
+
 Un seul processus doit porter ces schedulers. Sur le plan gratuit de Railway, le
 service tourne en un exemplaire : c'est le cas aujourd'hui. **Le jour où le
 service passe à plusieurs instances, deux schedulers tourneront en parallèle** —
@@ -56,6 +62,7 @@ from app.supabase_client import (
     appeler_fonction,
     mettre_a_jour,
     selectionner,
+    supprimer,
     upserter,
 )
 
@@ -80,6 +87,14 @@ DELAI_DEFINITIF = timedelta(hours=24)
 # Rythme de la boucle du définitif. Un quart d'heure suffit à une échéance
 # d'une journée, et espace les nouvelles tentatives si OpenF1 est indisponible.
 INTERVALLE_DEFINITIF = timedelta(minutes=15)
+
+# Nombre d'échecs consécutifs du définitif à partir duquel le GP apparaît dans
+# le profil admin (`roadmap.md` §3.17). La boucle, elle, réessaie sans fin :
+# trois tours de quinze minutes suffisent à écarter un hoquet d'OpenF1.
+SEUIL_ALERTE_DEFINITIF = 3
+
+# `alertes_admin.type` (migration 26).
+DEFINITIF_EN_ECHEC = "definitif_en_echec"
 
 # `grands_prix.statut_resultats` (migration `20260926200000`).
 PROVISOIRE = "provisoire"
@@ -153,7 +168,9 @@ async def cotes_du_gp(gp_id: str) -> dict[str, dict]:
         "cotes",
         {
             "gp_id": f"eq.{gp_id}",
-            "select": "id_outcome_unibet,marche,libelle_marche,pilote,valeur",
+            # `*` et non les colonnes nommées : `numero_pilote` et `ecurie_id`
+            # (migration 26) manquent sur une base pas encore migrée.
+            "select": "*",
         },
     )
     return {ligne["id_outcome_unibet"]: ligne for ligne in lignes}
@@ -367,6 +384,8 @@ async def consolider(gp: dict, relire: bool = True) -> dict:
         },
     )
 
+    await _effacer_alerte_definitif(gp_id, nom)
+
     rapport["statut"] = "termine"
     rapport["statut_resultats"] = DEFINITIF
     rapport["modifies"] = (ecrit or {}).get("modifies", 0)
@@ -389,6 +408,44 @@ async def consolider(gp: dict, relire: bool = True) -> dict:
         rapport["restants"],
     )
     return rapport
+
+
+async def _noter_echec_definitif(gp_id: str, nom: str, erreur: BaseException) -> None:
+    """Compte un échec du définitif en base, et alerte au seuil.
+
+    **Le compteur vit en base, pas en mémoire** : c'est lui que le profil admin
+    lit, et un redéploiement de Railway ne doit pas le remettre à zéro. Son
+    écriture est best effort — sans la migration 26, seul le journal en garde
+    trace, et la boucle continue.
+    """
+    message = str(erreur) or type(erreur).__name__
+    try:
+        tentatives = await appeler_fonction(
+            "noter_echec_definitif", {"p_gp": gp_id, "p_erreur": message}
+        )
+    except ErreurSupabase:
+        logger.exception("[resultats] %s : échec du définitif non compté.", nom)
+        return
+    if isinstance(tentatives, int) and tentatives >= SEUIL_ALERTE_DEFINITIF:
+        logger.error(
+            "[resultats] ALERTE — %s : calcul définitif en échec %d fois de suite "
+            "(dernière erreur : %s). Il continue de réessayer toutes les %s.",
+            nom,
+            tentatives,
+            message,
+            INTERVALLE_DEFINITIF,
+        )
+
+
+async def _effacer_alerte_definitif(gp_id: str, nom: str) -> None:
+    """Un définitif réussi remet le compteur d'échecs à zéro."""
+    try:
+        await supprimer(
+            "alertes_admin",
+            {"gp_id": f"eq.{gp_id}", "type": f"eq.{DEFINITIF_EN_ECHEC}"},
+        )
+    except ErreurSupabase:
+        logger.exception("[resultats] %s : alerte du définitif non effacée.", nom)
 
 
 async def _candidats() -> list[dict]:
@@ -496,6 +553,8 @@ async def consolider_echus() -> None:
         if depart is None or maintenant < depart + DELAI_DEFINITIF:
             continue
 
+        # À J+1, un classement encore indisponible n'est plus l'état normal :
+        # il compte comme un échec, au même titre qu'une panne.
         try:
             await consolider(gp)
         except ResultatsIndisponibles as erreur:
@@ -505,15 +564,18 @@ async def consolider_echus() -> None:
                 erreur,
                 INTERVALLE_DEFINITIF,
             )
-        except (ErreurOpenF1, ErreurSupabase):
+            await _noter_echec_definitif(str(gp["id"]), nom, erreur)
+        except (ErreurOpenF1, ErreurSupabase) as erreur:
             logger.exception(
                 "[resultats] %s : échec du calcul définitif. Le GP reste provisoire, "
                 "nouvel essai dans %s.",
                 nom,
                 INTERVALLE_DEFINITIF,
             )
-        except Exception:  # noqa: BLE001 — la boucle doit survivre à tout
+            await _noter_echec_definitif(str(gp["id"]), nom, erreur)
+        except Exception as erreur:  # noqa: BLE001 — la boucle doit survivre à tout
             logger.exception("[resultats] %s : échec inattendu du calcul définitif.", nom)
+            await _noter_echec_definitif(str(gp["id"]), nom, erreur)
 
 
 async def dernier_statut_des_resultats() -> str | None:
