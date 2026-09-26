@@ -137,6 +137,17 @@ extension HistoriqueSaison {
                 PiloteClasse(prenom: "Max", nom: "Verstappen", ecurie: "Red Bull"),
                 PiloteClasse(prenom: "Lewis", nom: "Hamilton", ecurie: "Ferrari"),
                 PiloteClasse(prenom: "Kimi", nom: "Antonelli", ecurie: "Mercedes")
+            ]),
+            GrandPrixJoue(slug: "azerbaidjan", pronostics: [
+                prono("vainqueur", "Vainqueur", pilote: "O.Piastri", points: 30, gagnes: 0),
+                prono("podium", "Podium", pilote: "C.Leclerc", points: 15, gagnes: 15),
+                prono("podium", "Podium", pilote: "M.Verstappen", points: 11, gagnes: 11),
+                prono("bonus", "Pole position", pilote: "C.Leclerc", points: 29, gagnes: 0),
+                prono("bonus", "Meilleur tour", pilote: "L.Norris", points: 42, gagnes: 42)
+            ], podium: [
+                PiloteClasse(prenom: "Max", nom: "Verstappen", ecurie: "Red Bull"),
+                PiloteClasse(prenom: "Charles", nom: "Leclerc", ecurie: "Ferrari"),
+                PiloteClasse(prenom: "Lando", nom: "Norris", ecurie: "McLaren")
             ])
         ]
         return HistoriqueSaison(

@@ -343,11 +343,12 @@ private struct WidgetGrandPrix: View {
     }
 
     /// Le libellé du bouton du bas, `nil` quand il n'y a rien à faire — course partie,
-    /// résultats pas encore tombés.
+    /// résultats pas encore tombés, **ou pronostics pas encore ouverts** : avant le relevé
+    /// des cotes, le widget n'annonce que le départ et l'ouverture, sans rien à saisir.
     private var libelleBouton: String? {
         switch etat {
         case .ouvert: return pronosValides ? "Voir mes pronos" : "Valider mes pronos"
-        case .aVenir: return "Pronostiquer"
+        case .aVenir: return nil
         case .termine: return "Voir les résultats"
         case .ferme: return nil
         }

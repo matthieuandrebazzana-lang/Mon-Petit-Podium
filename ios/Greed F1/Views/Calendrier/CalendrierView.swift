@@ -594,11 +594,17 @@ extension EtatGp {
     /// ni à quelle heure il part. L'ordre des tests compte — une course courue est terminée
     /// quoi qu'il arrive, et une fermeture passée l'emporte sur des cotes encore affichées.
     /// La fermeture est `date_course`, sans marge ; un départ inconnu n'est jamais passé.
+    ///
+    /// **« Pronos ouverts » = ``EcheancePronostics/cotesArretees(statut:dateCourse:le:)``**,
+    /// la condition du widget et du décompte — pas la seule présence de cotes. Des cotes
+    /// relevées en cours de semaine sur un GP encore `a_venir` ne l'ouvrent pas : c'est
+    /// l'écart assumé avec `etatDuGpSaison` du web, qui les comptait.
     static func pour(_ enBase: GrandPrixEnBase?, le maintenant: Date = .now) -> EtatGp {
         guard let enBase else { return .aVenir }
         if enBase.statut == "termine" { return .termine }
         if let depart = enBase.dateCourse, depart <= maintenant { return .ferme }
-        if enBase.cotesDisponibles { return .ouvert }
+        if EcheancePronostics.cotesArretees(statut: enBase.statut, dateCourse: enBase.dateCourse,
+                                            le: maintenant) { return .ouvert }
         return .aVenir
     }
 }
