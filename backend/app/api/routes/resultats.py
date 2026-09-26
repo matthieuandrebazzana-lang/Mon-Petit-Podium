@@ -8,8 +8,10 @@ détail :
   pouvoir s'afficher sans session. Elle sert **en plus** les pronostics des
   membres d'un championnat, et cette partie-là exige un jeton **et**
   l'appartenance au championnat demandé.
-- `POST /jobs/resultats/{id}` écrit en base. Elle est fermée par le secret
-  partagé `X-Admin-Secret`, comme `POST /scraper/declencher`.
+- `POST /jobs/resultats/{id}` écrit en base (calcul provisoire). Elle est
+  fermée par le secret partagé `X-Admin-Secret`, comme `POST /scraper/declencher`.
+- `POST /jobs/resultats/{id}/recalcul` rejuge un GP **définitif**, même secret.
+  C'est la seule écriture qui réécrit des verdicts hors du définitif de J+1.
 - `POST /jobs/resultats/{id}/test` **n'écrit rien du tout** : elle rejoue le
   calcul sur des résultats fictifs fournis dans le corps de la requête. Même
   secret, mais aucun effet de bord — c'est un banc d'essai, pas un job.
@@ -74,6 +76,9 @@ class GrandPrixResume(BaseModel):
     nom: str
     date_course: datetime | None = None
     statut: str
+    # `provisoire` jusqu'au calcul définitif de J+1, puis `definitif` ; nul tant
+    # que la course n'a pas de résultats. Défaut pour une base non migrée.
+    statut_resultats: str | None = None
 
 
 class ResultatsServis(BaseModel):
@@ -95,10 +100,12 @@ class RapportJob(BaseModel):
     statut: str | None = None
     deja_recupere: bool = False
     pronostics_a_noter: int = 0
-    # Nombre de points effacés par `?forcer=true`. Zéro sur un appel ordinaire :
-    # une valeur par défaut, comme tout nouveau champ de modèle (règle 3.3), pour
-    # qu'un backend déployé sans elle ne rende pas 500 sur toute la réponse.
-    reinitialises: int = 0
+    # `provisoire` après le calcul de l'arrivée, `definitif` après J+1 ou un
+    # recalcul. Valeurs par défaut, comme tout nouveau champ de modèle (règle 3.3).
+    statut_resultats: str | None = None
+    # Verdicts réellement changés par le définitif ou le recalcul. Zéro sur le
+    # calcul provisoire, qui n'écrit que des `NULL`.
+    modifies: int = 0
     attribues: int = 0
     restants: int = 0
     en_attente: list[str] = []
@@ -243,7 +250,9 @@ class RapportTest(BaseModel):
 async def _grand_prix(gp_id: UUID) -> dict:
     lignes = await selectionner(
         "grands_prix",
-        {"id": f"eq.{gp_id}", "select": "id,nom,date_course,statut", "limit": "1"},
+        # `*` : `statut_resultats` en fait partie sur une base migrée, et son
+        # absence ne fait pas échouer la route sur une base qui ne l'est pas.
+        {"id": f"eq.{gp_id}", "select": "*", "limit": "1"},
     )
     if not lignes:
         raise HTTPException(
@@ -321,37 +330,47 @@ async def resultats_du_grand_prix(
 # --------------------------------------------------------------------------- #
 
 
-async def traiter_grand_prix(gp_id: UUID, forcer: bool) -> RapportJob:
-    """Traite un Grand Prix et rend le compte rendu. **Le garde est chez l'appelant.**
+def _traduire(erreur: Exception) -> HTTPException:
+    """Les refus du job, traduits en codes HTTP. **Un seul propriétaire** pour
+    les deux routes au secret et l'action d'administration.
 
-    Jumelle de `scraper.lancer_scraping`, et extraite pour la même raison à la
-    version `0.64.0` : deux routes mènent désormais ici — `POST /jobs/resultats/{id}`
-    fermée par `X-Admin-Secret` pour le `curl`, et `POST /admin/action` fermée
-    par le jeton du membre pour l'application. **Ce sont les deux traductions
-    d'erreur qui ne devaient surtout pas être recopiées** : `ValueError` vaut
-    `404` et `ResultatsIndisponibles` vaut `425 Too Early`, pas `422` — une
-    copie aurait fini par rendre « erreur serveur » sur une course pas encore
-    classée, et enverrait chercher une panne là où il n'y a qu'une attente.
-
-    Aucune identité n'est vérifiée ici : chaque route pose son garde avant.
+    `ResultatsIndisponibles` vaut `425 Too Early`, pas `422` : ce n'est pas une
+    panne, la course n'a simplement pas encore de classement publié. Les deux
+    refus de statut valent `409` : la requête est juste, c'est l'état du GP qui
+    l'empêche.
     """
-    exiger_configuration()
-
-    try:
-        rapport = await job.declencher_maintenant(str(gp_id), forcer=forcer)
-    except ValueError as erreur:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(erreur)
-        ) from erreur
-    except ResultatsIndisponibles as erreur:
-        # Ce n'est pas une panne : la course n'a simplement pas encore de
-        # classement publié. Un `422` la ferait passer pour un bug ; `425 Too
-        # Early` dit exactement de quoi il s'agit, et invite à réessayer.
-        raise HTTPException(
+    if isinstance(erreur, ValueError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(erreur))
+    if isinstance(erreur, ResultatsIndisponibles):
+        return HTTPException(
             status_code=status.HTTP_425_TOO_EARLY,
             detail=f"Les résultats ne sont pas encore publiés. {erreur}",
-        ) from erreur
+        )
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(erreur))
 
+
+_REFUS = (
+    ValueError,
+    ResultatsIndisponibles,
+    job.GrandPrixDefinitif,
+    job.GrandPrixNonDefinitif,
+)
+
+
+async def traiter_grand_prix(gp_id: UUID) -> RapportJob:
+    """Calcul provisoire d'un Grand Prix, et son compte rendu. **Le garde est
+    chez l'appelant.**
+
+    Deux routes mènent ici — `POST /jobs/resultats/{id}` fermée par
+    `X-Admin-Secret` pour le `curl`, et `POST /admin/action` fermée par le jeton
+    du membre pour l'application. Aucune identité n'est vérifiée ici : chaque
+    route pose son garde avant.
+    """
+    exiger_configuration()
+    try:
+        rapport = await job.declencher_maintenant(str(gp_id))
+    except _REFUS as erreur:
+        raise _traduire(erreur) from erreur
     return RapportJob(**rapport)
 
 
@@ -359,46 +378,61 @@ async def traiter_grand_prix(gp_id: UUID, forcer: bool) -> RapportJob:
 @journaliser_echecs(DOMAINE, "Déclenchement du job de résultats")
 async def declencher_resultats(
     gp_id: UUID,
-    forcer: bool = False,
     x_admin_secret: str | None = Header(default=None),
 ) -> RapportJob:
-    """Traite un Grand Prix à la demande : résultats, points, clôture.
+    """Calcul **provisoire** d'un Grand Prix à la demande : résultats, points,
+    clôture.
 
-    Contrairement au scraper, la réponse est **synchrone** et porte le compte
-    rendu complet. C'est la route des tests et des interventions manuelles :
-    savoir combien de pronostics ont été notés, et surtout lesquels sont restés
-    en attente, est tout l'intérêt de l'appel. Le traitement dure quelques
-    secondes — cinq appels OpenF1 au plus, et aucun si les résultats sont déjà
-    en base.
+    La réponse est **synchrone** et porte le compte rendu complet : savoir
+    combien de pronostics ont été notés, et lesquels sont restés en attente, est
+    tout l'intérêt de l'appel.
 
     Elle ignore la fenêtre horaire de la règle 4.3, jamais l'idempotence : un
-    pronostic déjà noté ne le sera pas une seconde fois, quel que soit le nombre
-    d'appels.
+    pronostic déjà noté ne l'est pas une seconde fois. Sur un GP **définitif**,
+    elle répond `409` et renvoie vers `/recalcul`.
 
-    ### `?forcer=true` — la porte de sortie, et elle efface
-
-    C'est la **seule** façon de faire rejuger un pronostic déjà noté, et donc la
-    seule écriture du système qui défait un point acquis. Elle existe pour un cas
-    précis : un validateur corrigé **après** que le job a tourné. L'idempotence
-    est ce qui protège un GP d'être noté deux fois — c'est aussi ce qui fige un
-    verdict faux, et rien d'autre ne le débloque.
-
-    Les points sont rendus à `NULL`, **jamais à `0`** : `0` veut dire « raté » et
-    `attribuer_points` ne réécrit que les `NULL`, si bien qu'une remise à zéro
-    gèlerait pour de bon exactement ce qu'on veut recalculer (`reinitialiser_points`).
-
-    **OpenF1 n'est pas rappelée** : `resultats_gp` n'est pas touché, le calcul
-    rejoue le JSON conservé. C'est précisément à cela que sert `donnees_brutes`.
-
-    Le défaut est `false`, comme `?figer=false` au scraper : la porte de sortie
-    est toujours explicite.
+    `?forcer=true` n'existe plus depuis la `0.78.0` : il est remplacé par
+    `/recalcul`, transactionnel.
     """
     exiger_secret(x_admin_secret, DOMAINE)
 
     # Le secret d'abord, la configuration ensuite : répondre « Supabase n'est
     # pas configuré » à qui n'a pas donné le bon secret lui apprendrait quelque
     # chose sur l'état du serveur pour rien. Même ordre qu'au scraper.
-    return await traiter_grand_prix(gp_id, forcer)
+    return await traiter_grand_prix(gp_id)
+
+
+@router.post("/jobs/resultats/{gp_id}/recalcul", response_model=RapportJob)
+@journaliser_echecs(DOMAINE, "Recalcul d'un Grand Prix définitif")
+async def recalculer_resultats(
+    gp_id: UUID,
+    relire: bool = False,
+    x_admin_secret: str | None = Header(default=None),
+) -> RapportJob:
+    """Rejuge **tous** les pronostics d'un GP définitif. Seule route qui le fasse.
+
+    Après le calcul définitif de J+1, plus rien ne recalcule un GP tout seul.
+    Cette route existe pour les deux cas où il le faut :
+
+    - un évaluateur corrigé après coup — défaut, `relire=false` : le calcul
+      rejoue le `donnees_brutes` conservé, sans appel à OpenF1 ;
+    - une décision tardive des commissaires — `relire=true` : OpenF1 est relue
+      et `resultats_gp` remplacé.
+
+    **L'écriture est transactionnelle** (`remplacer_verdicts`) : résultats,
+    verdicts, podiums et statut changent d'un bloc, ou pas du tout. Jamais un GP
+    « tout en attente » entre deux appels, le défaut de l'ancien
+    `?forcer=true` (risque R5 de l'audit).
+
+    `409` sur un GP qui n'est pas encore définitif : sa boucle s'en charge.
+    """
+    exiger_secret(x_admin_secret, DOMAINE)
+    exiger_configuration()
+    try:
+        rapport = await job.recalculer(str(gp_id), relire=relire)
+    except _REFUS as erreur:
+        raise _traduire(erreur) from erreur
+    return RapportJob(**rapport)
 
 
 # --------------------------------------------------------------------------- #

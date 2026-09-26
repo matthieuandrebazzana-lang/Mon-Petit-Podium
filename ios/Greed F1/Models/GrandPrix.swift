@@ -19,10 +19,14 @@ struct GrandPrixEnBase: Decodable, Identifiable, Equatable, Hashable {
     let statut: String
     /// Au moins un marché servi. Toujours faux sur une lecture directe, qui ne les demande pas.
     let cotesDisponibles: Bool
+    /// `provisoire`, `definitif` ou `nil` (pas de résultats) — ``StatutResultats``. Nul sur
+    /// une lecture qui ne le demande pas.
+    let statutResultats: String?
 
     enum CodingKeys: String, CodingKey {
         case id, nom, statut, marches
         case dateCourse = "date_course"
+        case statutResultats = "statut_resultats"
         case dateQualifications = "date_qualifications"
     }
 
@@ -36,6 +40,7 @@ struct GrandPrixEnBase: Decodable, Identifiable, Equatable, Hashable {
         dateCourse = try c.decodeIfPresent(Date.self, forKey: .dateCourse)
         dateQualifications = try c.decodeIfPresent(Date.self, forKey: .dateQualifications)
         statut = try c.decode(String.self, forKey: .statut)
+        statutResultats = try? c.decodeIfPresent(String.self, forKey: .statutResultats)
         // `try?` : un marché mal formé fait perdre l'information « cotes présentes », jamais
         // le Grand Prix, et encore moins la liste.
         let marches = (try? c.decodeIfPresent([Marche].self, forKey: .marches)) ?? nil

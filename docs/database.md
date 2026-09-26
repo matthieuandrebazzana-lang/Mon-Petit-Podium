@@ -126,6 +126,19 @@ toute la table sans lui.
 | `date_course` | timestamptz, nullable | **en UTC** |
 | `date_qualifications` | timestamptz, nullable | migration 11 — **écrite, jamais dérivée** (migration 20) |
 | `statut` | text | `a_venir` \| `cotes_figees` \| `termine` |
+| `statut_resultats` | text, nullable | migration 25 — `NULL` \| `provisoire` \| `definitif` |
+
+> ### `statut_resultats` — provisoire, puis définitif à J+1 (migration 25, v`0.78.0`)
+>
+> | Valeur | Posée par | Sens |
+> |---|---|---|
+> | `NULL` | défaut | pas encore de résultats |
+> | `provisoire` | le job, au premier calcul (`attribuer_points`) | points comptés, classement de l'arrivée |
+> | `definitif` | `remplacer_verdicts`, 24 h après `date_course`, ou recalcul admin | OpenF1 relue, tous les verdicts réécrits |
+>
+> Contrainte `grands_prix_statut_resultats_valide`. La migration a marqué Pays-Bas,
+> Italie et Espagne `definitif`, Azerbaïdjan `provisoire` (seulement s'il n'avait encore
+> aucun statut : la rejouer ne rouvre pas un GP définitif). Règle métier : `metier.md` §4.
 
 > **Le rapprochement se fait sur `id_unibet`, JAMAIS sur le nom.** Unibet écrit
 > « GP Pays Bas » cette semaine et « GP Pays-Bas » la suivante.
@@ -260,9 +273,11 @@ plusieurs lignes) : c'est le trigger `pronostics_max_trois_bonus`.
 > rejouée) ramènent donc le statut à `en_attente` sans que le code appelant le sache. La
 > contrainte `pronostics_statut_evaluation_coherent` refuse toute autre combinaison.
 >
-> Le statut n'est **pas encore servi** aux écrans : `pronostics_du_joueur` et
-> `pronostics_du_championnat` ne le lisent pas, et un `non_evaluable` s'affiche « en
-> attente » comme avant. Voir `roadmap.md`.
+> **Servi aux écrans depuis la migration 25** : `pronostics_du_joueur` porte
+> `statut_evaluation`, et `pronostics_du_championnat`, qui l'appelle pour chaque membre,
+> en hérite **sans être remplacée** (aucun conflit avec la 18). Les lectures directes du
+> web (`lib/profils.js`, `lib/pronostics.js`) sélectionnent la colonne elles-mêmes. Un
+> `non_evaluable` s'affiche « Non évaluable », plus « en attente ».
 
 ### `public.pronostic_podium`
 
@@ -291,6 +306,10 @@ pilotes }`. **`laps` est réduit au meilleur tour par pilote** — la réponse c
 654 Ko par GP. **`qualification`** (v`0.77.0`) est le `session_result` des qualifications du
 week-end, qui donne la pole : c'est **la seule clé que le job ajoute après coup** à une
 ligne existante, quand elle manque (`scraper.md` §10).
+
+**Depuis la migration 25, la ligne est remplacée une fois** : au calcul définitif, 24 h
+après la course, par une relecture complète d'OpenF1 (`remplacer_verdicts`). Un recalcul
+admin la remplace de nouveau seulement s'il est demandé avec `relire=true`.
 
 ---
 
@@ -386,7 +405,8 @@ ligne existante, quand elle manque (`scraper.md` §10).
 | `enregistrer_pronostics(...)` | efface le jeu précédent et écrit le nouveau, une transaction |
 | `pronostics_du_joueur(profil, gp)` | pronostics rapprochés des cotes (`left join`) |
 | `pronostics_du_championnat(championnat, gp)` | tous les membres, voiture et total |
-| `attribuer_points(gp, jsonb)` | **la fonction la plus sensible du projet** |
+| `attribuer_points(gp, jsonb)` | **la fonction la plus sensible du projet** — calcul provisoire |
+| `remplacer_verdicts(gp, jsonb, donnees, statut)` | calcul définitif et recalcul admin : **remplace** résultats et verdicts, une transaction (migration 25) |
 | `classement_du_championnat(championnat)` | classement trié et rangé, avatars compris |
 | `stats_du_profil(profil, saison)` | les quatre chiffres de la grille 2×2 |
 | `calendrier_du_championnat(championnat, profil, saison)` | une ligne par GP |
@@ -412,6 +432,15 @@ ligne existante, quand elle manque (`scraper.md` §10).
 > pronostic encore à `NULL` seulement ; elle rend `attribues`, `restants` (`en_attente`) et
 > `non_evaluables`. Ouverte à `authenticated`, elle
 > laisserait n'importe qui s'attribuer le score de son choix.
+
+> **`remplacer_verdicts` fait l'inverse, et c'est son rôle** (migration 25). Elle reçoit
+> le verdict de chaque pronostic du GP et, **dans la transaction de l'appel** : remplace
+> `resultats_gp` si `p_donnees` est fourni, réécrit `points_gagnes` et
+> `statut_evaluation` de **tous** les pronostics du GP (un pronostic absent de la liste
+> repart `en_attente`), resynchronise `pronostic_podium`, puis pose `statut = 'termine'`
+> et `statut_resultats`. Un échec n'écrit rien : jamais de GP « tout en attente » entre
+> deux appels, le défaut de l'ancien `?forcer=true`. Réservée à `service_role`. Rend
+> `modifies`, `attribues`, `restants`, `non_evaluables`.
 
 > **`slug_gp` ne remplace JAMAIS `id_unibet` comme clé de rapprochement.** Elle sert à
 > reconnaître un Grand Prix **déjà présent** malgré une orthographe changeante — c'est le
@@ -541,7 +570,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les vingt-quatre migrations
+## 6. Les vingt-cinq migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -569,6 +598,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 22 | `20260913_storage_rls_extension` | **contrainte d'extension sur les dépôts** : `nom_de_photo_valide`, et les quatre politiques `insert`/`update` de Storage amendées par `alter policy` | **16** |
 | 23 | `20260918_fermeture_au_depart` | **retire la marge de cinq minutes** : `pronostics_fermes` ferme à `date_course`, plus à `date_course − 5 min` | **5** |
 | 24 | `20260926120000_statut_evaluation` | **`statut_evaluation`** sur `pronostics`, trigger de dérivation, `attribuer_points` qui écrit `non_evaluable` / `en_attente`. **À appliquer avant le backend `0.77.0`** | 5, **6** |
+| 25 | `20260926200000_resultats_provisoires` | **`grands_prix.statut_resultats`**, les quatre GP courus marqués, **`remplacer_verdicts`**, `pronostics_du_joueur` qui sert `statut_evaluation`. **À appliquer avant le backend `0.78.0`** | 3, 6, **24** |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -594,6 +624,7 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **16** après **22** | la contrainte d'extension sur les dépôts de photos | rejouer 22 |
 | **5** après **23** | la marge de cinq minutes, restaurée en base seule | rejouer 23 |
 | **6** après **24** | l'écriture de `non_evaluable` par `attribuer_points` (le trigger garde `gagne` / `perdu` / `en_attente` cohérents) | rejouer 24 |
+| **5** ou **6** après **25** | `statut_evaluation` dans les pronostics servis (un `non_evaluable` redevient « en attente » à l'écran) | rejouer 25 |
 
 **La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12
 et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre les écrans

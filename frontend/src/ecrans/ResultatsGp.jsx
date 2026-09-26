@@ -25,6 +25,11 @@ import {
 import { useDonnees } from "../lib/useDonnees.js";
 import { choixDuPronostic } from "../lib/pronostics.js";
 import { formaterDepart, formaterPoints } from "../lib/format.js";
+import {
+  estNonEvaluable,
+  estProvisoire,
+  MENTION_PROVISOIRE,
+} from "../lib/resultats.js";
 
 /**
  * Maquette 11 — les résultats d'un Grand Prix couru.
@@ -147,8 +152,27 @@ function TitreSection({ titre, sousTitre }) {
  *  > Mesuré sur carte blanche : coche vert sauge sur vert sauge à 15 % →
  *  > **4,01:1**, au-dessus des 3:1 d'un élément graphique porteur de sens. La
  *  > croix bordeaux sur bordeaux à 10 % tient 8,94:1 et ne bouge pas. */
-export function Verdict({ pointsGagnes }) {
-  if (pointsGagnes === null || pointsGagnes === undefined) {
+export function Verdict({ pointsGagnes, statut }) {
+  const sansPoints = pointsGagnes === null || pointsGagnes === undefined;
+
+  // Quatrième état depuis la `0.78.0` : aucun évaluateur ne porte ce marché.
+  // Ni l'horloge (« bientôt ») ni la croix (« raté ») ne disent vrai ; le tiret
+  // dit « rien à juger ». Même aplat que l'attente : ce n'est pas un verdict.
+  if (sansPoints && estNonEvaluable(statut)) {
+    return (
+      <span
+        aria-label="Pronostic non évaluable"
+        title="Non évaluable : ce marché n'a pas pu être jugé"
+        className="bg-fond flex size-[22px] shrink-0 items-center justify-center rounded-full"
+      >
+        <span aria-hidden="true" className="text-texte-doux text-[12px] font-medium">
+          –
+        </span>
+      </span>
+    );
+  }
+
+  if (sansPoints) {
     return (
       <span
         aria-label="En attente de validation"
@@ -256,7 +280,10 @@ function WidgetPronostic({ pronostic }) {
           pointsGagnes={pronostic.points_gagnes}
           points={pronostic.points}
         />
-        <Verdict pointsGagnes={pronostic.points_gagnes} />
+        <Verdict
+          pointsGagnes={pronostic.points_gagnes}
+          statut={pronostic.statut_evaluation}
+        />
       </span>
     </li>
   );
@@ -693,7 +720,10 @@ function LigneMembre({ ligne, estMoi, avecPhotos = false }) {
                       pointsGagnes={pronostic.points_gagnes}
                       points={pronostic.points}
                     />
-                    <Verdict pointsGagnes={pronostic.points_gagnes} />
+                    <Verdict
+                      pointsGagnes={pronostic.points_gagnes}
+                      statut={pronostic.statut_evaluation}
+                    />
                   </span>
                 </li>
               ))}
@@ -767,6 +797,7 @@ export default function ResultatsGp() {
   const { donnees, chargement, echec, recharger } = useDonnees(cle, chargeur);
 
   const gp = donnees?.grand_prix ?? null;
+  const provisoire = estProvisoire(gp?.statut_resultats);
   const depart = formaterDepart(gp?.date_course);
   const retour = championnatId ? `/championnats/${championnatId}` : "/accueil";
 
@@ -823,7 +854,11 @@ export default function ResultatsGp() {
           libelleRetour={championnatId ? "Championnat" : "Accueil"}
           sousTitre={
             gp
-              ? [donnees?.disponible ? "Terminé" : "À venir", depart.courte]
+              ? [
+                  donnees?.disponible ? "Terminé" : "À venir",
+                  donnees?.disponible && provisoire ? MENTION_PROVISOIRE : null,
+                  depart.courte,
+                ]
                   .filter(Boolean)
                   .join(" · ")
               : null
@@ -859,9 +894,11 @@ export default function ResultatsGp() {
                   <TitreSection
                     titre="Résultats du GP"
                     sousTitre={
-                      donnees.disponible
-                        ? "Classement officiel de la course"
-                        : "Classement pas encore publié"
+                      !donnees.disponible
+                        ? "Classement pas encore publié"
+                        : provisoire
+                          ? "Classement provisoire · définitif 24 h après la course"
+                          : "Classement officiel de la course"
                     }
                   />
                 </div>

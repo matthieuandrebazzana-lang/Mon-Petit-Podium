@@ -513,7 +513,7 @@ commençait par `ecurie` ou `equipe` (C3).
 | `les-2-voitures-sur-le-podium` | l'écurie désignée a ses deux voitures dans le top 3 |
 | famille `top-N` | position ≤ N |
 | famille `{écurie}-les-2-voitures-dans-le-top-N` | oui/non |
-| famille `face-a-face-{a}-{b}` | duel, adversaires lus dans les issues sœurs |
+| famille `face-a-face-{a}-{b}` | duel, adversaires lus dans les issues sœurs ; deux non-classés à tours égaux : **partage** (÷2, v`0.78.0`) |
 
 **Un slug absent du registre n'est pas évaluable** : le scraper ne l'enregistre pas (§7),
 et un pronostic qui le porterait passe `non_evaluable`. `NON_EVALUABLES` liste les marchés
@@ -575,7 +575,8 @@ cd backend
 |---|---|
 | `tests/test_verdicts_gp.py` | un test par GP : `calculer()` rend les verdicts de la base ; les 2 pronos de Bakou (triplé 50, marge 0) |
 | `tests/test_marches.py` | les 39 slugs vus en base ont un évaluateur ou une entrée dans `points.NON_EVALUABLES` ; l'égalité McLaren/Mercedes à 33 pts des Pays-Bas, payée à partage |
-| `tests/test_evaluateurs.py` | registre (aucun préfixe), marchés de la `0.77.0`, filtrage au scraping, bonus identique à un obligatoire |
+| `tests/test_evaluateurs.py` | registre (aucun préfixe), marchés de la `0.77.0`, filtrage au scraping, bonus sur la même issue du même marché, face-à-face à partage |
+| `tests/test_provisoire_definitif.py` | Bakou provisoire (Bortoleto 13ᵉ) puis définitif (15ᵉ) sur une base simulée : le verdict déjà écrit bascule en un seul appel à `remplacer_verdicts` ; pas de définitif avant 24 h ; plus de recalcul automatique ensuite ; recalcul admin réservé aux GP définitifs |
 | `tests/test_direction_de_course.py` | safety car, VSC, drapeau rouge et meilleur tour sur les vrais messages `race_control` |
 | `tests/fixtures/gp/*.json` | `donnees_brutes`, cotes, pronostics et verdicts attendus ; provenance dans la clé `source` |
 
@@ -597,12 +598,32 @@ pour l'audit ; en production, le job les ajoute au prochain passage sur ce GP.
 
 ## 12. Le job de résultats
 
-| Réglage | Valeur |
-|---|---|
-| Intervalle | 5 min |
-| Déclenchement | départ + 1h30 |
-| Fenêtre | 3 h |
-| Statuts surveillés | `a_venir` **et** `cotes_figees` |
+Deux boucles depuis la `0.78.0` : le **provisoire** à l'arrivée, le **définitif** à J+1.
+
+| Réglage | Provisoire (`surveiller`) | Définitif (`consolider_echus`) |
+|---|---|---|
+| Intervalle | 5 min | 15 min |
+| Déclenchement | départ + 1h30 | **départ + 24 h** |
+| Fenêtre | 3 h | aucune : réessaie jusqu'au succès |
+| GP concernés | `statut` `a_venir` **et** `cotes_figees` | `statut_resultats = provisoire` |
+| Écriture | `attribuer_points` (les `NULL` seuls) | `remplacer_verdicts` (tout le GP, une transaction) |
+| Statut posé | `termine` + `provisoire` | `termine` + `definitif` |
+| Premier tour après démarrage | 30 s | **15 s — le rattrapage** |
+
+> ### Le définitif, et son rattrapage au démarrage
+> 24 h après `date_course`, `consolider` relit **tout** chez OpenF1 — classement,
+> `/drivers`, `race_control`, tours, grille, qualifications (celles déjà conservées font
+> foi si OpenF1 ne les rend plus) —, puis rejuge **chaque** pronostic du GP, y compris
+> ceux déjà jugés, et `remplacer_verdicts` écrit le tout d'un bloc. C'est ce qui rattrape
+> les pénalités posées après l'arrivée (Bakou 2026 : Bortoleto 13ᵉ puis 15ᵉ,
+> `audit-evaluation.md` C5) et les données arrivées en retard (R3).
+>
+> Le premier tour de cette boucle part **15 s après le démarrage du backend** : un GP
+> resté provisoire pendant une veille ou un redéploiement de Railway reçoit son calcul
+> définitif dès le retour du service. Un échec (OpenF1 indisponible) laisse le GP
+> provisoire, ses points comptés, et le tour suivant réessaie.
+>
+> **Un GP `definitif` n'est plus jamais recalculé automatiquement.**
 
 > **La fenêtre est calculée depuis `date_course`, SANS état conservé nulle part.** Un
 > compteur de tentatives en base dirait la même chose au prix d'une colonne et d'une
@@ -617,7 +638,7 @@ journalisée **une seule fois** (garde-fou en mémoire).
 
 **Le GP passe à `termine` même s'il reste des pronostics à `NULL`** : la course est
 courue, et le laisser dans la boucle ferait rappeler OpenF1 toutes les cinq minutes pour
-rien. Les `NULL` se rattrapent par un déclenchement manuel.
+rien. Le définitif, à J+1, rejugera de toute façon chaque pronostic.
 
 > ### Le statut écrit par le job (v`0.77.0`, migration 24)
 > `attribuer_points` reçoit, pour chaque pronostic sans points, soit ses points (le
@@ -626,7 +647,7 @@ rien. Les `NULL` se rattrapent par un déclenchement manuel.
 > `POST /jobs/resultats/{gp_id}` liste `en_attente` et `non_evaluables` séparément.
 > Détail dans `database.md`.
 
-### Trois étages d'idempotence
+### Trois étages d'idempotence (provisoire)
 
 1. **Récupération** — `resultats_gp.gp_id` est `unique`. Une ligne existante ⇒ OpenF1
    n'est pas rappelée, le calcul est rejoué sur le JSON conservé. **Seule exception : les
@@ -635,41 +656,48 @@ rien. Les `NULL` se rattrapent par un déclenchement manuel.
    **C'est la base qui porte la garantie, pas le code appelant.**
 3. **Surveillance** — un GP passé à `termine` sort du champ de la boucle.
 
+Le définitif est idempotent autrement : un calcul **pur** des données, des cotes et des
+pronostics, et une écriture qui **remplace** — rejouée, elle écrit le même état. Un GP
+`definitif` sort de sa boucle.
+
 ---
 
 ## 13. Les routes de rattrapage
 
 ```bash
-# Force le traitement d'un GP : résultats, points, clôture. SYNCHRONE.
+# Calcul PROVISOIRE d'un GP, à la demande : résultats, points, clôture. SYNCHRONE.
 curl -X POST https://<railway>/jobs/resultats/<gp_id> -H "X-Admin-Secret: <valeur>"
 ```
 
 Synchrone, contrairement au scraper : c'est la route des interventions manuelles, et
 savoir combien de pronostics ont été notés — **surtout lesquels sont restés en attente** —
 est tout l'intérêt de l'appel. Elle ignore la fenêtre horaire, **jamais l'idempotence**.
-`425 Too Early` si les résultats ne sont pas publiés.
+`425 Too Early` si les résultats ne sont pas publiés, **`409` sur un GP définitif**. Même
+chemin pour l'action « resultats » de `POST /admin/action`.
 
 ```bash
-# RECALCUL FORCÉ : efface les points du GP, puis les recalcule. SANS rappeler OpenF1.
-curl -X POST "https://<railway>/jobs/resultats/<gp_id>?forcer=true" -H "X-Admin-Secret: <valeur>"
+# RECALCUL d'un GP DÉFINITIF : rejuge TOUS ses pronostics, une transaction.
+curl -X POST "https://<railway>/jobs/resultats/<gp_id>/recalcul" -H "X-Admin-Secret: <valeur>"
+# … en relisant OpenF1 (décision tardive des commissaires) :
+curl -X POST "https://<railway>/jobs/resultats/<gp_id>/recalcul?relire=true" -H "X-Admin-Secret: <valeur>"
 ```
 
-> ### `?forcer=true` — la seule écriture qui défait un point acquis
+> ### `/recalcul` — la seule route qui réécrit un verdict définitif (v`0.78.0`)
 >
-> L'idempotence protège un GP d'être noté deux fois. **C'est aussi ce qui fige un verdict
-> faux** : `attribuer_points` ne réécrit que les `NULL`, donc un validateur corrigé après
-> le passage du job rattrape ce qu'il n'avait pas su juger, et jamais ce qu'il avait mal
-> jugé. Rien d'autre ne débloque un `0`.
+> Elle **remplace `?forcer=true`**, supprimé. `forcer` rendait les points à `NULL` puis
+> les réécrivait en **deux appels** : entre les deux, tout le GP s'affichait « en
+> attente », et un échec au milieu l'y laissait (risque R5 de l'audit). `/recalcul` passe
+> par `remplacer_verdicts`, la même écriture que le définitif : résultats, verdicts,
+> podiums et statut changent d'un bloc, ou pas du tout.
 >
-> **Les points sont rendus à `NULL`, jamais à `0`.** `0` veut dire « raté » : une remise à
-> zéro gèlerait pour de bon exactement ce qu'on veut recalculer. `pronostic_podium` suit son
-> parent, sans quoi les deux colonnes divergeraient sur un podium resté non jugé.
+> Par défaut **OpenF1 n'est pas rappelée** (`relire=false`) : le calcul rejoue le JSON
+> conservé — le cas d'un évaluateur corrigé après coup. `relire=true` relit OpenF1 et
+> remplace `resultats_gp`. La réponse porte `modifies`, le nombre de verdicts changés.
 >
-> **OpenF1 n'est pas rappelée** : `resultats_gp` n'est pas touché, le calcul rejoue le JSON
-> conservé — ce à quoi sert `donnees_brutes`. La réponse porte `reinitialises`.
->
-> Défaut `false`, comme `?figer=false` au scraper : la porte de sortie est toujours
-> explicite. **Le scheduler ne l'emprunte jamais.** Voir `bugs-connus.md` §24.
+> **`409` sur un GP qui n'est pas encore définitif** : sa boucle s'en charge, et le rendre
+> définitif avant l'heure le priverait de la relecture de J+1. Le scheduler ne l'emprunte
+> jamais. `POST /admin/action` ne l'expose pas : un champ `forcer` qu'un vieux client
+> enverrait encore est ignoré.
 
 ```bash
 # BANC D'ESSAI — n'écrit RIEN. À utiliser AVANT la course.

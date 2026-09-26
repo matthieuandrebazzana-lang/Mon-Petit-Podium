@@ -13,12 +13,16 @@ struct GrandPrixDuChampionnat: Decodable, Identifiable, Equatable, Hashable {
     /// Lu dans `resultats_gp`, **jamais déduit du statut** — qui peut mentir dans les deux
     /// sens (`GrandPrixCalendrier`, backend).
     let resultatsDisponibles: Bool
+    /// `provisoire` jusqu'au calcul définitif de J+1 — ``StatutResultats``. Servi par la
+    /// route depuis le backend `0.78.0`, `nil` avant.
+    let statutResultats: String?
 
     enum CodingKeys: String, CodingKey {
         case nom
         case id = "gp_id"
         case dateCourse = "date_course"
         case resultatsDisponibles = "resultats_disponibles"
+        case statutResultats = "statut_resultats"
     }
 
     init(from decoder: Decoder) throws {
@@ -27,7 +31,10 @@ struct GrandPrixDuChampionnat: Decodable, Identifiable, Equatable, Hashable {
         nom = try c.decode(String.self, forKey: .nom)
         dateCourse = try? c.decodeIfPresent(Date.self, forKey: .dateCourse)
         resultatsDisponibles = try c.decodeIfPresent(Bool.self, forKey: .resultatsDisponibles) ?? false
+        statutResultats = try? c.decodeIfPresent(String.self, forKey: .statutResultats)
     }
+
+    var provisoire: Bool { StatutResultats.estProvisoire(statutResultats) }
 
     /// Le libellé d'une pastille du sélecteur — `libelleCourtGp` du web : **le préfixe
     /// « GP » saute, et lui seul**. Identique sur toutes les options, il ne distingue rien
@@ -135,6 +142,9 @@ struct PronosticMembre: Decodable, Identifiable, Equatable {
     let points: Int?
     /// Ce qu'il a rapporté. **`nil` = pas encore jugé, `0` = raté** — jamais confondus.
     let pointsGagnes: Int?
+    /// `en_attente`, `non_evaluable`, `gagne` ou `perdu` (migration 24, servi par la 25).
+    /// Seul moyen de distinguer, quand `pointsGagnes` est nul, l'attente du non évaluable.
+    let statutEvaluation: String?
     let podium: Podium?
 
     struct Podium: Decodable, Equatable {
@@ -150,6 +160,11 @@ struct PronosticMembre: Decodable, Identifiable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, type, pilote, libelle, points, podium
         case pointsGagnes = "points_gagnes"
+        case statutEvaluation = "statut_evaluation"
+    }
+
+    var nonEvaluable: Bool {
+        pointsGagnes == nil && StatutResultats.estNonEvaluable(statutEvaluation)
     }
 
     var marche: String { libelle ?? type.capitalized }

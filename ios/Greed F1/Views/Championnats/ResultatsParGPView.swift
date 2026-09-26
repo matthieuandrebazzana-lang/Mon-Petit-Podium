@@ -261,12 +261,18 @@ struct ResultatsParGPView: View {
 
     @ViewBuilder private var blocParis: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Les paris de chacun")
-                .font(.label)
-                .tracking(Tracking.label)
-                .textCase(.uppercase)
-                .foregroundColor(.grisSecondaire)             // 5,33:1 sur le blanc
-                .padding(.bottom, 4)
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("Les paris de chacun")
+                    .font(.label)
+                    .tracking(Tracking.label)
+                    .textCase(.uppercase)
+                    .foregroundColor(.grisSecondaire)         // 5,33:1 sur le blanc
+                Spacer(minLength: 0)
+                if gpRegarde?.provisoire == true {
+                    MentionProvisoire()
+                }
+            }
+            .padding(.bottom, 4)
 
             switch gpChoisi.flatMap({ donnees.paris[$0] }) ?? .chargement {
             case .chargement:
@@ -487,7 +493,11 @@ private struct RangeePronostic: View {
 
             // Vert sauge + blanc 4,86:1 · `primaire` + blanc 10,88:1 ·
             // `fondPrincipal` + `secondaire` 9,32:1.
-            Text(formaterPoints(juge ? pronostic.pointsGagnes : pronostic.points))
+            // Un pari non évaluable ne dit ni « en jeu » ni un score : le mot, sur l'aplat
+            // neutre de l'attente (`fondPrincipal` + `secondaire` 9,32:1).
+            Text(pronostic.nonEvaluable
+                 ? "Non évaluable"
+                 : formaterPoints(juge ? pronostic.pointsGagnes : pronostic.points))
                 .font(.custom("HelveticaNeue-Medium", size: 12))
                 .foregroundColor(juge ? .white : .secondaire)
                 .lineLimit(1)
@@ -501,6 +511,7 @@ private struct RangeePronostic: View {
         .accessibilityLabel(
             "\(pronostic.marche), \(pronostic.choix), "
             + (juge ? (reussi ? "gagné, \(pronostic.pointsGagnes ?? 0) points" : "raté")
+                    : pronostic.nonEvaluable ? "non évaluable"
                     : "en attente, \(pronostic.points ?? 0) points en jeu")
         )
     }

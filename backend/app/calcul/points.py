@@ -844,7 +844,8 @@ class Partage:
 
     Règle des bookmakers (*dead heat*) : quand `diviseur` issues finissent à
     égalité en tête, chacune rapporte sa cote divisée par `diviseur`, arrondie à
-    l'entier. Seule « l'écurie qui marque le plus de points » la produit.
+    l'entier. Deux marchés la produisent : « l'écurie qui marque le plus de
+    points » et le face-à-face entre deux non-classés à tours égaux.
     """
 
     diviseur: int
@@ -952,13 +953,23 @@ def _les_deux_voitures_sur_le_podium(course: Course, libelle: str) -> bool | Non
     return all(_numero_au_plus(course, numero, 3) for numero in numeros)
 
 
+# Rendu par `_vainqueur_du_duel` quand deux non-classés ont bouclé le même
+# nombre de tours : les deux issues gagnent à partage.
+EGALITE = -1  # aucun numéro de pilote n'est négatif
+
+
 def _vainqueur_du_duel(course: Course, a: int, b: int) -> int | None:
-    """Le gagnant d'un face-à-face, ou `None` si rien ne les départage.
+    """Le gagnant d'un face-à-face, `EGALITE`, ou `None` si rien ne les départage.
 
     1. Les deux classés : le mieux classé gagne.
     2. Un seul classé : il gagne.
     3. Aucun classé : celui qui a bouclé le plus de tours gagne. Un pilote sans
-       ligne de résultat compte zéro tour. À tours égaux, rien n'est décidé.
+       ligne de résultat compte zéro tour. **À tours égaux, `EGALITE`** : les
+       deux issues gagnent, cote divisée par deux (`Partage`, même arrondi que
+       l'égalité entre écuries).
+
+    Deux pilotes tous deux **absents** du classement ne sont pas une égalité
+    mais une donnée qui manque : `None`, le pronostic attend.
     """
     ligne_a, ligne_b = course.lignes.get(a), course.lignes.get(b)
     classe_a = ligne_a is not None and ligne_a.classe
@@ -971,10 +982,12 @@ def _vainqueur_du_duel(course: Course, a: int, b: int) -> int | None:
     if classe_b:
         return b
 
+    if ligne_a is None and ligne_b is None:
+        return None
     tours_a = ligne_a.tours if ligne_a else 0
     tours_b = ligne_b.tours if ligne_b else 0
     if tours_a == tours_b:
-        return None
+        return EGALITE
     return a if tours_a > tours_b else b
 
 
@@ -989,7 +1002,7 @@ def _face_a_face(options: Sequence[str] = ()):
     """
     libelles = tuple(dict.fromkeys(libelle for libelle in options if libelle))
 
-    def valider(course: Course, libelle: str) -> bool | None:
+    def valider(course: Course, libelle: str) -> bool | Partage | None:
         numeros = {course.pilote_du_libelle(option) for option in libelles}
         if len(libelles) != 2 or len(numeros) != 2 or None in numeros:
             logger.warning(
@@ -1007,12 +1020,14 @@ def _face_a_face(options: Sequence[str] = ()):
         gagnant = _vainqueur_du_duel(course, a, b)
         if gagnant is None:
             logger.warning(
-                "[points] Face-à-face #%s / #%s : aucun classé, tours égaux. "
+                "[points] Face-à-face #%s / #%s : aucun des deux au classement. "
                 "Pronostic laissé non jugé.",
                 a,
                 b,
             )
             return None
+        if gagnant == EGALITE:
+            return Partage(2)
         return gagnant == choisi
 
     return valider

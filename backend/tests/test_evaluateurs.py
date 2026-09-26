@@ -172,9 +172,32 @@ def test_face_a_face(duel, issue, gagne):
     assert _juger("face-a-face-duel", issue, options=duel) is gagne
 
 
-def test_face_a_face_aucun_classe_tours_egaux_en_attente():
-    # Norris et Gasly abandonnent tous deux au 35e tour.
-    assert _juger("face-a-face-duel", "L.Norris", options=("L.Norris", "P.Gasly")) is None
+@pytest.mark.parametrize("issue", ["L.Norris", "P.Gasly"])
+def test_face_a_face_aucun_classe_tours_egaux_partage(issue):
+    # Norris et Gasly abandonnent tous deux au 35e tour : les deux issues
+    # gagnent, cote divisée par deux.
+    assert _juger("face-a-face-duel", issue, options=("L.Norris", "P.Gasly")) == P.Partage(2)
+
+
+@pytest.mark.parametrize(("valeur", "attendu"), [(40, 20), (25, 13), (19, 10)])
+def test_face_a_face_tours_egaux_points_divises_par_deux(valeur, attendu):
+    # Même arrondi que l'égalité entre écuries : demi vers le haut.
+    cotes = {
+        "o-nor": {"marche": "face-a-face-l-norris-p-gasly", "pilote": "L.Norris", "valeur": valeur},
+        "o-gas": {"marche": "face-a-face-l-norris-p-gasly", "pilote": "P.Gasly", "valeur": 30},
+    }
+    pronostic = {"id": "p1", "type": "bonus", "id_outcome_unibet": "o-nor"}
+    attribution, raison = P.points_du_pronostic(pronostic, cotes, _bakou())
+    assert raison == ""
+    assert attribution.points == attendu
+    assert attribution.statut == P.GAGNE
+
+
+def test_face_a_face_deux_absents_du_classement_en_attente():
+    course = _bakou()
+    for numero in (1, 10):  # Norris, Gasly
+        course.lignes.pop(numero, None)
+    assert _juger("face-a-face-duel", "L.Norris", options=("L.Norris", "P.Gasly"), course=course) is None
 
 
 def test_face_a_face_sans_issues_soeurs_en_attente():
@@ -247,21 +270,29 @@ OBLIGATOIRES = ("v-rus", "p-ant", "p-ver")
 
 
 @pytest.mark.parametrize(
-    "bonus",
+    ("bonus", "role"),
     [
-        "p-ant",  # Pays-Bas 48f08402 : même issue que le podium
-        "v-rus",  # Espagne 76b78d5c : même issue que le vainqueur
-        "v-ant",  # Bakou 32b03d07 : pilote du podium repris en vainqueur
-        "p-rus",  # vainqueur repris en podium
+        ("p-ant", "le podium"),  # Pays-Bas 48f08402 : même issue que le podium
+        ("p-ver", "le podium"),
+        ("v-rus", "la victoire"),  # Espagne 76b78d5c : même issue que le vainqueur
     ],
 )
-def test_bonus_reprenant_un_obligatoire_refuse(bonus):
+def test_bonus_meme_issue_meme_marche_refuse(bonus, role):
     with pytest.raises(HTTPException) as refus:
         exiger_bonus_distincts_des_obligatoires(COTES_SAISIE, [bonus], OBLIGATOIRES)
     assert refus.value.status_code == 422
-    assert "reprend un pilote déjà choisi" in refus.value.detail
+    assert f"reprend ton pronostic pour {role}" in refus.value.detail
 
 
-@pytest.mark.parametrize("bonus", ["v-lec", "p-lec", "t6-ant"])
-def test_bonus_distinct_accepte(bonus):
+@pytest.mark.parametrize(
+    "bonus",
+    [
+        "v-ant",  # Bakou 32b03d07 : pilote du podium en bonus « vainqueur », accepté
+        "p-rus",  # vainqueur choisi en bonus « podium » : autre marché, accepté
+        "v-lec",
+        "p-lec",
+        "t6-ant",
+    ],
+)
+def test_bonus_autre_marche_ou_autre_issue_accepte(bonus):
     exiger_bonus_distincts_des_obligatoires(COTES_SAISIE, [bonus], OBLIGATOIRES)

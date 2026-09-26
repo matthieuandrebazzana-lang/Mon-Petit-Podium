@@ -393,7 +393,11 @@ private struct WidgetGrandPrix: View {
             }
             .buttonStyle(StyleAppui(.grandeSurface))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Dernier Grand Prix, \(grandPrix.nom), le \(date).")
+            .accessibilityLabel(
+                "Dernier Grand Prix, \(grandPrix.nom), le \(date)."
+                + (StatutResultats.estProvisoire(grandPrix.statutResultats)
+                   ? " \(StatutResultats.detail)" : "")
+            )
             .accessibilityHint(libelle)
             .accessibilityAddTraits(.isButton)
         } else {
@@ -504,6 +508,22 @@ private struct WidgetGrandPrix: View {
                 .padding(.vertical, 5)
                 .background(apparence?.pastille ?? Color.white.opacity(0.20))
                 .clipShape(Capsule())
+
+            if etat == .termine && StatutResultats.estProvisoire(grandPrix.statutResultats) {
+                // Résultats pas encore définitifs (24 h après la course) : la pastille
+                // voisine, même matériau et même encre blanche — seul le mot change.
+                Text(StatutResultats.mention)
+                    .font(.labelSm)
+                    .tracking(Tracking.label)
+                    .textCase(.uppercase)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(apparence?.pastille ?? Color.white.opacity(0.20))
+                    .clipShape(Capsule())
+            }
 
             if etat == .ouvert {
                 // La pastille du calendrier — ``EtatGp/fondPastille`` et

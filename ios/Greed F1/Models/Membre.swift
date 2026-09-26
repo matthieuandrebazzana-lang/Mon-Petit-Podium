@@ -26,6 +26,9 @@ struct Membre: Codable, Identifiable, Equatable, Hashable {
     let livreeMode: ModeLivree
     let livreeEcurie: String?
     let avatarUrl: URL?
+    /// Vrai tant que le dernier Grand Prix couru est provisoire : le classement peut encore
+    /// bouger au calcul définitif. Le même sur chaque ligne (backend `0.78.0`).
+    let resultatsProvisoires: Bool
 
     var id: UUID { profilId }
 
@@ -40,6 +43,7 @@ struct Membre: Codable, Identifiable, Equatable, Hashable {
         case livreeMode = "livree_mode"
         case livreeEcurie = "livree_ecurie"
         case avatarUrl = "avatar_url"
+        case resultatsProvisoires = "resultats_provisoires"
     }
 
     init(from decoder: Decoder) throws {
@@ -58,6 +62,7 @@ struct Membre: Codable, Identifiable, Equatable, Hashable {
         livreeMode = try c.decodeIfPresent(ModeLivree.self, forKey: .livreeMode) ?? .perso
         livreeEcurie = try c.decodeIfPresent(String.self, forKey: .livreeEcurie)
         avatarUrl = URL.facultative(try c.decodeIfPresent(String.self, forKey: .avatarUrl))
+        resultatsProvisoires = (try? c.decodeIfPresent(Bool.self, forKey: .resultatsProvisoires)) ?? false
     }
 }
 
@@ -68,7 +73,7 @@ extension Membre {
          meilleureCote: Int?, rang: Int, ordreInscription: Int,
          couleur1: String, couleur2: String, couleurTexte: String? = nil,
          numero: Int?, livreeMode: ModeLivree, livreeEcurie: String? = nil,
-         avatarUrl: URL? = nil) {
+         avatarUrl: URL? = nil, resultatsProvisoires: Bool = false) {
         self.profilId = profilId
         self.pseudo = pseudo
         self.totalPoints = totalPoints
@@ -83,6 +88,7 @@ extension Membre {
         self.livreeMode = livreeMode
         self.livreeEcurie = livreeEcurie
         self.avatarUrl = avatarUrl
+        self.resultatsProvisoires = resultatsProvisoires
     }
 
     /// La chaîne d'où se tire la teinte de l'avatar : l'UUID **en minuscules**, la forme

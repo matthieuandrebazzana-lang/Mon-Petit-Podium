@@ -31,6 +31,7 @@ import { cotesArretees } from "../lib/calendrier.js";
 import { formaterDepart } from "../lib/format.js";
 import { useEtatPronostics } from "../lib/useFermeture.js";
 import { APP_VERSION } from "../config.js";
+import { estProvisoire } from "../lib/resultats.js";
 
 /**
  * Grands Prix restants dans la saison 2026, du GP des Pays-Bas à Abu Dhabi.
@@ -212,7 +213,13 @@ export function BlocProchainGp({ profilId, previsualisation = false }) {
   const cases = couru
     ? [
         { label: "Course", valeur: "Terminée" },
-        { label: "Points", valeur: "Attribués" },
+        // Jusqu'au calcul définitif (24 h après la course), les points comptent
+        // déjà mais peuvent encore bouger : la case le dit, sans rien ajouter
+        // au bloc.
+        {
+          label: "Points",
+          valeur: estProvisoire(gp.statut_resultats) ? "Provisoires" : "Attribués",
+        },
       ]
     : [
         { label: "Départ", valeur: depart.heure ?? "À confirmer" },

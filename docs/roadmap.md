@@ -177,12 +177,26 @@ curl -X POST https://<railway>/jobs/resultats/3bf1ef36-f97c-446c-a8c6-e605f9750c
 
 Attendu : `80cc59ee` (triplé) → 50 pts, `8cd836f1` (marge) → 0, `en_attente` vide.
 
-### 1.3 sexies Servir `statut_evaluation` aux écrans
+### 1.3 sexies Appliquer la migration 25 — **avant le backend `0.78.0`**
 
-La colonne existe (migration 24) mais `pronostics_du_joueur` et
-`pronostics_du_championnat` ne la lisent pas : un `non_evaluable` s'affiche « en attente »
-sur le web et sur iOS. Le filtrage au scraping rend le cas rare ; le servir demande de
-remplacer ces deux fonctions, donc une migration de plus et son conflit d'ordre avec la 18.
+`20260926200000_resultats_provisoires` ajoute `grands_prix.statut_resultats`, marque
+Pays-Bas, Italie et Espagne `definitif` et Azerbaïdjan `provisoire`, crée
+`remplacer_verdicts` et remplace `pronostics_du_joueur` pour servir `statut_evaluation`
+(`database.md` §6). **Ordre : 24, puis 25, puis le déploiement Railway `0.78.0` et le
+frontend `0.78.0`.** Dans l'ordre inverse, le job du backend échoue à chaque tour (colonne
+inconnue) et l'accueil web ne charge plus le dernier GP couru.
+
+Attendu : Bakou (départ 2026-09-26 11:00 UTC) reçoit son **calcul définitif le
+2026-09-27 peu après 11:00 UTC** — ou **dans les 15 secondes qui suivent le démarrage** si
+le backend est déployé ou redémarré après cette heure (rattrapage). Dans les logs Railway : `résultats
+DÉFINITIFS (OpenF1 relue)`, et `grands_prix.statut_resultats = 'definitif'` pour Bakou.
+Aucun verdict réel de Bakou ne dépend de la place de Bortoleto : `modifies` doit valoir 0,
+sauf si le triplé et la marge n'avaient pas encore été rattrapés (1.3 quinquies).
+
+> **Écart avec la note précédente, signalé.** Elle annonçait qu'il faudrait remplacer
+> `pronostics_du_joueur` **et** `pronostics_du_championnat`, avec un conflit d'ordre avec
+> la 18. Il n'en faut qu'une : `pronostics_du_championnat` appelle `pronostics_du_joueur`
+> pour chaque membre et hérite du champ sans être touchée.
 
 ### 1.4 Vérifier les migrations appliquées
 
@@ -701,16 +715,25 @@ GP des Pays-Bas. Elle ne se range dans aucun code et se juge contre les issues s
 marché — traitée en v`0.56.0` (`bugs-connus.md` §25). Les quinze pays, eux, restent à
 confronter.
 
-### 3.16 Le recalcul forcé n'a pas de trace en base
+### 3.16 Le recalcul d'un GP définitif n'a pas de trace en base
 
-`?forcer=true` efface des points acquis, et **rien n'en garde le souvenir** hors des logs
-Railway, qui tournent. Un joueur dont le score baisse entre deux visites n'a aucun moyen de
-savoir pourquoi, et personne n'a de moyen de reconstituer l'état d'avant.
+`?forcer=true` a disparu en `0.78.0` au profit de `POST /jobs/resultats/{id}/recalcul`,
+transactionnel : le GP ne passe plus jamais par un état « tout en attente ». Mais un
+recalcul qui change des verdicts n'en garde toujours **aucun souvenir** hors des logs
+Railway (`modifies` dans la réponse, l'avertissement `RECALCUL VOLONTAIRE`). Le calcul
+définitif de J+1, lui, change des points **par construction**, une fois par GP : un joueur
+dont le score baisse le lendemain de la course n'a que la mention « Provisoire » de la
+veille pour le comprendre.
 
-Ce n'est pas bloquant tant que la route reste une intervention manuelle rare derrière le
-secret d'admin — mais dès qu'elle servira une seconde fois, une colonne `recalcule_le` sur
-`grands_prix`, ou une ligne d'audit, coûtera moins cher que la question posée le jour où un
-classement bougera sans explication.
+Une colonne `recalcule_le` sur `grands_prix`, ou une ligne d'audit par verdict modifié,
+coûtera moins cher que la question posée le jour où un classement bougera sans explication.
+
+### 3.17 Le définitif réessaie sans fin si OpenF1 ne répond plus
+
+La boucle du définitif n'a pas de fenêtre : tant qu'OpenF1 échoue, elle retente toutes les
+15 minutes et journalise un avertissement à chaque tour. Le GP reste provisoire, ses points
+comptés — rien n'est perdu, mais les logs se remplissent. À borner (par exemple : après
+J+3, alerte unique et consolidation sur les données conservées) si le cas se présente.
 
 ## 4. Dettes techniques
 

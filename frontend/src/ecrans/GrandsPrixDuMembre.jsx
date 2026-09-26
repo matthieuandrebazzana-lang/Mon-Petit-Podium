@@ -14,6 +14,11 @@ import {
 } from "../lib/profils.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import { formaterDepart, formaterPoints } from "../lib/format.js";
+import {
+  DETAIL_PROVISOIRE,
+  estNonEvaluable,
+  MENTION_PROVISOIRE,
+} from "../lib/resultats.js";
 
 /**
  * Maquette 13 — les Grands Prix pariés par un membre, du plus récent au plus
@@ -48,7 +53,23 @@ import { formaterDepart, formaterPoints } from "../lib/format.js";
 const ETIQUETTES = { vainqueur: "Obligatoire", podium: "Obligatoire", bonus: "Bonus" };
 
 /** Pastille de verdict de la maquette 13 : coche verte, croix rouge, ou attente. */
-function Verdict({ pointsGagnes }) {
+function Verdict({ pointsGagnes, statut }) {
+  if (pointsGagnes === null && estNonEvaluable(statut)) {
+    // Ni en attente ni raté : aucun évaluateur ne porte ce marché. Le tiret
+    // dit « rien à juger », l'horloge dirait « bientôt » (migration 24).
+    return (
+      <span
+        aria-label="Pronostic non évaluable"
+        title="Non évaluable : ce marché n'a pas pu être jugé"
+        className="bg-fond flex size-[26px] shrink-0 items-center justify-center rounded-full"
+      >
+        <span aria-hidden="true" className="text-texte-doux text-[13px] font-medium">
+          –
+        </span>
+      </span>
+    );
+  }
+
   if (pointsGagnes === null) {
     return (
       <span
@@ -114,7 +135,9 @@ function Ligne({ pronostic, termine }) {
           </span>
         )}
 
-        {termine && <Verdict pointsGagnes={pronostic.pointsGagnes} />}
+        {termine && (
+          <Verdict pointsGagnes={pronostic.pointsGagnes} statut={pronostic.statut} />
+        )}
       </span>
     </li>
   );
@@ -123,7 +146,9 @@ function Ligne({ pronostic, termine }) {
 /** Une carte de Grand Prix : son en-tête, ses pronostics, son total. */
 export function CarteGrandPrix({ gp }) {
   const depart = formaterDepart(gp.date_course);
-  const attente = gp.pronostics.filter((p) => p.pointsGagnes === null).length;
+  const sansPoints = gp.pronostics.filter((p) => p.pointsGagnes === null);
+  const nonEvaluables = sansPoints.filter((p) => estNonEvaluable(p.statut)).length;
+  const attente = sansPoints.length - nonEvaluables;
 
   return (
     <div className="rounded-carte bg-surface shadow-carte p-4">
@@ -132,6 +157,9 @@ export function CarteGrandPrix({ gp }) {
           <p className="text-corps text-texte truncate font-medium">{gp.nom}</p>
           <p className="text-texte-doux mt-0.5 text-[12px]">
             {gp.termine ? "Terminé" : "À venir"}
+            {gp.termine && gp.provisoire && (
+              <span title={DETAIL_PROVISOIRE}> · {MENTION_PROVISOIRE}</span>
+            )}
             {depart.courte ? ` · ${depart.courte}` : ""}
           </p>
         </div>
@@ -160,6 +188,9 @@ export function CarteGrandPrix({ gp }) {
           {gp.reussis > 1 ? "s" : ""} sur {gp.juges}
           {attente > 0
             ? ` · ${attente} en attente de validation`
+            : ""}
+          {nonEvaluables > 0
+            ? ` · ${nonEvaluables} non évaluable${nonEvaluables > 1 ? "s" : ""}`
             : ""}
         </p>
       )}

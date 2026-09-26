@@ -19,6 +19,7 @@ from app.api import journal
 from app.api.deps import utilisateur_courant
 from app.api.routes.pronostics import exiger_membre
 from app.api.stockage import COMPARTIMENT_CHAMPIONNATS, url_de_photo_valide
+from app.jobs import resultats as job_resultats
 from app.supabase_client import (
     ErreurSupabase,
     appeler_fonction,
@@ -126,6 +127,10 @@ class LigneClassement(BaseModel):
     rang: int
     # Rang d'adhésion au championnat, 4ᵉ critère de départage.
     ordre_inscription: int
+    # Vrai tant que le dernier Grand Prix couru est `provisoire` : le classement
+    # comprend des points qui peuvent encore bouger au calcul définitif (J+1).
+    # Identique sur chaque ligne — la réponse reste une liste, comme avant.
+    resultats_provisoires: bool = False
     # La voiture du membre (étape 8). Les couleurs ne sont jamais nulles : la
     # fonction SQL retombe sur les défauts de la colonne quand le profil manque,
     # sans quoi le SVG afficherait des aplats transparents. Le numéro, lui, reste
@@ -197,6 +202,10 @@ class GrandPrixCalendrier(BaseModel):
     mon_rang: int | None = None
     mes_pronostics: int = 0
     classement: list[LigneCalendrier] = []
+    # `provisoire` | `definitif` | nul (pas de résultats). Lu dans `grands_prix`
+    # par la route, pas par la fonction SQL : aucune migration de plus sur
+    # `calendrier_du_championnat` et ses conflits d'ordre.
+    statut_resultats: str | None = None
 
 
 class ProchainGp(BaseModel):
@@ -720,7 +729,10 @@ async def classement(
     except ErreurSupabase as erreur:
         raise echec_lisible("Chargement du classement", erreur) from erreur
 
-    return [LigneClassement(**ligne) for ligne in (lignes or [])]
+    provisoire = await job_resultats.dernier_statut_des_resultats() == job_resultats.PROVISOIRE
+    return [
+        LigneClassement(**ligne, resultats_provisoires=provisoire) for ligne in (lignes or [])
+    ]
 
 
 @router.get("/{championnat_id}/calendrier", response_model=list[GrandPrixCalendrier])
@@ -758,7 +770,11 @@ async def calendrier(
     except ErreurSupabase as erreur:
         raise echec_lisible("Chargement du calendrier", erreur) from erreur
 
-    return [GrandPrixCalendrier(**ligne) for ligne in (lignes or [])]
+    statuts = await job_resultats.statuts_des_resultats()
+    return [
+        GrandPrixCalendrier(**ligne, statut_resultats=statuts.get(str(ligne.get("gp_id"))))
+        for ligne in (lignes or [])
+    ]
 
 
 @router.delete("/{championnat_id}/quitter", status_code=status.HTTP_204_NO_CONTENT)

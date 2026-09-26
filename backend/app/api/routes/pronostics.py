@@ -125,6 +125,10 @@ class PronosticServi(BaseModel):
     # `0` si le pronostic est raté. Ne jamais confondre les deux : afficher `0`
     # avant la course annoncerait un échec qui n'a pas eu lieu.
     points_gagnes: int | None = None
+    # `en_attente` | `non_evaluable` | `gagne` | `perdu` (migration 24, servi par
+    # la 25). Seul moyen de distinguer, quand `points_gagnes` est nul, « pas
+    # encore jugé » de « aucun évaluateur ». Nul sur une base non migrée.
+    statut_evaluation: str | None = None
     podium: PodiumServi | None = None
 
 
@@ -283,23 +287,36 @@ def exiger_marche(cote: dict, attendu: str, role: str) -> None:
 def exiger_bonus_distincts_des_obligatoires(
     cotes: dict[str, dict], bonus: list[str], obligatoires: tuple[str, ...]
 ) -> None:
-    """Refuse un bonus qui reprend le vainqueur ou un pilote du podium (audit, C4).
+    """Refuse un bonus qui reprend **la même issue du même marché** (audit, C4).
 
-    Seuls les bonus pris dans les marchés `vainqueur` et `podium` sont concernés :
-    un « top 6 » sur le même pilote est un autre pari. La comparaison porte sur
-    le **libellé**, jamais sur l'identifiant d'issue, qui diffère d'un marché à
-    l'autre pour un même pilote (`metier.md` §2). Sans cette règle, un joueur
-    pouvait se faire payer deux fois le même événement.
+    `obligatoires` est `(vainqueur, pilote_1, pilote_2)`. Seuls deux cas sont
+    refusés :
+
+    - un bonus « vainqueur » sur le pilote choisi pour la victoire ;
+    - un bonus « podium » sur l'un des deux pilotes choisis pour le podium.
+
+    Un bonus « vainqueur » sur un pilote choisi au podium est un **autre pari**
+    (gagner n'est pas monter sur le podium), et reste accepté, comme un « top 6 »
+    sur le même pilote. La comparaison porte sur le **libellé**, jamais sur
+    l'identifiant d'issue, qui diffère d'un marché à l'autre pour un même pilote
+    (`metier.md` §2). Sans cette règle, un joueur pouvait se faire payer deux
+    fois le même événement.
     """
-    pris = {normaliser(cotes[outcome].get("pilote")) for outcome in obligatoires}
+    vainqueur, *podium = obligatoires
+    pris = {
+        MARCHE_VAINQUEUR: {normaliser(cotes[vainqueur].get("pilote"))},
+        MARCHE_PODIUM: {normaliser(cotes[outcome].get("pilote")) for outcome in podium},
+    }
     for choix in bonus:
         cote = cotes[choix]
-        if cote.get("marche") not in (MARCHE_VAINQUEUR, MARCHE_PODIUM):
+        marche = cote.get("marche")
+        if marche not in pris:
             continue
-        if normaliser(cote.get("pilote")) in pris:
+        if normaliser(cote.get("pilote")) in pris[marche]:
+            role = "la victoire" if marche == MARCHE_VAINQUEUR else "le podium"
             raise refuser(
-                f"Ton bonus « {cote.get('pilote')} » reprend un pilote déjà choisi "
-                f"pour la victoire ou le podium. Choisis un autre bonus."
+                f"Ton bonus « {cote.get('pilote')} » reprend ton pronostic pour "
+                f"{role}. Choisis un autre bonus."
             )
 
 

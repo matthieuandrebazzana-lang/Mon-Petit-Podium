@@ -319,9 +319,11 @@ private struct CarteGrandPrixJoue: View {
     }
 
     /// Tous les Grands Prix de l'écran sont terminés — il ne liste que ceux qui ont été
-    /// joués et jugés.
+    /// joués et jugés. **« Provisoire » prend la place de « Terminé »** jusqu'au calcul
+    /// définitif (24 h après la course) : même pastille, même encre sur le drapeau voilé,
+    /// seul le mot change.
     private var badgeStatut: some View {
-        Text("Terminé")
+        Text(gp.provisoire ? StatutResultats.mention : "Terminé")
             .font(.custom("HelveticaNeue", size: 11))
             .foregroundColor(.white)
             .lineLimit(1)
@@ -463,13 +465,14 @@ private struct RangeeHistorique: View {
 
             PastillePoints(pointsGagnes: pronostic.pointsGagnes, points: pronostic.points ?? 0)
                 .fixedSize()
-            Verdict(pointsGagnes: pronostic.pointsGagnes)
+            Verdict(pointsGagnes: pronostic.pointsGagnes, nonEvaluable: pronostic.nonEvaluable)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(pronostic.marche), \(pronostic.choix), \(verdict)")
     }
 
     private var verdict: String {
+        if pronostic.nonEvaluable { return "non évaluable" }
         guard let gagnes = pronostic.pointsGagnes else {
             return "en attente, \(pronostic.points ?? 0) points en jeu"
         }

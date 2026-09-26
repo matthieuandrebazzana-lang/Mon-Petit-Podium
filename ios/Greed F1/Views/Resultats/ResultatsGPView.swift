@@ -69,8 +69,12 @@ struct ResultatsGPView: View {
                     entete
 
                     Spacer().frame(height: 24)      // changement de sujet : 24 pt (§4.6)
-                    TitreSectionResultats(titre: "Résultats du GP",
-                                          sousTitre: "Classement officiel de la course")
+                    TitreSectionResultats(
+                        titre: "Résultats du GP",
+                        sousTitre: resultats.provisoire
+                            ? "Classement provisoire · définitif 24 h après la course"
+                            : "Classement officiel de la course"
+                    )
 
                     Spacer().frame(height: 12)
                     contenu
@@ -103,9 +107,14 @@ struct ResultatsGPView: View {
             // `grisSecondaire` (4,71:1) et non le `#999999` de la version web (2,52:1) :
             // le contraste se mesure (`ios/CLAUDE.md` §3). Seul un GP « Terminé » ouvre
             // cet écran (``CalendrierView``).
-            Text("Terminé · \(date)")
+            // « Provisoire » s'y glisse tant que le calcul définitif n'est pas passé : même
+            // ligne, même encre, rien de plus à lire.
+            Text(resultats.provisoire
+                 ? "Terminé · \(StatutResultats.mention) · \(date)"
+                 : "Terminé · \(date)")
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
+                .accessibilityHint(resultats.provisoire ? StatutResultats.detail : "")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
@@ -373,12 +382,20 @@ struct PastillePoints: View {
 struct Verdict: View {
 
     let pointsGagnes: Int?
+    /// Quatrième état depuis la `0.78.0` : aucun évaluateur ne porte le marché. Ni
+    /// l'horloge (« bientôt ») ni la croix (« raté ») ne disent vrai ; le tiret dit « rien
+    /// à juger ». Même aplat et même encre que l'attente : ce n'est pas un verdict.
+    var nonEvaluable = false
 
     var body: some View {
         ZStack {
             Circle().fill(aplat)
 
-            if let pointsGagnes {
+            if nonEvaluable && pointsGagnes == nil {
+                Text("–")
+                    .font(.custom("HelveticaNeue-Medium", size: 13))
+                    .foregroundColor(.grisSecondaire)   // 4,71:1 sur le beige, comme l'horloge
+            } else if let pointsGagnes {
                 if pointsGagnes > 0 {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .bold))

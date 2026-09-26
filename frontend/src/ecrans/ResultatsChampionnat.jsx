@@ -21,6 +21,8 @@ import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
 import { livreeDuMembre } from "../lib/palette.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import { formaterPoints } from "../lib/format.js";
+import MentionProvisoire from "../composants/MentionProvisoire.jsx";
+import { estProvisoire } from "../lib/resultats.js";
 
 /**
  * Résultats par Grand Prix — qui a parié quoi, championnat par championnat.
@@ -298,7 +300,10 @@ export function LigneMembrePronostics({ ligne, estMoi, avecPhotos = false }) {
                     pointsGagnes={pronostic.points_gagnes}
                     points={pronostic.points}
                   />
-                  <Verdict pointsGagnes={pronostic.points_gagnes} />
+                  <Verdict
+                    pointsGagnes={pronostic.points_gagnes}
+                    statut={pronostic.statut_evaluation}
+                  />
                 </span>
               </li>
             ))}
@@ -521,9 +526,12 @@ export default function ResultatsChampionnat() {
             >
               {membres && (
                 <div className="rounded-carte bg-surface shadow-carte p-4">
-                  <p className="text-label text-texte-doux mb-1 uppercase">
-                    Les paris de chacun
-                  </p>
+                  <div className="mb-1 flex items-baseline justify-between gap-3">
+                    <p className="text-label text-texte-doux uppercase">
+                      Les paris de chacun
+                    </p>
+                    {estProvisoire(gpRegarde?.statut_resultats) && <MentionProvisoire />}
+                  </div>
 
                   {lignes.length === 0 ? (
                     <p className="text-corps-sm text-texte-doux py-2">

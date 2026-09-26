@@ -30,6 +30,8 @@ final class GrandsPrixJoues: ObservableObject {
         let pronostics: [PronosticMembre]
         /// Les trois premiers, dans l'ordre. Vide tant que les résultats ne sont pas lus.
         let podium: [LigneResultat]
+        /// Résultats encore provisoires : calcul définitif 24 h après la course.
+        var provisoire = false
 
         var id: UUID { gpId }
 
@@ -137,6 +139,6 @@ final class GrandsPrixJoues: ObservableObject {
         let podium = (1...3).compactMap { place in classement.first { $0.position == place } }
         return GrandPrixJoue(gpId: gp.id, nom: gp.nom, dateCourse: gp.dateCourse,
                              totalPoints: ligne.totalPoints, pronostics: ligne.pronostics,
-                             podium: podium)
+                             podium: podium, provisoire: gp.provisoire)
     }
 }

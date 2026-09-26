@@ -1,5 +1,6 @@
 import { appelApi } from "./api.js";
 import { supabase } from "./supabase.js";
+import { estProvisoire } from "./resultats.js";
 import {
   GENRE_DONNEES,
   GENRE_SESSION,
@@ -205,7 +206,7 @@ export async function chargerGrandsPrixDuMembre(profilId, signal) {
       supabase
         .from("pronostics")
         .select(
-          "id, gp_id, type, id_outcome_unibet, points_gagnes, pronostic_podium(pilote_1, pilote_2)",
+          "id, gp_id, type, id_outcome_unibet, points_gagnes, statut_evaluation, pronostic_podium(pilote_1, pilote_2)",
         )
         .eq("profil_id", profilId),
     );
@@ -221,7 +222,7 @@ export async function chargerGrandsPrixDuMembre(profilId, signal) {
         lire(
           supabase
             .from("grands_prix")
-            .select("id, nom, date_course, statut")
+            .select("id, nom, date_course, statut, statut_resultats")
             .in("id", gpIds)
             .order("date_course", { ascending: false, nullsFirst: false }),
         ),
@@ -296,6 +297,9 @@ export function assemblerGrandsPrix(pronostics, gps, cotes) {
       // Ce qu'il a rapporté. `null` = pas encore jugé, `0` = raté. Les deux ne
       // se confondent jamais (convention de l'étape 6).
       pointsGagnes: brut.points_gagnes ?? null,
+      // Distingue, quand `pointsGagnes` est nul, « pas encore jugé » de « aucun
+      // évaluateur » (migration 24).
+      statut: brut.statut_evaluation ?? null,
     });
   }
 
@@ -310,6 +314,7 @@ export function assemblerGrandsPrix(pronostics, gps, cotes) {
     return {
       ...gp,
       termine: gp.statut === "termine",
+      provisoire: estProvisoire(gp.statut_resultats),
       pronostics: siens,
       // Ces trois totaux ne valent que pour un GP jugé : avant la course, ils
       // annonceraient un score de zéro qui n'a pas encore de sens.

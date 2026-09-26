@@ -13,10 +13,27 @@ struct ResultatsGP: Decodable, Equatable {
     let disponible: Bool
     let recupereLe: Date?
     let classement: [LigneResultat]
+    /// `grand_prix.statut_resultats` vaut `provisoire` — ``StatutResultats``.
+    let provisoire: Bool
 
     enum CodingKeys: String, CodingKey {
         case disponible, classement
         case recupereLe = "recupere_le"
+        case grandPrix = "grand_prix"
+    }
+
+    private struct Resume: Decodable {
+        let statutResultats: String?
+        enum CodingKeys: String, CodingKey { case statutResultats = "statut_resultats" }
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        disponible = try c.decode(Bool.self, forKey: .disponible)
+        recupereLe = try c.decodeIfPresent(Date.self, forKey: .recupereLe)
+        classement = try c.decode([LigneResultat].self, forKey: .classement)
+        let resume = try? c.decodeIfPresent(Resume.self, forKey: .grandPrix)
+        provisoire = StatutResultats.estProvisoire(resume?.statutResultats)
     }
 }
 

@@ -88,17 +88,25 @@ emplacements suivants (exclusion croisée).
 > l'ancien aux listes, **sans vider les sélections déjà faites**. Une sélection devenue
 > conflictuelle reste affichée et la validation la nomme.
 
-> ### Un bonus ne reprend pas un pronostic obligatoire (v`0.77.0`)
-> La route d'enregistrement refuse un bonus pris dans les marchés `vainqueur` ou `podium`
-> dont le **libellé** est celui du vainqueur ou d'un des deux pilotes du podium du même
-> joueur, avec un message en français que le web et l'app iOS affichent tels quels.
-> Sans cette règle, un joueur se faisait payer deux fois le même événement (Pays-Bas,
-> Espagne, Bakou 2026 : `audit-evaluation.md` C4).
+> ### Un bonus ne reprend pas la même issue du même marché (v`0.77.0`, resserré en `0.78.0`)
+> La route d'enregistrement refuse **deux cas seulement**, avec un message en français que
+> le web et l'app iOS affichent tels quels :
 >
-> Le libellé et non l'identifiant, pour la même raison que l'exclusion croisée : un
-> même pilote change d'identifiant d'un marché à l'autre. Les deux marchés sont croisés —
-> un bonus « Antonelli vainqueur » est refusé à qui a déjà Antonelli au podium. **Un bonus
-> sur un autre marché reste libre** : « Antonelli dans le top 6 » est un autre pari.
+> | Bonus | Refusé si son pilote est… |
+> |---|---|
+> | marché `vainqueur` | le vainqueur choisi |
+> | marché `podium` | l'un des deux pilotes choisis au podium |
+>
+> Sans cette règle, un joueur se faisait payer deux fois le même événement (Pays-Bas,
+> Espagne 2026 : `audit-evaluation.md` C4). La comparaison porte sur le **libellé** et non
+> sur l'identifiant, pour la même raison que l'exclusion croisée : un même pilote change
+> d'identifiant d'un marché à l'autre.
+>
+> **Les marchés ne sont plus croisés depuis la `0.78.0`.** Un bonus « Antonelli
+> vainqueur » est de nouveau **accepté** pour qui a Antonelli au podium, et un bonus
+> « Russell sur le podium » pour qui a Russell vainqueur : gagner et monter sur le podium
+> sont deux paris distincts (Bakou 2026, `32b03d07`). Un bonus sur un autre marché
+> (« Antonelli dans le top 6 ») reste libre.
 >
 > Les pronostics déjà payés deux fois (Pays-Bas) ne sont pas modifiés.
 
@@ -339,8 +347,11 @@ l'abandonné avec le moins de tours a abandonné en premier. Gérer l'égalité.
 **Volontairement NON implémenté** tant que la règle d'égalité n'est pas écrite.
 
 **Duel (face-à-face)** — le pilote le mieux classé gagne. Si un seul des deux est classé,
-il gagne. Si aucun ne l'est, celui qui a bouclé le plus de tours gagne ; à tours égaux,
-rien n'est décidé et le pronostic reste en attente. « Classé » veut dire une position au
+il gagne. Si aucun ne l'est, celui qui a bouclé le plus de tours gagne ; **à tours égaux,
+les deux issues gagnent à partage** : la cote est divisée par deux, avec le même arrondi
+que l'égalité entre écuries (entier le plus proche, demi vers le haut : 25 → 13), depuis
+la `0.78.0`. Deux pilotes tous deux absents du classement ne sont pas une égalité mais
+une donnée manquante : le pronostic reste en attente. « Classé » veut dire une position au
 classement : un pilote peut abandonner et rester classé. Les deux adversaires se lisent
 dans les **deux issues du marché**, le slug ne se découpant pas sûrement en deux noms.
 
@@ -378,10 +389,34 @@ dans les **deux issues du marché**, le slug ne se découpant pas sûrement en d
 > l'ancienne règle est resté `0` après la `0.54.0` : le correctif était juste, la valeur
 > était figée (`bugs-connus.md` §24).
 >
-> Défaire un point acquis demande donc une décision explicite :
-> `POST /jobs/resultats/{gp_id}?forcer=true` rend les points du GP à `NULL` avant de
-> recalculer. C'est **la seule écriture du système qui efface un point**, elle est derrière
-> le secret d'admin, et **le scheduler ne l'appelle jamais**.
+> C'est la règle du **calcul provisoire** seulement. Le **définitif** (ci-dessous) et le
+> recalcul admin réécrivent tout le GP.
+
+### Résultats provisoires, puis définitifs à J+1 (v`0.78.0`)
+
+Le classement publié à l'arrivée précède les décisions des commissaires : à Bakou 2026,
+Bortoleto est 13ᵉ à l'arrivée, **15ᵉ** après une pénalité de 10 s. Un GP passe donc par
+deux calculs, et son état est `grands_prix.statut_resultats` :
+
+| Étape | Quand | Ce qui est écrit | Statut |
+|---|---|---|---|
+| **Provisoire** | publication du classement (départ + 1h30 au plus tôt) | les verdicts des pronostics encore à `NULL` | `provisoire` |
+| **Définitif** | **24 h après `date_course`** | OpenF1 relue (classement, tours, direction de course, qualifications), `resultats_gp` remplacé, **tous** les verdicts du GP recalculés, y compris ceux déjà écrits, **dans une seule transaction** | `definitif` |
+
+- **Les points provisoires comptent immédiatement, partout** : classements, piste,
+  résultats, calendrier, historique. Ils peuvent bouger une fois, au définitif.
+- Les écrans portent une mention discrète « **Provisoire** » sur les résultats d'un GP
+  provisoire (widget d'accueil, résultats du GP, résultats par Grand Prix, « Mes / Ses
+  Grands Prix ») et sur le classement d'un championnat **tant que le dernier GP couru est
+  provisoire**.
+- 24 h et non « le lundi » : Bakou 2026 se court un samedi.
+- **Après le définitif, plus aucun recalcul automatique.** Défaire un verdict définitif
+  demande une décision explicite : `POST /jobs/resultats/{gp_id}/recalcul` (secret
+  d'admin), avec la même écriture transactionnelle. Elle remplace `?forcer=true`, dont la
+  remise à `NULL` puis la réécriture en deux appels pouvaient laisser tout un GP « en
+  attente » (risque R5 de l'audit).
+- Un pronostic `non_evaluable` s'affiche comme tel (tiret, « Non évaluable »), jamais
+  comme « en attente ».
 
 ## 5. Championnats
 

@@ -6,6 +6,7 @@ import Bouton from "../composants/Bouton.jsx";
 import Alerte from "../composants/Alerte.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
 import Pastille from "../composants/Pastille.jsx";
+import MentionProvisoire from "../composants/MentionProvisoire.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import RecadragePhoto from "../composants/RecadragePhoto.jsx";
@@ -676,9 +677,16 @@ export default function Championnat() {
                 />
 
                 <div className="flex flex-col gap-2">
-                  <p className="text-label text-texte-doux px-1 uppercase">
-                    {lignes.length > 0 ? "Classement" : "Membres"}
-                  </p>
+                  {/* La mention « Provisoire » vit tant que le dernier Grand
+                      Prix couru n'a pas son calcul définitif (24 h après la
+                      course) : le classement peut encore bouger. Le serveur la
+                      porte sur chaque ligne, la première suffit. */}
+                  <div className="flex items-baseline justify-between gap-3 px-1">
+                    <p className="text-label text-texte-doux uppercase">
+                      {lignes.length > 0 ? "Classement" : "Membres"}
+                    </p>
+                    {lignes[0]?.resultats_provisoires === true && <MentionProvisoire />}
+                  </div>
 
                   {/* Le classement remplace la liste des membres dès qu'il est
                       là. Tant qu'il n'est pas revenu — Railway se réveille — la

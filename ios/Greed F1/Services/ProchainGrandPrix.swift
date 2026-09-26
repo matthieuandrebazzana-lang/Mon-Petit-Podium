@@ -39,7 +39,7 @@ final class ProchainGrandPrix: ObservableObject {
         do {
             let reponse = try await SupabaseManager.partage.client
                 .from("grands_prix")
-                .select("id,nom,date_course,date_qualifications,statut")
+                .select("id,nom,date_course,date_qualifications,statut,statut_resultats")
                 .or("statut.in.(a_venir,cotes_figees),date_course.gte.\(Self.debutDuJour())")
                 .order("date_course", ascending: true, nullsFirst: false)
                 .limit(1)

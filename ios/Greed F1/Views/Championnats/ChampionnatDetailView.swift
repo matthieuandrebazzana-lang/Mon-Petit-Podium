@@ -344,6 +344,18 @@ struct ChampionnatDetailView: View {
     private func contenuClassement(_ membres: [Membre]) -> some View {
         ScrollView {
             VStack(spacing: 12) {
+                // Tant que le dernier Grand Prix couru est provisoire, le classement peut
+                // encore bouger au calcul définitif (24 h après la course). La mention se
+                // pose au-dessus du bloc, alignée sur sa marge droite, sans rien décaler
+                // quand elle disparaît le lendemain.
+                if membres.first?.resultatsProvisoires == true {
+                    HStack {
+                        Spacer(minLength: 0)
+                        MentionProvisoire()             // 4,71:1 sur le beige
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, -4)
+                }
                 listeClassement(membres)
                 lienResultats
             }

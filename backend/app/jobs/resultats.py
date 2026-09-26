@@ -1,21 +1,39 @@
 """Job de résultats — récupération OpenF1, calcul des points, clôture du GP.
 
-Le calendrier de la règle 4.3 : le job démarre **1h30 après le départ**, appelle
-OpenF1 **toutes les cinq minutes** jusqu'à obtenir des données, puis calcule et
-attribue les points. Si rien n'est disponible **trois heures** après ce
-démarrage, il journalise une alerte et cesse d'essayer pour ce GP.
+Deux temps depuis la version `0.78.0` (`docs/audit-evaluation.md` §5.3) :
 
-L'idempotence est exigée par la section 9, et elle est portée à trois étages —
-chacun couvrant ce que les autres ne couvrent pas :
+1. **Provisoire** — le job démarre **1h30 après le départ**, appelle OpenF1
+   **toutes les cinq minutes** jusqu'à obtenir un classement, puis écrit les
+   verdicts par `attribuer_points` (les `NULL` seuls) et passe le GP en
+   `statut_resultats = provisoire`. Les points comptent aussitôt partout. Si
+   rien n'est disponible **trois heures** après ce démarrage, il journalise une
+   alerte et cesse d'essayer pour ce GP.
+2. **Définitif** — **24 heures après `date_course`**, `consolider` relit OpenF1
+   en entier (classement, tours, direction de course, qualifications) et
+   `remplacer_verdicts` remplace, **dans une seule transaction**, `resultats_gp`
+   et TOUS les verdicts du GP, y compris ceux déjà écrits. Le GP passe
+   `definitif`. C'est ce qui rattrape les pénalités posées après l'arrivée :
+   à Bakou 2026, Bortoleto 13ᵉ à l'arrivée, 15ᵉ au classement définitif.
+
+Après le définitif, **plus aucun recalcul automatique**. Seule la route admin
+`POST /jobs/resultats/{gp_id}/recalcul` rejuge un GP définitif, par la même
+écriture transactionnelle. Elle remplace `?forcer=true`, dont la remise à
+`NULL` puis la réécriture en deux appels pouvaient laisser tout un GP « en
+attente » (risque R5).
+
+L'idempotence du provisoire tient toujours à trois étages :
 
 1. **La récupération** — `resultats_gp.gp_id` est `unique`. Si une ligne existe
    déjà, OpenF1 n'est pas rappelée : le calcul est rejoué sur le JSON conservé.
 2. **L'attribution** — `public.attribuer_points` n'écrit que les pronostics dont
-   `points_gagnes` est encore NULL. Même appelée dix fois avec les mêmes
-   valeurs, elle n'attribue rien deux fois.
+   `points_gagnes` est encore NULL.
 3. **La surveillance** — un GP passé à `termine` sort du champ de la boucle.
 
-Un seul processus doit porter ce scheduler. Sur le plan gratuit de Railway, le
+Le définitif est idempotent autrement : c'est un calcul pur des données, des
+cotes et des pronostics, et `remplacer_verdicts` écrit le même état à chaque
+rejeu. Un GP `definitif` sort de sa boucle.
+
+Un seul processus doit porter ces schedulers. Sur le plan gratuit de Railway, le
 service tourne en un exemplaire : c'est le cas aujourd'hui. **Le jour où le
 service passe à plusieurs instances, deux schedulers tourneront en parallèle** —
 la base empêcherait la double attribution (étage 2), mais pas les appels OpenF1
@@ -53,6 +71,19 @@ INTERVALLE = timedelta(minutes=5)
 # course dure deux heures au maximum, réglementairement : 1h30 + 3h laisse une
 # marge très large, y compris pour une course interrompue au drapeau rouge.
 FENETRE_ESSAIS = timedelta(hours=3)
+
+# Le calcul définitif part 24 heures après le départ : les commissaires ont
+# statué, OpenF1 a publié le classement corrigé. Pas « le lundi » : Bakou 2026
+# se court un samedi.
+DELAI_DEFINITIF = timedelta(hours=24)
+
+# Rythme de la boucle du définitif. Un quart d'heure suffit à une échéance
+# d'une journée, et espace les nouvelles tentatives si OpenF1 est indisponible.
+INTERVALLE_DEFINITIF = timedelta(minutes=15)
+
+# `grands_prix.statut_resultats` (migration `20260926200000`).
+PROVISOIRE = "provisoire"
+DEFINITIF = "definitif"
 
 # Statuts dont un GP peut encore sortir. `termine` en est absent : un GP terminé
 # ne repasse jamais dans la boucle.
@@ -128,80 +159,74 @@ async def cotes_du_gp(gp_id: str) -> dict[str, dict]:
     return {ligne["id_outcome_unibet"]: ligne for ligne in lignes}
 
 
-async def reinitialiser_points(gp_id: str) -> int:
-    """Rend à `NULL` les points de tous les pronostics d'un GP. Rend leur nombre.
+class GrandPrixDefinitif(Exception):
+    """Le GP est définitif : seul `recalculer` peut encore le rejuger."""
 
-    > ### On remet à `NULL`, jamais à `0` — et c'est toute la fonction
-    >
-    > `0` veut dire « raté » (règle 4.1), et `attribuer_points` n'écrit **que**
-    > les `points_gagnes` encore `NULL` (`scraper.md` §11). Remettre `0` gèlerait
-    > donc définitivement ce qu'on cherche justement à recalculer : le GP
-    > ressortirait avec exactement les mêmes zéros, et plus rien ne pourrait les
-    > corriger. `NULL` est le seul état depuis lequel le calcul peut reprendre.
-    >
-    > C'est la même asymétrie que partout ailleurs dans le module : attendre est
-    > réversible, écrire ne l'est pas.
 
-    **C'est la seule écriture du système qui défait un point acquis**, et elle
-    n'existe que pour un cas : un validateur corrigé après coup, dont les
-    verdicts d'avant sont faux. Elle n'est jamais appelée par le scheduler — le
-    job automatique reste strictement idempotent — mais seulement par
-    `POST /jobs/resultats/{gp_id}?forcer=true`, derrière le secret d'admin.
+class GrandPrixNonDefinitif(Exception):
+    """`recalculer` ne rejuge qu'un GP définitif : les autres ont leur boucle."""
 
-    `pronostic_podium.points_gagnes` est remis à `NULL` avec le parent. Il en
-    DÉRIVE (migration `resultats_points` §5) et `attribuer_points` le resynchronise
-    à la prochaine attribution — mais seulement pour les podiums qui en
-    reçoivent une. Un podium qui resterait non jugé garderait sinon l'ancien
-    total à côté d'un parent vide, et les deux colonnes divergeraient : ce que
-    le trigger d'origine avait précisément pour but d'empêcher.
+
+async def _tous_les_pronostics(gp_id: str) -> list[dict]:
+    """Tous les pronostics du GP, jugés ou non : le définitif les rejuge tous."""
+    return await selectionner(
+        "pronostics",
+        {
+            "gp_id": f"eq.{gp_id}",
+            "select": "id,profil_id,type,id_outcome_unibet,pronostic_podium(pilote_1,pilote_2)",
+        },
+    )
+
+
+def _verdicts(pronostics: list[dict], attributions: list, statut_manquant: str) -> list[dict]:
+    """Les entrées de `attribuer_points` / `remplacer_verdicts`, une par pronostic.
+
+    Les pronostics que le calcul n'a pas pu juger repartent `en_attente`
+    explicitement : un pronostic `non_evaluable` dont l'évaluateur vient d'être
+    livré, mais dont la donnée manque encore, doit quitter ce statut.
     """
-    podiums = await selectionner(
-        "pronostics",
-        {"gp_id": f"eq.{gp_id}", "type": "eq.podium", "select": "id"},
-    )
-    if podiums:
-        identifiants = ",".join(str(ligne["id"]) for ligne in podiums)
-        await mettre_a_jour(
-            "pronostic_podium",
-            {"pronostic_id": f"in.({identifiants})"},
-            {"points_gagnes": None},
-        )
-
-    remis = await mettre_a_jour(
-        "pronostics",
-        {"gp_id": f"eq.{gp_id}", "points_gagnes": "not.is.null"},
-        {"points_gagnes": None},
-    )
-    logger.warning(
-        "[resultats] RECALCUL FORCÉ : %d pronostic(s) du GP %s remis à NULL. "
-        "Les points déjà acquis sont effacés et vont être recalculés.",
-        len(remis),
-        gp_id,
-    )
-    return len(remis)
+    juges = {attribution.pronostic_id for attribution in attributions}
+    return [
+        {
+            "pronostic_id": attribution.pronostic_id,
+            "points": attribution.points,
+            "statut": attribution.statut,
+        }
+        for attribution in attributions
+    ] + [
+        {"pronostic_id": str(p["id"]), "points": None, "statut": statut_manquant}
+        for p in pronostics
+        if str(p["id"]) not in juges
+    ]
 
 
-async def traiter(gp: dict, forcer: bool = False) -> dict:
-    """Traite un GP de bout en bout : résultats, points, clôture.
+async def traiter(gp: dict) -> dict:
+    """Le calcul **provisoire** d'un GP : résultats, points, clôture.
 
     La fenêtre horaire de la règle 4.3 n'est **pas** appliquée ici mais par
     l'appelant : `surveiller` la respecte, `declencher_maintenant` l'ignore. Un
-    déclenchement manuel peut ainsi rejouer un GP ancien ou anticiper sur un GP
-    dont l'heure n'est pas venue — sans jamais sauter le moindre contrôle
-    d'idempotence, qui vit tout entier dans les trois étages décrits en tête de
-    module.
+    déclenchement manuel peut ainsi anticiper sur un GP dont l'heure n'est pas
+    venue, ou remplir les `NULL` d'un GP provisoire — sans jamais sauter le
+    moindre contrôle d'idempotence.
 
-    `forcer=True` est la **seule** exception, et elle ne vient jamais du
-    scheduler : les points déjà attribués sont rendus à `NULL` avant le calcul,
-    pour qu'un validateur corrigé puisse rejuger un GP que l'ancien avait mal
-    jugé. OpenF1 n'est pas rappelée pour autant — `resultats_gp` est intact, et
-    c'est exactement ce que `donnees_brutes` conserve pour.
+    Un GP **définitif** est refusé (`GrandPrixDefinitif`) : ses verdicts ne se
+    touchent plus que par `recalculer`, qui réécrit tout le GP d'un bloc.
     """
     gp_id = str(gp["id"])
     nom = str(gp.get("nom") or gp_id)
     depart = _en_datetime(gp.get("date_course"))
 
-    rapport: dict = {"gp": nom, "gp_id": gp_id, "statut": gp.get("statut")}
+    if gp.get("statut_resultats") == DEFINITIF:
+        raise GrandPrixDefinitif(
+            f"{nom} est définitif. Pour le rejuger : POST /jobs/resultats/{gp_id}/recalcul"
+        )
+
+    rapport: dict = {
+        "gp": nom,
+        "gp_id": gp_id,
+        "statut": gp.get("statut"),
+        "statut_resultats": gp.get("statut_resultats"),
+    }
 
     if depart is None:
         # Sans heure de départ, impossible de retrouver la course chez OpenF1 :
@@ -214,28 +239,22 @@ async def traiter(gp: dict, forcer: bool = False) -> dict:
     rapport["deja_recupere"] = donnees is not None
 
     if donnees is None:
-        # Seul appel réseau du job, et il n'a lieu qu'une fois par GP.
+        # Seul appel réseau du provisoire, et il n'a lieu qu'une fois par GP.
         donnees = await recuperer(nom, depart)
         await upserter(
             "resultats_gp",
             [{"gp_id": gp_id, "donnees_brutes": donnees}],
             "gp_id",
         )
-        logger.info("[resultats] %s : résultats OpenF1 enregistrés.", nom)
+        logger.info("[resultats] %s : résultats OpenF1 (provisoires) enregistrés.", nom)
     elif await completer_qualification(nom, donnees):
-        # Seule exception à « jamais relus chez OpenF1 » : les qualifications,
-        # absentes des GP récupérés avant la 0.77.0. Le reste de `donnees` est
-        # réécrit tel qu'il était.
+        # Les qualifications, absentes des GP récupérés avant la 0.77.0. Le
+        # reste de `donnees` est réécrit tel qu'il était.
         await upserter(
             "resultats_gp",
             [{"gp_id": gp_id, "donnees_brutes": donnees}],
             "gp_id",
         )
-
-    # Après la récupération, avant la lecture : les pronostics doivent être lus
-    # une fois qu'ils sont revenus à NULL, sans quoi le filtre
-    # `points_gagnes=is.null` de `_pronostics_a_noter` ne remonterait rien.
-    rapport["reinitialises"] = await reinitialiser_points(gp_id) if forcer else 0
 
     pronostics = await _pronostics_a_noter(gp_id)
     rapport["pronostics_a_noter"] = len(pronostics)
@@ -244,29 +263,11 @@ async def traiter(gp: dict, forcer: bool = False) -> dict:
         cotes = await cotes_du_gp(gp_id)
         attributions, en_attente = calcul.calculer(pronostics, cotes, donnees)
 
-        # Les pronostics que le calcul n'a pas pu juger repartent `en_attente`
-        # explicitement : un pronostic `non_evaluable` dont l'évaluateur vient
-        # d'être livré, mais dont la donnée manque encore, doit quitter ce statut.
-        juges = {attribution.pronostic_id for attribution in attributions}
-        a_rattraper = [
-            {"pronostic_id": str(p["id"]), "points": None, "statut": calcul.EN_ATTENTE}
-            for p in pronostics
-            if str(p["id"]) not in juges
-        ]
-
         ecrit = await appeler_fonction(
             "attribuer_points",
             {
                 "p_gp": gp_id,
-                "p_attributions": [
-                    {
-                        "pronostic_id": attribution.pronostic_id,
-                        "points": attribution.points,
-                        "statut": attribution.statut,
-                    }
-                    for attribution in attributions
-                ]
-                + a_rattraper,
+                "p_attributions": _verdicts(pronostics, attributions, calcul.EN_ATTENTE),
             },
         )
         rapport["attribues"] = (ecrit or {}).get("attribues", 0)
@@ -283,28 +284,110 @@ async def traiter(gp: dict, forcer: bool = False) -> dict:
         rapport["en_attente"] = []
         rapport["non_evaluables"] = []
 
-    # Le GP passe à `termine` même s'il reste des pronostics sans points : la
-    # course est courue, et laisser le GP dans la boucle ferait rappeler OpenF1
-    # toutes les cinq minutes pour rien. Les pronostics restés à NULL sont
-    # rattrapables par un déclenchement manuel, une fois le validateur manquant
-    # écrit — c'est précisément à quoi sert `donnees_brutes`.
-    if gp.get("statut") != "termine":
+    # Le GP passe à `termine` et `provisoire` même s'il reste des pronostics
+    # sans points : la course est courue, et laisser le GP dans la boucle ferait
+    # rappeler OpenF1 toutes les cinq minutes pour rien. Le définitif, à J+1,
+    # rejugera de toute façon chaque pronostic.
+    if gp.get("statut") != "termine" or not gp.get("statut_resultats"):
         await mettre_a_jour(
-            "grands_prix", {"id": f"eq.{gp_id}"}, {"statut": "termine"}
+            "grands_prix",
+            {"id": f"eq.{gp_id}"},
+            {"statut": "termine", "statut_resultats": PROVISOIRE},
         )
         rapport["statut"] = "termine"
-        logger.info("[resultats] %s : statut passé à « termine ».", nom)
+        rapport["statut_resultats"] = PROVISOIRE
+        logger.info(
+            "[resultats] %s : statut passé à « termine », résultats provisoires. "
+            "Calcul définitif prévu %s après le départ.",
+            nom,
+            DELAI_DEFINITIF,
+        )
 
     if rapport["restants"]:
         logger.warning(
-            "[resultats] %s : %d pronostic(s) restent sans points. "
-            "Rejouer POST /jobs/resultats/%s une fois le validateur manquant écrit.",
+            "[resultats] %s : %d pronostic(s) restent sans points. Le calcul "
+            "définitif les rejugera.",
             nom,
             rapport["restants"],
-            gp_id,
         )
 
     _alertes_emises.discard(gp_id)
+    return rapport
+
+
+async def consolider(gp: dict, relire: bool = True) -> dict:
+    """Le calcul **définitif** : relecture d'OpenF1, puis réécriture de tout le GP.
+
+    `relire=False` rejuge sur le `donnees_brutes` conservé, sans appel réseau :
+    c'est le recalcul après la livraison d'un évaluateur corrigé. Dans les deux
+    cas, **tous** les pronostics du GP sont rejugés, y compris ceux qui ont déjà
+    un verdict, et `remplacer_verdicts` écrit résultats, verdicts, podiums et
+    statut dans une seule transaction : un échec laisse le GP tel qu'il était,
+    jamais à moitié réécrit.
+    """
+    gp_id = str(gp["id"])
+    nom = str(gp.get("nom") or gp_id)
+    depart = _en_datetime(gp.get("date_course"))
+
+    rapport: dict = {"gp": nom, "gp_id": gp_id, "statut": gp.get("statut")}
+
+    ancien = await _resultats_en_base(gp_id)
+
+    if relire:
+        if depart is None:
+            rapport["erreur"] = "Grand Prix sans date de course : rapprochement OpenF1 impossible."
+            logger.error("[resultats] %s — %s", nom, rapport["erreur"])
+            return rapport
+        donnees = await recuperer(nom, depart)
+        # Les qualifications ne changent pas après la course : si OpenF1 ne les
+        # rend pas cette fois-ci, celles déjà conservées font foi.
+        if not donnees.get("qualification") and (ancien or {}).get("qualification"):
+            donnees["qualification"] = ancien["qualification"]
+    else:
+        if ancien is None:
+            raise ValueError(f"{nom} n'a aucun résultat en base à rejuger.")
+        donnees = ancien
+
+    rapport["deja_recupere"] = ancien is not None
+
+    pronostics = await _tous_les_pronostics(gp_id)
+    rapport["pronostics_a_noter"] = len(pronostics)
+
+    cotes = await cotes_du_gp(gp_id) if pronostics else {}
+    attributions, en_attente = calcul.calculer(pronostics, cotes, donnees)
+
+    ecrit = await appeler_fonction(
+        "remplacer_verdicts",
+        {
+            "p_gp": gp_id,
+            "p_attributions": _verdicts(pronostics, attributions, calcul.EN_ATTENTE),
+            # `None` : le JSON en base est gardé tel quel.
+            "p_donnees": donnees if relire else None,
+            "p_statut_resultats": DEFINITIF,
+        },
+    )
+
+    rapport["statut"] = "termine"
+    rapport["statut_resultats"] = DEFINITIF
+    rapport["modifies"] = (ecrit or {}).get("modifies", 0)
+    rapport["attribues"] = (ecrit or {}).get("attribues", 0)
+    rapport["restants"] = (ecrit or {}).get("restants", 0)
+    rapport["en_attente"] = en_attente
+    rapport["non_evaluables"] = [
+        attribution.pronostic_id
+        for attribution in attributions
+        if attribution.statut == calcul.NON_EVALUABLE
+    ]
+
+    logger.info(
+        "[resultats] %s : résultats DÉFINITIFS%s — %d verdict(s) modifié(s) sur %d "
+        "pronostic(s), %d en attente.",
+        nom,
+        " (OpenF1 relue)" if relire else " (données conservées)",
+        rapport["modifies"],
+        len(pronostics),
+        rapport["restants"],
+    )
     return rapport
 
 
@@ -315,7 +398,7 @@ async def _candidats() -> list[dict]:
         {
             "statut": f"in.({','.join(STATUTS_SURVEILLES)})",
             "date_course": "not.is.null",
-            "select": "id,nom,date_course,statut",
+            "select": "id,nom,date_course,statut,statut_resultats",
             "order": "date_course.asc",
         },
     )
@@ -379,6 +462,99 @@ async def surveiller() -> None:
             logger.exception("[resultats] %s : échec inattendu du traitement.", nom)
 
 
+async def consolider_echus() -> None:
+    """Un tour de la boucle du définitif : chaque GP provisoire dont le départ
+    date de plus de 24 heures reçoit son calcul définitif.
+
+    **C'est aussi le rattrapage au démarrage** : le premier tour part quelques
+    secondes après le lancement du backend (`demarrer`). Un GP resté provisoire
+    pendant une veille ou un redéploiement de Railway est donc consolidé dès le
+    retour du service, sans attendre.
+
+    Un échec (OpenF1 indisponible, classement encore vide) laisse le GP
+    provisoire : ses points restent comptés, et le tour suivant réessaie.
+    """
+    try:
+        provisoires = await selectionner(
+            "grands_prix",
+            {
+                "statut_resultats": f"eq.{PROVISOIRE}",
+                "date_course": "not.is.null",
+                "select": "id,nom,date_course,statut,statut_resultats",
+                "order": "date_course.asc",
+            },
+        )
+    except ErreurSupabase:
+        logger.exception("[resultats] Lecture des Grands Prix provisoires impossible.")
+        return
+
+    maintenant = datetime.now(UTC)
+
+    for gp in provisoires:
+        nom = str(gp.get("nom") or gp.get("id"))
+        depart = _en_datetime(gp.get("date_course"))
+        if depart is None or maintenant < depart + DELAI_DEFINITIF:
+            continue
+
+        try:
+            await consolider(gp)
+        except ResultatsIndisponibles as erreur:
+            logger.warning(
+                "[resultats] %s : définitif reporté (%s). Nouvel essai dans %s.",
+                nom,
+                erreur,
+                INTERVALLE_DEFINITIF,
+            )
+        except (ErreurOpenF1, ErreurSupabase):
+            logger.exception(
+                "[resultats] %s : échec du calcul définitif. Le GP reste provisoire, "
+                "nouvel essai dans %s.",
+                nom,
+                INTERVALLE_DEFINITIF,
+            )
+        except Exception:  # noqa: BLE001 — la boucle doit survivre à tout
+            logger.exception("[resultats] %s : échec inattendu du calcul définitif.", nom)
+
+
+async def dernier_statut_des_resultats() -> str | None:
+    """Le `statut_resultats` du dernier GP couru, pour la mention « Provisoire »
+    du classement d'un championnat.
+
+    `select=*` et non la colonne nommée : sur une base pas encore migrée, la
+    colonne manque, et la réponse du classement ne doit pas en échouer.
+    """
+    try:
+        lignes = await selectionner(
+            "grands_prix",
+            {
+                "statut": "eq.termine",
+                "date_course": "not.is.null",
+                "select": "*",
+                "order": "date_course.desc",
+                "limit": "1",
+            },
+        )
+    except ErreurSupabase:
+        logger.exception("[resultats] Lecture du dernier Grand Prix couru impossible.")
+        return None
+    return lignes[0].get("statut_resultats") if lignes else None
+
+
+async def statuts_des_resultats() -> dict[str, str]:
+    """`{gp_id: statut_resultats}` des GP qui en ont un. Même prudence que
+    `dernier_statut_des_resultats` sur une base non migrée."""
+    try:
+        lignes = await selectionner("grands_prix", {"statut": "eq.termine", "select": "*"})
+    except ErreurSupabase:
+        logger.exception("[resultats] Lecture des statuts de résultats impossible.")
+        return {}
+    return {
+        str(ligne["id"]): ligne["statut_resultats"]
+        for ligne in lignes
+        if ligne.get("statut_resultats")
+    }
+
+
 # --------------------------------------------------------------------------- #
 #  Scheduler
 # --------------------------------------------------------------------------- #
@@ -434,11 +610,27 @@ def demarrer() -> None:
         # requête.
         next_run_time=datetime.now(UTC) + timedelta(seconds=30),
     )
+    # Le définitif, et son rattrapage : premier tour quelques secondes après le
+    # démarrage, pour qu'un GP provisoire échu pendant une veille de Railway
+    # soit consolidé aussitôt.
+    _scheduler.add_job(
+        consolider_echus,
+        "interval",
+        seconds=int(INTERVALLE_DEFINITIF.total_seconds()),
+        id="resultats-definitifs",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=int(INTERVALLE_DEFINITIF.total_seconds() * 2),
+        next_run_time=datetime.now(UTC) + timedelta(seconds=15),
+    )
     _scheduler.start()
     logger.info(
-        "[resultats] Surveillance démarrée : un tour toutes les %s, statuts %s.",
+        "[resultats] Surveillance démarrée : un tour toutes les %s, statuts %s ; "
+        "résultats définitifs %s après le départ, vérifiés toutes les %s.",
         INTERVALLE,
         ", ".join(STATUTS_SURVEILLES),
+        DELAI_DEFINITIF,
+        INTERVALLE_DEFINITIF,
     )
 
 
@@ -454,23 +646,50 @@ def arreter() -> None:
         logger.info("[resultats] Surveillance arrêtée.")
 
 
-async def declencher_maintenant(gp_id: str, forcer: bool = False) -> dict:
-    """Traite un GP à la demande, quelle que soit l'heure. Utilisé par la route.
-
-    Le GP est relu en base plutôt que reçu de l'appelant : c'est la seule façon
-    de garantir que le statut et l'heure de départ sont bien ceux de la base au
-    moment du traitement.
-    """
+async def _grand_prix(gp_id: str) -> dict:
+    """Le GP relu en base plutôt que reçu de l'appelant : c'est la seule façon
+    de garantir que ses statuts et son heure de départ sont bien ceux de la base
+    au moment du traitement."""
     lignes = await selectionner(
         "grands_prix",
-        {"id": f"eq.{gp_id}", "select": "id,nom,date_course,statut", "limit": "1"},
+        {
+            "id": f"eq.{gp_id}",
+            "select": "id,nom,date_course,statut,statut_resultats",
+            "limit": "1",
+        },
     )
     if not lignes:
         raise ValueError("Ce Grand Prix n'existe pas.")
+    return lignes[0]
 
-    logger.info(
-        "[resultats] Déclenchement manuel pour %s%s.",
-        lignes[0].get("nom"),
-        " — RECALCUL FORCÉ" if forcer else "",
+
+async def declencher_maintenant(gp_id: str) -> dict:
+    """Le calcul provisoire à la demande, quelle que soit l'heure. Utilisé par la
+    route. Refuse un GP définitif (`GrandPrixDefinitif`)."""
+    gp = await _grand_prix(gp_id)
+    logger.info("[resultats] Déclenchement manuel pour %s.", gp.get("nom"))
+    return await traiter(gp)
+
+
+async def recalculer(gp_id: str, relire: bool = False) -> dict:
+    """Recalcul **volontaire** d'un GP définitif — la route admin, rien d'autre.
+
+    Même écriture transactionnelle que le définitif automatique. Par défaut sur
+    les données conservées (évaluateur corrigé) ; `relire=True` rappelle OpenF1
+    (décision tardive de la FIA). Un GP qui n'est pas encore définitif est
+    refusé : sa boucle s'en charge, et le rendre définitif avant l'heure
+    priverait le GP de la relecture de J+1.
+    """
+    gp = await _grand_prix(gp_id)
+    if gp.get("statut_resultats") != DEFINITIF:
+        raise GrandPrixNonDefinitif(
+            f"{gp.get('nom')} n'est pas définitif (statut : "
+            f"{gp.get('statut_resultats') or 'aucun résultat'}). Il le deviendra "
+            f"{DELAI_DEFINITIF} après le départ."
+        )
+    logger.warning(
+        "[resultats] RECALCUL VOLONTAIRE de %s%s : tous ses verdicts vont être réécrits.",
+        gp.get("nom"),
+        " avec relecture d'OpenF1" if relire else "",
     )
-    return await traiter(lignes[0], forcer=forcer)
+    return await consolider(gp, relire=relire)

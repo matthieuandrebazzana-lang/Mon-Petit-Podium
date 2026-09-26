@@ -20,6 +20,8 @@ final class ResultatsGrandPrix: ObservableObject {
     }
 
     @Published private(set) var etat: Etat
+    /// Résultats encore provisoires (calcul définitif 24 h après la course).
+    @Published private(set) var provisoire = false
 
     private let gpId: UUID?
     private var enCours = false
@@ -38,6 +40,7 @@ final class ResultatsGrandPrix: ObservableObject {
         do {
             let chemin = "grands-prix/\(gpId.uuidString.lowercased())/resultats"
             let reponse: ResultatsGP = try await APIClient.partage.requete(chemin)
+            provisoire = reponse.provisoire
             etat = reponse.disponible && !reponse.classement.isEmpty
                 ? .pret(reponse.classement)
                 : .indisponible

@@ -79,8 +79,11 @@ class DemandeAction(BaseModel):
     # Nul par défaut, et vérifié dans le handler plutôt que dans le type : un
     # `gp_id` obligatoire au niveau du modèle rendrait `POST /admin/action`
     # impossible pour l'action « scraper », qui n'en a que faire.
+    # `forcer` a disparu en 0.78.0 : un client qui l'enverrait encore est
+    # ignoré sans erreur (Pydantic écarte les champs inconnus). Le recalcul d'un
+    # GP définitif passe par `POST /jobs/resultats/{id}/recalcul`, et par elle
+    # seule.
     gp_id: UUID | None = None
-    forcer: bool = False
 
 
 class ReponseAction(BaseModel):
@@ -118,7 +121,7 @@ async def _executer_resultats(demande: DemandeAction) -> ReponseAction:
             detail="Cette action demande l'identifiant d'un Grand Prix.",
         )
 
-    rapport = await traiter_grand_prix(demande.gp_id, demande.forcer)
+    rapport = await traiter_grand_prix(demande.gp_id)
     return ReponseAction(action=demande.action, statut="traite", rapport=rapport)
 
 
@@ -144,7 +147,7 @@ async def executer_action(
     fois sur deux.
 
     **L'appelant est journalisé, et ce n'est pas décoratif.** Ces actions
-    écrivent en base, et `?forcer=true` défait des points acquis : savoir *qui*
+    écrivent en base : savoir *qui*
     a appuyé est la seule chose que les logs ne pourront pas reconstituer après
     coup. Le secret partagé, lui, ne disait jamais qui l'avait employé — c'est
     un gain de cette version, au-delà du secret retiré du bundle.

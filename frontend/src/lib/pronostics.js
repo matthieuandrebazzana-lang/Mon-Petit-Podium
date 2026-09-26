@@ -395,7 +395,7 @@ export async function chargerMesPronostics(gpId, profilId, signal) {
     const requete = supabase
       .from("pronostics")
       .select(
-        "id, type, id_outcome_unibet, points_gagnes, pronostic_podium(pilote_1, pilote_2)",
+        "id, type, id_outcome_unibet, points_gagnes, statut_evaluation, pronostic_podium(pilote_1, pilote_2)",
       )
       .eq("gp_id", gpId)
       .eq("profil_id", profilId);
@@ -520,7 +520,7 @@ export async function chargerDernierGpCouru(signal) {
   try {
     const requete = supabase
       .from("grands_prix")
-      .select("id, nom, date_course, statut, resultats_gp!inner(gp_id)")
+      .select("id, nom, date_course, statut, statut_resultats, resultats_gp!inner(gp_id)")
       .order("date_course", { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle();
@@ -871,6 +871,7 @@ export function decrirePronostics(pronostics, index) {
         libelle: premiere?.libelle ?? null,
         points: premiere?.points ?? null,
         points_gagnes: brut.points_gagnes ?? null,
+        statut_evaluation: brut.statut_evaluation ?? null,
         podium: detail
           ? {
               pilote_1: detail.pilote_1,
