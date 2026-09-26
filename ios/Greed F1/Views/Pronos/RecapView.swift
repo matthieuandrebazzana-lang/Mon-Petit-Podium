@@ -145,6 +145,10 @@ struct RecapView: View {
     /// Rembourrage de la carte de résumé. Mesuré sur `screen-28` : 48 px à 3×.
     private let rembourrageCarte: CGFloat = 16
 
+    /// **La course est terminée** : la grille ne se modifie plus. Le bandeau cesse de le
+    /// promettre et le bouton « Modifier mes pronos » disparaît.
+    private var termine: Bool { grille.horaires.statut == "termine" }
+
     private var obligatoires: [LigneRecap] { grille.obligatoires }
     private var lignesBonus: [LigneRecap] { grille.bonus }
 
@@ -235,7 +239,7 @@ struct RecapView: View {
                     .font(.custom("HelveticaNeue-Medium", size: 17))
                     .foregroundColor(.white)          // 4,86:1 sur le vert sauge
 
-                Text("Tu peux les modifier jusqu'au départ.")
+                Text(termine ? "La course est terminée." : "Tu peux les modifier jusqu'au départ.")
                     .font(.custom("HelveticaNeue", size: 13))
                     .foregroundColor(.white)
                     .fixedSize(horizontal: false, vertical: true)
@@ -277,7 +281,7 @@ struct RecapView: View {
     /// écran d'intervalle.
     private var blocEcheance: some View {
         BlocEcheance(horaires: grille.horaires) {
-            boutonModifier
+            if !termine { boutonModifier }
         }
         .padding(.horizontal, margeLaterale)
     }

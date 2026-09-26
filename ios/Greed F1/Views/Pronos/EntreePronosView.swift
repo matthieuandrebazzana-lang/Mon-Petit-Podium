@@ -8,6 +8,9 @@ import SwiftUI
 ///   cotes, puis saisie.
 /// - **Rien encore** : le tableau des cotes, comme avant.
 ///
+/// **Après la course** (``dateResultats`` renseignée) : sa grille s'il en a une, sinon le
+/// classement officiel (``ResultatsGPView``) — il n'y a plus de cotes à parcourir.
+///
 /// Le chargeur est **celui du tableau des cotes**, qu'elle lui passe : les cotes déjà lues
 /// s'affichent sans second spinner.
 struct EntreePronosView: View {
@@ -16,6 +19,8 @@ struct EntreePronosView: View {
     let libelleRetour: String
     let avancer: (EtapePronos) -> Void
     let retour: () -> Void
+    /// La date écrite du GP, **seulement après la course** — `nil` avant.
+    let dateResultats: String?
 
     @StateObject private var donnees: DonneesPronostics
 
@@ -25,8 +30,10 @@ struct EntreePronosView: View {
     @State private var recapDabord: Bool?
 
     init(grandPrix: GrandPrixPronos, libelleRetour: String,
-         avancer: @escaping (EtapePronos) -> Void, retour: @escaping () -> Void) {
+         avancer: @escaping (EtapePronos) -> Void, retour: @escaping () -> Void,
+         dateResultats: String? = nil) {
         self.grandPrix = grandPrix
+        self.dateResultats = dateResultats
         self.libelleRetour = libelleRetour
         self.avancer = avancer
         self.retour = retour
@@ -49,7 +56,11 @@ struct EntreePronosView: View {
                 }
 
             case false?:
-                CotesView(grandPrix: grandPrix, donnees: donnees)
+                if let dateResultats {
+                    ResultatsGPView(nom: grandPrix.nom, date: dateResultats, gpId: grandPrix.id)
+                } else {
+                    CotesView(grandPrix: grandPrix, donnees: donnees)
+                }
 
             case nil:
                 attente

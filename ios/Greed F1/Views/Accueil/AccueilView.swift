@@ -349,7 +349,7 @@ private struct WidgetGrandPrix: View {
         switch etat {
         case .ouvert: return pronosValides ? "Voir mes pronos" : "Valider mes pronos"
         case .aVenir: return nil
-        case .termine: return "Voir les résultats"
+        case .termine: return "Voir mes résultats"
         case .ferme: return nil
         }
     }
@@ -381,9 +381,14 @@ private struct WidgetGrandPrix: View {
 
     @ViewBuilder private func lien(_ libelle: String) -> some View {
         if etat == .termine {
-            NavigationLink {
-                ResultatsGPView(nom: grandPrix.nom, date: date, gpId: grandPrix.id)
-            } label: {
+            // **Ses propres pronos d'abord** : le récapitulatif de sa grille, ou le
+            // classement officiel s'il n'a rien joué (``EntreePronosView``).
+            NavigationLink(value: EtapePronos.resultats(GrandPrixPronos(
+                id: grandPrix.id,
+                nom: grandPrix.nom,
+                slug: grandPrix.slug,
+                sousTitre: date
+            ), date: date)) {
                 surface
             }
             .buttonStyle(StyleAppui(.grandeSurface))
