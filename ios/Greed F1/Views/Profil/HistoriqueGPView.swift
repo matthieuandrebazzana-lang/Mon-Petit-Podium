@@ -7,12 +7,12 @@ import SwiftUI
 /// GP de l'accueil (drapeau · tracé · voile · contenu), le détail reprend ``PastillePoints``
 /// et ``Verdict``.
 ///
-/// > *Écart signalé (`CLAUDE.md` §3.2).* Le type et la route portent « historique », terme
-/// > proscrit du vocabulaire. **Rien de ce qui s'affiche ne le dit** : l'écran s'intitule
+/// > *Écart signalé (`CLAUDE.md` §3.2).* Le type porte « historique », terme proscrit du
+/// > vocabulaire. **Rien de ce qui s'affiche ne le dit** : l'écran s'intitule
 /// > « Ses Grands Prix ».
 ///
-/// **Données** : ``HistoriqueSaison/apercu`` tant que `GET /membres/{id}/historique`
-/// n'existe pas.
+/// **Données** : ``GrandsPrixJoues`` — les routes de ``ResultatsParGPView``, relues pour
+/// chaque GP terminé et filtrées sur le membre. Spinner pendant l'appel.
 ///
 /// **Une seule carte ouverte à la fois** : en ouvrir une referme la précédente.
 struct HistoriqueGPView: View {
@@ -20,22 +20,32 @@ struct HistoriqueGPView: View {
     /// « Ses Grands Prix », ou « Mes Grands Prix » depuis son propre profil.
     var titre = "Ses Grands Prix"
 
-    var historique: HistoriqueSaison = .apercu
+    /// Rang au classement du championnat d'où l'on vient ; `nil` depuis son propre profil.
+    var rang: Int?
 
-    @State private var ouvert: String?
+    @StateObject private var donnees: GrandsPrixJoues
+
+    @State private var ouvert: UUID?
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
     private let margeLaterale: CGFloat = 16
 
-    /// Du plus ancien au plus récent — l'ordre du calendrier. **Le tri se fait ici**, quel
-    /// que soit l'ordre dans lequel l'API renverra la liste ; un GP hors calendrier
-    /// statique ferme la marche.
-    private var grandsPrix: [GrandPrixJoue] {
-        let ordre = GrandPrixSaison.saison2026.map(\.slug)
-        return historique.grandsPrix.sorted {
-            (ordre.firstIndex(of: $0.slug) ?? .max) < (ordre.firstIndex(of: $1.slug) ?? .max)
-        }
+    /// - Parameters:
+    ///   - profilId: le membre ; `nil` = le compte connecté.
+    ///   - championnatId: un championnat partagé ; `nil` = le premier des miens.
+    init(titre: String = "Ses Grands Prix", profilId: UUID? = nil,
+         championnatId: UUID? = nil, rang: Int? = nil) {
+        self.titre = titre
+        self.rang = rang
+        _donnees = StateObject(wrappedValue: GrandsPrixJoues(profilId: profilId,
+                                                             championnatId: championnatId))
+    }
+
+    /// Du plus ancien au plus récent — l'ordre du calendrier servi.
+    private var grandsPrix: [GrandsPrixJoues.GrandPrixJoue] {
+        if case .pret(let liste) = donnees.etat { return liste }
+        return []
     }
 
     var body: some View {
@@ -48,16 +58,7 @@ struct HistoriqueGPView: View {
                     entete
 
                     Spacer().frame(height: 20)
-                    resumeSaison
-
-                    Spacer().frame(height: 24)
-                    VStack(spacing: 12) {
-                        ForEach(grandsPrix) { gp in
-                            CarteGrandPrixJoue(gp: gp, ouvert: ouvert == gp.id) {
-                                basculer(gp.id)
-                            }
-                        }
-                    }
+                    contenu
                 }
                 .padding(.horizontal, margeLaterale)
                 .padding(.top, 8)
@@ -67,9 +68,53 @@ struct HistoriqueGPView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .task { await donnees.charger() }
     }
 
-    private func basculer(_ id: String) {
+    @ViewBuilder private var contenu: some View {
+        switch donnees.etat {
+        case .chargement:
+            ProgressView()
+                .tint(.secondaire)
+                .frame(maxWidth: .infinity, minHeight: 160)
+                .accessibilityLabel("Chargement des Grands Prix")
+
+        case .echec(let erreur):
+            EchecChargement(erreur: erreur) {
+                Task { await donnees.charger() }
+            }
+
+        case .sansChampionnat:
+            messageVide("Rejoins un championnat pour retrouver tes Grands Prix ici.")
+
+        case .pret(let liste) where liste.isEmpty:
+            resumeSaison
+            Spacer().frame(height: 24)
+            messageVide("Aucun Grand Prix terminé joué pour l'instant.")
+
+        case .pret:
+            resumeSaison
+
+            Spacer().frame(height: 24)
+            VStack(spacing: 12) {
+                ForEach(grandsPrix) { gp in
+                    CarteGrandPrixJoue(gp: gp, ouvert: ouvert == gp.id) {
+                        basculer(gp.id)
+                    }
+                }
+            }
+        }
+    }
+
+    private func messageVide(_ texte: String) -> some View {
+        Text(texte)
+            .font(.custom("HelveticaNeue", size: 15))
+            .foregroundColor(.secondaire)                 // 9,32:1 sur le beige
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, minHeight: 120)
+    }
+
+    private func basculer(_ id: UUID) {
         withAnimation(mouvementReduit ? nil : Mouvement.deplacement(0.22)) {
             ouvert = ouvert == id ? nil : id
         }
@@ -86,14 +131,25 @@ struct HistoriqueGPView: View {
                 .accessibilityAddTraits(.isHeader)
 
             // `grisSecondaire` tient 4,71:1 sur le beige.
-            Text("Saison \(String(historique.saison)) · \(joues) \(joues > 1 ? "GP joués" : "GP joué")")
+            Text(sousTitre)
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var joues: Int { historique.grandsPrix.count }
+    private var sousTitre: String {
+        guard case .pret = donnees.etat else { return "Saison 2026" }
+        return "Saison 2026 · \(joues) \(joues > 1 ? "GP joués" : "GP joué")"
+    }
+
+    private var joues: Int { grandsPrix.count }
+
+    /// `nil` tant qu'aucun pronostic n'est jugé.
+    private var totalPoints: Int? {
+        let juges = grandsPrix.compactMap(\.totalPoints)
+        return juges.isEmpty ? nil : juges.reduce(0, +)
+    }
 
     // MARK: - Résumé de la saison
 
@@ -108,7 +164,7 @@ struct HistoriqueGPView: View {
 
                 Spacer().frame(height: 6)
 
-                Text(historique.totalPoints.map(\.enPoints) ?? "—")
+                Text(totalPoints.map(\.enPoints) ?? "—")
                     .font(.scoreLg)
                     .tracking(Tracking.scoreLg)
                     .foregroundColor(.white)              // 10,88:1 sur le bordeaux
@@ -123,7 +179,7 @@ struct HistoriqueGPView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let rang = historique.rang {
+            if let rang {
                 VStack(spacing: 2) {
                     Text(rang == 1 ? "1er" : "\(rang)e")
                         .font(.custom("HelveticaNeue-Medium", size: 26))
@@ -152,12 +208,12 @@ struct HistoriqueGPView: View {
         .accessibilityLabel(libelleResume)
     }
 
-    private var reussis: Int { historique.pronosticsReussis }
+    private var reussis: Int { grandsPrix.map(\.reussis).reduce(0, +) }
 
     private var libelleResume: String {
-        var libelle = "Total saison, \(historique.totalPoints ?? 0) points, "
+        var libelle = "Total saison, \(totalPoints ?? 0) points, "
             + "\(reussis) pronostic\(reussis > 1 ? "s" : "") réussi\(reussis > 1 ? "s" : "")."
-        if let rang = historique.rang { libelle += " \(rang == 1 ? "1er" : "\(rang)e") au classement." }
+        if let rang { libelle += " \(rang == 1 ? "1er" : "\(rang)e") au classement." }
         return libelle
     }
 }
@@ -172,7 +228,7 @@ struct HistoriqueGPView: View {
 /// La partie basse, blanche, se déplie dessous et partage le rayon de la carte.
 private struct CarteGrandPrixJoue: View {
 
-    let gp: GrandPrixJoue
+    let gp: GrandsPrixJoues.GrandPrixJoue
     let ouvert: Bool
     let basculer: () -> Void
 
@@ -205,7 +261,7 @@ private struct CarteGrandPrixJoue: View {
             VStack(spacing: 0) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(gp.fiche?.nom ?? gp.slug)
+                        Text(gp.fiche?.nom ?? gp.nom)
                             .font(.custom("HelveticaNeue-Medium", size: 18))
                             .foregroundColor(.white)
                             .lineLimit(1)
@@ -233,7 +289,7 @@ private struct CarteGrandPrixJoue: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text(gp.pointsGagnes.map(\.enPoints) ?? "—")
+                        Text(gp.totalPoints.map(\.enPoints) ?? "—")
                             .font(.custom("HelveticaNeue-Medium", size: 34))
                             .tracking(-0.85)              // grand chiffre : −0,025em × 34
                             .foregroundColor(.white)
@@ -314,8 +370,8 @@ private struct CarteGrandPrixJoue: View {
     }
 
     private var libelleAccessible: String {
-        "\(gp.fiche?.nom ?? gp.slug), \(gp.fiche?.date ?? ""), terminé. "
-            + "\(gp.pointsGagnes ?? 0) points, \(gp.reussis) sur \(gp.pronostics.count) pronostics réussis."
+        "\(gp.fiche?.nom ?? gp.nom), \(gp.fiche?.date ?? ""), terminé. "
+            + "\(gp.totalPoints ?? 0) points, \(gp.reussis) sur \(gp.pronostics.count) pronostics réussis."
     }
 
     // MARK: La partie basse
@@ -426,7 +482,7 @@ private struct RangeeHistorique: View {
 private struct TuilePodium: View {
 
     let position: Int
-    let pilote: PiloteClasse
+    let pilote: LigneResultat
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -443,7 +499,7 @@ private struct TuilePodium: View {
                 .foregroundColor(.texte)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-            Text(pilote.ecurie)
+            Text(pilote.equipe ?? "")
                 .font(.custom("HelveticaNeue", size: 11))
                 .foregroundColor(.secondaire)             // 9,32:1 beige · 11,0:1 ambre
                 .lineLimit(1)
@@ -454,7 +510,7 @@ private struct TuilePodium: View {
         .background(position == 1 ? Color.ambreClair : Color.fondPrincipal)
         .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(position == 1 ? "1er" : "\(position)e"), \(pilote.prenom) \(pilote.nom), \(pilote.ecurie)")
+        .accessibilityLabel("\(position == 1 ? "1er" : "\(position)e"), \(pilote.prenom) \(pilote.nom), \(pilote.equipe ?? "")")
     }
 }
 

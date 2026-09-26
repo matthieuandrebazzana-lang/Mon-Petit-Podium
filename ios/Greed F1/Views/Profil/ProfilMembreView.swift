@@ -18,6 +18,11 @@ struct MembreProfil {
     /// aucun appel ne part, les tuiles provisoires restent.
     var profilId: UUID?
 
+    /// Le championnat d'où l'on vient — celui que ``HistoriqueGPView`` interroge pour ses
+    /// paris — et son rang dedans. `nil` pour un membre d'aperçu.
+    var championnatId: UUID?
+    var rang: Int?
+
     let pseudo: String
 
     var photo: URL?
@@ -142,7 +147,8 @@ struct ProfilMembreView: View {
 
     private var sesGrandsPrix: some View {
         LigneGrandsPrix(titre: "Ses Grands Prix", sousTitre: sousTitreGrandsPrix) {
-            HistoriqueGPView(titre: "Ses Grands Prix")
+            HistoriqueGPView(titre: "Ses Grands Prix", profilId: membre.profilId,
+                             championnatId: membre.championnatId, rang: membre.rang)
         }
     }
 

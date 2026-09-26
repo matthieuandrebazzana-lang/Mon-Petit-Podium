@@ -98,7 +98,7 @@ struct ProfilView: View {
                     Spacer().frame(height: 12)
                     LigneGrandsPrix(titre: "Mes Grands Prix",
                                     sousTitre: StatsProfil.sousTitreGrandsPrix(joues: statistiques.stats?.gpJoues)) {
-                        HistoriqueGPView(titre: "Mes Grands Prix")
+                        HistoriqueGPView(titre: "Mes Grands Prix", profilId: viewModel.profil?.id)
                     }
 
                     Spacer().frame(height: 12)

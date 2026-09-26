@@ -457,7 +457,7 @@ struct ChampionnatDetailView: View {
                 // d'écran natif et le geste de retour par le bord, qu'un `Button` poussant
                 // un état ne donne pas.
                 NavigationLink {
-                    ProfilMembreView(membre: membre.profil)
+                    ProfilMembreView(membre: membre.profil(dans: championnat.id))
                 } label: {
                     LigneClassement(membre: membre, total: membres.count)
                 }
@@ -740,10 +740,12 @@ extension Membre {
     /// seul** — affiché sans attendre. Les statistiques qu'il ne sert pas s'affichent « – »
     /// sous le spinner : les calculer ici serait les inventer. `GET /profils/{id}/stats`
     /// les remplace dès qu'il répond.
-    var profil: MembreProfil {
+    func profil(dans championnat: UUID) -> MembreProfil {
         MembreProfil(
             identifiant: cleTeinte,
             profilId: profilId,
+            championnatId: championnat,
+            rang: rang,
             pseudo: pseudo,
             photo: avatarUrl,
             livree: livree,

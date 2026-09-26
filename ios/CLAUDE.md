@@ -158,8 +158,7 @@ ios/
     │   ├── Membre.swift         une ligne de classement
     │   ├── ResultatsGP.swift    résultats d'une course : lignes, nom coupé, mention, livrée
     │   ├── PronosticsChampionnat.swift  GP du calendrier d'un championnat, paris de chaque membre, tri par GP
-    │   ├── Pronostics.swift     cotes, favoris, mes pronostics, corps du POST, `ClePilote`, `OrdreMarches`
-    │   └── HistoriqueGP.swift   GP joués d'un membre + `apercu` — `GET /membres/{id}/historique` pas encore servi
+    │   └── Pronostics.swift     cotes, favoris, mes pronostics, corps du POST, `ClePilote`, `OrdreMarches`
     ├── Services/
     │   ├── SupabaseManager.swift  chemin direct, sous RLS
     │   ├── APIClient.swift        chemin Railway : Bearer, décodage, réessais, réveil
@@ -169,6 +168,7 @@ ios/
     │   ├── CalendrierSaison.swift  `GET /scraper/cotes` — états et `gp_id` du calendrier
     │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil, lecture directe `grands_prix`
     │   ├── ResultatsGrandPrix.swift  `GET /grands-prix/{id}/resultats` — 404 / `disponible: false` ⇒ indisponible
+    │   ├── GrandsPrixJoues.swift  « Ses / Mes Grands Prix » : calendrier du championnat, puis paris (filtrés sur le membre) + résultats de chaque GP terminé
     │   ├── ResultatsParGrandPrix.swift  `GET /championnats/{id}/calendrier` puis `GET /grands-prix/{gp}/pronostics/championnat/{id}`, un GP à la fois
     │   ├── DonneesPronostics.swift  cotes + favoris (+ mes pronos en direct), bascule de favori, `POST …/pronostics`
     │   ├── Administration.swift   `POST /admin/action` — scraper sans figeage, jamais le secret
@@ -211,7 +211,7 @@ ios/
     │   └── Profil/
     │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`)
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
-    │       ├── HistoriqueGPView.swift   « Ses / Mes Grands Prix » : résumé saison, cartes GP drapeau + tracé en accordéon — données d’aperçu
+    │       ├── HistoriqueGPView.swift   « Ses / Mes Grands Prix » : résumé saison, cartes GP drapeau + tracé en accordéon — données réelles (`GrandsPrixJoues`)
     │       └── ComposantsProfil.swift   pastille, en-tête, grille, `BlocStatistiques`, `LigneGrandsPrix`, PARTAGÉS
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)
