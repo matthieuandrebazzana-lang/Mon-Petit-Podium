@@ -235,6 +235,21 @@ struct GrilleStatistiques: View {
 ///
 /// `NavigationLink` et non `Button` : c'est lui qui porte le glissement d'écran natif et
 /// le geste de retour par le bord, qu'un `Button` poussant un état ne donne pas.
+/// Le drapeau à damier blanc sur sa tuile bordeaux — l'icône des cellules qui ouvrent des
+/// **Grands Prix** : « Mes / Ses Grands Prix » du profil, « Résultats par Grand Prix » d'un
+/// championnat. **Un seul habillage**, pour que les deux cellules ne divergent pas.
+struct TuileDrapeauDamier: View {
+    var body: some View {
+        Image("icone-drapeau-damier")
+            .renderingMode(.template)
+            .foregroundColor(.white)              // 10,88:1 sur #800111
+            .frame(width: 44, height: 44)
+            .background(Color.primaire)
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
 struct LigneGrandsPrix<Destination: View>: View {
 
     let titre: String
@@ -244,13 +259,7 @@ struct LigneGrandsPrix<Destination: View>: View {
     var body: some View {
         NavigationLink(destination: destination) {
             HStack(spacing: 14) {
-                Image("icone-drapeau-damier")
-                    .renderingMode(.template)
-                    .foregroundColor(.white)              // 10,88:1 sur #800111
-                    .frame(width: 44, height: 44)
-                    .background(Color.primaire)
-                    .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
-                    .accessibilityHidden(true)
+                TuileDrapeauDamier()
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(titre)

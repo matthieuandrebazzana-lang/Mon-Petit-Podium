@@ -27,6 +27,8 @@ final class GrandsPrixJoues: ObservableObject {
         let dateCourse: Date?
         /// `nil` tant que rien n'est jugé — « pas encore jugé » n'est pas « zéro ».
         let totalPoints: Int?
+        /// Les paris en lignes d'affichage — le podium en deux, une par pilote
+        /// (``MembrePronostics/paris``) : les compteurs de la carte comptent ces lignes.
         let pronostics: [PronosticMembre]
         /// Les trois premiers, dans l'ordre. Vide tant que les résultats ne sont pas lus.
         let podium: [LigneResultat]
@@ -138,7 +140,7 @@ final class GrandsPrixJoues: ObservableObject {
         let classement = await resultats?.classement ?? []
         let podium = (1...3).compactMap { place in classement.first { $0.position == place } }
         return GrandPrixJoue(gpId: gp.id, nom: gp.nom, dateCourse: gp.dateCourse,
-                             totalPoints: ligne.totalPoints, pronostics: ligne.pronostics,
+                             totalPoints: ligne.totalPoints, pronostics: ligne.paris,
                              podium: podium, provisoire: gp.provisoire)
     }
 }

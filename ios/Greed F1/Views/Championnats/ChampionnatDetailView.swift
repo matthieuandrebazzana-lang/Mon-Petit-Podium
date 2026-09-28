@@ -273,8 +273,31 @@ struct ChampionnatDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
 
+            // La photo entre le texte et le menu, carrée, sur la hauteur de l'en-tête.
+            // Absente, elle ne réserve pas sa place.
+            if let photo {
+                AsyncImage(url: photo) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Color.surface
+                }
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
+                .accessibilityHidden(true)
+            }
+
             menuChampionnat
         }
+    }
+
+    /// La photo **de la liste rechargée** dès qu'elle y figure : ``championnat`` est celui
+    /// reçu à l'ouverture, et une photo envoyée depuis le menu n'y entrerait jamais.
+    private var photo: URL? {
+        if case .pret(let liste) = mesChampionnats.etat,
+           let courant = liste.first(where: { $0.id == championnat.id }) {
+            return courant.photoUrl
+        }
+        return championnat.photoUrl
     }
 
     /// Les trois points. **Un `Menu` natif** : il s'ouvre depuis son déclencheur et se
@@ -367,22 +390,15 @@ struct ChampionnatDetailView: View {
     // MARK: - Le lien vers les résultats par Grand Prix
 
     /// La carte d'entrée de ``ResultatsParGPView`` — celle de la version web, au même
-    /// endroit. **Le libellé nomme sa destination** ; l'icône est le pilote casqué, car
-    /// l'écran montre des personnes, pas des dates.
+    /// endroit. **Le libellé nomme sa destination** ; l'icône est le drapeau à damier de
+    /// « Mes Grands Prix », avec le même habillage (``TuileDrapeauDamier``) : les deux
+    /// cellules ouvrent des Grands Prix.
     private var lienResultats: some View {
         NavigationLink {
             ResultatsParGPView(championnat: championnat)
         } label: {
             HStack(spacing: 12) {
-                Image("icone-profil")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 20)
-                    .foregroundColor(.primaire)
-                    .frame(width: 40, height: 40)
-                    .background(Color.fondPrincipal)
-                    .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
-                    .accessibilityHidden(true)
+                TuileDrapeauDamier()
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Résultats par Grand Prix")

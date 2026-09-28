@@ -98,8 +98,13 @@ struct MembrePronostics: Decodable, Identifiable, Equatable {
 
     var aJoue: Bool { !pronostics.isEmpty }
 
-    /// Ce que la grille **peut** rapporter, tant que rien n'est jugé.
-    var potentiel: Int { pronostics.reduce(0) { $0 + ($1.points ?? 0) } }
+    /// Les paris **tels qu'ils s'affichent** : le podium en deux lignes, une par pilote
+    /// (``PronosticMembre/paris``). Un joueur qui a tout joué en compte six.
+    var paris: [PronosticMembre] { pronostics.flatMap(\.paris) }
+
+    /// Ce que la grille **peut** rapporter, tant que rien n'est jugé — les deux cotes du
+    /// podium comprises (`metier.md` §2).
+    var potentiel: Int { paris.reduce(0) { $0 + ($1.points ?? 0) } }
 
     /// La teinte de l'initiale : l'UUID en minuscules, la règle de ``Membre/cleTeinte``.
     var cleTeinte: String { profilId.uuidString.lowercased() }
@@ -131,36 +136,84 @@ struct MembrePronostics: Decodable, Identifiable, Equatable {
     }
 }
 
-/// Un pronostic servi (`PronosticServi`, backend).
+/// Un pronostic servi (`PronosticServi`, backend) — ou, pour un podium, l'une de ses deux
+/// lignes (``paris``).
 struct PronosticMembre: Decodable, Identifiable, Equatable {
-    let id: UUID
+    let pronosticId: UUID
+    /// `0` pour un pronostic entier, `1` ou `2` pour le pilote d'un podium détaillé.
+    private(set) var rang = 0
     let type: String
-    let pilote: String?
+    private(set) var pilote: String?
     /// Le libellé du marché tel que le bookmaker l'écrit.
     let libelle: String?
     /// Ce que le pronostic **peut** rapporter — déjà un nombre de points, jamais une cote.
-    let points: Int?
+    private(set) var points: Int?
     /// Ce qu'il a rapporté. **`nil` = pas encore jugé, `0` = raté** — jamais confondus.
-    let pointsGagnes: Int?
+    private(set) var pointsGagnes: Int?
     /// `en_attente`, `non_evaluable`, `gagne` ou `perdu` (migration 24, servi par la 25).
     /// Seul moyen de distinguer, quand `pointsGagnes` est nul, l'attente du non évaluable.
-    let statutEvaluation: String?
-    let podium: Podium?
+    private(set) var statutEvaluation: String?
+    private(set) var podium: Podium?
 
     struct Podium: Decodable, Equatable {
         let nom1: String?
         let nom2: String?
+        /// La cote du second pilote ; celle du premier est ``PronosticMembre/points``.
+        let points2: Int?
+        /// Ce que chaque pilote a rapporté, **jugé par le backend** (migration 27) —
+        /// jamais redéduit du total ici. `nil` tant que rien n'est jugé.
+        let pointsGagnes1: Int?
+        let pointsGagnes2: Int?
 
         enum CodingKeys: String, CodingKey {
             case nom1 = "nom_1"
             case nom2 = "nom_2"
+            case points2 = "points_2"
+            case pointsGagnes1 = "points_gagnes_1"
+            case pointsGagnes2 = "points_gagnes_2"
         }
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, type, pilote, libelle, points, podium
+        case type, pilote, libelle, points, podium
+        case pronosticId = "id"
         case pointsGagnes = "points_gagnes"
         case statutEvaluation = "statut_evaluation"
+    }
+
+    /// Unique **par ligne affichée** : les deux pilotes d'un podium partagent le même
+    /// pronostic.
+    var id: String { rang == 0 ? pronosticId.uuidString : "\(pronosticId.uuidString)-\(rang)" }
+
+    /// Le pronostic en lignes d'affichage — **la seule découpe du podium de l'app**.
+    ///
+    /// Chaque pilote porte son nom, sa cote et **son** verdict, lu dans ce que le backend
+    /// a écrit pour lui. Tant que le pronostic n'est pas jugé, les deux lignes reprennent
+    /// son statut (attente ou non évaluable). Jugé mais sans détail — base non migrée, ou
+    /// cotes égales non réparties —, le podium reste **une seule ligne** portant son total :
+    /// le verdict affiché suit toujours les points écrits, jamais un `en_attente` qui les
+    /// contredit, et un verdict par pilote ne se devine pas depuis le total.
+    var paris: [PronosticMembre] {
+        guard let podium, rang == 0 else { return [self] }
+        if pointsGagnes != nil, podium.pointsGagnes1 == nil || podium.pointsGagnes2 == nil {
+            return [self]
+        }
+        let jambes: [(nom: String?, points: Int?, gagnes: Int?)] = [
+            (podium.nom1 ?? pilote, points, podium.pointsGagnes1),
+            (podium.nom2, podium.points2, podium.pointsGagnes2),
+        ]
+        return jambes.enumerated().map { index, jambe in
+            var ligne = self
+            ligne.rang = index + 1
+            ligne.pilote = jambe.nom
+            ligne.points = jambe.points
+            ligne.podium = nil
+            if pointsGagnes != nil {
+                ligne.pointsGagnes = jambe.gagnes
+                ligne.statutEvaluation = jambe.gagnes.map { $0 > 0 ? "gagne" : "perdu" }
+            }
+            return ligne
+        }
     }
 
     var nonEvaluable: Bool {

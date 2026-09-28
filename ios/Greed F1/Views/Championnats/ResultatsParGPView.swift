@@ -420,8 +420,9 @@ private struct LigneParisMembre: View {
         }
     }
 
+    /// Chaque pilote du podium compte pour un : le nombre dit les lignes du dépli.
     private var sousTitre: String {
-        let n = membre.pronostics.count
+        let n = membre.paris.count
         guard n > 0 else { return "Aucun prono sur ce Grand Prix" }
         return "\(n) prono\(n > 1 ? "s" : "") validé\(n > 1 ? "s" : "")"
     }
@@ -453,7 +454,7 @@ private struct LigneParisMembre: View {
     /// appartiennent à la personne nommée.
     private var detail: some View {
         VStack(spacing: 10) {
-            ForEach(membre.pronostics) { RangeePronostic(pronostic: $0) }
+            ForEach(membre.paris) { RangeePronostic(pronostic: $0) }
         }
         .padding(.leading, 84)
         .padding(.trailing, 4)
@@ -506,6 +507,11 @@ private struct RangeePronostic: View {
                 .background(juge ? (reussi ? Color.vertSauge : Color.primaire) : Color.fondPrincipal)
                 .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
                 .fixedSize()
+
+            // La pastille et le pictogramme disent la même chose de deux façons : la
+            // couleur seule ne porte jamais une information (WCAG 1.4.1). Même
+            // ``Verdict`` que les résultats d'un Grand Prix et « Mes Grands Prix ».
+            Verdict(pointsGagnes: pronostic.pointsGagnes, nonEvaluable: pronostic.nonEvaluable)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
