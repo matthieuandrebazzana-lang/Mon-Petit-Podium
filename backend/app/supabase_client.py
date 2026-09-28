@@ -237,3 +237,78 @@ async def appeler_fonction(nom: str, arguments: dict):
     if not reponse.content:
         return None
     return reponse.json()
+
+
+async def supprimer_objets_storage(compartiment: str, chemins: list[str]) -> None:
+    """Efface des objets Storage — avec la clé de service, hors RLS.
+
+    Appelée depuis le backend et non depuis le client (`lib/stockage.js`,
+    `DepotPhoto.swift`) : la suppression de compte doit réussir même après que
+    le compte Supabase Auth a disparu, quand la session de l'appelant n'existe
+    déjà plus.
+
+    **Requête différente de `_appeler`** : Storage a sa propre API
+    (`/storage/v1`), pas `/rest/v1`. Le corps porte `prefixes`, au pluriel —
+    c'est le point d'entrée de suppression EN LOT de Supabase Storage
+    (`DELETE /object/{compartiment}`, body `{"prefixes": [...]}`), le même
+    qu'appelle `supabase.storage.from(...).remove(...)` côté client.
+
+    Son échec est journalisé par l'appelant, jamais renvoyé à l'appelant final :
+    un objet orphelin en Storage est un défaut d'exploitation, pas une raison de
+    faire échouer la suppression du compte.
+    """
+    if not chemins:
+        return
+    parametres = get_settings()
+    try:
+        reponse = await client().request(
+            "DELETE",
+            f"{parametres.supabase_base}/storage/v1/object/{compartiment}",
+            headers=_entetes_service(),
+            json={"prefixes": chemins},
+        )
+    except httpx.HTTPError as erreur:
+        raise ErreurSupabase("Le stockage est injoignable.", statut=503) from erreur
+    _verifier(reponse)
+
+
+async def supprimer_utilisateur_auth(utilisateur_id: str) -> None:
+    """Supprime le compte Supabase Auth — API d'administration de GoTrue.
+
+    **Jamais `/rest/v1`** : c'est une autre API que PostgREST, réservée à la
+    clé de service. `public.profils` suit par cascade (1-1, `docs/database.md`
+    §1) ; c'est pourquoi cette fonction est appelée EN DERNIER par la route de
+    suppression de compte, une fois les championnats, pronostics et la photo
+    déjà traités — au cas où l'appelant ne rejouerait pas la requête jusqu'au
+    bout.
+
+    Un `404` est toléré plutôt que refusé : il dit que le compte est déjà
+    supprimé, ce qu'un appel rejoué après un premier succès partiel doit
+    pouvoir constater sans échouer sur ce qu'il a déjà obtenu.
+    """
+    parametres = get_settings()
+    try:
+        reponse = await client().delete(
+            f"{parametres.supabase_base}/auth/v1/admin/users/{utilisateur_id}",
+            headers=_entetes_service(),
+        )
+    except httpx.HTTPError as erreur:
+        raise ErreurSupabase(
+            "Le service d'authentification est injoignable.", statut=503
+        ) from erreur
+    if reponse.status_code < 400 or reponse.status_code == 404:
+        return
+
+    try:
+        corps = reponse.json()
+    except ValueError:
+        corps = {}
+    raise ErreurSupabase(
+        message=str(
+            corps.get("msg")
+            or corps.get("message")
+            or corps.get("error_description")
+            or "Suppression du compte impossible."
+        ),
+        statut=reponse.status_code,
+    )

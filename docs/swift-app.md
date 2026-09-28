@@ -498,6 +498,27 @@ Un corps sans aucun champ exploitable rend l'état courant, sans écriture.
 **Erreurs** : `401` · `422` (refus métier, message français affichable) · `404` « Ton profil
 est introuvable. » · `503`
 
+#### `DELETE /profils/moi`
+
+Jeton requis. Suppression de compte — App Store, règle 5.1.1(v).
+
+**Réponse `204 No Content`** — pas de corps.
+
+- **Trois étapes côté serveur, dans cet ordre** : la fonction SQL
+  `supprimer_mon_compte` (transfère au membre le mieux classé les championnats créés par
+  l'appelant, règle 4.6, ou les éteint s'il était seul ; efface pronostics, favoris et
+  adhésions) ; la photo de profil dans Storage, best-effort ; le compte Supabase Auth
+  lui-même, dont dépend `public.profils` par cascade.
+- **Rien ne couvre les trois d'une seule transaction** — Storage et Supabase Auth sont hors
+  PostgreSQL. Un appel rejoué après un échec partiel reste sûr : chaque étape tolère de
+  retrouver un état déjà nettoyé.
+- **Le client se déconnecte lui-même après un `204`** : `AuthViewModel.supprimerCompte()`
+  vide la session locale (`supabase.auth.signOut()` ignore déjà un `401`/`403`/`404` sur son
+  propre appel — le compte n'existe plus).
+
+**Erreurs** : `401` · `422` (échec de la transaction SQL ou du compte Auth, message français
+affichable) · `503`
+
 ---
 
 ### 3.3 Championnats

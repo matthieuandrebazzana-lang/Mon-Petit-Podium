@@ -1,6 +1,7 @@
 import { appelApi } from "./api.js";
 import { supabase } from "./supabase.js";
 import { estProvisoire } from "./resultats.js";
+import { verdictDuPilote } from "./pronostics.js";
 import {
   GENRE_DONNEES,
   GENRE_SESSION,
@@ -67,6 +68,25 @@ export function enregistrerAvatar(url) {
     methode: "PATCH",
     corps: url ? { avatar_url: url } : { retirer_avatar: true },
   });
+}
+
+/**
+ * Supprime le compte de l'appelant — App Store, règle 5.1.1(v).
+ *
+ * **Tout se passe côté backend** (`DELETE /profils/moi`) : pronostics,
+ * adhésions, championnats créés (transférés ou éteints, règle 4.6), photo de
+ * profil, puis le compte Supabase Auth lui-même. Rien de tout cela ne peut se
+ * faire depuis le client — la clé de service seule contourne la RLS, et l'API
+ * d'administration Auth n'a pas d'équivalent `supabase-js` accessible avec un
+ * jeton de session.
+ *
+ * **L'appelant se déconnecte lui-même après**, jamais cette fonction : le
+ * compte n'existe déjà plus quand la réponse revient, donc `supabase.auth.signOut()`
+ * n'a rien à révoquer côté serveur — mais l'écran doit quand même vider la
+ * session locale, exactement comme après un `401` (`lib/api.js`).
+ */
+export function supprimerMonCompte() {
+  return appelApi("/profils/moi", { methode: "DELETE" });
 }
 
 /** Maquettes 12 et 14 : le profil et sa grille de stats, en une seule attente. */
@@ -206,7 +226,10 @@ export async function chargerGrandsPrixDuMembre(profilId, signal) {
       supabase
         .from("pronostics")
         .select(
-          "id, gp_id, type, id_outcome_unibet, points_gagnes, statut_evaluation, pronostic_podium(pilote_1, pilote_2)",
+          // `pronostic_podium(*)` et non ses colonnes nommées : les gains par
+          // pilote (migration 27) manquent sur une base pas encore migrée, et
+          // une colonne inconnue ferait échouer toute la lecture.
+          "id, gp_id, type, id_outcome_unibet, points_gagnes, statut_evaluation, pronostic_podium(*)",
         )
         .eq("profil_id", profilId),
     );
@@ -251,9 +274,10 @@ export async function chargerGrandsPrixDuMembre(profilId, signal) {
  * Assemble les trois lectures en une liste de Grands Prix prête à afficher.
  *
  * Exportée pour être vérifiable seule : c'est la seule vraie logique de cet
- * écran, et elle porte les deux règles qui comptent — la somme des deux cotes
- * pour un podium (règle tranchée à l'étape 6) et la distinction entre « raté »
- * (`0`) et « pas encore jugé » (`null`), qui ne doivent jamais se confondre.
+ * écran, et elle porte les deux règles qui comptent — le podium en deux lignes,
+ * chaque pilote avec son propre verdict (`verdictDuPilote`), et la distinction
+ * entre « raté » (`0`) et « pas encore jugé » (`null`), qui ne doivent jamais se
+ * confondre.
  */
 export function assemblerGrandsPrix(pronostics, gps, cotes) {
   const index = new Map(
@@ -273,33 +297,48 @@ export function assemblerGrandsPrix(pronostics, gps, cotes) {
       : brut.pronostic_podium;
 
     const premiere = decrire(brut.gp_id, brut.id_outcome_unibet);
-    const seconde = detail ? decrire(brut.gp_id, detail.pilote_2) : null;
+    // Le libellé du marché vient du bookmaker (étape 4) : lui seul nomme
+    // correctement un marché. À défaut, on retombe sur le type.
+    const libelle = premiere?.libelle_marche ?? etiquetteDuType(brut.type);
+    // Ce qu'il a rapporté. `null` = pas encore jugé, `0` = raté. Les deux ne
+    // se confondent jamais (convention de l'étape 6).
+    const pointsGagnes = brut.points_gagnes ?? null;
+    // Distingue, quand `pointsGagnes` est nul, « pas encore jugé » de « aucun
+    // évaluateur » (migration 24).
+    const statut = brut.statut_evaluation ?? null;
 
-    const pilotes = [premiere, ...(detail ? [seconde] : [])];
+    if (!detail) {
+      parGp.get(brut.gp_id).push({
+        id: brut.id,
+        type: brut.type,
+        libelle,
+        choix: premiere?.pilote ?? null,
+        points: premiere?.valeur ?? null,
+        pointsGagnes,
+        statut,
+      });
+      continue;
+    }
 
-    parGp.get(brut.gp_id).push({
-      id: brut.id,
-      type: brut.type,
-      // Le libellé du marché vient du bookmaker (étape 4) : lui seul nomme
-      // correctement un marché. À défaut, on retombe sur le type.
-      libelle: premiere?.libelle_marche ?? etiquetteDuType(brut.type),
-      // Un podium se lit « Norris + Piastri » : les deux pilotes forment un
-      // seul pronostic, sans ordre entre eux (schéma de l'étape 5).
-      choix: pilotes
-        .map((cote) => cote?.pilote ?? null)
-        .filter(Boolean)
-        .join(" + ") || null,
-      // Ce que le pronostic PEUT rapporter. Pour un podium, la somme des deux
-      // cotes : la même règle qu'à l'étape 6 pour ce qu'il rapporte vraiment.
-      points: pilotes.some((cote) => cote)
-        ? pilotes.reduce((total, cote) => total + (cote?.valeur ?? 0), 0)
-        : null,
-      // Ce qu'il a rapporté. `null` = pas encore jugé, `0` = raté. Les deux ne
-      // se confondent jamais (convention de l'étape 6).
-      pointsGagnes: brut.points_gagnes ?? null,
-      // Distingue, quand `pointsGagnes` est nul, « pas encore jugé » de « aucun
-      // évaluateur » (migration 24).
-      statut: brut.statut_evaluation ?? null,
+    // **Un podium s'affiche en deux lignes, une par pilote** : chacune porte sa
+    // cote et le gain que le backend a jugé pour ce pilote (migration 27). Le
+    // total du pronostic, lui, ne change pas — il est gardé à part pour la carte.
+    const seconde = decrire(brut.gp_id, detail.pilote_2);
+    [
+      [premiere, detail.points_gagnes_1],
+      [seconde, detail.points_gagnes_2],
+    ].forEach(([cote, gain], index) => {
+      const verdict = verdictDuPilote(pointsGagnes, statut, gain);
+      parGp.get(brut.gp_id).push({
+        id: `${brut.id}-${index + 1}`,
+        type: brut.type,
+        libelle,
+        choix: cote?.pilote ?? null,
+        points: cote?.valeur ?? null,
+        pointsGagnes: verdict.pointsGagnes,
+        statut: verdict.statut,
+        totalDuPronostic: index === 0 ? pointsGagnes : null,
+      });
     });
   }
 
@@ -310,6 +349,11 @@ export function assemblerGrandsPrix(pronostics, gps, cotes) {
       (a, b) => (ordre[a.type] ?? 9) - (ordre[b.type] ?? 9),
     );
     const juges = siens.filter((p) => p.pointsGagnes !== null);
+    // Le total se lit sur les PRONOSTICS, pas sur les lignes : un podium jugé
+    // dont le détail par pilote manque compte quand même ses points.
+    const totaux = siens.map((p) =>
+      p.type === "podium" ? p.totalDuPronostic : p.pointsGagnes,
+    );
 
     return {
       ...gp,
@@ -318,7 +362,7 @@ export function assemblerGrandsPrix(pronostics, gps, cotes) {
       pronostics: siens,
       // Ces trois totaux ne valent que pour un GP jugé : avant la course, ils
       // annonceraient un score de zéro qui n'a pas encore de sens.
-      total: juges.reduce((somme, p) => somme + p.pointsGagnes, 0),
+      total: totaux.reduce((somme, points) => somme + (points ?? 0), 0),
       reussis: juges.filter((p) => p.pointsGagnes > 0).length,
       juges: juges.length,
     };

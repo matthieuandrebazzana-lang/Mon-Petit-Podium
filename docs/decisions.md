@@ -780,3 +780,36 @@ Ils sont corrigés dans la même version.
   donc `422` plutôt que `401` à un appelant anonyme qui envoie n'importe quoi. La route ne
   s'exécute pas pour autant, et le schéma qu'il apprend ainsi est de toute façon public
   dans `openapi.json`. Corriger l'ordre demanderait de lire le corps à la main.
+
+---
+
+## 22. La suppression de compte transfère un championnat, elle ne l'abandonne pas
+
+**Décision.** `DELETE /profils/moi` transfère chaque championnat créé par le compte au
+membre le mieux classé (`classement_du_championnat`, règle 4.6), ou l'éteint si le compte
+en était l'unique membre. Le reste — pronostics, favoris, adhésions, photo — suit le même
+sort qu'un départ ordinaire.
+
+**Raison.** App Store 5.1.1(v) exige un vrai retrait, pas une désactivation. Un compte qui
+disparaît ne doit pas laisser ses co-champions sans classement ni moyen d'agir sur le
+championnat qu'ils continuent de jouer.
+
+**Écarté.** *Laisser `cree_par` retomber à NULL par la cascade existante* (migration 4,
+`docs/database.md` §1) — c'est le comportement de `DELETE /championnats/{id}/quitter`, et il
+reste **délibérément inchangé pour ce chemin-là** : quitter n'est pas supprimer son compte,
+et rien n'obligeait les deux gestes à se comporter pareil. Mais un championnat orphelin, sur
+lequel plus personne ne peut agir (la politique RLS « Seul le créateur modifie/supprime »
+n'y répond jamais vrai), est un prix que la suppression forcée par l'App Store ne doit pas
+faire payer aux autres membres — alors qu'un départ volontaire, lui, reste rare et laisse le
+championnat rejoignable par son code tant qu'il compte au moins un membre.
+
+**Conséquence assumée.** Les deux chemins divergent maintenant : `quitter_championnat`
+laisse un championnat orphelin s'éteindre par manque de membres, jamais par transfert ;
+`supprimer_mon_compte` transfère quand il le peut. Deux fonctions SQL distinctes plutôt
+qu'un paramètre partagé — le jour où `quitter_championnat` devrait transférer à son tour,
+c'est un changement de règle métier, pas un défaut à corriger ici.
+
+**Ce que la fonction ne fait PAS.** Aucune transaction ne couvre Storage ni Supabase Auth —
+deux services hors PostgreSQL. Un échec entre les trois étapes de la route laisse un compte
+qui peut encore se reconnecter, sans championnat ni pronostic ; l'appelant reçoit une erreur
+et peut relancer, ce que les trois étapes tolèrent (`app/api/routes/profils.py`).

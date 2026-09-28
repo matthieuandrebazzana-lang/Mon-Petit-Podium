@@ -26,18 +26,22 @@ import re
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import utilisateur_courant
 from app.api.journal import echec_lisible as _echec_lisible
 from app.api.journal import journaliser_echecs
-from app.api.stockage import COMPARTIMENT_AVATARS, url_de_photo_valide
+from app.api.journal import logger as _logger
+from app.api.journal import technique as _technique
+from app.api.stockage import COMPARTIMENT_AVATARS, chemins_avatar, url_de_photo_valide
 from app.supabase_client import (
     ErreurSupabase,
     appeler_fonction,
     mettre_a_jour,
     selectionner,
+    supprimer_objets_storage,
+    supprimer_utilisateur_auth,
 )
 
 router = APIRouter(prefix="/profils", tags=["profils"])
@@ -430,6 +434,68 @@ async def modifier_mon_profil(
         )
 
     return ProfilServi(**modifiees[0])
+
+
+@router.delete("/moi", status_code=status.HTTP_204_NO_CONTENT)
+@journaliser_echecs(DOMAINE, "Suppression de ton compte")
+async def supprimer_mon_compte(
+    utilisateur: str = Depends(utilisateur_courant),
+) -> Response:
+    """Supprime le compte de l'appelant — App Store, règle 5.1.1(v).
+
+    Déclarée **avant** `/{profil_id}` pour la même raison que
+    `modifier_mon_profil` : les deux chemins n'entrent pas en conflit — les
+    méthodes diffèrent — mais l'ordre reflète ce que FastAPI fait.
+
+    Trois étapes, dans cet ordre précis, et l'ordre est la partie qui compte :
+
+    1. **`supprimer_mon_compte` en base** (`supabase/migrations/20260928120000`) :
+       transfère ou éteint les championnats créés par l'appelant (règle 4.6),
+       efface ses pronostics, ses favoris et ses adhésions. C'est la SEULE
+       étape dont l'échec doit faire échouer la route — la base est le seul
+       endroit où « championnat transféré au bon membre » se décide, et un
+       échec ici laisserait un championnat à transférer plus tard sans que
+       personne ne le sache.
+    2. **La photo de profil**, dans Storage. Son échec **n'empêche pas la
+       suite** : un objet orphelin en Storage n'est plus référencé par
+       personne dès que `public.profils` disparaît (étape 3), donc invisible
+       partout — c'est un défaut d'exploitation, pas une raison de laisser le
+       compte en place. Même arbitrage que `supprimerPhoto` côté web.
+    3. **Le compte Supabase Auth**, en dernier. `public.profils` en dépend par
+       cascade (1-1, `docs/database.md` §1) : le supprimer avant l'étape 1
+       aurait laissé `classement_du_championnat` lire un classement sans le
+       pseudo ni la voiture de l'appelant, faussant le choix du nouveau
+       propriétaire.
+
+    **Aucune transaction ne couvre les trois** : Storage et Supabase Auth sont
+    deux services distincts de PostgreSQL, qu'aucune transaction ne peut
+    engager avec lui. Un échec entre les étapes 1 et 3 laisse un compte sans
+    championnat ni pronostic mais encore capable de se reconnecter — l'appelant
+    reçoit alors une erreur et peut relancer la suppression, ce que les trois
+    étapes tolèrent : la première ne retrouve plus rien à transférer ni à
+    effacer, la deuxième ne retrouve plus l'objet, la troisième rend `404`.
+    """
+    try:
+        await appeler_fonction("supprimer_mon_compte", {"p_profil": utilisateur})
+    except ErreurSupabase as erreur:
+        raise echec_lisible("Suppression de ton compte", erreur) from erreur
+
+    try:
+        await supprimer_objets_storage(COMPARTIMENT_AVATARS, chemins_avatar(utilisateur))
+    except ErreurSupabase as erreur:
+        _logger.warning(
+            "[%s] Photo de profil non effacée pour %s — %s",
+            DOMAINE,
+            utilisateur,
+            _technique(erreur),
+        )
+
+    try:
+        await supprimer_utilisateur_auth(utilisateur)
+    except ErreurSupabase as erreur:
+        raise echec_lisible("Suppression de ton compte", erreur) from erreur
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{profil_id}", response_model=ProfilServi)

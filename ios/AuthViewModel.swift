@@ -190,6 +190,26 @@ final class AuthViewModel: ObservableObject {
         estConnecte = false
     }
     
+    /// Supprime le compte de l'appelant — App Store, règle 5.1.1(v).
+    ///
+    /// **Le serveur fait tout** (`DELETE /profils/moi`) : championnats créés
+    /// transférés au membre le mieux classé ou éteints s'il était seul (règle
+    /// 4.6), pronostics et photo de profil effacés, puis le compte Supabase
+    /// Auth lui-même. Cette fonction n'a donc plus qu'à vider la session
+    /// locale — `signOut()` ignore déjà un `401`/`403`/`404` sur son propre
+    /// appel (le compte n'existe plus), exactement comme après une
+    /// déconnexion ordinaire.
+    ///
+    /// - Throws: une ``ErreurAPI`` dont le message est affichable. Si elle est
+    ///   levée, rien n'a été touché **sauf** ce que `DELETE /profils/moi` a pu
+    ///   accomplir avant l'échec — la route est conçue pour tolérer un second
+    ///   appel (`app/api/routes/profils.py`).
+    func supprimerCompte() async throws {
+        try await APIClient.partage.envoyer("profils/moi", methode: .delete)
+        try? await supabase.auth.signOut()
+        oublierCompte()
+    }
+
     /// Déconnecte l'utilisateur actuel.
     func deconnexion() async {
         estEnChargement = true

@@ -64,6 +64,18 @@ struct ProfilView: View {
     @State private var retourScraper: String?
     @State private var erreurScraper: ErreurAPI?
 
+    /// Suppression de compte (App Store, règle 5.1.1(v)) : deux alertes système
+    /// chaînées, **jamais** une feuille maison — c'est le seul geste de l'écran
+    /// assez grave pour justifier l'interruption d'une alerte, et deux fois
+    /// plutôt qu'une (`/apple-design` §16, agence : la confirmation se réserve
+    /// aux actions vraiment destructrices et irréversibles). `DELETE
+    /// /profils/moi` fait tout côté serveur ; l'échec se dit sous le bouton,
+    /// comme le reste de cet écran, jamais dans une troisième alerte.
+    @State private var confirmationSuppression = false
+    @State private var confirmationSuppressionFinale = false
+    @State private var envoiSuppression = false
+    @State private var erreurSuppression: ErreurAPI?
+
     // MARK: - Corps
 
     var body: some View {
@@ -114,6 +126,9 @@ struct ProfilView: View {
 
                     Spacer().frame(height: 28)
                     deconnexion
+
+                    Spacer().frame(height: 8)
+                    suppressionCompte
 
                     Spacer().frame(height: 16)
                     versionAffichee
@@ -797,6 +812,70 @@ struct ProfilView: View {
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(StyleAppui(.bouton))
+    }
+
+    /// **Sous « Se déconnecter », jamais avant.** Wayfinding d'`/apple-design`
+    /// §16 : la sortie ordinaire et réversible se rencontre d'abord, la sortie
+    /// destructrice et irréversible en dernier — le pouce qui vise la première
+    /// ne doit pas tomber sur la seconde par réflexe de position.
+    private var suppressionCompte: some View {
+        VStack(spacing: 10) {
+            Button {
+                confirmationSuppression = true
+            } label: {
+                Text("Supprimer mon compte")
+                    .font(.custom("HelveticaNeue-Medium", size: 13))
+                    .foregroundColor(.primaire)             // 9,13:1 sur le beige
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(StyleAppui(.bouton))
+            .disabled(envoiSuppression)
+
+            if let erreurSuppression {
+                ErreurEnLigne(erreur: erreurSuppression)
+                    .transition(.opacity)
+            }
+        }
+        .animation(mouvementReduit ? nil : Mouvement.entree(0.20), value: erreurSuppression)
+        .sensoryFeedback(.error, trigger: erreurSuppression) { _, nouveau in nouveau != nil }
+        .alert("Supprimer mon compte ?", isPresented: $confirmationSuppression) {
+            Button("Annuler", role: .cancel) {}
+            Button("Supprimer", role: .destructive) {
+                confirmationSuppressionFinale = true
+            }
+        } message: {
+            Text("Cette action est irréversible. Toutes tes données seront supprimées.")
+        }
+        .alert("Es-tu sûr ?", isPresented: $confirmationSuppressionFinale) {
+            Button("Annuler", role: .cancel) {}
+            Button("Oui, supprimer définitivement", role: .destructive, action: supprimerCompte)
+        } message: {
+            Text("Tu perdras ton historique, tes pronostics et ta voiture personnalisée.")
+        }
+    }
+
+    /// Lancée depuis la seconde alerte. **Pas liée à l'écran**, comme
+    /// ``enregistrerVoiture()`` : changer d'onglet pendant l'appel ne l'annule
+    /// pas — un compte à moitié supprimé serait pire qu'un écran quitté.
+    private func supprimerCompte() {
+        guard !envoiSuppression else { return }
+        erreurSuppression = nil
+        envoiSuppression = true
+
+        Task {
+            do {
+                try await viewModel.supprimerCompte()
+                // Rien à faire ici : `oublierCompte()` (dans le view model)
+                // publie `estConnecte = false`, et c'est `GreedF1App` qui
+                // bascule seul vers `LandingView` — le même chemin qu'une
+                // déconnexion ordinaire.
+            } catch let refus as ErreurAPI {
+                envoiSuppression = false
+                erreurSuppression = refus
+            } catch {
+                envoiSuppression = false
+            }
+        }
     }
 
     private var versionAffichee: some View {

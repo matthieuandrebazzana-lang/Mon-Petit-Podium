@@ -441,6 +441,7 @@ admin la remplace de nouveau seulement s'il est demandé avec `relire=true`.
 | `adopter_grand_prix(placeholder, id_unibet)` | fait porter son vrai identifiant à une ligne posée à la main |
 | `rattacher_issues(gp, rattachements, non_reconnus)` | pose `numero_pilote` / `ecurie_id` sur les cotes du GP et **remplace** ses alertes de libellé, une transaction (migration 26) |
 | `noter_echec_definitif(gp, erreur)` | incrémente le compteur d'échecs du définitif, rend le total (migration 26) |
+| `supprimer_mon_compte(profil)` | transfère ou éteint les championnats créés (règle 4.6), efface pronostics, favoris et adhésions — appelée par `DELETE /profils/moi` avant Storage et le compte Auth (migration 28) |
 
 > **Pourquoi `security definer` + `service_role` sur les fonctions de lecture agrégée.**
 > Paramétrées par un championnat ou un profil, elles lisent forcément les pronostics
@@ -598,7 +599,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les vingt-six migrations
+## 6. Les vingt-huit migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -628,6 +629,8 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 24 | `20260926120000_statut_evaluation` | **`statut_evaluation`** sur `pronostics`, trigger de dérivation, `attribuer_points` qui écrit `non_evaluable` / `en_attente`. **À appliquer avant le backend `0.77.0`** | 5, **6** |
 | 25 | `20260926200000_resultats_provisoires` | **`grands_prix.statut_resultats`**, les quatre GP courus marqués, **`remplacer_verdicts`**, `pronostics_du_joueur` qui sert `statut_evaluation`. **À appliquer avant le backend `0.78.0`** | 3, 6, **24** |
 | 26 | `20260926230000_identifiants_issues` | **`cotes.numero_pilote`, `cotes.ecurie_id`**, table `alertes_admin`, `rattacher_issues`, `noter_echec_definitif`. **À appliquer avant le backend `0.79.0`**. Ne remplace aucune fonction | 3 |
+| 27 | `20260927120000_podium_par_pilote` | **`pronostic_podium.points_gagnes_1` / `_2`** — le gain de chaque pilote du podium, jugé par le backend ; `attribuer_points`, `remplacer_verdicts` et `pronostics_du_joueur` remplacés ; rattrapage des podiums déjà jugés depuis leur total. **À appliquer avec le backend `0.80.0`** | 5, 6, **24**, **25** |
+| 28 | `20260928120000_suppression_compte` | **`supprimer_mon_compte(profil)`** — transfère les championnats créés au membre le mieux classé ou les éteint (règle 4.6), efface pronostics, favoris et adhésions. Appelée par `DELETE /profils/moi` (App Store 5.1.1(v)), **avant** la photo de Storage et le compte Supabase Auth. **À appliquer avec le backend `0.81.0`** | 2, 4, 5, **7** |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -654,6 +657,7 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **5** après **23** | la marge de cinq minutes, restaurée en base seule | rejouer 23 |
 | **6** après **24** | l'écriture de `non_evaluable` par `attribuer_points` (le trigger garde `gagne` / `perdu` / `en_attente` cohérents) | rejouer 24 |
 | **5** ou **6** après **25** | `statut_evaluation` dans les pronostics servis (un `non_evaluable` redevient « en attente » à l'écran) | rejouer 25 |
+| **24** ou **25** après **27** | les gains par pilote du podium : plus écrits par le calcul (24, 25), plus servis (25) — les écrans disent le pilote « en attente » | rejouer 27 |
 
 **La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12
 et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre les écrans

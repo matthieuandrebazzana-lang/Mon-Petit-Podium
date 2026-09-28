@@ -27,6 +27,7 @@ import {
   enregistrerAvatar,
   enregistrerVoiture,
   porteurDuNumero,
+  supprimerMonCompte,
 } from "../lib/profils.js";
 import {
   COMPARTIMENT_AVATARS,
@@ -623,6 +624,36 @@ export default function MonProfil() {
     if (resultat.ok) naviguer("/", { replace: true });
   }
 
+  // 0 = bouton texte, 1 = première confirmation, 2 = deuxième confirmation.
+  // Un entier et non deux booléens : les deux étapes sont mutuellement
+  // exclusives, et un entier ne peut pas décrire un état incohérent (les
+  // deux à la fois) que deux booléens séparés laisseraient s'écrire.
+  const [etapeSuppression, setEtapeSuppression] = useState(0);
+  const [suppression, setSuppression] = useState(false);
+  const [echecSuppression, setEchecSuppression] = useState(null);
+  const [tentativeSuppression, setTentativeSuppression] = useState(0);
+
+  async function supprimerCompte() {
+    setSuppression(true);
+    setEchecSuppression(null);
+    setTentativeSuppression((n) => n + 1);
+
+    const resultat = await supprimerMonCompte();
+
+    if (!resultat.ok) {
+      setSuppression(false);
+      setEtapeSuppression(0);
+      setEchecSuppression(resultat.message);
+      return;
+    }
+
+    // Le compte n'existe déjà plus côté serveur : `deconnecter()` ne fait que
+    // vider la session locale (`supabase-js` ignore un `401`/`404` sur son
+    // propre appel de déconnexion — voir `lib/profils.js`).
+    await deconnecter();
+    naviguer("/", { replace: true });
+  }
+
   if (echec && !donnees) {
     return (
       <Ecran direction="avant">
@@ -1000,6 +1031,72 @@ export default function MonProfil() {
         >
           Se déconnecter
         </button>
+
+        {/* Suppression de compte — App Store, règle 5.1.1(v). Confirmation en
+            DEUX temps, comme « Quitter le championnat » : irréversible, elle
+            garde la même distance au pouce et le même échange instantané
+            entre les états, sans transition — la cohérence avec ce flux
+            frère compte plus qu'un fondu que lui seul porterait. */}
+        {etapeSuppression === 0 && (
+          <button
+            type="button"
+            onClick={() => setEtapeSuppression(1)}
+            className="text-primaire min-h-tactile pressable -my-2 px-3 py-2 text-[13px] font-medium"
+          >
+            Supprimer mon compte
+          </button>
+        )}
+
+        {etapeSuppression === 1 && (
+          <div className="flex w-full max-w-xs flex-col items-center gap-2.5 text-center">
+            <p className="text-corps-sm text-texte-doux">
+              Cette action est irréversible. Toutes tes données seront
+              supprimées.
+            </p>
+            <Bouton variante="principal" onClick={() => setEtapeSuppression(2)}>
+              Supprimer
+            </Bouton>
+            <button
+              type="button"
+              onClick={() => setEtapeSuppression(0)}
+              className="text-texte-doux min-h-tactile pressable py-2 text-center text-[13px] font-medium"
+            >
+              Annuler
+            </button>
+          </div>
+        )}
+
+        {etapeSuppression === 2 && (
+          <div className="flex w-full max-w-xs flex-col items-center gap-2.5 text-center">
+            <p className="text-corps-sm text-texte-doux">
+              Es-tu sûr ? Tu perdras ton historique, tes pronostics et ta
+              voiture personnalisée.
+            </p>
+            <Bouton
+              variante="principal"
+              onClick={supprimerCompte}
+              occupe={suppression}
+              libelleOccupe="Suppression…"
+            >
+              Oui, supprimer définitivement
+            </Bouton>
+            <button
+              type="button"
+              onClick={() => setEtapeSuppression(0)}
+              disabled={suppression}
+              className="text-texte-doux min-h-tactile pressable py-2 text-center text-[13px] font-medium"
+            >
+              Annuler
+            </button>
+          </div>
+        )}
+
+        {echecSuppression && (
+          <Alerte ton="erreur" tentative={tentativeSuppression}>
+            {echecSuppression}
+          </Alerte>
+        )}
+
         <span className="text-label-sm text-texte-doux uppercase">
           Version {APP_VERSION}
         </span>

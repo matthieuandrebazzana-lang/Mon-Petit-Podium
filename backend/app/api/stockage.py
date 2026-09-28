@@ -122,6 +122,27 @@ PARAMETRE_DE_CACHE = re.compile(r"^v=\d{1,20}$")
 LONGUEUR_MAXIMALE = 512
 
 
+# Le nom de base d'un avatar sous son dossier — le même que `base: "avatar"`
+# de `MonProfil.jsx` et `Compartiment.avatars.nomDeBase` de `DepotPhoto.swift`.
+# Écrit une troisième fois ici, et c'est le prix d'un chemin qu'aucun des deux
+# clients ne peut dire au backend : la suppression de compte efface l'objet
+# APRÈS avoir supprimé le compte Supabase Auth qui aurait porté la session.
+NOM_AVATAR = "avatar"
+
+
+def chemins_avatar(profil_id: str) -> list[str]:
+    """Les chemins possibles de l'avatar d'un profil, toutes extensions confondues.
+
+    Trois chemins et non un seul : une photo déposée avant la version `0.51.0`
+    peut porter `.png` ou `.webp` (voir `EXTENSIONS_ACCEPTEES`), et la
+    suppression de compte doit faire place nette quel que soit le format sous
+    lequel l'avatar a été déposé.
+    """
+    return [
+        f"{profil_id}/{NOM_AVATAR}.{extension}" for extension in EXTENSIONS_ACCEPTEES
+    ]
+
+
 def _prefixe_attendu(compartiment: str) -> str:
     """Le début que doit avoir toute URL de photo de ce compartiment."""
     return f"{get_settings().supabase_url.rstrip('/')}{CHEMIN_PUBLIC}{compartiment}/"

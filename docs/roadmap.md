@@ -389,9 +389,13 @@ Livrées en version `0.50.0` (dépôt, affichage, retrait). Trois manques assum�
   sur le visage. Levier : rien à changer côté géométrie, tout se joue au recadrage.
 - **La photo d'un championnat ne se change plus après sa création.** `PATCH
   /championnats/{id}` existe et accepte le créateur ; il manque l'écran qui l'appelle.
-- **Rien ne nettoie le stockage à la suppression d'un compte ou d'un championnat.** La
-  ligne part par cascade, l'objet reste. Sans conséquence visible — plus rien ne le
-  référence — mais le compartiment grossit indéfiniment.
+- ~~**Rien ne nettoie le stockage à la suppression d'un compte.**~~ **Réglé en version
+  `0.81.0`** : `DELETE /profils/moi` efface l'avatar avant de supprimer le compte
+  (best-effort — son échec n'empêche pas la suite).
+- **Rien ne nettoie le stockage à la suppression d'un championnat.** Le trigger qui efface
+  un championnat resté sans membre (`docs/database.md` §1) n'efface que la ligne ; sa photo,
+  elle, reste — sans conséquence visible, plus rien ne la référence, mais le compartiment
+  `championnats` grossit indéfiniment.
 
 ### 2.7 Parcours jamais exercés contre le vrai Supabase
 
