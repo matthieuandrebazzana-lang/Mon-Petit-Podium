@@ -10,6 +10,7 @@
 		088E00CB305F9171000E15DE /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00CA305F9170000E15DE /* AuthViewModel.swift */; };
 		088E00CD305F917E000E15DE /* ConnexionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00CC305F917E000E15DE /* ConnexionView.swift */; };
 		088E00CF305F918D000E15DE /* InscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00CE305F918D000E15DE /* InscriptionView.swift */; };
+		088E00D1305F9199000E15DF /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00D2305F9199000E15E0 /* OnboardingView.swift */; };
 		A1000000000000000000022 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000021 /* Supabase */; };
 		A1000000000000000000024 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000023 /* Auth */; };
 /* End PBXBuildFile section */
@@ -18,6 +19,7 @@
 		088E00CA305F9170000E15DE /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		088E00CC305F917E000E15DE /* ConnexionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnexionView.swift; sourceTree = "<group>"; };
 		088E00CE305F918D000E15DE /* InscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InscriptionView.swift; sourceTree = "<group>"; };
+		088E00D2305F9199000E15E0 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		A1000000000000000000001 /* Greed F1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Greed F1.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000002 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Config.xcconfig; path = "Greed F1/Config/Config.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -67,6 +69,7 @@
 				088E00CA305F9170000E15DE /* AuthViewModel.swift */,
 				088E00CC305F917E000E15DE /* ConnexionView.swift */,
 				088E00CE305F918D000E15DE /* InscriptionView.swift */,
+				088E00D2305F9199000E15E0 /* OnboardingView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -160,6 +163,7 @@
 				088E00CB305F9171000E15DE /* AuthViewModel.swift in Sources */,
 				088E00CF305F918D000E15DE /* InscriptionView.swift in Sources */,
 				088E00CD305F917E000E15DE /* ConnexionView.swift in Sources */,
+				088E00D1305F9199000E15DF /* OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -219,7 +223,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.44.0;
+				MARKETING_VERSION = 0.45.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -247,7 +251,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.44.0;
+				MARKETING_VERSION = 0.45.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

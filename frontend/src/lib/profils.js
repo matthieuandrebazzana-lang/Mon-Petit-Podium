@@ -375,6 +375,16 @@ function etiquetteDuType(type) {
   return "Bonus";
 }
 
+/**
+ * Vrai si `pseudo` est celui que `gerer_nouvel_utilisateur` fabrique faute
+ * d'un pseudo transmis à l'inscription (`pilote-xxxxxxxxxx`, migration 21 —
+ * voir `docs/database.md`). Google et Apple ne fournissent jamais de pseudo :
+ * c'est le signal qu'un compte OAuth doit encore en choisir un vrai.
+ */
+export function pseudoGenere(pseudo) {
+  return typeof pseudo === "string" && /^pilote-/i.test(pseudo);
+}
+
 // --------------------------------------------------------------------------
 //  L'identité courante — lue en base, jamais dans le jeton
 // --------------------------------------------------------------------------

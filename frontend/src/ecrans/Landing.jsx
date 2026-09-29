@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import Bouton from "../composants/Bouton.jsx";
+import Alerte from "../composants/Alerte.jsx";
+import BoutonsOAuth from "../composants/BoutonsOAuth.jsx";
 import { BandeauGreedF1 } from "../composants/LogoGreedF1.jsx";
 import { APP_VERSION } from "../config.js";
 
@@ -49,6 +52,7 @@ const POINTS_APP = [
 
 export default function Landing() {
   const naviguer = useNavigate();
+  const [erreurOAuth, setErreurOAuth] = useState(null);
 
   return (
     <Ecran direction="arriere">
@@ -78,7 +82,12 @@ export default function Landing() {
         </Bloc>
 
         <Bloc rang={4} className="pt-2">
+          {/* Google d'abord, séparateur, puis les deux boutons habituels : le
+              raccourci le plus rapide passe en tête, sans retarder l'apparition
+              du bloc « 4 points » qui suit — même rang de stagger que les deux
+              boutons, dont il partage la décision « comment entrer ». */}
           <div className="flex flex-col gap-2.5">
+            <BoutonsOAuth separateurApres onErreur={setErreurOAuth} />
             <Bouton
               variante="principal"
               className="text-[17px]"
@@ -94,6 +103,12 @@ export default function Landing() {
               J'ai déjà un compte
             </Bouton>
           </div>
+
+          {erreurOAuth && (
+            <div className="mt-2.5">
+              <Alerte ton="erreur">{erreurOAuth}</Alerte>
+            </div>
+          )}
         </Bloc>
 
         <Bloc rang={5} className="pt-3">

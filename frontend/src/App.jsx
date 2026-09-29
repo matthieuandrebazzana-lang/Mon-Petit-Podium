@@ -9,6 +9,7 @@ import Inscription from "./ecrans/Inscription.jsx";
 import Connexion from "./ecrans/Connexion.jsx";
 import MotDePasseOublie from "./ecrans/MotDePasseOublie.jsx";
 import NouveauMotDePasse from "./ecrans/NouveauMotDePasse.jsx";
+import Onboarding from "./ecrans/Onboarding.jsx";
 import Accueil from "./ecrans/Accueil.jsx";
 import CreerChampionnat from "./ecrans/CreerChampionnat.jsx";
 import RejoindreChampionnat from "./ecrans/RejoindreChampionnat.jsx";
@@ -83,6 +84,10 @@ export default function App() {
         />
 
         <Route element={<RouteProtegee />}>
+          {/* Un premier compte Google (ou Apple) sans pseudo choisi atterrit
+              ici — `RouteProtegee` y redirige tant que `pseudoAConfigurer`
+              vaut vrai, avant tout autre écran de ce groupe. */}
+          <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/accueil" element={<Accueil />} />
           {/* Cible de l'onglet Championnats de la barre basse (étape 10). */}
           <Route path="/championnats" element={<ListeChampionnats />} />

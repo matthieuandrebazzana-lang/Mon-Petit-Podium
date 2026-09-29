@@ -14,7 +14,7 @@ import Chargement from "./Chargement.jsx";
  * de retour ramènerait sur la page protégée.
  */
 export function RouteProtegee() {
-  const { connecte, chargement, recuperation } = useAuth();
+  const { connecte, chargement, recuperation, pseudoAConfigurer } = useAuth();
   const emplacement = useLocation();
 
   if (chargement) return <Chargement />;
@@ -25,6 +25,14 @@ export function RouteProtegee() {
 
   if (!connecte) {
     return <Navigate to="/connexion" replace state={{ depuis: emplacement }} />;
+  }
+
+  // Premier compte Google sans pseudo choisi : l'onboarding passe avant tout
+  // le reste de l'app, y compris l'écran qu'on venait de demander. La garde
+  // laisse passer l'onboarding lui-même, sous peine de le rediriger vers
+  // lui-même en boucle.
+  if (pseudoAConfigurer && emplacement.pathname !== "/onboarding") {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return <Outlet />;

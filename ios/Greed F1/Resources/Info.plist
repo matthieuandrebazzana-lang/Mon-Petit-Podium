@@ -29,6 +29,18 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!-- Schéma personnalisé du retour OAuth (Google, puis Apple) — voir
+	     AuthViewModel.connexionOAuth et docs/swift-app.md §2.7. Doit aussi être
+	     ajouté aux Redirect URLs du tableau de bord Supabase. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>greedf1</string>
+			</array>
+		</dict>
+	</array>
 	<!-- Injectées depuis Config.xcconfig, non versionné. Voir SupabaseConfig.swift. -->
 	<key>SUPABASE_URL</key>
 	<string>$(SUPABASE_URL)</string>

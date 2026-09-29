@@ -8,7 +8,7 @@ import {
 } from "react";
 import { supabase, supabaseConfigure, urlDeRetour } from "../lib/supabase.js";
 import { emailDejaInscrit, messageErreur } from "../lib/erreurs.js";
-import { chargerEstAdmin } from "../lib/profils.js";
+import { chargerEstAdmin, chargerIdentite, pseudoGenere } from "../lib/profils.js";
 
 /**
  * Exporté nommément depuis l'étape 9, pour la même raison que `BlocProchainGp`
@@ -180,6 +180,46 @@ export function AuthProvider({ children }) {
   }, [compte]);
 
   /**
+   * Faut-il envoyer ce compte choisir un pseudo avant d'entrer dans l'app ?
+   *
+   * Relu **en base**, jamais dans le jeton, pour la même raison que `pseudo`
+   * dans `useIdentiteCourante` : `user_metadata.pseudo` est une copie figée à
+   * l'inscription, absente pour Google et Apple, donc incapable de dire quoi
+   * que ce soit ici.
+   *
+   * **Le doute laisse entrer, il ne bloque jamais.** Base non migrée, ligne
+   * absente, réseau coupé : tous ces cas laissent `false`, comme `estAdmin`
+   * juste au-dessus mais dans le sens inverse — un onboarding déclenché à tort
+   * couperait l'accès à toute l'application pour une lecture de confort, alors
+   * qu'un administrateur affiché à tort ne montre qu'une section.
+   */
+  const [pseudoAConfigurer, setPseudoAConfigurer] = useState(false);
+
+  useEffect(() => {
+    setPseudoAConfigurer(false);
+    if (!compte) return undefined;
+
+    const controleur = new AbortController();
+    let actif = true;
+
+    (async () => {
+      try {
+        const resultat = await chargerIdentite(compte, controleur.signal);
+        if (actif && resultat.ok && resultat.donnees) {
+          setPseudoAConfigurer(pseudoGenere(resultat.donnees.pseudo));
+        }
+      } catch {
+        /* Abandon au démontage, ou panne réseau : on reste sans onboarding forcé. */
+      }
+    })();
+
+    return () => {
+      actif = false;
+      controleur.abort();
+    };
+  }, [compte]);
+
+  /**
    * Teste la disponibilité d'un pseudo avant l'inscription, via la fonction
    * `pseudo_disponible` de la base. Sans ce test, le doublon ne serait détecté
    * qu'à l'insertion, donc après que l'utilisateur a saisi son mot de passe.
@@ -249,6 +289,38 @@ export function AuthProvider({ children }) {
       // Tant que les clés OAuth ne sont pas renseignées dans le tableau de bord
       // Supabase, l'appel échoue proprement ici : le message reste lisible au
       // lieu de laisser un bouton mort.
+      if (error) return echec(messageErreur(error));
+      return succes();
+    } catch (erreur) {
+      return echec(messageErreur(erreur));
+    }
+  }, []);
+
+  /**
+   * Enregistre le pseudo choisi à l'onboarding — l'écran qui suit un premier
+   * compte Google sans pseudo transmis.
+   *
+   * **Écriture directe dans `public.profils`, jamais par l'API.** La colonne
+   * `pseudo` fait partie des huit ouvertes à `authenticated` par la migration
+   * 21 (`docs/database.md`), sous la politique « Chacun modifie son profil » :
+   * exactement le chemin que `lib/erreurs.js` anticipe déjà pour ce cas précis
+   * (le code `23505` y est traduit comme « un renommage de profil vers un
+   * pseudo déjà occupé »). `supabase.auth.getUser()` et non le `compte` fermé
+   * dans cette fonction : ce callback est mémorisé une fois pour toutes par
+   * `useCallback`, une valeur de session capturée au premier rendu serait
+   * périmée dès le compte suivant.
+   */
+  const definirPseudo = useCallback(async (pseudo) => {
+    if (!supabase) return echec(CONFIG_MANQUANTE);
+    try {
+      const { data, error: erreurSession } = await supabase.auth.getUser();
+      if (erreurSession || !data.user) {
+        return echec("Session expirée. Reconnecte-toi.");
+      }
+      const { error } = await supabase
+        .from("profils")
+        .update({ pseudo })
+        .eq("id", data.user.id);
       if (error) return echec(messageErreur(error));
       return succes();
     } catch (erreur) {
@@ -370,10 +442,12 @@ export function AuthProvider({ children }) {
       recuperation,
       configure: supabaseConfigure,
       erreurConfiguration: supabaseConfigure ? null : CONFIG_MANQUANTE,
+      pseudoAConfigurer,
       pseudoDisponible,
       inscrire,
       connecter,
       connecterAvec,
+      definirPseudo,
       envoyerLienReinitialisation,
       definirMotDePasse,
       deconnecter,
@@ -383,12 +457,14 @@ export function AuthProvider({ children }) {
     estAdmin,
     modeAdminActif,
     modePrevisualisationActif,
+    pseudoAConfigurer,
     chargement,
     recuperation,
     pseudoDisponible,
     inscrire,
     connecter,
     connecterAvec,
+    definirPseudo,
     envoyerLienReinitialisation,
     definirMotDePasse,
     deconnecter,

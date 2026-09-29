@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import SwiftUI
 import Supabase
@@ -45,6 +46,17 @@ final class AuthViewModel: ObservableObject {
 
     /// Message d'erreur à afficher sous le formulaire, ou `nil` si aucune erreur.
     @Published var messageErreur: String?
+
+    /// Faut-il envoyer ce compte choisir un pseudo avant d'entrer dans l'app ?
+    ///
+    /// Vrai quand le pseudo lu en base est celui que `gerer_nouvel_utilisateur` fabrique
+    /// faute d'un pseudo transmis (`pilote-xxxxxxxxxx`, Google et Apple n'en envoient
+    /// jamais) — contrepartie exacte de `pseudoAConfigurer` côté web
+    /// (`lib/profils.js pseudoGenere`, `docs/database.md`). Calculé sur `profil`, jamais
+    /// sur le jeton, qui ne porte aucune copie de cette valeur.
+    var pseudoAConfigurer: Bool {
+        profil?.pseudo.hasPrefix("pilote-") ?? false
+    }
     
     private let supabase = SupabaseManager.partage.client
     
@@ -119,7 +131,75 @@ final class AuthViewModel: ObservableObject {
         
         estEnChargement = false
     }
-    
+
+    /// Connecte via un fournisseur tiers — Google aujourd'hui, Apple suivra une fois le
+    /// compte développeur Apple configuré (même appel, `provider: .apple`).
+    ///
+    /// Ouvre le navigateur système via `ASWebAuthenticationSession`, le chemin recommandé
+    /// sur iOS (`docs/swift-app.md` §2.7) : `supabase-swift` la pilote lui-même derrière
+    /// cette surcharge de `signInWithOAuth`, jusqu'à consommer le jeton PKCE au retour.
+    /// Le schéma `greedf1://auth-callback` doit être déclaré dans `Info.plist`
+    /// (`CFBundleURLTypes`) et dans les *Redirect URLs* du tableau de bord Supabase.
+    func connexionOAuth(fournisseur: Provider) async {
+        estEnChargement = true
+        messageErreur = nil
+
+        do {
+            let session = try await supabase.auth.signInWithOAuth(
+                provider: fournisseur,
+                redirectTo: URL(string: "greedf1://auth-callback")
+            )
+            estConnecte = true
+            await chargerProfil(id: session.user.id)
+        } catch let erreur as NSError
+            where erreur.domain == ASWebAuthenticationSessionErrorDomain
+                && erreur.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
+            // L'utilisateur a fermé la fenêtre de connexion : ni erreur, ni action.
+        } catch {
+            messageErreur = "Connexion impossible. Réessaie."
+        }
+
+        estEnChargement = false
+    }
+
+    /// Enregistre le pseudo choisi à l'onboarding — écriture **directe** dans
+    /// `public.profils`, jamais par Railway : la colonne `pseudo` fait partie des huit
+    /// ouvertes à `authenticated` par la migration 21 (`docs/database.md`), sous la
+    /// politique « Chacun modifie son profil ». Contrepartie exacte de
+    /// `AuthContexte.definirPseudo` côté web, jusqu'au code d'erreur `23505` traduit en
+    /// « pseudo déjà pris ».
+    ///
+    /// - Returns: `true` si l'enregistrement a réussi.
+    @discardableResult
+    func definirPseudo(_ pseudo: String) async -> Bool {
+        estEnChargement = true
+        messageErreur = nil
+
+        guard let id = try? await supabase.auth.session.user.id else {
+            messageErreur = "Session expirée. Reconnecte-toi."
+            estEnChargement = false
+            return false
+        }
+
+        do {
+            try await supabase
+                .from("profils")
+                .update(["pseudo": pseudo])
+                .eq("id", value: id)
+                .execute()
+            await chargerProfil(id: id)
+            estEnChargement = false
+            return true
+        } catch let erreur as PostgrestError where erreur.code == "23505" {
+            messageErreur = "Ce pseudo est déjà pris. Choisis-en un autre."
+        } catch {
+            messageErreur = "Une erreur est survenue. Réessaie."
+        }
+
+        estEnChargement = false
+        return false
+    }
+
     /// (Re)lit le profil du compte connecté, en direct sous RLS — lecture que la
     /// politique « soi-même » décrit exactement, donc sans passer par Railway ni
     /// attendre son réveil. **Seul endroit qui le lit** : connexion, inscription et

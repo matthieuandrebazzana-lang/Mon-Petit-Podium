@@ -4,24 +4,42 @@ import { IconeApple, IconeGoogle } from "./Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 
 /**
- * Google et Apple sont **temporairement masqués** tant que les clés OAuth ne
- * sont pas renseignées dans le tableau de bord Supabase : des boutons qui
- * échouent systématiquement valent moins que pas de boutons du tout.
+ * Google et Apple s'activent **indépendamment**, un drapeau par fournisseur :
+ * les clés Google sont renseignées dans le tableau de bord Supabase, celles
+ * d'Apple viendront une fois le compte développeur Apple configuré. Un bouton
+ * qui échoue systématiquement vaut moins que pas de bouton du tout.
  *
- * Rien n'est supprimé — repasser ce drapeau à `true` réaffiche le séparateur
- * et les deux boutons, sans autre modification ailleurs.
+ * Rien n'est supprimé — repasser `APPLE_ACTIF` à `true` réaffiche son bouton
+ * sans autre modification ailleurs.
  */
-const OAUTH_ACTIF = false;
+const GOOGLE_ACTIF = true;
+const APPLE_ACTIF = false;
+
+/** Le séparateur « ou continuer avec », seul sans les boutons qu'il annonce. */
+function Separateur() {
+  return (
+    <div className="flex items-center gap-2.5 py-1">
+      <div className="bg-texte/10 h-px flex-1" />
+      <span className="text-corps-sm text-texte-doux">ou continuer avec</span>
+      <div className="bg-texte/10 h-px flex-1" />
+    </div>
+  );
+}
 
 /**
  * Séparateur puis Google et Apple, comme sur les maquettes 02 et 03.
  *
- * Les clés OAuth seront renseignées à la main dans le tableau de bord Supabase.
- * En attendant, `signInWithOAuth` renvoie une erreur explicite que l'on remonte
- * à l'appelant : le bouton reste vivant et dit pourquoi il ne marche pas encore,
- * au lieu de ne rien faire.
+ * `signInWithOAuth` renvoie une erreur explicite si le fournisseur n'est
+ * finalement pas configuré côté Supabase : le bouton reste vivant et dit
+ * pourquoi il ne marche pas, au lieu de ne rien faire.
+ *
+ * `separateurApres` inverse l'ordre pour Landing (étape « connexion Google »
+ * — bouton d'abord, séparateur ensuite, avant les deux boutons « Créer un
+ * compte » / « J'ai déjà un compte »). Connexion et Inscription gardent
+ * l'ordre par défaut : le séparateur annonce ces boutons-ci, posés après le
+ * formulaire email/mot de passe.
  */
-export default function BoutonsOAuth({ onErreur }) {
+export default function BoutonsOAuth({ onErreur, separateurApres = false }) {
   const { connecterAvec } = useAuth();
   const [enCours, setEnCours] = useState(null);
 
@@ -41,17 +59,11 @@ export default function BoutonsOAuth({ onErreur }) {
   // Après les hooks, jamais avant : les règles de React interdisent un retour
   // anticipé qui les court-circuiterait. Le parent enveloppe l'appel dans un
   // conteneur `flex gap` — ne rien rendre y referme l'espacement de lui-même.
-  if (!OAUTH_ACTIF) return null;
+  if (!GOOGLE_ACTIF && !APPLE_ACTIF) return null;
 
-  return (
-    <>
-      <div className="flex items-center gap-2.5 py-1">
-        <div className="bg-texte/10 h-px flex-1" />
-        <span className="text-corps-sm text-texte-doux">ou continuer avec</span>
-        <div className="bg-texte/10 h-px flex-1" />
-      </div>
-
-      <div className="flex flex-col gap-2.5">
+  const boutons = (
+    <div className="flex flex-col gap-2.5">
+      {GOOGLE_ACTIF && (
         <Bouton
           variante="social"
           onClick={() => lancer("google")}
@@ -63,7 +75,9 @@ export default function BoutonsOAuth({ onErreur }) {
         >
           Continuer avec Google
         </Bouton>
+      )}
 
+      {APPLE_ACTIF && (
         <Bouton
           variante="social"
           onClick={() => lancer("apple")}
@@ -75,7 +89,23 @@ export default function BoutonsOAuth({ onErreur }) {
         >
           Continuer avec Apple
         </Bouton>
-      </div>
+      )}
+    </div>
+  );
+
+  if (separateurApres) {
+    return (
+      <>
+        {boutons}
+        <Separateur />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Separateur />
+      {boutons}
     </>
   );
 }

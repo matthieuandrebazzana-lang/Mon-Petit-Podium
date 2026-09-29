@@ -497,7 +497,7 @@ et qui revient allumé est un interrupteur auquel on cesse de se fier.
 
 | Gardé | Redevient utile quand |
 |---|---|
-| `BoutonsOAuth` (`OAUTH_ACTIF = false`) | les clés OAuth sont renseignées |
+| Bouton Apple de `BoutonsOAuth` (`APPLE_ACTIF = false`) | le compte développeur Apple et ses clés OAuth sont configurés |
 | `Onglets` | Unibet ouvre dix marchés |
 | `ApercusApp` | les vraies captures existent |
 | `TraceCircuit` | une vignette de 20 × 32 px est nécessaire |

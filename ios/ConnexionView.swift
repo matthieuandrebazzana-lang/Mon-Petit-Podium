@@ -149,9 +149,52 @@ struct ConnexionView: View {
                 .cornerRadius(24)
                 .disabled(viewModel.estEnChargement || email.isEmpty || motDePasse.isEmpty)
                 .padding(.horizontal, 32)
-                
+
                 Spacer()
-                
+                    .frame(height: 24)
+
+                // Séparateur puis Google — même ordre que Connexion.jsx (`BoutonsOAuth`,
+                // ordre par défaut) : le séparateur annonce ce bouton-ci, posé après le
+                // formulaire email/mot de passe.
+                HStack(spacing: 10) {
+                    Rectangle().fill(Color.gray.opacity(0.15)).frame(height: 1)
+                    Text("ou continuer avec")
+                        .font(.custom("Helvetica Neue", size: 13))
+                        .foregroundColor(.grisSecondaire)
+                    Rectangle().fill(Color.gray.opacity(0.15)).frame(height: 1)
+                }
+                .padding(.horizontal, 32)
+
+                Spacer()
+                    .frame(height: 16)
+
+                Button {
+                    Task { await viewModel.connexionOAuth(fournisseur: .google) }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image("icone-google")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
+                        Text("Continuer avec Google")
+                            .font(.custom("Helvetica Neue", size: 16))
+                            .fontWeight(.medium)
+                            .foregroundColor(.black)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                }
+                .background(Color.white)
+                .cornerRadius(24)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(Color.gray.opacity(0.25), lineWidth: 1)
+                )
+                .disabled(viewModel.estEnChargement)
+                .padding(.horizontal, 32)
+
+                Spacer()
+
                 // Lien "Pas encore de compte ? S'inscrire"
                 NavigationLink {
                     InscriptionView(viewModel: viewModel)

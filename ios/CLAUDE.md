@@ -257,6 +257,7 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 | `icone-rejoindre` | Deux casques — carte « Rejoindre un championnat », 40 × 40 pt, *template* |
 | `icone-etoile` | Étoile — bouton « pari bonus » de `CotesView`, 22 × 22 pt, *template* |
 | `icone-drapeau-damier` | Drapeau à damier — cellule « Mes / Ses Grands Prix » du profil, 24,22 × 22 pt, *template* |
+| `icone-google` | Logo Google — bouton « Continuer avec Google », 24 × 24 pt. **Pas de rendu *template*** : ses quatre couleurs sont la marque, comme un drapeau. Source : `Ressources/icone-google.svg`, les mêmes tracés que `IconeGoogle` (`frontend/src/composants/Icones.jsx`) |
 | `texture-hexa` | Damier en filigrane des cartes — monté par ``Damier``, jamais en direct |
 | `flag-<slug>` | Les 12 drapeaux des pays hôtes. **Pas de rendu *template*** : ils gardent leurs couleurs |
 | `drapeau-<code>` | Les 17 drapeaux de **nationalité** — les 16 de la grille 2026, plus l'Autriche du palmarès —, en ISO alpha-2 — `drapeau-gb`, `drapeau-nl`… Fond des lignes de résultats **et des cartes « Derniers vainqueurs »**. Pas *template* non plus |

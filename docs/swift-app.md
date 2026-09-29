@@ -269,34 +269,43 @@ jamais voir les données de l'autre, fût-ce une fraction de seconde.
 ### 2.7 Google OAuth
 
 ```swift
-try await supabase.auth.signInWithOAuth(provider: .google) { config in
-    config.redirectURL = URL(string: "greedf1://auth-callback")
-}
+// Le schéma personnalisé est celui déclaré dans Info.plist (`CFBundleURLTypes`) —
+// voir plus bas. `configure` reçoit l'`ASWebAuthenticationSession` elle-même (pas un
+// objet de configuration à `redirectURL`, contrairement à une version antérieure de
+// cette note : signature vérifiée contre `supabase-swift` 2.55.2 vendorisé).
+let session = try await supabase.auth.signInWithOAuth(
+    provider: .google,
+    redirectTo: URL(string: "greedf1://auth-callback")
+)
 ```
 
 Points à connaître :
 
-- **Le flux est PKCE**, et `supabase-swift` sait consommer le jeton au retour via
-  `supabase.auth.session(from: url)` dans le handler d'URL de l'app. Il faut déclarer un
-  **schéma d'URL personnalisé** dans `Info.plist` et l'ajouter aux *Redirect URLs* du
-  tableau de bord Supabase.
+- **Le flux est PKCE**, et cette surcharge de `signInWithOAuth` consomme le jeton toute
+  seule via `ASWebAuthenticationSession` — pas de `session(from:)` ni de handler d'URL
+  d'app à écrire : la session ne quitte jamais le processus de l'app. Il faut quand même
+  déclarer un **schéma d'URL personnalisé** dans `Info.plist` (`CFBundleURLTypes`,
+  schéma `greedf1`) et ajouter `greedf1://auth-callback` aux *Redirect URLs* du tableau
+  de bord Supabase — un préalable externe, comme les clés elles-mêmes.
 - **Une inscription OAuth ne transmet aucun pseudo.** Le trigger
   `gerer_nouvel_utilisateur` fabrique alors un pseudo de la forme `pilote-xxxxxxxxxx`
-  avec incrémentation : une inscription Google ne doit jamais échouer pour cause de
-  pseudo pris. L'app doit proposer de le changer ensuite.
-- **`ASWebAuthenticationSession` est le chemin recommandé sur iOS.**
-  `supabase-swift` peut aussi consommer un `idToken` natif obtenu via *Sign in with
-  Google* (`signInWithIdToken`) — c'est le geste le plus propre sur iOS, et il évite
-  l'aller-retour navigateur.
+  avec incrémentation (`docs/database.md`) : une inscription Google ne doit jamais
+  échouer pour cause de pseudo pris. **`AuthViewModel.pseudoAConfigurer`** détecte ce
+  préfixe sur le profil relu en base — jamais sur le jeton, qui ne le porte pas — et
+  `GreedF1App` bascule alors sur `OnboardingView` au lieu de `BarreNavigation`, tant
+  qu'un vrai pseudo n'a pas été enregistré (`AuthViewModel.definirPseudo`, écriture
+  directe dans `public.profils` sous le même droit de colonne que la version web).
+  Contrepartie exacte de `pseudoAConfigurer` / `Onboarding.jsx` côté web.
+- Une annulation par l'utilisateur (fermeture de la fenêtre) remonte une
+  `ASWebAuthenticationSessionError.canceledLogin` : à traiter en silence, ce n'est pas
+  un échec à afficher.
 
-> ### État réel côté production — à traiter avant de coder l'écran
-> **Les clés OAuth ne sont PAS renseignées dans le tableau de bord Supabase** au moment où
-> ces lignes sont écrites : `frontend/src/composants/BoutonsOAuth.jsx` porte
-> `OAUTH_ACTIF = false` et masque les boutons Google et Apple, précisément parce qu'ils
-> échoueraient systématiquement. **Renseigner les clés dans Supabase est un préalable**,
-> pas une conséquence du code iOS. Apple Sign-In est prévu dans le même module et suit
-> exactement le même flux (`provider: .apple`), et il est **obligatoire sur l'App Store**
-> dès lors que Google est proposé.
+> ### État réel côté production
+> **Google est configuré dans le tableau de bord Supabase et actif** :
+> `frontend/src/composants/BoutonsOAuth.jsx` porte `GOOGLE_ACTIF = true`. **Apple reste à
+> faire** — `APPLE_ACTIF = false` côté web, non implémenté côté iOS — une fois le compte
+> développeur Apple configuré ; il suivra exactement le même flux (`provider: .apple`),
+> et il est **obligatoire sur l'App Store** dès lors que Google est proposé.
 
 ### 2.8 Réinitialisation du mot de passe
 

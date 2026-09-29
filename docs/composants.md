@@ -716,7 +716,7 @@ la bonne réponse.**
 
 | Composant | Pourquoi gardé |
 |---|---|
-| `BoutonsOAuth` (`OAUTH_ACTIF = false`) | repasser à `true` suffit à tout réafficher |
+| Bouton Apple de `BoutonsOAuth` (`APPLE_ACTIF = false`) | repasser à `true` suffit à le réafficher, une fois le compte développeur Apple configuré |
 | `ApercusApp` | poser `image` sur chaque entrée et remonter le composant |
 | `TraceCircuit` | vignettes de 20 × 32 px |
 | `Calendrier` (l'écran d'un championnat) | plus d'entrée depuis le championnat (`0.53.0`), route conservée : son mini-classement par Grand Prix n'existe nulle part ailleurs |

@@ -12,7 +12,14 @@ struct GreedF1App: App {
         WindowGroup {
             Group {
                 if authViewModel.estConnecte {
-                    BarreNavigation(viewModel: authViewModel)
+                    // Premier compte Google (ou Apple) sans pseudo choisi : l'onboarding
+                    // passe avant le reste de l'app, contrepartie exacte du garde posé
+                    // dans `RouteProtegee` côté web.
+                    if authViewModel.pseudoAConfigurer {
+                        OnboardingView(viewModel: authViewModel)
+                    } else {
+                        BarreNavigation(viewModel: authViewModel)
+                    }
                 } else {
                     LandingView(viewModel: authViewModel)
                 }

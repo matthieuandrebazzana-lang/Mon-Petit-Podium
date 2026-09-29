@@ -369,11 +369,15 @@ Vérifier aussi que **l'accueil annonce bien le GP du week-end** et non celui de
 d'avant (le défaut de `chargerProchainGp` est corrigé, mais jamais exercé contre la vraie
 base au moment du figeage).
 
-### 2.5 Clés OAuth Google et Apple
+### 2.5 Clé OAuth Apple
 
-À renseigner dans Supabase, avec les URL de redirection (`/accueil`,
-`/nouveau-mot-de-passe`, en production **et** sur `localhost:5173`). Puis repasser
-`OAUTH_ACTIF` à `true` dans `composants/BoutonsOAuth.jsx` — **rien d'autre à toucher**.
+Google est configuré côté Supabase et actif (`GOOGLE_ACTIF = true` dans
+`composants/BoutonsOAuth.jsx`, web et iOS). Apple reste à faire une fois le compte
+développeur Apple en place : renseigner ses clés dans Supabase (URL de redirection
+`/accueil` en production **et** sur `localhost:5173`, plus `greedf1://auth-callback` pour
+iOS), puis repasser `APPLE_ACTIF` à `true` dans `BoutonsOAuth.jsx` — **rien d'autre à
+toucher côté web**. Sign in with Apple est **obligatoire sur l'App Store** dès lors que
+Google est proposé (`docs/swift-app.md` §2.7).
 
 ### 2.6 Les photos, ce qui reste à faire
 

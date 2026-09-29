@@ -85,8 +85,31 @@ struct LandingView: View {
 
     // MARK: - Boutons
 
+    /// Google d'abord, séparateur « ou », puis les deux boutons habituels : le raccourci
+    /// le plus rapide passe en tête. Contrepartie exacte de `Landing.jsx`
+    /// (`BoutonsOAuth separateurApres`).
     private var boutons: some View {
         VStack(spacing: 12) {
+            Button {
+                Task { await viewModel.connexionOAuth(fournisseur: .google) }
+            } label: {
+                HStack(spacing: 10) {
+                    Image("icone-google")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                    Text("Continuer avec Google")
+                        .font(.custom("HelveticaNeue-Medium", size: 17))
+                        .foregroundColor(.texte)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+            }
+            .background(Color.white)
+            .clipShape(Capsule())
+
+            separateurOu
+
             NavigationLink {
                 InscriptionView(viewModel: viewModel)
             } label: {
@@ -102,7 +125,25 @@ struct LandingView: View {
                     .background(Color.white)
                     .clipShape(Capsule())
             }
+
+            if let erreur = viewModel.messageErreur {
+                Text(erreur)
+                    .font(.custom("HelveticaNeue", size: 13))
+                    .foregroundColor(.primaire)
+                    .multilineTextAlignment(.center)
+            }
         }
+    }
+
+    private var separateurOu: some View {
+        HStack(spacing: 10) {
+            Rectangle().fill(Color.texte.opacity(0.1)).frame(height: 1)
+            Text("ou")
+                .font(.custom("HelveticaNeue", size: 13))
+                .foregroundColor(.secondaire)
+            Rectangle().fill(Color.texte.opacity(0.1)).frame(height: 1)
+        }
+        .padding(.vertical, 2)
     }
 
     /// Un seul propriétaire pour la forme des deux boutons : ils ne divergent pas.
