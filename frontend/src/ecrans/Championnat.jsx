@@ -11,11 +11,11 @@ import TexteEchange from "../composants/TexteEchange.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import RecadragePhoto from "../composants/RecadragePhoto.jsx";
 import { Pave } from "../composants/Squelette.jsx";
+import TuileDrapeau from "../composants/TuileDrapeau.jsx";
 import {
   IconeChevronDroit,
   IconeCoche,
   IconeCopie,
-  IconePilote,
   IconeSortie,
 } from "../composants/Icones.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
@@ -769,22 +769,18 @@ export default function Championnat() {
                     personne ne montrait, c'est ce que les autres ont joué. Le
                     libellé nomme sa destination, ce que le wayfinding demande
                     (/apple-design §16), et l'icône change avec lui : un
-                    calendrier annoncerait encore des dates.
+                    calendrier annoncerait encore des dates. C'est le drapeau
+                    de « Ses Grands Prix », au même habillage (`TuileDrapeau`) :
+                    les deux cellules ouvrent des Grands Prix.
 
                     L'écran `Calendrier` reste atteignable par son URL — c'est du
                     code éprouvé, gardé pour le jour où il redevient la bonne
                     réponse (CLAUDE.md §6). */}
                 <Link
                   to={`/championnats/${id}/resultats`}
-                  className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3 p-4"
+                  className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3.5 p-4"
                 >
-                  <span
-                    aria-hidden="true"
-                    className="bg-fond rounded-champ flex size-10 shrink-0 items-center justify-center"
-                    style={{ color: couleur.hex }}
-                  >
-                    <IconePilote className="size-[18px]" />
-                  </span>
+                  <TuileDrapeau />
                   <span className="min-w-0 flex-1">
                     <span className="text-corps text-texte block font-medium">
                       Résultats par Grand Prix

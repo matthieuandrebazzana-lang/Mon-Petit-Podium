@@ -5,7 +5,8 @@ import EnTete from "../composants/EnTete.jsx";
 import GrilleStats from "../composants/GrilleStats.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import BlocErreur from "../composants/BlocErreur.jsx";
-import { IconeChevronDroit, IconeDrapeau } from "../composants/Icones.jsx";
+import { IconeChevronDroit } from "../composants/Icones.jsx";
+import TuileDrapeau from "../composants/TuileDrapeau.jsx";
 import { HeroProfil } from "./MonProfil.jsx";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import { chargerProfilComplet, cleProfil } from "../lib/profils.js";
@@ -131,12 +132,7 @@ export default function ProfilMembre() {
                   to={`/profils/${profilId}/grands-prix`}
                   className="rounded-carte bg-surface shadow-carte pressable-large min-h-tactile flex items-center gap-3.5 p-4"
                 >
-                  <span
-                    aria-hidden="true"
-                    className="bg-primaire rounded-champ flex size-[46px] shrink-0 items-center justify-center text-white"
-                  >
-                    <IconeDrapeau className="size-[22px]" />
-                  </span>
+                  <TuileDrapeau />
                   <span className="min-w-0 flex-1">
                     <span className="text-corps text-texte block font-medium">
                       Ses Grands Prix
