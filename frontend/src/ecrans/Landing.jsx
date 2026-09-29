@@ -30,7 +30,23 @@ import { APP_VERSION } from "../config.js";
  * Le groupe est **centré verticalement** plutôt que poussé vers le bas par un
  * ressort : sans les aperçus, un `flex-1` entre le sous-texte et les boutons
  * rouvrirait exactement le vide qu'on vient de refermer.
+ *
+ * **Le bloc « 4 points » sous les boutons répond à l'exigence Google OAuth**
+ * de décrire ce que fait l'app avant la connexion. Il porte le rang 5 du
+ * stagger, un seul rang pour les quatre lignes : l'écran n'est vu qu'une fois
+ * avant connexion, et /animate juge qu'un rang par puce (rangs 5 à 8)
+ * retarderait la lecture sans rien communiquer de plus qu'une apparition
+ * groupée. Le repère devant chaque ligne reprend le point de
+ * `BandeauPrevisualisation` (`bg-primaire size-1.5 rounded-full`) — aucune
+ * nouvelle couleur, aucune icône.
  */
+const POINTS_APP = [
+  "Pronostics jugés sur les cotes réelles des bookmakers",
+  "Championnats privés à créer et partager entre amis",
+  "Classement mis à jour en temps réel après chaque course",
+  "Voiture personnalisable aux couleurs de ton écurie",
+];
+
 export default function Landing() {
   const naviguer = useNavigate();
 
@@ -78,6 +94,20 @@ export default function Landing() {
               J'ai déjà un compte
             </Bouton>
           </div>
+        </Bloc>
+
+        <Bloc rang={5} className="pt-3">
+          <ul className="flex flex-col gap-2.5">
+            {POINTS_APP.map((point) => (
+              <li key={point} className="flex items-start gap-2.5 px-1">
+                <span
+                  aria-hidden="true"
+                  className="bg-primaire mt-[7px] size-1.5 shrink-0 rounded-full"
+                />
+                <span className="text-corps-sm text-secondaire">{point}</span>
+              </li>
+            ))}
+          </ul>
         </Bloc>
       </div>
 
