@@ -1692,3 +1692,31 @@ connecté, comme le reste de sa voiture (§36).
 
 - Un paramètre facultatif d'un composant partagé se vérifie **à chaque site d'appel** :
   l'oublier ne casse rien, ça éteint une fonction en silence.
+
+---
+
+## 38. Le podium en deux lignes restait gris, sans coche ni croix (`0.80.0`, `ios 0.42.0`)
+
+**Symptôme.** Dans « Résultats par Grand Prix » (GP Azerbaïdjan, Team Bazzana), chaque
+pilote du podium affichait ses points sur l'aplat beige de l'attente, là où les autres
+pronostics du même membre étaient verts ou bordeaux.
+
+**Cause réelle — deux, indépendantes.**
+
+1. **La migration 27 n'était pas appliquée.** Le verdict de chaque pilote vient de
+   `pronostic_podium.points_gagnes_1/2` ; la colonne n'existait pas en production
+   (`42703` sur un `select` à la clé anonyme). Un podium jugé sans détail passe
+   délibérément « en attente » (`metier.md` §2) — les écrans ne redéduisent jamais le
+   verdict du total. Le code était juste, la base en retard.
+2. **iOS n'avait pas de pictogramme dans cet écran.** `RangeePronostic` ne portait que la
+   pastille de points ; le web y pose `Verdict` depuis longtemps. Aucun pronostic n'y avait
+   donc de coche, podium ou non.
+
+**Correctif.** Appliquer la migration 27 **avant** de déployer le backend `0.80.0` ; iOS
+monte ``Verdict`` à côté de la pastille, comme ``ResultatsGPView`` et « Mes Grands Prix ».
+
+### Ce qu'il ne faut pas refaire
+
+- Devant un verdict « en attente » sur un pronostic jugé, **vérifier la colonne en base**
+  avant de toucher au rendu : ajouter une déduction côté écran masquerait la migration
+  manquante et créerait un second propriétaire du verdict.

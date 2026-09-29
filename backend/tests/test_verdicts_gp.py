@@ -53,3 +53,29 @@ def test_bakou_marge_plus_de_10_secondes_perdue():
     # Verstappen finit à 0,196 s de Russell.
     _, obtenus, _ = _rejouer("azerbaidjan")
     assert obtenus.get(MARGE) == 0
+
+
+@pytest.mark.parametrize("nom", GPS)
+def test_podium_detaille_pilote_par_pilote(nom):
+    """Chaque podium jugé porte le gain de chacun de ses deux pilotes.
+
+    La somme vaut le total du pronostic, et chaque gain vaut soit la cote de son
+    pilote, soit zéro : c'est ce que les écrans affichent sur deux lignes.
+    """
+    gp = charger_gp(nom)
+    attributions, _ = calculer(gp["pronostics"], gp["cotes"], gp["donnees_brutes"])
+    podiums = {p["id"]: p for p in gp["pronostics"] if p["type"] == "podium"}
+    detailles = [a for a in attributions if a.pronostic_id in podiums]
+    assert detailles, "aucun podium jugé dans ce GP"
+
+    for attribution in detailles:
+        assert attribution.podium is not None
+        assert sum(attribution.podium) == attribution.points
+        detail = podiums[attribution.pronostic_id]["pronostic_podium"]
+        if isinstance(detail, list):
+            detail = detail[0]
+        for gain, champ in zip(attribution.podium, ("pilote_1", "pilote_2")):
+            assert gain in (0, int(gp["cotes"][detail[champ]]["valeur"]))
+
+    autres = [a for a in attributions if a.pronostic_id not in podiums]
+    assert all(a.podium is None for a in autres)

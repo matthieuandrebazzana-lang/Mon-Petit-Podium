@@ -16,6 +16,7 @@ import { chargerChampionnat } from "../lib/championnats.js";
 import {
   chargerPronosticsChampionnat,
   choixDuPronostic,
+  parisAffiches,
 } from "../lib/pronostics.js";
 import { couleurChampionnat, tonalites } from "../lib/couleurs.js";
 import { livreeDuMembre } from "../lib/palette.js";
@@ -174,7 +175,9 @@ export function classerParPointsDuGp(lignes) {
 export function LigneMembrePronostics({ ligne, estMoi, avecPhotos = false }) {
   const [ouvert, setOuvert] = useState(false);
 
-  const pronostics = ligne.pronostics ?? [];
+  // Le podium en deux lignes, une par pilote : le dépli, le compteur « N pronos
+  // validés » et le potentiel comptent chacun de ses pilotes.
+  const pronostics = parisAffiches(ligne.pronostics);
   const aJoue = pronostics.length > 0;
 
   // « Ce que ça peut rapporter » tant que rien n'est jugé, « ce que ça a
@@ -283,7 +286,7 @@ export function LigneMembrePronostics({ ligne, estMoi, avecPhotos = false }) {
           <ul className="mb-1 ml-8 flex flex-col">
             {pronostics.map((pronostic) => (
               <li
-                key={pronostic.id}
+                key={pronostic.cle ?? pronostic.id}
                 className="flex items-center justify-between gap-2 py-1.5"
               >
                 <span className="min-w-0">

@@ -208,6 +208,13 @@ def _verdicts(pronostics: list[dict], attributions: list, statut_manquant: str) 
             "pronostic_id": attribution.pronostic_id,
             "points": attribution.points,
             "statut": attribution.statut,
+            # Les points de chaque pilote d'un podium (migration 27). Une base
+            # non migrée ignore la clé.
+            **(
+                {"podium": list(attribution.podium)}
+                if attribution.podium is not None
+                else {}
+            ),
         }
         for attribution in attributions
     ] + [

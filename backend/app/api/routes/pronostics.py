@@ -110,6 +110,11 @@ class PodiumServi(BaseModel):
     nom_1: str | None = None
     nom_2: str | None = None
     points_2: int | None = None
+    # Ce que chaque pilote a rapporté (migration 27), écrit par le calcul qui
+    # juge le podium pilote par pilote. `None` tant que le pronostic n'est pas
+    # jugé — et sur une base non migrée, d'où la valeur par défaut.
+    points_gagnes_1: int | None = None
+    points_gagnes_2: int | None = None
 
 
 class PronosticServi(BaseModel):

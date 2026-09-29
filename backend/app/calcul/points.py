@@ -1348,6 +1348,11 @@ class Attribution:
     reussi: bool
     detail: str
     statut: str = ""
+    # Un podium seulement : ce que chaque pilote a rapporté, dans l'ordre de
+    # `pronostic_podium` (`pilote_1`, `pilote_2`). La somme vaut `points`. C'est
+    # la seule source du verdict pilote par pilote affiché par les écrans : la
+    # base le conserve tel quel (migration 27), rien ne le redéduit du total.
+    podium: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         if not self.statut:
@@ -1458,6 +1463,7 @@ def points_du_podium(pronostic: dict, cotes: dict[str, dict], course: Course):
             # de verdict lit à l'écran — `points_gagnes > 0`.
             reussi=total > 0,
             detail=f"podium — {detail}",
+            podium=(gains[0], gains[1]),
         ),
         "",
     )

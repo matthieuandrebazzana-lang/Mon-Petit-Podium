@@ -74,6 +74,15 @@ Pour chaque Grand Prix :
 > c'est toujours le maximum atteignable. La même règle vaut partout où un podium est
 > chiffré *avant* la course : total potentiel, cote moyenne tentée, récapitulatif.
 
+> ### Le podium s'affiche en deux lignes (v`0.80.0`)
+> Une ligne par pilote, chacune avec son label « PODIUM », son nom, sa cote et **son**
+> verdict : « Résultats par Grand Prix », « Mes / Ses Grands Prix », récapitulatif. Le gain
+> de chaque pilote vient du calcul du backend et est conservé en base
+> (`pronostic_podium.points_gagnes_1/2`, migration 27) — les écrans ne le redéduisent
+> jamais du total. Pronostic non jugé : les deux lignes reprennent son statut. Le compteur
+> « N pronos validés » compte chaque pilote : six pour une grille complète. Le total du
+> joueur ne change pas.
+
 **Le vainqueur est déjà sur le podium**, donc le bloc de saisie s'intitule
 « 2e et 3e du podium » et un pilote choisi comme vainqueur **disparaît** des deux
 emplacements suivants (exclusion croisée).

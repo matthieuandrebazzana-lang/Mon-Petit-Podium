@@ -61,6 +61,56 @@ export function choixDuPronostic(pronostic) {
   return formaterPilote(pronostic.pilote) ?? "Cote retirée par le bookmaker";
 }
 
+/**
+ * Le verdict d'UN pilote du podium — **la seule règle du web** qui le pose.
+ *
+ * Le gain de chaque pilote est jugé par le backend et conservé tel quel
+ * (`pronostic_podium.points_gagnes_1/2`, migration 27) : il ne se redéduit
+ * jamais du total ici. Tant que le pronostic n'est pas jugé, le pilote reprend
+ * son statut (attente ou non évaluable). Jugé mais sans détail — base non
+ * migrée —, il reste en attente.
+ */
+export function verdictDuPilote(pointsGagnes, statut, gainDuPilote) {
+  if (pointsGagnes === null || pointsGagnes === undefined) {
+    return { pointsGagnes: null, statut: statut ?? null };
+  }
+  if (gainDuPilote === null || gainDuPilote === undefined) {
+    return { pointsGagnes: null, statut: "en_attente" };
+  }
+  return { pointsGagnes: gainDuPilote, statut: gainDuPilote > 0 ? "gagne" : "perdu" };
+}
+
+/**
+ * Les pronostics d'un membre **tels qu'ils s'affichent** : le podium en deux
+ * lignes, une par pilote, chacune avec sa cote et son verdict. Un joueur qui a
+ * tout joué en compte six. Forme d'entrée et de sortie : `PronosticServi`.
+ */
+export function parisAffiches(pronostics) {
+  return (pronostics ?? []).flatMap((pronostic) => {
+    const podium = pronostic.podium;
+    if (!podium) return [pronostic];
+    return [
+      [podium.nom_1 ?? pronostic.pilote, pronostic.points, podium.points_gagnes_1],
+      [podium.nom_2, podium.points_2, podium.points_gagnes_2],
+    ].map(([nom, points, gain], index) => {
+      const verdict = verdictDuPilote(
+        pronostic.points_gagnes,
+        pronostic.statut_evaluation,
+        gain,
+      );
+      return {
+        ...pronostic,
+        cle: `${pronostic.id}-${index + 1}`,
+        pilote: nom ?? null,
+        points: points ?? null,
+        points_gagnes: verdict.pointsGagnes,
+        statut_evaluation: verdict.statut,
+        podium: null,
+      };
+    });
+  });
+}
+
 export const MARCHE_VAINQUEUR = "vainqueur";
 export const MARCHE_PODIUM = "podium";
 export const BONUS_MAXIMUM = 3;
