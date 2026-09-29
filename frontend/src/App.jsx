@@ -26,6 +26,8 @@ import CalendrierGlobal from "./ecrans/CalendrierGlobal.jsx";
 import DetailGp from "./ecrans/DetailGp.jsx";
 import ListeChampionnats from "./ecrans/ListeChampionnats.jsx";
 import ResultatsGp from "./ecrans/ResultatsGp.jsx";
+import Privacy from "./ecrans/Privacy.jsx";
+import Terms from "./ecrans/Terms.jsx";
 
 /** Configuration absente : mieux vaut le dire que servir une page blanche. */
 function EcranConfiguration({ message }) {
@@ -57,6 +59,14 @@ export default function App() {
             réinitialisation est connectée sans donner droit à l'app, et cet écran
             doit rester atteignable dans cet entre-deux. */}
         <Route path="/nouveau-mot-de-passe" element={<NouveauMotDePasse />} />
+
+        {/* Politique de confidentialité et CGU, hors des deux groupes pour la
+            même raison que les résultats d'un GP ci-dessous : Google (OAuth) et
+            l'App Store doivent pouvoir les atteindre sans session, et un membre
+            déjà connecté doit pouvoir les relire sans être renvoyé sur son
+            accueil. */}
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
 
         {/* Résultats d'un Grand Prix, hors des deux groupes pour la même raison
             que l'écran ci-dessus : le classement de la course est **public**

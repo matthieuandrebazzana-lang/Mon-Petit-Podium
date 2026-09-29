@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Ecran, { Bloc } from "../composants/Ecran.jsx";
 import Bouton from "../composants/Bouton.jsx";
 import { BandeauGreedF1 } from "../composants/LogoGreedF1.jsx";
@@ -81,7 +81,10 @@ export default function Landing() {
         </Bloc>
       </div>
 
-      <footer className="pt-4 text-center">
+      <footer className="flex flex-col items-center gap-1.5 pt-4 text-center">
+        <Link to="/privacy" className="text-texte-doux text-[11px] underline">
+          Politique de confidentialité
+        </Link>
         <span className="text-texte-doux text-[11px]">
           Greed F1 · v{APP_VERSION}
         </span>

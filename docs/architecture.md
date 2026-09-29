@@ -294,8 +294,11 @@ Le plan gratuit met le service en veille. Deux conséquences assumées :
 - **protégé** — tout le reste
 - **hors des deux** — `/nouveau-mot-de-passe` (un lien de réinitialisation ouvre une
   session, donc l'utilisateur est techniquement connecté sans avoir le droit d'entrer
-  dans l'app) et `/grands-prix/:gpId/resultats` (le classement d'une course est public,
-  mais un membre connecté ne doit pas être renvoyé sur son accueil).
+  dans l'app), `/grands-prix/:gpId/resultats` (le classement d'une course est public,
+  mais un membre connecté ne doit pas être renvoyé sur son accueil), et `/privacy` /
+  `/terms` (politique de confidentialité et CGU — Google OAuth et l'App Store doivent
+  pouvoir les atteindre sans session, et un membre connecté doit pouvoir les relire sans
+  être renvoyé sur son accueil).
 
 Tant que la session initiale n'est pas résolue, les gardes affichent l'écran d'attente :
 rediriger pendant ce laps ferait clignoter la connexion à chaque lancement.
