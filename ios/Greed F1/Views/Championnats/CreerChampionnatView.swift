@@ -31,10 +31,12 @@ struct CreerChampionnatView: View {
     @State private var nom = ""
     @FocusState private var nomActif: Bool
 
-    /// La photo choisie dans la photothèque, et sa vignette une fois décodée. **Deux états
-    /// et non un** : `PhotosPickerItem` est une référence, l'image n'arrive qu'après un
-    /// chargement asynchrone, et la vignette ne doit apparaître qu'une fois l'image prête.
+    /// La photo choisie dans la photothèque, puis son recadrage (``RecadrageImageView``,
+    /// masque carré), puis sa vignette une fois recadrée. **Trois états et non un** :
+    /// `PhotosPickerItem` est une référence, l'image n'arrive qu'après un chargement
+    /// asynchrone, et la vignette ne doit apparaître qu'une fois le recadrage validé.
     @State private var choixPhoto: PhotosPickerItem?
+    @State private var imageACadrer: UIImage?
     @State private var vignette: Image?
 
     /// Le refus opposé à une photo trop lourde. `nil` tant qu'il n'y a rien à dire.
@@ -106,6 +108,19 @@ struct CreerChampionnatView: View {
         // ou le refus qui s'écrit.
         .sensoryFeedback(.success, trigger: cree) { _, nouveau in nouveau != nil }
         .sensoryFeedback(.error, trigger: erreur) { _, nouveau in nouveau != nil }
+        .fullScreenCover(isPresented: Binding(
+            get: { imageACadrer != nil },
+            set: { affiche in if !affiche { imageACadrer = nil } }
+        )) {
+            if let imageACadrer {
+                RecadrageImageView(image: imageACadrer, forme: .carre) { recadree in
+                    refusPhoto = nil
+                    withAnimation(Mouvement.entree(0.20)) {
+                        vignette = Image(uiImage: recadree)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Envoi
@@ -318,9 +333,7 @@ struct CreerChampionnatView: View {
 
             await MainActor.run {
                 refusPhoto = nil
-                withAnimation(Mouvement.entree(0.20)) {
-                    vignette = Image(uiImage: image)
-                }
+                imageACadrer = image
             }
         }
     }

@@ -42,9 +42,11 @@ struct ProfilView: View {
     @State private var envoiVoiture = false
     @State private var erreurVoiture: ErreurAPI?
 
-    /// La photo choisie dans la photothèque, puis son dépôt en vol et son refus — dit sous
-    /// l'en-tête (``ErreurEnLigne``), jamais en alerte.
+    /// La photo choisie dans la photothèque, puis son recadrage (``RecadrageImageView``,
+    /// masque cercle) et son dépôt en vol — le refus dit sous l'en-tête (``ErreurEnLigne``),
+    /// jamais en alerte.
     @State private var choixPhoto: PhotosPickerItem?
+    @State private var imageACadrer: UIImage?
     @State private var envoiPhoto = false
     @State private var erreurPhoto: ErreurAPI?
 
@@ -145,7 +147,17 @@ struct ProfilView: View {
         .task(id: viewModel.profil?.id) { await chargerStatistiques() }
         .onChange(of: choixPhoto) { _, choix in
             guard let choix else { return }
-            Task { await envoyerPhoto(choix) }
+            Task { await chargerPourRecadrage(choix) }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { imageACadrer != nil },
+            set: { affiche in if !affiche { imageACadrer = nil } }
+        )) {
+            if let imageACadrer {
+                RecadrageImageView(image: imageACadrer, forme: .cercle) { recadree in
+                    Task { await envoyerPhoto(recadree) }
+                }
+            }
         }
     }
 
@@ -231,20 +243,32 @@ struct ProfilView: View {
         .accessibilityLabel("Changer ma photo de profil")
     }
 
-    /// Charge la photo choisie, la dépose et enregistre son URL (``AuthViewModel/enregistrerPhoto(_:)``).
-    /// La sélection est remise à `nil` à la fin : choisir deux fois la même photo doit
-    /// relancer l'envoi, ce qu'un `onChange` sur une valeur inchangée ne ferait pas.
-    private func envoyerPhoto(_ choix: PhotosPickerItem) async {
+    /// Charge la photo choisie et ouvre son recadrage. La sélection est remise à `nil` à la
+    /// fin : choisir deux fois la même photo doit rouvrir le recadrage, ce qu'un `onChange`
+    /// sur une valeur inchangée ne ferait pas.
+    private func chargerPourRecadrage(_ choix: PhotosPickerItem) async {
+        erreurPhoto = nil
+        defer { choixPhoto = nil }
+        guard
+            let donnees = try? await choix.loadTransferable(type: Data.self),
+            let image = UIImage(data: donnees)
+        else {
+            erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+            return
+        }
+        imageACadrer = image
+    }
+
+    /// Dépose la photo recadrée et enregistre son URL (``AuthViewModel/enregistrerPhoto(_:)``).
+    private func envoyerPhoto(_ image: UIImage) async {
         envoiPhoto = true
         erreurPhoto = nil
-        defer {
-            envoiPhoto = false
-            choixPhoto = nil
+        defer { envoiPhoto = false }
+        guard let donnees = image.jpegData(compressionQuality: 0.9) else {
+            erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+            return
         }
         do {
-            guard let donnees = try await choix.loadTransferable(type: Data.self) else {
-                throw ErreurAPI.serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
-            }
             try await viewModel.enregistrerPhoto(donnees)
         } catch let erreur as ErreurAPI {
             erreurPhoto = erreur

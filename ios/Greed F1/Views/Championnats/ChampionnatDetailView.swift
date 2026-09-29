@@ -41,10 +41,12 @@ struct ChampionnatDetailView: View {
     @State private var erreurDepart: ErreurAPI?
 
     /// La photothèque, ouverte depuis le menu — **créateur seulement** (`est_createur`,
-    /// calculé par le serveur ; le `PATCH` le revérifie de toute façon). Puis le dépôt en
-    /// vol et son refus, en alerte pour la même raison que le départ : il part d'un menu.
+    /// calculé par le serveur ; le `PATCH` le revérifie de toute façon). Puis son recadrage
+    /// (``RecadrageImageView``, masque carré), puis le dépôt en vol et son refus, en alerte
+    /// pour la même raison que le départ : il part d'un menu.
     @State private var selecteurPhoto = false
     @State private var choixPhoto: PhotosPickerItem?
+    @State private var imageACadrer: UIImage?
     @State private var envoiPhoto = false
     @State private var erreurPhoto: ErreurAPI?
 
@@ -175,7 +177,17 @@ struct ChampionnatDetailView: View {
                       matching: .images, photoLibrary: .shared())
         .onChange(of: choixPhoto) { _, choix in
             guard let choix else { return }
-            envoyerPhoto(choix)
+            chargerPourRecadrage(choix)
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { imageACadrer != nil },
+            set: { affiche in if !affiche { imageACadrer = nil } }
+        )) {
+            if let imageACadrer {
+                RecadrageImageView(image: imageACadrer, forme: .carre) { recadree in
+                    envoyerPhoto(recadree)
+                }
+            }
         }
         .alert("Impossible de changer la photo",
                isPresented: Binding(get: { erreurPhoto != nil },
@@ -187,26 +199,40 @@ struct ChampionnatDetailView: View {
         }
     }
 
-    /// Charge la photo choisie, la dépose sous le dossier du championnat
-    /// (``DepotPhoto``, comme l'avatar), enregistre son URL par `PATCH /championnats/{id}`,
-    /// puis recharge la liste — c'est elle qui peint la photo sur les cartes.
+    /// Charge la photo choisie et ouvre son recadrage. La sélection est remise à `nil` à la
+    /// fin : choisir deux fois la même photo doit rouvrir le recadrage.
+    private func chargerPourRecadrage(_ choix: PhotosPickerItem) {
+        erreurPhoto = nil
+        Task {
+            defer { choixPhoto = nil }
+            guard
+                let donnees = try? await choix.loadTransferable(type: Data.self),
+                let image = UIImage(data: donnees)
+            else {
+                erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+                return
+            }
+            imageACadrer = image
+        }
+    }
+
+    /// Dépose la photo recadrée sous le dossier du championnat (``DepotPhoto``, comme
+    /// l'avatar), enregistre son URL par `PATCH /championnats/{id}`, puis recharge la
+    /// liste — c'est elle qui peint la photo sur les cartes.
     ///
     /// **Tâche non liée à l'écran**, comme ``quitter()`` : l'envoi va au bout même si l'on
-    /// revient en arrière entre-temps. La sélection est remise à `nil` à la fin : choisir
-    /// deux fois la même photo doit relancer l'envoi.
-    private func envoyerPhoto(_ choix: PhotosPickerItem) {
+    /// revient en arrière entre-temps.
+    private func envoyerPhoto(_ image: UIImage) {
         guard !envoiPhoto else { return }
         envoiPhoto = true
         erreurPhoto = nil
         Task {
-            defer {
-                envoiPhoto = false
-                choixPhoto = nil
+            defer { envoiPhoto = false }
+            guard let donnees = image.jpegData(compressionQuality: 0.9) else {
+                erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+                return
             }
             do {
-                guard let donnees = try await choix.loadTransferable(type: Data.self) else {
-                    throw ErreurAPI.serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
-                }
                 let url = try await DepotPhoto.deposer(donnees, dans: .championnats,
                                                        proprietaire: championnat.id.uuidString)
                 try await APIClient.partage.envoyer("championnats/\(championnat.id.uuidString.lowercased())",
