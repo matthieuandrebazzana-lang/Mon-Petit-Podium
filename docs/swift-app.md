@@ -2234,6 +2234,19 @@ l'avatar bascule sur l'onglet Profil (`BarreNavigation.Onglet`, sélection expli
 > capsule noire à 40 % d'opacité plutôt qu'en médaillon blanc — un fond sombre porte mieux
 > sur une photo qui peut être claire comme sombre — icône blanche. Sans photo, l'en-tête
 > garde le `HStack` d'avant, inchangé.
+>
+> **iOS 0.45.4 — l'en-tête redevient un `HStack`, sans superposition.** Le `ZStack` de
+> 0.45.3 posait la photo *derrière* le titre : retour à une composition empilée, plus simple
+> à garantir sans chevauchement. À droite, un `VStack` aligné à droite pose le bouton « ⋯ »
+> puis la photo juste en dessous (espacement 8 pt) ; le bouton reprend son médaillon nu
+> (`menuSurPhoto` reste en place, non monté). La hauteur totale de l'en-tête est désormais
+> **fixe** (100 pt, `hauteurEntete`) plutôt que mesurée sur le titre — c'est elle qui borne
+> le côté du carré (`hauteurEntete - 44 - 8`), rayon `Rayon.champ` (14 pt) sur les quatre
+> coins. **Piège rencontré** : `.aspectRatio(1, contentMode: .fill)` suivi de
+> `.frame(height:)` ne suffit pas à obtenir un carré dans ce `HStack` — le titre porte
+> `.frame(maxWidth: .infinity)`, donc les deux côtés sont également flexibles, et la photo
+> reçoit toute la largeur restante au lieu de la déduire de sa hauteur (un rectangle large,
+> pas un carré). Il faut fixer explicitement `.frame(width:height:)` aux deux côtés.
 
 
 **Étape 4, statistiques.** **Une seule route pour les deux profils** : `GET /profils/{id}/stats`,

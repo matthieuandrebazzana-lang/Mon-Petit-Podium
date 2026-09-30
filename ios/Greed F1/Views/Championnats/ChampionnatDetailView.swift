@@ -77,11 +77,6 @@ struct ChampionnatDetailView: View {
 
     @State private var vue: Vue = .classement
 
-    /// La hauteur du titre et du sous-titre, mesurée par ``HauteurEnTeteKey`` : c'est elle
-    /// que la photo du championnat prend pour hauteur, afin de remplir tout l'en-tête sans
-    /// jamais le dépasser ni le sous-remplir (§ « La photo »).
-    @State private var hauteurEnTete: CGFloat = 64
-
     var body: some View {
         ZStack {
             Color.fondPrincipal
@@ -302,12 +297,14 @@ struct ChampionnatDetailView: View {
 
     // MARK: - En-tête
 
-    /// **Avec photo, l'en-tête devient un `ZStack` pleine largeur** — plus le `HStack` qui
-    /// pose la photo à côté du texte : elle passe **derrière** le texte, alignée à droite,
-    /// et prend toute la largeur restante. Sans photo, le `HStack` d'origine reste inchangé.
-    /// Les deux partagent ``titreEtSousTitre``, dont ``HauteurEnTeteKey`` mesure la vraie
-    /// hauteur rendue — deux lignes de titre ou une seule ne donnent pas le même en-tête,
-    /// et c'est cette hauteur que la photo reprend pour ne jamais dépasser le bloc titre.
+    /// La hauteur totale de l'en-tête, **fixe** : la photo carrée s'y ajuste, jamais
+    /// l'inverse. C'est ce qui garantit qu'elle ne chevauche jamais le bouton ⋯ ni ne
+    /// déborde du bloc au-dessus du sélecteur.
+    private let hauteurEntete: CGFloat = 100
+
+    /// **Avec photo, l'en-tête reste un `HStack` pleine largeur** : le titre à gauche, le
+    /// bouton ⋯ et la photo carrée empilés à droite l'un sous l'autre — plus de
+    /// superposition. Sans photo, le `HStack` d'origine reste inchangé.
     private var entete: some View {
         Group {
             if let photo {
@@ -319,7 +316,6 @@ struct ChampionnatDetailView: View {
                 }
             }
         }
-        .onPreferenceChange(HauteurEnTeteKey.self) { hauteurEnTete = $0 }
     }
 
     private var titreEtSousTitre: some View {
@@ -336,54 +332,46 @@ struct ChampionnatDetailView: View {
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
         }
-        .background {
-            GeometryReader { geometrie in
-                Color.clear.preference(key: HauteurEnTeteKey.self, value: geometrie.size.height)
-            }
-        }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
 
-    /// L'en-tête complet quand une photo existe : un `ZStack` pleine largeur, mesuré par le
-    /// `GeometryReader` englobant plutôt que par un carré fixe de 60 pt — sans lui la photo
-    /// ne connaîtrait ni la largeur totale à partager avec le texte, ni la hauteur exacte du
-    /// bloc titre à reprendre. La photo va du bord droit jusqu'à 45 % de la largeur (« environ
-    /// 55 % » côté texte), sur toute la hauteur (``HauteurEnTeteKey``), arrondie **seulement
-    /// à gauche** (``Rayon/widget``, 16 pt) — son bord droit colle à celui de l'écran, sans
-    /// rayon à y poser. Le texte reste à gauche : `.frame(alignment: .leading)` sur tout
-    /// l'espace disponible le centre verticalement de lui-même — `.leading` vaut horizontal
-    /// gauche **et** vertical centre, sans réglage à part.
+    /// L'en-tête complet quand une photo existe. À droite, un `VStack` aligné à droite pose
+    /// le bouton ⋯ puis la photo juste en dessous : empilés, jamais superposés, ils ne
+    /// peuvent pas se chevaucher. Le côté de la photo est ce qui reste de l'en-tête une fois
+    /// le bouton (44 pt) et l'espacement (8 pt) retirés ; ``aspectRatio(1, contentMode:
+    /// .fill)`` la garde carrée quelle que soit l'image reçue, sans jamais déborder du
+    /// header. Rayon `champ` (14 pt) sur les quatre coins : elle est posée *à l'intérieur*
+    /// du bloc d'en-tête, pas un aplat qui en épouserait un bord (`Formes.swift`).
     private func enteteAvecPhoto(_ url: URL) -> some View {
-        GeometryReader { geometrie in
-            let largeurPhoto = geometrie.size.width * 0.45
+        let taillePhoto = hauteurEntete - 44 - 8
 
-            ZStack {
+        return HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
                 titreEtSousTitre
-                    .padding(.trailing, largeurPhoto + 12)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: .trailing, spacing: 8) {
+                iconeMenu
 
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     Color.surface
                 }
-                .frame(width: largeurPhoto, height: geometrie.size.height)
-                .clipShape(
-                    UnevenRoundedRectangle(topLeadingRadius: Rayon.widget,
-                                           bottomLeadingRadius: Rayon.widget,
-                                           style: .continuous)
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                // **Largeur ET hauteur, pas la hauteur seule.** Le titre à gauche porte
+                // `.frame(maxWidth: .infinity)` : dans le `HStack`, les deux côtés sont
+                // alors également « flexibles », et `aspectRatio(1, .fill)` livré sans
+                // largeur fixe se voit proposer toute la place restante plutôt que de la
+                // déduire de sa hauteur — un rectangle large, jamais un carré. Fixer les
+                // deux côtés au même `taillePhoto` ferme cette ambiguïté.
+                .frame(width: taillePhoto, height: taillePhoto)
+                .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
                 .accessibilityHidden(true)
-
-                menuSurPhoto
-                    .padding(8)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
-            .frame(width: geometrie.size.width, height: geometrie.size.height)
         }
-        .frame(height: hauteurEnTete)
+        .frame(height: hauteurEntete, alignment: .top)
     }
 
     /// La photo **de la liste rechargée** dès qu'elle y figure : ``championnat`` est celui
@@ -423,10 +411,11 @@ struct ChampionnatDetailView: View {
         }
     }
 
-    /// Les trois points, **sans photo** : icône nue sur le beige, comme avant. Un `Menu`
+    /// Les trois points : icône nue, zone tactile 44 × 44 pt (le plancher iOS). Un `Menu`
     /// natif — il s'ouvre depuis son déclencheur et se referme vers lui, porte seul
-    /// l'accessibilité. Zone tactile 44 × 44 pt, le plancher iOS.
-    private var menuChampionnat: some View {
+    /// l'accessibilité. Partagé par ``menuChampionnat`` (sans photo) et ``enteteAvecPhoto``
+    /// (avec photo), qui ne diffèrent que par son placement.
+    private var iconeMenu: some View {
         Menu {
             optionsChampionnat
         } label: {
@@ -445,12 +434,21 @@ struct ChampionnatDetailView: View {
         }
         .disabled(occupe)
         .accessibilityLabel(envoiPhoto ? "Envoi de la photo" : "Options du championnat")
-        // L'icône est centrée sur 44 pt : sans ce décalage, le bouton dépasserait la marge
-        // latérale à droite et le sommet du titre à gauche.
-        .padding(.trailing, -10)
-        .padding(.top, -6)
     }
 
+    /// Les trois points, **sans photo** : décalé pour que son cadre de 44 pt ne dépasse pas
+    /// la marge latérale à droite ni le sommet du titre à gauche.
+    private var menuChampionnat: some View {
+        iconeMenu
+            .padding(.trailing, -10)
+            .padding(.top, -6)
+    }
+
+    /// > **Non monté.** Le bouton ⋯ est redescendu à côté de la photo au lieu d'être posé
+    /// > dessus (§En-tête, ``enteteAvecPhoto``) : plus de superposition, donc plus besoin
+    /// > d'un déclencheur pensé pour rester lisible sur une image quelconque. Le composant
+    /// > reste en place (`CLAUDE.md` §6).
+    ///
     /// Les trois points, **posés sur la photo** : une capsule noire à 40 % d'opacité plutôt
     /// qu'une icône nue, dont le contraste dépendrait des couleurs de la photo — le même
     /// principe que le bouton appareil photo de ``ProfilView`` (« un matériau plutôt qu'un
@@ -630,17 +628,6 @@ struct ChampionnatDetailView: View {
         .ombreBloc()
     }
 
-}
-
-// MARK: - La hauteur de l'en-tête
-
-/// La hauteur rendue du titre + sous-titre, remontée à ``ChampionnatDetailView/entete`` pour
-/// que la photo du championnat prenne exactement la même — voir ``ChampionnatDetailView``.
-private struct HauteurEnTeteKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
 }
 
 // MARK: - Une ligne du classement
