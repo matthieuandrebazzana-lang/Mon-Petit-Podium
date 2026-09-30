@@ -28,6 +28,7 @@ import DetailGp from "./ecrans/DetailGp.jsx";
 import ListeChampionnats from "./ecrans/ListeChampionnats.jsx";
 import ResultatsGp from "./ecrans/ResultatsGp.jsx";
 import Privacy from "./ecrans/Privacy.jsx";
+import Contact from "./ecrans/Contact.jsx";
 import Terms from "./ecrans/Terms.jsx";
 
 /** Configuration absente : mieux vaut le dire que servir une page blanche. */
@@ -68,6 +69,7 @@ export default function App() {
             accueil. */}
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/contact" element={<Contact />} />
 
         {/* Résultats d'un Grand Prix, hors des deux groupes pour la même raison
             que l'écran ci-dessus : le classement de la course est **public**
