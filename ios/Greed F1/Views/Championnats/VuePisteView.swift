@@ -35,6 +35,60 @@ import SwiftUI
 /// > **La piste n'appelle rien** : elle reçoit de ``ChampionnatDetailView`` le tableau que
 /// > `GET /championnats/{id}/classement` a servi au segment « Classement ». Un second appel
 /// > aurait pu poser une voiture à un autre score que sa ligne.
+/// **Le sol de la piste, et rien d'autre** — la planche `vue_piste.svg`, étirée aux deux
+/// axes, poussée jusqu'au bord de l'écran, zones sûres comprises.
+///
+/// Extrait de ``VuePisteView`` pour servir à **deux endroits** : le sol de l'écran plein,
+/// et celui de ``ChampionnatDetailView``, qui le pousse **derrière son en-tête et son
+/// sélecteur** pour que les kerbs montent jusqu'en haut de l'écran au lieu de s'arrêter
+/// sous eux. Un second calcul de débord écrit séparément aurait divergé au premier
+/// ajustement (`CLAUDE.md` §6).
+struct SolPiste: View {
+
+    /// La `viewBox` de la planche, telle quelle.
+    private static let planche = CGRect(x: 0, y: 0, width: 589.5, height: 1280.4)
+
+    /// **Le rayon des coins de la planche** — le `rx` de son aplat, 62,7 unités. Les kerbs
+    /// s'y arrondissent et leurs bandes s'arrêtent avant : posé tel quel, le bas de l'écran
+    /// montrait un kerb rouge uni, sans damier, sur une vingtaine de points.
+    private static let rayonPlanche: CGFloat = 62.7
+
+    /// Les quatre segments de la ligne médiane. **La planche les peint à 11 %**, et
+    /// ``PlancheSVG`` ne lit que `fill` : l'opacité passe donc par la substitution d'encre,
+    /// qui est le mécanisme prévu pour ça. Sans elle, la ligne médiane sortirait en
+    /// `#1d1d1b` plein et se lirait comme un rail.
+    private static let substitutions: [String: Color] = [
+        "#1d1d1b": Color(hexadecimal: 0x1D1D1B).opacity(0.11)
+    ]
+
+    var body: some View {
+        GeometryReader { bloc in
+            // **Étirée aux deux axes, sur tout le bloc proposé**, zones sûres comprises.
+            // `etiree` — l'équivalent de `preserveAspectRatio="none"` : la piste couvre
+            // l'écran quel que soit son rapport de forme, et ses kerbs gardent une largeur
+            // proportionnelle à celle de la piste.
+            //
+            // **Le bas de la planche passe sous l'écran**, de la hauteur de son arrondi :
+            // les kerbs gardent leur damier jusqu'au bord, et l'arrondi du dessin laisse
+            // la place à celui de l'écran. Le haut n'en a pas besoin.
+            VuePlanche(planche: "vue_piste", fenetre: Self.planche,
+                       substitutions: Self.substitutions, etiree: true)
+                .ignoresSafeArea()
+                .padding(.bottom, -debordBas(ecran: bloc.size.height
+                                             + bloc.safeAreaInsets.top
+                                             + bloc.safeAreaInsets.bottom))
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// Ce que la planche doit dépasser sous l'écran pour que son arrondi en sorte. Étirée,
+    /// elle fait `ecran + d` de haut, et son arrondi `rayon × (ecran + d) / hauteur` :
+    /// égaler `d` à ce dernier donne `d = rayon × ecran / (hauteur − rayon)`.
+    private func debordBas(ecran: CGFloat) -> CGFloat {
+        Self.rayonPlanche * ecran / (Self.planche.height - Self.rayonPlanche)
+    }
+}
+
 struct VuePisteView: View {
 
     let championnat: Championnat
@@ -55,9 +109,6 @@ struct VuePisteView: View {
     @Environment(\.dismiss) private var fermer
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
-    /// La `viewBox` de la planche, telle quelle.
-    private static let planche = CGRect(x: 0, y: 0, width: 589.5, height: 1280.4)
-
     /// **Les deux kerbs, mesurés sur les tracés de la planche** — 24,88 et 561,17 sur
     /// 589,5 — et non une tranche arithmétique. La zone de jeu s'arrête à eux : les
     /// voitures disposent de toute la largeur de la piste, et d'elle seule.
@@ -74,19 +125,6 @@ struct VuePisteView: View {
     private static let hauteurRetour: CGFloat = 38
     private static let hauteurNom: CGFloat = 80
 
-    /// **Le rayon des coins de la planche** — le `rx` de son aplat, 62,7 unités. Les kerbs
-    /// s'y arrondissent et leurs bandes s'arrêtent avant : posé tel quel, le bas de l'écran
-    /// montrait un kerb rouge uni, sans damier, sur une vingtaine de points.
-    private static let rayonPlanche: CGFloat = 62.7
-
-    /// Les quatre segments de la ligne médiane. **La planche les peint à 11 %**, et
-    /// ``PlancheSVG`` ne lit que `fill` : l'opacité passe donc par la substitution d'encre,
-    /// qui est le mécanisme prévu pour ça. Sans elle, la ligne médiane sortirait en
-    /// `#1d1d1b` plein et se lirait comme un rail.
-    private static let substitutions: [String: Color] = [
-        "#1d1d1b": Color(hexadecimal: 0x1D1D1B).opacity(0.11)
-    ]
-
     var body: some View {
         // **Le bloc est mesuré une fois, ici.** Les deux marges de kerb sont des fractions
         // de SA largeur : mesurées après les avoir retirées, elles se réduiraient à chaque
@@ -94,22 +132,14 @@ struct VuePisteView: View {
         GeometryReader { bloc in
             ZStack(alignment: .top) {
                 // Le sol, sous tout le reste et **sur l'écran entier**, zones sûres
-                // comprises. `etiree` — l'équivalent de `preserveAspectRatio="none"` : la
-                // piste couvre l'écran quel que soit son rapport de forme, et ses kerbs
-                // gardent une largeur proportionnelle à celle de la piste.
-                //
-                // **Le bas de la planche passe sous l'écran**, de la hauteur de son arrondi :
-                // les kerbs gardent leur damier jusqu'au bord, et l'arrondi du dessin laisse
-                // la place à celui de l'écran. Le haut n'en a pas besoin, le bandeau le couvre.
-                VuePlanche(planche: "vue_piste", fenetre: Self.planche,
-                           substitutions: Self.substitutions, etiree: true)
-                    // Un décor qui déborde de son cadre ne doit rien intercepter : intégrée,
-                    // la piste est posée sous le sélecteur « Classement / Piste ».
-                    .allowsHitTesting(false)
-                    .ignoresSafeArea()
-                    .padding(.bottom, -debordBas(ecran: bloc.size.height
-                                                 + bloc.safeAreaInsets.top
-                                                 + bloc.safeAreaInsets.bottom))
+                // comprises. **Intégrée, ce n'est plus elle qui le peint** :
+                // ``ChampionnatDetailView`` le pousse derrière son propre en-tête, pour que
+                // les kerbs montent jusqu'au bord supérieur de l'écran au lieu de s'arrêter
+                // sous le sélecteur « Classement / Piste ». Un second sol peint ici par-dessus
+                // masquerait celui-là sans rien ajouter.
+                if !integree {
+                    SolPiste()
+                }
 
                 VStack(spacing: 0) {
                     if !integree { bandeau }
@@ -123,7 +153,12 @@ struct VuePisteView: View {
         // Sous les coins arrondis que la planche dessine. Le beige de l'app est à un
         // point de celui du sol (`#F5F0EB` contre `#F4EFEA`) : c'est lui qu'on pose, plutôt
         // qu'une septième teinte déclarée par un écran, ce que le design system proscrit.
-        .background(Color.fondPrincipal.ignoresSafeArea())
+        //
+        // **Intégrée, pas de fond ici** : un aplat opaque plein écran couvrirait le sol que
+        // ``ChampionnatDetailView`` peint derrière son en-tête.
+        .background {
+            if !integree { Color.fondPrincipal.ignoresSafeArea() }
+        }
         // **Le chrome disparaît, les deux barres avec.** Le retour du bandeau est le seul
         // chemin sortant, et le geste de bord continue de fonctionner.
         // Intégrée, la piste laisse les barres à l'écran qui l'accueille.
@@ -137,13 +172,6 @@ struct VuePisteView: View {
                 withAnimation { enPiste = true }
             }
         }
-    }
-
-    /// Ce que la planche doit dépasser sous l'écran pour que son arrondi en sorte. Étirée,
-    /// elle fait `ecran + d` de haut, et son arrondi `rayon × (ecran + d) / hauteur` :
-    /// égaler `d` à ce dernier donne `d = rayon × ecran / (hauteur − rayon)`.
-    private func debordBas(ecran: CGFloat) -> CGFloat {
-        Self.rayonPlanche * ecran / (Self.planche.height - Self.rayonPlanche)
     }
 
     // MARK: - Le bandeau

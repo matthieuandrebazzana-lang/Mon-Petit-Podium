@@ -82,18 +82,34 @@ struct ChampionnatDetailView: View {
             Color.fondPrincipal
                 .ignoresSafeArea()
 
+            // **Le sol de la piste, derrière l'en-tête.** Posé ici et non par
+            // ``VuePisteView`` — intégrée, elle ne le peint plus — pour que ses kerbs
+            // montent jusqu'au bord supérieur de l'écran, zones sûres comprises, au lieu de
+            // s'arrêter sous le sélecteur « Classement / Piste ». C'est l'opacité du bloc
+            // ci-dessous qui les cache là où il se pose, exactement comme l'aplat du
+            // bandeau les cache sur l'écran plein.
+            if vue == .piste {
+                SolPiste()
+                    .ignoresSafeArea()
+            }
+
             // **L'en-tête et le sélecteur ne défilent pas**, le contenu dessous oui. La
             // piste redevient un segment de cet écran : elle s'affiche **en place**, sous
             // l'en-tête, au lieu d'être poussée comme un écran plein.
             VStack(spacing: 0) {
-                entete
-                    .padding(.horizontal, margeLaterale)
-                    .padding(.top, 8)
+                // **Fond opaque** — sans lui le sol de la piste, posé juste derrière,
+                // remonterait sous le titre et le sélecteur au lieu de rester derrière eux.
+                VStack(spacing: 0) {
+                    entete
+                        .padding(.horizontal, margeLaterale)
+                        .padding(.top, 8)
 
-                selecteur
-                    .padding(.horizontal, margeLaterale)
-                    .padding(.top, 12)
-                    .padding(.bottom, 12)
+                    selecteur
+                        .padding(.horizontal, margeLaterale)
+                        .padding(.top, 12)
+                        .padding(.bottom, 12)
+                }
+                .background(Color.fondPrincipal)
 
                 // Un fondu court entre les deux contenus, et rien d'autre : un segment
                 // se bascule souvent, un glissement latéral finirait par se faire attendre.
