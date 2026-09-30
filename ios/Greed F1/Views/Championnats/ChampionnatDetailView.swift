@@ -302,19 +302,21 @@ struct ChampionnatDetailView: View {
 
     // MARK: - En-tête
 
-    /// **La photo prend toute la hauteur du bloc titre + sous-titre**, dont
-    /// ``HauteurEnTeteKey`` mesure la vraie hauteur rendue — deux lignes de titre ou une
-    /// seule ne donnent pas le même en-tête. Sans photo, le bouton ⋯ garde sa position
-    /// actuelle ; avec elle, il se pose sur son coin supérieur droit (``menuSurPhoto``) —
-    /// le texte et la photo se répondent alors symétriquement de part et d'autre de l'écran.
+    /// **Avec photo, l'en-tête devient un `ZStack` pleine largeur** — plus le `HStack` qui
+    /// pose la photo à côté du texte : elle passe **derrière** le texte, alignée à droite,
+    /// et prend toute la largeur restante. Sans photo, le `HStack` d'origine reste inchangé.
+    /// Les deux partagent ``titreEtSousTitre``, dont ``HauteurEnTeteKey`` mesure la vraie
+    /// hauteur rendue — deux lignes de titre ou une seule ne donnent pas le même en-tête,
+    /// et c'est cette hauteur que la photo reprend pour ne jamais dépasser le bloc titre.
     private var entete: some View {
-        HStack(alignment: .top, spacing: 12) {
-            titreEtSousTitre
-
+        Group {
             if let photo {
-                photoChampionnat(photo)
+                enteteAvecPhoto(photo)
             } else {
-                menuChampionnat
+                HStack(alignment: .top, spacing: 12) {
+                    titreEtSousTitre
+                    menuChampionnat
+                }
             }
         }
         .onPreferenceChange(HauteurEnTeteKey.self) { hauteurEnTete = $0 }
@@ -343,29 +345,45 @@ struct ChampionnatDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// La photo, carrée (elle est toujours recadrée ainsi à l'envoi — ``RecadrageImageView``,
-    /// `.carre`), sur toute la hauteur du titre et du sous-titre, alignée à droite. Le rayon
-    /// est celui des widgets (``Rayon/widget``, 16 pt) : le design system n'en a pas d'autre
-    /// à ce format, et un écran n'en déclare jamais un à lui (`ios/CLAUDE.md` §3).
-    ///
-    /// `aspectRatio(1, contentMode: .fit)` fige le carré dès le placeholder — sans lui, le
-    /// fond `Color.surface` du chargement, sans forme propre, prendrait toute la largeur
-    /// restante et la photo sauterait à sa taille définitive une fois l'image reçue.
-    private func photoChampionnat(_ url: URL) -> some View {
-        ZStack(alignment: .topTrailing) {
-            AsyncImage(url: url) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Color.surface
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .frame(height: hauteurEnTete)
-            .clipShape(RoundedRectangle(cornerRadius: Rayon.widget, style: .continuous))
-            .accessibilityHidden(true)
+    /// L'en-tête complet quand une photo existe : un `ZStack` pleine largeur, mesuré par le
+    /// `GeometryReader` englobant plutôt que par un carré fixe de 60 pt — sans lui la photo
+    /// ne connaîtrait ni la largeur totale à partager avec le texte, ni la hauteur exacte du
+    /// bloc titre à reprendre. La photo va du bord droit jusqu'à 45 % de la largeur (« environ
+    /// 55 % » côté texte), sur toute la hauteur (``HauteurEnTeteKey``), arrondie **seulement
+    /// à gauche** (``Rayon/widget``, 16 pt) — son bord droit colle à celui de l'écran, sans
+    /// rayon à y poser. Le texte reste à gauche : `.frame(alignment: .leading)` sur tout
+    /// l'espace disponible le centre verticalement de lui-même — `.leading` vaut horizontal
+    /// gauche **et** vertical centre, sans réglage à part.
+    private func enteteAvecPhoto(_ url: URL) -> some View {
+        GeometryReader { geometrie in
+            let largeurPhoto = geometrie.size.width * 0.45
 
-            menuSurPhoto
-                .padding(8)
+            ZStack {
+                titreEtSousTitre
+                    .padding(.trailing, largeurPhoto + 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Color.surface
+                }
+                .frame(width: largeurPhoto, height: geometrie.size.height)
+                .clipShape(
+                    UnevenRoundedRectangle(topLeadingRadius: Rayon.widget,
+                                           bottomLeadingRadius: Rayon.widget,
+                                           style: .continuous)
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                .accessibilityHidden(true)
+
+                menuSurPhoto
+                    .padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            }
+            .frame(width: geometrie.size.width, height: geometrie.size.height)
         }
+        .frame(height: hauteurEnTete)
     }
 
     /// La photo **de la liste rechargée** dès qu'elle y figure : ``championnat`` est celui
@@ -433,11 +451,12 @@ struct ChampionnatDetailView: View {
         .padding(.top, -6)
     }
 
-    /// Les trois points, **posés sur la photo** : un disque blanc plutôt qu'une icône nue,
-    /// dont le contraste dépendrait des couleurs de la photo — le même principe que le
-    /// bouton appareil photo de ``ProfilView`` (« un matériau plutôt qu'un voile coloré »).
-    /// 32 pt, dans le coin supérieur droit de la photo. `grisSecondaire` sur blanc tient
-    /// largement 4,5:1, quelle que soit la photo dessous.
+    /// Les trois points, **posés sur la photo** : une capsule noire à 40 % d'opacité plutôt
+    /// qu'une icône nue, dont le contraste dépendrait des couleurs de la photo — le même
+    /// principe que le bouton appareil photo de ``ProfilView`` (« un matériau plutôt qu'un
+    /// voile coloré »). 32 pt, dans le coin supérieur droit de la photo. L'icône passe au
+    /// blanc : `grisSecondaire` était réglé pour un fond clair, il s'effacerait sur un fond
+    /// sombre.
     private var menuSurPhoto: some View {
         Menu {
             optionsChampionnat
@@ -445,17 +464,17 @@ struct ChampionnatDetailView: View {
             Group {
                 if occupe {
                     ProgressView()
-                        .tint(.grisSecondaire)
+                        .tint(.white)
                         .scaleEffect(0.8)
                 } else {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.grisSecondaire)
+                        .foregroundColor(.white)
                 }
             }
             .frame(width: 32, height: 32)
-            .background(Color.white, in: Circle())
-            .contentShape(Circle())
+            .background(Color.black.opacity(0.4), in: Capsule())
+            .contentShape(Capsule())
         }
         .disabled(occupe)
         .accessibilityLabel(envoiPhoto ? "Envoi de la photo" : "Options du championnat")

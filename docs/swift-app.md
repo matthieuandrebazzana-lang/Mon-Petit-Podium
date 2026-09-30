@@ -2221,11 +2221,19 @@ l'avatar bascule sur l'onglet Profil (`BarreNavigation.Onglet`, sélection expli
 
 > **iOS 0.45.2 — la photo du championnat occupe tout l'en-tête.** 64 × 64 pt fixe jusqu'ici,
 > elle prend désormais la hauteur du bloc titre + sous-titre, mesurée en direct (elle varie
-> avec le nombre de lignes du titre) — carrée, puisque `RecadrageImageView` la recadre déjà
-> ainsi à l'envoi, rayon `Rayon.widget`. Le bouton « ⋯ » se pose sur son coin supérieur
-> droit, en médaillon blanc plutôt qu'en icône nue — le même principe que le badge appareil
-> photo de `ProfilView`, pour rester lisible quelles que soient les couleurs de la photo.
-> Sans photo, il garde sa position d'avant.
+> avec le nombre de lignes du titre).
+>
+> **iOS 0.45.3 — l'en-tête devient un `ZStack` pleine largeur.** La photo carrée posée à
+> côté du titre (0.45.2) sous-remplissait la largeur : elle va désormais du bord droit de
+> l'en-tête jusqu'à 45 % de sa largeur, toujours sur la hauteur du bloc titre + sous-titre
+> (`GeometryReader`, pas un carré figé), et n'est arrondie **qu'à gauche**
+> (`UnevenRoundedRectangle`, `Rayon.widget`) — son bord droit colle à celui de l'en-tête,
+> sans rayon à y poser. Le titre reste à gauche, centré verticalement par construction
+> (`.frame(alignment: .leading)` sur tout l'espace disponible, `.leading` valant horizontal
+> gauche et vertical centre). Le bouton « ⋯ » se pose sur son coin supérieur droit, en
+> capsule noire à 40 % d'opacité plutôt qu'en médaillon blanc — un fond sombre porte mieux
+> sur une photo qui peut être claire comme sombre — icône blanche. Sans photo, l'en-tête
+> garde le `HStack` d'avant, inchangé.
 
 
 **Étape 4, statistiques.** **Une seule route pour les deux profils** : `GET /profils/{id}/stats`,
