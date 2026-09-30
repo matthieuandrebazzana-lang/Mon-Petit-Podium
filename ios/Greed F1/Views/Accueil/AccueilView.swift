@@ -292,6 +292,18 @@ private struct WidgetGrandPrix: View {
 
     private var apparence: ApparenceDrapeau? { ApparenceDrapeau.pour(slug: grandPrix.slug) }
 
+    /// Le même Grand Prix, dans le vocabulaire statique de ``CalendrierView`` — c'est ce que
+    /// demande ``DetailGPView``, qui ne connaît que ``GrandPrixSaison``. `nil` si le slug est
+    /// hors de la liste statique, ce qui ne devrait pas arriver : la base ne connaît que les
+    /// Grands Prix de la saison.
+    private var grandPrixSaison: GrandPrixSaison? {
+        guard var saison = GrandPrixSaison.saison2026.first(where: { $0.slug == grandPrix.slug })
+        else { return nil }
+        saison.enBase = grandPrix
+        saison.etatConnu = true
+        return saison
+    }
+
     /// « 26 septembre 2026 », **en heure locale du téléphone** (§7.4) — c'est un instant
     /// servi par la base, pas une date nue : le formater est juste.
     private var date: String {
@@ -357,6 +369,23 @@ private struct WidgetGrandPrix: View {
     @ViewBuilder var body: some View {
         if let libelleBouton {
             lien(libelleBouton)
+        } else if let grandPrixSaison {
+            // **À venir ou fermé** : rien à saisir, mais le widget reste tappable — c'est la
+            // fiche du week-end qui répond, le même `NavigationLink` que ``CalendrierView``
+            // pose sur ses cartes dans les mêmes états.
+            NavigationLink {
+                DetailGPView(grandPrix: grandPrixSaison)
+            } label: {
+                surface
+            }
+            .buttonStyle(StyleAppui(.grandeSurface))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                "Prochain Grand Prix, \(grandPrix.nom), le \(date). "
+                + "Départ à \(heureDepart). \(echeance().phrase)."
+            )
+            .accessibilityHint("Voir la fiche du Grand Prix")
+            .accessibilityAddTraits(.isButton)
         } else {
             surface
                 .accessibilityElement(children: .ignore)

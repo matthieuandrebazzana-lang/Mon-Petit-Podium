@@ -77,6 +77,11 @@ struct ChampionnatDetailView: View {
 
     @State private var vue: Vue = .classement
 
+    /// La hauteur du titre et du sous-titre, mesurée par ``HauteurEnTeteKey`` : c'est elle
+    /// que la photo du championnat prend pour hauteur, afin de remplir tout l'en-tête sans
+    /// jamais le dépasser ni le sous-remplir (§ « La photo »).
+    @State private var hauteurEnTete: CGFloat = 64
+
     var body: some View {
         ZStack {
             Color.fondPrincipal
@@ -297,38 +302,69 @@ struct ChampionnatDetailView: View {
 
     // MARK: - En-tête
 
+    /// **La photo prend toute la hauteur du bloc titre + sous-titre**, dont
+    /// ``HauteurEnTeteKey`` mesure la vraie hauteur rendue — deux lignes de titre ou une
+    /// seule ne donnent pas le même en-tête. Sans photo, le bouton ⋯ garde sa position
+    /// actuelle ; avec elle, il se pose sur son coin supérieur droit (``menuSurPhoto``) —
+    /// le texte et la photo se répondent alors symétriquement de part et d'autre de l'écran.
     private var entete: some View {
         HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(championnat.nom)
-                    .font(.titre)
-                    .tracking(Tracking.titre)
-                    .foregroundColor(.texte)        // 15,37:1 sur le beige
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+            titreEtSousTitre
 
-                // `grisSecondaire` (4,71:1) et non le `#999999` de la maquette (2,52:1).
-                Text("\(effectif) \(effectif > 1 ? "membres" : "membre") · Saison 2026")
-                    .font(.custom("HelveticaNeue", size: 13))
-                    .foregroundColor(.grisSecondaire)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-
-            // La photo entre le texte et le menu, carrée, sur la hauteur de l'en-tête.
-            // Absente, elle ne réserve pas sa place.
             if let photo {
-                AsyncImage(url: photo) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Color.surface
-                }
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
-                .accessibilityHidden(true)
+                photoChampionnat(photo)
+            } else {
+                menuChampionnat
             }
+        }
+        .onPreferenceChange(HauteurEnTeteKey.self) { hauteurEnTete = $0 }
+    }
 
-            menuChampionnat
+    private var titreEtSousTitre: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(championnat.nom)
+                .font(.titre)
+                .tracking(Tracking.titre)
+                .foregroundColor(.texte)        // 15,37:1 sur le beige
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // `grisSecondaire` (4,71:1) et non le `#999999` de la maquette (2,52:1).
+            Text("\(effectif) \(effectif > 1 ? "membres" : "membre") · Saison 2026")
+                .font(.custom("HelveticaNeue", size: 13))
+                .foregroundColor(.grisSecondaire)
+        }
+        .background {
+            GeometryReader { geometrie in
+                Color.clear.preference(key: HauteurEnTeteKey.self, value: geometrie.size.height)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// La photo, carrée (elle est toujours recadrée ainsi à l'envoi — ``RecadrageImageView``,
+    /// `.carre`), sur toute la hauteur du titre et du sous-titre, alignée à droite. Le rayon
+    /// est celui des widgets (``Rayon/widget``, 16 pt) : le design system n'en a pas d'autre
+    /// à ce format, et un écran n'en déclare jamais un à lui (`ios/CLAUDE.md` §3).
+    ///
+    /// `aspectRatio(1, contentMode: .fit)` fige le carré dès le placeholder — sans lui, le
+    /// fond `Color.surface` du chargement, sans forme propre, prendrait toute la largeur
+    /// restante et la photo sauterait à sa taille définitive une fois l'image reçue.
+    private func photoChampionnat(_ url: URL) -> some View {
+        ZStack(alignment: .topTrailing) {
+            AsyncImage(url: url) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Color.surface
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .frame(height: hauteurEnTete)
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.widget, style: .continuous))
+            .accessibilityHidden(true)
+
+            menuSurPhoto
+                .padding(8)
         }
     }
 
@@ -342,33 +378,39 @@ struct ChampionnatDetailView: View {
         return championnat.photoUrl
     }
 
-    /// Les trois points. **Un `Menu` natif** : il s'ouvre depuis son déclencheur et se
-    /// referme vers lui, porte seul l'accessibilité, et range l'action destructive en
-    /// rouge, en dernier — ce que l'utilisateur d'iOS attend sans lire.
+    /// Les trois options du menu — **un seul propriétaire** pour ``menuChampionnat`` et
+    /// ``menuSurPhoto``, qui n'en diffèrent que par leur déclencheur. Range l'action
+    /// destructive en rouge, en dernier — ce que l'utilisateur d'iOS attend sans lire.
     ///
-    /// Renommer viendra avec `PATCH /championnats/{id}` ; la zone tactile fait déjà ses
-    /// 44 × 44 pt, le plancher iOS.
+    /// Renommer viendra avec `PATCH /championnats/{id}`.
+    @ViewBuilder private var optionsChampionnat: some View {
+        Button {
+            codeAffiche = true
+        } label: {
+            Label("Code d'invitation", systemImage: "person.badge.plus")
+        }
+
+        if championnat.estCreateur {
+            Button {
+                selecteurPhoto = true
+            } label: {
+                Label("Modifier la photo", systemImage: "photo")
+            }
+        }
+
+        Button(role: .destructive) {
+            confirmationDepart = true
+        } label: {
+            Label("Quitter le championnat", systemImage: "rectangle.portrait.and.arrow.right")
+        }
+    }
+
+    /// Les trois points, **sans photo** : icône nue sur le beige, comme avant. Un `Menu`
+    /// natif — il s'ouvre depuis son déclencheur et se referme vers lui, porte seul
+    /// l'accessibilité. Zone tactile 44 × 44 pt, le plancher iOS.
     private var menuChampionnat: some View {
         Menu {
-            Button {
-                codeAffiche = true
-            } label: {
-                Label("Code d'invitation", systemImage: "person.badge.plus")
-            }
-
-            if championnat.estCreateur {
-                Button {
-                    selecteurPhoto = true
-                } label: {
-                    Label("Modifier la photo", systemImage: "photo")
-                }
-            }
-
-            Button(role: .destructive) {
-                confirmationDepart = true
-            } label: {
-                Label("Quitter le championnat", systemImage: "rectangle.portrait.and.arrow.right")
-            }
+            optionsChampionnat
         } label: {
             Group {
                 if occupe {
@@ -389,6 +431,34 @@ struct ChampionnatDetailView: View {
         // latérale à droite et le sommet du titre à gauche.
         .padding(.trailing, -10)
         .padding(.top, -6)
+    }
+
+    /// Les trois points, **posés sur la photo** : un disque blanc plutôt qu'une icône nue,
+    /// dont le contraste dépendrait des couleurs de la photo — le même principe que le
+    /// bouton appareil photo de ``ProfilView`` (« un matériau plutôt qu'un voile coloré »).
+    /// 32 pt, dans le coin supérieur droit de la photo. `grisSecondaire` sur blanc tient
+    /// largement 4,5:1, quelle que soit la photo dessous.
+    private var menuSurPhoto: some View {
+        Menu {
+            optionsChampionnat
+        } label: {
+            Group {
+                if occupe {
+                    ProgressView()
+                        .tint(.grisSecondaire)
+                        .scaleEffect(0.8)
+                } else {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.grisSecondaire)
+                }
+            }
+            .frame(width: 32, height: 32)
+            .background(Color.white, in: Circle())
+            .contentShape(Circle())
+        }
+        .disabled(occupe)
+        .accessibilityLabel(envoiPhoto ? "Envoi de la photo" : "Options du championnat")
     }
 
     // MARK: - Le sélecteur
@@ -541,6 +611,17 @@ struct ChampionnatDetailView: View {
         .ombreBloc()
     }
 
+}
+
+// MARK: - La hauteur de l'en-tête
+
+/// La hauteur rendue du titre + sous-titre, remontée à ``ChampionnatDetailView/entete`` pour
+/// que la photo du championnat prenne exactement la même — voir ``ChampionnatDetailView``.
+private struct HauteurEnTeteKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }
 
 // MARK: - Une ligne du classement

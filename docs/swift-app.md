@@ -2219,6 +2219,14 @@ l'avatar bascule sur l'onglet Profil (`BarreNavigation.Onglet`, sélection expli
 > chemin vers les pronostics passe par l'accueil. Les avatars du classement sont des
 > `PastilleProfil` — la photo si le membre en a une, l'initiale sur sa teinte sinon.
 
+> **iOS 0.45.2 — la photo du championnat occupe tout l'en-tête.** 64 × 64 pt fixe jusqu'ici,
+> elle prend désormais la hauteur du bloc titre + sous-titre, mesurée en direct (elle varie
+> avec le nombre de lignes du titre) — carrée, puisque `RecadrageImageView` la recadre déjà
+> ainsi à l'envoi, rayon `Rayon.widget`. Le bouton « ⋯ » se pose sur son coin supérieur
+> droit, en médaillon blanc plutôt qu'en icône nue — le même principe que le badge appareil
+> photo de `ProfilView`, pour rester lisible quelles que soient les couleurs de la photo.
+> Sans photo, il garde sa position d'avant.
+
 
 **Étape 4, statistiques.** **Une seule route pour les deux profils** : `GET /profils/{id}/stats`,
 chargée par `Services/StatistiquesProfil.swift`, possédé par chaque écran (`@StateObject`),
@@ -2261,6 +2269,12 @@ dans `grands_prix` (`Services/ProchainGrandPrix.swift`, `a_venir`/`cotes_figees`
 croissant, inconnu en dernier), silhouette rouge de même hauteur pendant le chargement ;
 aucun GP à venir ⇒ pas de widget (le repli web sur le dernier GP couru n'est pas repris).
 Le widget ne mène aux cotes **que si `cotesArretees`**.
+
+> **iOS 0.45.2 — à venir ou fermé, le widget mène à la fiche du GP.** Il ne poussait rien
+> dans ces deux états. Il pousse désormais `DetailGPView` — le même `NavigationLink` que
+> `CalendrierView` pose sur ses cartes hors « Terminé » —, jamais les cotes : le
+> `GrandPrixEnBase` reçu est reconstitué en `GrandPrixSaison` par son slug, seul format que
+> `DetailGPView` connaît.
 
 **Étape 6, classement de course.** `Services/ResultatsGrandPrix.swift`, possédé par
 `ResultatsGPView` (`@StateObject`), appelle `GET /grands-prix/{id}/resultats` **sans**
