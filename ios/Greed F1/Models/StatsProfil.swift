@@ -55,13 +55,13 @@ extension StatsProfil {
         let juge = pronosticsNotes > 0
         return [
             StatistiqueProfil(valeur: juge ? "\(parisGagnesPct)%" : StatistiqueProfil.absente,
-                              libelle: "Paris gagnés"),
+                              libelle: t("stats.parisGagnes")),
             StatistiqueProfil(valeur: juge ? String(ptsMoyenGp) : StatistiqueProfil.absente,
-                              libelle: "Pts moy. / GP"),
+                              libelle: t("stats.ptsMoyens")),
             StatistiqueProfil(valeur: juge ? String(meilleurCoup) : StatistiqueProfil.absente,
-                              libelle: "Meilleur coup"),
+                              libelle: t("stats.meilleurCoup")),
             StatistiqueProfil(valeur: coteMoyTentee > 0 ? String(coteMoyTentee) : StatistiqueProfil.absente,
-                              libelle: "Cote moy. tentée")
+                              libelle: t("stats.coteMoyenne"))
         ]
     }
 }

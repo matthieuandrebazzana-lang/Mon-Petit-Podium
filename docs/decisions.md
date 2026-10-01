@@ -813,3 +813,32 @@ c'est un changement de règle métier, pas un défaut à corriger ici.
 deux services hors PostgreSQL. Un échec entre les trois étapes de la route laisse un compte
 qui peut encore se reconnecter, sans championnat ni pronostic ; l'appelant reçoit une erreur
 et peut relancer, ce que les trois étapes tolèrent (`app/api/routes/profils.py`).
+
+## 23. La localisation iOS passe par des dictionnaires Swift, pas par des `.strings`
+
+**Décision.** Deux dictionnaires `[String: String]` aux clés identiques
+(`ios/Greed F1/Localisation/Traductions{FR,EN}.swift`), lus par une fonction globale
+`t("clé")`. La langue active appartient à `LanguageManager`, `@Observable` **et**
+`ObservableObject` : injecté au niveau de l'app, mais c'est l'Observation qui fait le
+travail — `t()` lu dans un `body` y inscrit la langue comme dépendance, et chaque vue se
+redessine seule au changement, sans `.id()` qui reconstruirait l'arbre (onglet, pile de
+navigation et données chargées restent en place).
+
+**Raison.** Le choix de langue est **dans l'app** et doit s'appliquer sans redémarrage ;
+`NSLocalizedString` suit la langue du bundle, fixée au lancement. Un dictionnaire Swift se
+vérifie aussi par script (parité des clés, doublons, spécificateurs de format).
+
+**Écarté.** *String Catalog / `.strings`* — langue figée au lancement, et deux sources de
+vérité dès qu'on force la langue. *`.id(langue)` à la racine* — redémarrage déguisé, perte
+de l'onglet et des données.
+
+**Conséquences assumées.** Une clé en double fait planter l'app au lancement (littéral de
+dictionnaire) : la passe de vérification les cherche. Un texte stocké ne suit pas la langue
+— on stocke la clé (`EcheancePronostics.cleLabel`, `Seance.libelle`, `Teinte.nom`). Les
+dates du calendrier statique sont recomposées **en heure locale** depuis le jour et le mois
+écrits, jamais analysées depuis une date nue. Le `detail` d'une erreur du backend reste en
+français : c'est une donnée de l'API. Pour que l'App Store liste les deux langues, `fr` et
+`en` sont déclarés dans `CFBundleLocalizations` et `knownRegions` ; App Store Connect peut
+toutefois exiger un dossier `.lproj` par langue dans le bundle — à vérifier à la première
+soumission.
+

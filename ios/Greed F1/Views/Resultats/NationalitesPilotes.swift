@@ -38,6 +38,12 @@ enum NationalitesPilotes {
         /// L'asset du drapeau — `drapeau-gb`, `drapeau-nl`… Le catalogue les porte tous
         /// les seize ; un code absent de la table n'arrive jamais jusqu'ici.
         var asset: String { "drapeau-\(code.lowercased())" }
+
+        /// Le pays dans la langue de l'interface, tiré du code ISO — ``pays``, écrit en
+        /// français, n'est que le repli.
+        var paysAffiche: String {
+            localeInterface.localizedString(forRegionCode: code.uppercased()) ?? pays
+        }
     }
 
     /// Les vingt-trois pilotes que la saison 2026 a fait courir.

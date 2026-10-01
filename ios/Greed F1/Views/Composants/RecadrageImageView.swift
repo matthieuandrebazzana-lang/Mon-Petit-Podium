@@ -208,7 +208,7 @@ struct RecadrageImageView: View {
             Button {
                 dismiss()
             } label: {
-                Text("Annuler")
+                Text(t("commun.annuler"))
                     .font(.custom("HelveticaNeue-Medium", size: 17))
                     .foregroundColor(.encreSecondaire)
                     .frame(maxWidth: .infinity, minHeight: 52)
@@ -219,7 +219,7 @@ struct RecadrageImageView: View {
                 onValider(resultat)
                 dismiss()
             } label: {
-                Text("Utiliser cette photo")
+                Text(t("recadrage.utiliser"))
                     .font(.custom("HelveticaNeue-Medium", size: 17))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity, minHeight: 52)

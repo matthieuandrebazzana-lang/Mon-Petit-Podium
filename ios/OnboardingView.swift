@@ -23,13 +23,13 @@ struct OnboardingView: View {
                 Spacer()
                     .frame(height: 56)
 
-                Text("Choisis ton pseudo")
+                Text(t("onboarding.titre"))
                     .font(.custom("Helvetica Neue", size: 36))
                     .fontWeight(.bold)
                     .foregroundColor(.black)
                     .padding(.horizontal, 32)
 
-                Text("Il te reste une chose à faire : c'est lui que tes amis verront dans les championnats et les classements.")
+                Text(t("onboarding.texte"))
                     .font(.custom("Helvetica Neue", size: 15))
                     .foregroundColor(.grisSecondaire)
                     .padding(.horizontal, 32)
@@ -40,7 +40,7 @@ struct OnboardingView: View {
 
                 // Card blanche avec le champ — même habillage que InscriptionView.
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("PSEUDO")
+                    Text(t("auth.pseudo"))
                         .font(.custom("Helvetica Neue", size: 12))
                         .fontWeight(.semibold)
                         .foregroundColor(.grisSecondaire)
@@ -89,7 +89,7 @@ struct OnboardingView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
                     } else {
-                        Text("Continuer")
+                        Text(t("commun.continuer"))
                             .font(.custom("Helvetica Neue", size: 18))
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
@@ -107,7 +107,7 @@ struct OnboardingView: View {
                 Button {
                     Task { await viewModel.deconnexion() }
                 } label: {
-                    Text("Se déconnecter")
+                    Text(t("commun.seDeconnecter"))
                         .font(.custom("Helvetica Neue", size: 14))
                         .foregroundColor(.grisSecondaire)
                         .frame(maxWidth: .infinity)

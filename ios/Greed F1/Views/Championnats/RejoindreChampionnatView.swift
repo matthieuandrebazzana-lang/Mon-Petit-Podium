@@ -154,7 +154,7 @@ struct RejoindreChampionnatView: View {
 
     /// La confirmation, à la place exacte où un refus se serait écrit.
     private func bienvenue(_ championnat: Championnat) -> some View {
-        Text("Bienvenue dans « \(championnat.nom) » !")
+        Text(t("rejoindre.bienvenue", championnat.nom))
             .font(.corps)
             .foregroundColor(.texte)                // 15,37:1 sur le beige
             .fixedSize(horizontal: false, vertical: true)
@@ -166,7 +166,7 @@ struct RejoindreChampionnatView: View {
 
     private var titre: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Rejoindre un championnat")
+            Text(t("championnat.rejoindre"))
                 .font(.titre)
                 .tracking(Tracking.titre)
                 .foregroundColor(.texte)            // 15,37:1 sur le beige
@@ -177,7 +177,7 @@ struct RejoindreChampionnatView: View {
             // **`grisSecondaire` et non le `#999999` de la version web** : sur le beige,
             // `#999999` ne vaut que 2,52:1 quand `#6B6B6B` y tient **4,71:1**, le plancher
             // d'un texte ordinaire. Le contraste se mesure (`ios/CLAUDE.md` §3).
-            Text("Entre le code à \(Self.longueurCode) caractères reçu.")
+            Text(t("rejoindre.indication", Self.longueurCode))
                 .font(.corps)
                 .foregroundColor(.grisSecondaire)
                 .fixedSize(horizontal: false, vertical: true)
@@ -189,7 +189,7 @@ struct RejoindreChampionnatView: View {
 
     private var blocCode: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Code d'invitation")
+            Text(t("championnat.codeInvitation"))
                 .font(.label)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
@@ -319,9 +319,9 @@ struct RejoindreChampionnatView: View {
             .onSubmit { saisieActive = false }
             // Rejoint, le code ne se modifie plus : il a servi.
             .disabled(rejoint != nil)
-            .accessibilityLabel("Code d'invitation")
+            .accessibilityLabel(t("championnat.codeInvitation"))
             .accessibilityValue(valeurAccessible)
-            .accessibilityHint("Six caractères, lettres ou chiffres.")
+            .accessibilityHint(t("rejoindre.a11y.aide"))
     }
 
     /// Le lien du champ, qui **filtre en écrivant**.
@@ -346,7 +346,7 @@ struct RejoindreChampionnatView: View {
     /// Le code épelé, caractère par caractère : lu d'une traite, « 7K2P4M » devient un mot
     /// que personne ne peut recopier.
     private var valeurAccessible: String {
-        code.isEmpty ? "Vide" : codeNormalise.map(String.init).joined(separator: " ")
+        code.isEmpty ? t("rejoindre.a11y.vide") : codeNormalise.map(String.init).joined(separator: " ")
     }
 
     /// Lettres et chiffres latins, six au plus. **La casse n'y touche pas** : voir
@@ -389,7 +389,7 @@ struct RejoindreChampionnatView: View {
             NavigationLink {
                 ChampionnatDetailView(championnat: rejoint, mesChampionnats: mesChampionnats)
             } label: {
-                Text("Voir le championnat")
+                Text(t("championnat.voir"))
                     .habillageBoutonPrincipal(actif: true)
             }
             .buttonStyle(StyleAppui(.bouton))
@@ -404,14 +404,14 @@ struct RejoindreChampionnatView: View {
             ZStack {
                 // Le libellé reste en place, invisible, sous le spinner : le bouton ne
                 // change pas de taille, et le texte revient à l'identique en cas d'échec.
-                Text("Rejoindre le championnat").opacity(envoi ? 0 : 1)
+                Text(t("rejoindre.bouton")).opacity(envoi ? 0 : 1)
                 if envoi { ProgressView().tint(.white) }
             }
             .habillageBoutonPrincipal(actif: codeComplet)
         }
         .buttonStyle(StyleAppui(.bouton))
         .disabled(!codeComplet || envoi)
-        .accessibilityLabel(envoi ? "Adhésion en cours" : "Rejoindre le championnat")
+        .accessibilityLabel(envoi ? t("rejoindre.a11y.enCours") : t("rejoindre.bouton"))
         // Couleur et opacité seulement, jamais une géométrie : rien ne bouge sous le doigt,
         // et le repli `accessibilityReduceMotion` est donc inutile ici.
         .animation(Mouvement.entree(0.18), value: codeComplet)

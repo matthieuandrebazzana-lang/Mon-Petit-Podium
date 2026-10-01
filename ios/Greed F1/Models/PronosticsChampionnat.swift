@@ -43,7 +43,7 @@ struct GrandPrixDuChampionnat: Decodable, Identifiable, Equatable, Hashable {
         let court = nom.replacingOccurrences(of: #"^GP\s+"#, with: "",
                                              options: [.regularExpression, .caseInsensitive])
             .trimmingCharacters(in: .whitespaces)
-        return court.isEmpty ? "Grand Prix" : court
+        return court.isEmpty ? t("commun.grandPrix") : court
     }
 }
 
@@ -228,6 +228,6 @@ struct PronosticMembre: Decodable, Identifiable, Equatable {
             let deux = [podium.nom1, podium.nom2].compactMap { $0 }
             if !deux.isEmpty { return deux.joined(separator: " + ") }
         }
-        return pilote ?? "Cote retirée par le bookmaker"
+        return pilote ?? t("pronostic.coteRetiree")
     }
 }

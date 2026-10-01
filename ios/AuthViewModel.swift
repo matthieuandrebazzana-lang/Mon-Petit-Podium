@@ -107,7 +107,7 @@ final class AuthViewModel: ObservableObject {
             // Inscription réussie — vérifier la session.
             await verifierSession()
         } catch {
-            messageErreur = "Erreur lors de l'inscription : \(error.localizedDescription)"
+            messageErreur = t("auth.erreur.inscription", error.localizedDescription)
         }
         
         estEnChargement = false
@@ -126,7 +126,7 @@ final class AuthViewModel: ObservableObject {
             estConnecte = true
             await chargerProfil(id: session.user.id)
         } catch {
-            messageErreur = "Erreur de connexion : \(error.localizedDescription)"
+            messageErreur = t("auth.erreur.connexion", error.localizedDescription)
         }
         
         estEnChargement = false
@@ -156,7 +156,7 @@ final class AuthViewModel: ObservableObject {
                 && erreur.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
             // L'utilisateur a fermé la fenêtre de connexion : ni erreur, ni action.
         } catch {
-            messageErreur = "Connexion impossible. Réessaie."
+            messageErreur = t("auth.erreur.oauth")
         }
 
         estEnChargement = false
@@ -176,7 +176,7 @@ final class AuthViewModel: ObservableObject {
         messageErreur = nil
 
         guard let id = try? await supabase.auth.session.user.id else {
-            messageErreur = "Session expirée. Reconnecte-toi."
+            messageErreur = t("auth.erreur.session")
             estEnChargement = false
             return false
         }
@@ -191,9 +191,9 @@ final class AuthViewModel: ObservableObject {
             estEnChargement = false
             return true
         } catch let erreur as PostgrestError where erreur.code == "23505" {
-            messageErreur = "Ce pseudo est déjà pris. Choisis-en un autre."
+            messageErreur = t("auth.erreur.pseudoPris")
         } catch {
-            messageErreur = "Une erreur est survenue. Réessaie."
+            messageErreur = t("commun.erreurGenerique")
         }
 
         estEnChargement = false
@@ -299,7 +299,7 @@ final class AuthViewModel: ObservableObject {
             try await supabase.auth.signOut()
             oublierCompte()
         } catch {
-            messageErreur = "Erreur lors de la déconnexion : \(error.localizedDescription)"
+            messageErreur = t("auth.erreur.deconnexion", error.localizedDescription)
         }
         
         estEnChargement = false

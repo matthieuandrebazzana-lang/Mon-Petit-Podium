@@ -102,7 +102,7 @@ struct EnteteProfil<Avatar: View>: View {
                 // composité sur `primaire` donne #D9B3B8, soit 4,47:1 — sous le plancher
                 // de 4,5:1 d'un texte ordinaire. À 70 % il y tient 5,75:1, pour un gris que
                 // l'œil ne distingue pas du premier (`ios/CLAUDE.md` §3).
-                Text("Saison 2026")
+                Text(t("commun.saison2026"))
                     .font(.corpsSm)
                     .foregroundColor(.encreSecondaire)
             }
@@ -146,12 +146,14 @@ struct StatistiqueProfil: Identifiable, Equatable {
 
     /// Les quatre tuiles avant toute lecture : la grille garde sa place pendant le
     /// chargement, et rien ne saute quand les chiffres arrivent.
-    static let enAttente: [StatistiqueProfil] = [
-        StatistiqueProfil(valeur: absente, libelle: "Paris gagnés"),
-        StatistiqueProfil(valeur: absente, libelle: "Pts moy. / GP"),
-        StatistiqueProfil(valeur: absente, libelle: "Meilleur coup"),
-        StatistiqueProfil(valeur: absente, libelle: "Cote moy. tentée")
-    ]
+    static var enAttente: [StatistiqueProfil] {
+        [
+            StatistiqueProfil(valeur: absente, libelle: t("stats.parisGagnes")),
+            StatistiqueProfil(valeur: absente, libelle: t("stats.ptsMoyens")),
+            StatistiqueProfil(valeur: absente, libelle: t("stats.meilleurCoup")),
+            StatistiqueProfil(valeur: absente, libelle: t("stats.coteMoyenne"))
+        ]
+    }
 }
 
 /// La grille branchée sur ``StatistiquesProfil`` — **un seul bloc pour les deux profils** :
@@ -178,7 +180,7 @@ struct BlocStatistiques: View {
                         .tint(.primaire)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Chargement des statistiques")
+                .accessibilityLabel(t("profil.a11y.chargementStats"))
 
         case .pret(let stats):
             GrilleStatistiques(statistiques: stats.tuiles)
@@ -301,7 +303,7 @@ extension StatsProfil {
     /// Le sous-titre de ``LigneGrandsPrix`` — la saison seule tant que rien n'est joué,
     /// plutôt qu'un « 0 GP joué » qui se lirait comme un bilan.
     static func sousTitreGrandsPrix(joues: Int?) -> String {
-        guard let joues, joues > 0 else { return "Saison 2026" }
-        return "\(joues) \(joues > 1 ? "GP joués" : "GP joué") cette saison"
+        guard let joues, joues > 0 else { return t("commun.saison2026") }
+        return tp("profil.gpJouesSaison", joues)
     }
 }

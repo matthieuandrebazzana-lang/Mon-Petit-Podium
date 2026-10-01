@@ -17,8 +17,10 @@ import SwiftUI
 /// **Une seule carte ouverte à la fois** : en ouvrir une referme la précédente.
 struct HistoriqueGPView: View {
 
-    /// « Ses Grands Prix », ou « Mes Grands Prix » depuis son propre profil.
-    var titre = "Ses Grands Prix"
+    /// « Ses Grands Prix », ou « Mes Grands Prix » depuis son propre profil. `nil` vaut
+    /// « Ses Grands Prix », relu dans la langue de l'interface.
+    var titreRecu: String?
+    private var titre: String { titreRecu ?? t("profil.sesGrandsPrix") }
 
     /// Rang au classement du championnat d'où l'on vient ; `nil` depuis son propre profil.
     var rang: Int?
@@ -34,9 +36,9 @@ struct HistoriqueGPView: View {
     /// - Parameters:
     ///   - profilId: le membre ; `nil` = le compte connecté.
     ///   - championnatId: un championnat partagé ; `nil` = le premier des miens.
-    init(titre: String = "Ses Grands Prix", profilId: UUID? = nil,
+    init(titre: String? = nil, profilId: UUID? = nil,
          championnatId: UUID? = nil, rang: Int? = nil) {
-        self.titre = titre
+        self.titreRecu = titre
         self.rang = rang
         _donnees = StateObject(wrappedValue: GrandsPrixJoues(profilId: profilId,
                                                              championnatId: championnatId))
@@ -77,7 +79,7 @@ struct HistoriqueGPView: View {
             ProgressView()
                 .tint(.secondaire)
                 .frame(maxWidth: .infinity, minHeight: 160)
-                .accessibilityLabel("Chargement des Grands Prix")
+                .accessibilityLabel(t("parGP.a11y.chargementGP"))
 
         case .echec(let erreur):
             EchecChargement(erreur: erreur) {
@@ -85,12 +87,12 @@ struct HistoriqueGPView: View {
             }
 
         case .sansChampionnat:
-            messageVide("Rejoins un championnat pour retrouver tes Grands Prix ici.")
+            messageVide(t("historique.videAucunChampionnat"))
 
         case .pret(let liste) where liste.isEmpty:
             resumeSaison
             Spacer().frame(height: 24)
-            messageVide("Aucun Grand Prix terminé joué pour l'instant.")
+            messageVide(t("historique.videAucunGP"))
 
         case .pret:
             resumeSaison
@@ -139,8 +141,8 @@ struct HistoriqueGPView: View {
     }
 
     private var sousTitre: String {
-        guard case .pret = donnees.etat else { return "Saison 2026" }
-        return "Saison 2026 · \(joues) \(joues > 1 ? "GP joués" : "GP joué")"
+        guard case .pret = donnees.etat else { return t("commun.saison2026") }
+        return tp("historique.gpJoues", joues)
     }
 
     private var joues: Int { grandsPrix.count }
@@ -156,7 +158,7 @@ struct HistoriqueGPView: View {
     private var resumeSaison: some View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Total saison")
+                Text(t("historique.totalSaison"))
                     .font(.label)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)
@@ -173,7 +175,7 @@ struct HistoriqueGPView: View {
 
                 Spacer().frame(height: 4)
 
-                Text("\(reussis) prono\(reussis > 1 ? "s" : "") réussi\(reussis > 1 ? "s" : "")")
+                Text(tp("historique.pronosReussis", reussis))
                     .font(.custom("HelveticaNeue", size: 12))
                     .foregroundColor(.encreSecondaire)
             }
@@ -181,13 +183,13 @@ struct HistoriqueGPView: View {
 
             if let rang {
                 VStack(spacing: 2) {
-                    Text(rang == 1 ? "1er" : "\(rang)e")
+                    Text(ordinal(rang))
                         .font(.custom("HelveticaNeue-Medium", size: 26))
                         .foregroundColor(.white)
                     // **Blanc 70 % et non 50 %** : sur la pastille (blanc 15 % sur le
                     // bordeaux), 50 % ne tient que 3,15:1 — sous le plancher de 4,5:1 d'un
                     // texte de 10 pt. 70 % y tient 4,76:1.
-                    Text("Classement")
+                    Text(t("championnat.classement"))
                         .font(.labelSm)
                         .tracking(Tracking.label)
                         .textCase(.uppercase)
@@ -211,9 +213,9 @@ struct HistoriqueGPView: View {
     private var reussis: Int { grandsPrix.map(\.reussis).reduce(0, +) }
 
     private var libelleResume: String {
-        var libelle = "Total saison, \(totalPoints ?? 0) points, "
-            + "\(reussis) pronostic\(reussis > 1 ? "s" : "") réussi\(reussis > 1 ? "s" : "")."
-        if let rang { libelle += " \(rang == 1 ? "1er" : "\(rang)e") au classement." }
+        var libelle = t("historique.a11y.total", tp("classement.a11y.points", totalPoints ?? 0),
+                        tp("classement.a11y.reussis", reussis))
+        if let rang { libelle += t("historique.a11y.rang", ordinal(rang)) }
         return libelle
     }
 }
@@ -241,7 +243,7 @@ private struct CarteGrandPrixJoue: View {
                 .buttonStyle(StyleAppui(.grandeSurface))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(libelleAccessible)
-                .accessibilityValue(ouvert ? "Déplié" : "Replié")
+                .accessibilityValue(ouvert ? t("commun.deplie") : t("commun.replie"))
                 .accessibilityAddTraits(.isButton)
 
             if ouvert {
@@ -267,7 +269,7 @@ private struct CarteGrandPrixJoue: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
                             .ombreTexteDrapeau()
-                        Text(gp.fiche?.date ?? "")
+                        Text(gp.fiche?.dateAffichee ?? "")
                             .font(.custom("HelveticaNeue", size: 13))
                             .foregroundColor(.white)
                             .lineLimit(1)
@@ -281,7 +283,7 @@ private struct CarteGrandPrixJoue: View {
                 Spacer(minLength: 0)
 
                 HStack(alignment: .lastTextBaseline, spacing: 12) {
-                    Text("\(gp.reussis)/\(gp.pronostics.count) pronos réussis")
+                    Text(tp("historique.reussisSur", gp.pronostics.count, gp.reussis))
                         .font(.custom("HelveticaNeue-Medium", size: 14))
                         .foregroundColor(.white)
                         .lineLimit(1)
@@ -293,7 +295,7 @@ private struct CarteGrandPrixJoue: View {
                             .font(.custom("HelveticaNeue-Medium", size: 34))
                             .tracking(-0.85)              // grand chiffre : −0,025em × 34
                             .foregroundColor(.white)
-                        Text("pts")
+                        Text(t("points.unite"))
                             .font(.custom("HelveticaNeue", size: 14))
                             .foregroundColor(.white)
                     }
@@ -323,7 +325,7 @@ private struct CarteGrandPrixJoue: View {
     /// définitif (24 h après la course) : même pastille, même encre sur le drapeau voilé,
     /// seul le mot change.
     private var badgeStatut: some View {
-        Text(gp.provisoire ? StatutResultats.mention : "Terminé")
+        Text(gp.provisoire ? StatutResultats.mention : EtatGp.termine.libelle)
             .font(.custom("HelveticaNeue", size: 11))
             .foregroundColor(.white)
             .lineLimit(1)
@@ -372,8 +374,9 @@ private struct CarteGrandPrixJoue: View {
     }
 
     private var libelleAccessible: String {
-        "\(gp.fiche?.nom ?? gp.nom), \(gp.fiche?.date ?? ""), terminé. "
-            + "\(gp.totalPoints ?? 0) points, \(gp.reussis) sur \(gp.pronostics.count) pronostics réussis."
+        t("historique.a11y.carte", gp.fiche?.nom ?? gp.nom, gp.fiche?.dateAffichee ?? "",
+          tp("classement.a11y.points", gp.totalPoints ?? 0),
+          tp("historique.a11y.reussisSur", gp.pronostics.count, gp.reussis))
     }
 
     // MARK: La partie basse
@@ -388,7 +391,7 @@ private struct CarteGrandPrixJoue: View {
             .padding(.top, 16)
 
             if !bonus.isEmpty {
-                titreSection("Bonus")
+                titreSection(t("recap.bonus"))
 
                 VStack(spacing: 12) {
                     ForEach(bonus) { RangeeHistorique(pronostic: $0) }
@@ -398,7 +401,7 @@ private struct CarteGrandPrixJoue: View {
             }
 
             if gp.podium.count == 3 {
-                titreSection("Résultat réel")
+                titreSection(t("historique.resultatReel"))
 
                 HStack(spacing: 8) {
                     ForEach(Array(gp.podium.enumerated()), id: \.offset) { index, pilote in
@@ -468,15 +471,15 @@ private struct RangeeHistorique: View {
             Verdict(pointsGagnes: pronostic.pointsGagnes, nonEvaluable: pronostic.nonEvaluable)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(pronostic.marche), \(pronostic.choix), \(verdict)")
+        .accessibilityLabel(t("resultats.a11y.pronostic", pronostic.marche, pronostic.choix, verdict))
     }
 
     private var verdict: String {
-        if pronostic.nonEvaluable { return "non évaluable" }
+        if pronostic.nonEvaluable { return t("parGP.a11y.nonEvaluable") }
         guard let gagnes = pronostic.pointsGagnes else {
-            return "en attente, \(pronostic.points ?? 0) points en jeu"
+            return tp("parGP.a11y.enAttente", pronostic.points ?? 0)
         }
-        return gagnes > 0 ? "gagné, \(gagnes) points" : "raté"
+        return gagnes > 0 ? tp("parGP.a11y.gagne", gagnes) : t("parGP.a11y.rate")
     }
 }
 
@@ -489,7 +492,7 @@ private struct TuilePodium: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(position == 1 ? "1er" : "\(position)e")
+            Text(ordinal(position))
                 .font(.labelSm)
                 .tracking(Tracking.label)
                 .foregroundColor(.secondaire)
@@ -513,7 +516,7 @@ private struct TuilePodium: View {
         .background(position == 1 ? Color.ambreClair : Color.fondPrincipal)
         .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(position == 1 ? "1er" : "\(position)e"), \(pilote.prenom) \(pilote.nom), \(pilote.equipe ?? "")")
+        .accessibilityLabel("\(ordinal(position)), \(pilote.prenom) \(pilote.nom), \(pilote.equipe ?? "")")
     }
 }
 

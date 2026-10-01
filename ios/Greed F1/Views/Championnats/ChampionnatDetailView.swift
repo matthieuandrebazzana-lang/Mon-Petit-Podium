@@ -120,7 +120,7 @@ struct ChampionnatDetailView: View {
                         ProgressView()
                             .tint(.secondaire)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .accessibilityLabel("Chargement du classement")
+                            .accessibilityLabel(t("championnat.a11y.chargementClassement"))
 
                     case .echec(let erreur):
                         EchecChargement(erreur: erreur) {
@@ -164,7 +164,7 @@ struct ChampionnatDetailView: View {
         // > **iOS 17 et 18**, la cible de déploiement, où le bouton l'affiche ; sans
         // > l'élément principal vide, ces deux versions gagneraient le libellé mais iOS 26
         // > hériterait d'un « Classement » centré en doublon du nom juste dessous.
-        .navigationTitle("Classement")
+        .navigationTitle(t("championnat.classement"))
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Color.clear.frame(width: 0, height: 0)
@@ -175,17 +175,17 @@ struct ChampionnatDetailView: View {
         .sheet(isPresented: $codeAffiche) {
             FeuilleCodeInvitation(championnat: championnat)
         }
-        .alert("Quitter « \(championnat.nom) » ?", isPresented: $confirmationDepart) {
-            Button("Quitter", role: .destructive) { quitter() }
-            Button("Annuler", role: .cancel) {}
+        .alert(t("championnat.quitterTitre", championnat.nom), isPresented: $confirmationDepart) {
+            Button(t("championnat.quitter"), role: .destructive) { quitter() }
+            Button(t("commun.annuler"), role: .cancel) {}
         } message: {
-            Text("Tu disparais du classement. Pour revenir, il te faudra de nouveau le code d'invitation.")
+            Text(t("championnat.quitterMessage"))
         }
-        .alert("Impossible de quitter le championnat",
+        .alert(t("championnat.quitterImpossible"),
                isPresented: Binding(get: { erreurDepart != nil },
                                     set: { if !$0 { erreurDepart = nil } }),
                presenting: erreurDepart) { _ in
-            Button("OK", role: .cancel) {}
+            Button(t("commun.ok"), role: .cancel) {}
         } message: { erreur in
             Text(erreur.message)
         }
@@ -205,11 +205,11 @@ struct ChampionnatDetailView: View {
                 }
             }
         }
-        .alert("Impossible de changer la photo",
+        .alert(t("championnat.photoImpossible"),
                isPresented: Binding(get: { erreurPhoto != nil },
                                     set: { if !$0 { erreurPhoto = nil } }),
                presenting: erreurPhoto) { _ in
-            Button("OK", role: .cancel) {}
+            Button(t("commun.ok"), role: .cancel) {}
         } message: { erreur in
             Text(erreur.message)
         }
@@ -225,7 +225,7 @@ struct ChampionnatDetailView: View {
                 let donnees = try? await choix.loadTransferable(type: Data.self),
                 let image = UIImage(data: donnees)
             else {
-                erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+                erreurPhoto = .serveur(statut: nil, message: t("photo.illisible"))
                 return
             }
             imageACadrer = image
@@ -245,7 +245,7 @@ struct ChampionnatDetailView: View {
         Task {
             defer { envoiPhoto = false }
             guard let donnees = image.jpegData(compressionQuality: 0.9) else {
-                erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+                erreurPhoto = .serveur(statut: nil, message: t("photo.illisible"))
                 return
             }
             do {
@@ -260,7 +260,7 @@ struct ChampionnatDetailView: View {
                 erreurPhoto = erreur
                 return
             } catch {
-                erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+                erreurPhoto = .serveur(statut: nil, message: t("photo.illisible"))
                 return
             }
             await mesChampionnats.charger(forcer: true)
@@ -328,7 +328,7 @@ struct ChampionnatDetailView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             // `grisSecondaire` (4,71:1) et non le `#999999` de la maquette (2,52:1).
-            Text("\(effectif) \(effectif > 1 ? "membres" : "membre") · Saison 2026")
+            Text(tp("championnat.membresSaison", effectif))
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
         }
@@ -393,21 +393,21 @@ struct ChampionnatDetailView: View {
         Button {
             codeAffiche = true
         } label: {
-            Label("Code d'invitation", systemImage: "person.badge.plus")
+            Label(t("championnat.codeInvitation"), systemImage: "person.badge.plus")
         }
 
         if championnat.estCreateur {
             Button {
                 selecteurPhoto = true
             } label: {
-                Label("Modifier la photo", systemImage: "photo")
+                Label(t("championnat.modifierPhoto"), systemImage: "photo")
             }
         }
 
         Button(role: .destructive) {
             confirmationDepart = true
         } label: {
-            Label("Quitter le championnat", systemImage: "rectangle.portrait.and.arrow.right")
+            Label(t("championnat.quitterLeChampionnat"), systemImage: "rectangle.portrait.and.arrow.right")
         }
     }
 
@@ -433,7 +433,7 @@ struct ChampionnatDetailView: View {
             .contentShape(Rectangle())
         }
         .disabled(occupe)
-        .accessibilityLabel(envoiPhoto ? "Envoi de la photo" : "Options du championnat")
+        .accessibilityLabel(envoiPhoto ? t("championnat.a11y.envoiPhoto") : t("championnat.a11y.options"))
     }
 
     /// Les trois points, **sans photo** : décalé pour que son cadre de 44 pt ne dépasse pas
@@ -475,7 +475,7 @@ struct ChampionnatDetailView: View {
             .contentShape(Capsule())
         }
         .disabled(occupe)
-        .accessibilityLabel(envoiPhoto ? "Envoi de la photo" : "Options du championnat")
+        .accessibilityLabel(envoiPhoto ? t("championnat.a11y.envoiPhoto") : t("championnat.a11y.options"))
     }
 
     // MARK: - Le sélecteur
@@ -484,9 +484,9 @@ struct ChampionnatDetailView: View {
     /// même objet », et il porte seul l'accessibilité, le retour d'appui et le glissement
     /// de la pastille. Rien ici ne le redessine.
     private var selecteur: some View {
-        Picker("Affichage", selection: $vue) {
-            Text("Classement").tag(Vue.classement)
-            Text("Piste").tag(Vue.piste)
+        Picker(t("championnat.affichage"), selection: $vue) {
+            Text(t("championnat.classement")).tag(Vue.classement)
+            Text(t("championnat.piste")).tag(Vue.piste)
         }
         .pickerStyle(.segmented)
     }
@@ -530,10 +530,10 @@ struct ChampionnatDetailView: View {
                 TuileDrapeauDamier()
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Résultats par Grand Prix")
+                    Text(t("championnat.resultatsParGP"))
                         .font(.custom("HelveticaNeue-Medium", size: 15))
                         .foregroundColor(.texte)                 // 15,37:1 sur le blanc
-                    Text("Les paris de chaque membre, course par course")
+                    Text(t("championnat.resultatsParGPSousTitre"))
                         .font(.custom("HelveticaNeue", size: 12))
                         .foregroundColor(.grisSecondaire)        // 5,33:1 sur le blanc
                         .lineLimit(1)
@@ -581,7 +581,7 @@ struct ChampionnatDetailView: View {
         NavigationLink {
             VuePisteView(championnat: championnat, membres: membres)
         } label: {
-            Text("Vue piste")
+            Text(t("championnat.vuePiste"))
                 .font(.custom("HelveticaNeue-Medium", size: 18))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -647,9 +647,9 @@ private struct LigneClassement: View {
     /// « aucun », et « meilleur coup 0 pts » le confondrait avec un coup raté
     /// (`CLAUDE.md` §3.1).
     private var detail: String {
-        let reussis = "\(membre.pronosticsReussis) \(membre.pronosticsReussis > 1 ? "réussis" : "réussi")"
+        let reussis = tp("classement.reussis", membre.pronosticsReussis)
         guard let meilleur = membre.meilleureCote else { return reussis }
-        return "\(reussis) · meilleur coup \(meilleur) pts"
+        return t("classement.reussisMeilleurCoup", reussis, meilleur)
     }
 
     var body: some View {
@@ -685,9 +685,10 @@ private struct LigneClassement: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(membre.rang)\(membre.rang == 1 ? "er" : "e") sur \(total), \(membre.pseudo), "
-            + "\(membre.totalPoints) points, \(membre.pronosticsReussis) pronostics réussis"
-            + (membre.meilleureCote.map { ", meilleur coup \($0) points." } ?? ".")
+            t("classement.a11y.ligne", ordinal(membre.rang), total, membre.pseudo,
+              tp("classement.a11y.points", membre.totalPoints),
+              tp("classement.a11y.reussis", membre.pronosticsReussis))
+            + (membre.meilleureCote.map { t("classement.a11y.meilleurCoup", $0) } ?? ".")
         )
     }
 
@@ -736,7 +737,7 @@ private struct LigneClassement: View {
                 .foregroundColor(.primaire)                   // 10,88:1 sur le blanc
                 .lineLimit(1)
 
-            Text("pts")
+            Text(t("points.unite"))
                 .font(.labelSm)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
@@ -769,7 +770,7 @@ private struct WidgetGrandPrixSuivant: View {
     var body: some View {
         aplat
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Prochain Grand Prix : \(nom). \(echeance).")
+            .accessibilityLabel(t("championnat.a11y.prochainGP", nom, echeance))
     }
 
     private var aplat: some View {
@@ -823,7 +824,7 @@ private struct FeuilleCodeInvitation: View {
     var body: some View {
         VStack(spacing: 20) {
             VStack(spacing: 6) {
-                Text("Code d'invitation")
+                Text(t("championnat.codeInvitation"))
                     .font(.label)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)
@@ -836,7 +837,7 @@ private struct FeuilleCodeInvitation: View {
                     .textSelection(.enabled)
                     .accessibilityLabel(championnat.codeInvitation.map(String.init).joined(separator: " "))
 
-                Text("Partage-le pour qu'on rejoigne « \(championnat.nom) ».")
+                Text(t("championnat.partageIndication", championnat.nom))
                     .font(.corpsSm)
                     .foregroundColor(.grisSecondaire)
                     .multilineTextAlignment(.center)
@@ -845,8 +846,8 @@ private struct FeuilleCodeInvitation: View {
 
             // La même phrase que l'écran « Créer » : l'ami la reçoit à l'identique, d'où
             // qu'on la lui envoie.
-            ShareLink(item: "Rejoins mon championnat « \(championnat.nom) » sur Greed F1 avec le code \(championnat.codeInvitation).") {
-                Label("Partager", systemImage: "square.and.arrow.up")
+            ShareLink(item: t("championnat.messagePartage", championnat.nom, championnat.codeInvitation)) {
+                Label(t("commun.partager"), systemImage: "square.and.arrow.up")
                     .habillageBoutonPrincipal(actif: true)
             }
             .buttonStyle(StyleAppui(.bouton))
@@ -909,11 +910,11 @@ extension Membre {
             numero: numeroAffiche,
             grandsPrixJoues: nil,
             statistiques: [
-                StatistiqueProfil(valeur: StatistiqueProfil.absente, libelle: "Paris gagnés"),
-                StatistiqueProfil(valeur: StatistiqueProfil.absente, libelle: "Pts moy. / GP"),
+                StatistiqueProfil(valeur: StatistiqueProfil.absente, libelle: t("stats.parisGagnes")),
+                StatistiqueProfil(valeur: StatistiqueProfil.absente, libelle: t("stats.ptsMoyens")),
                 StatistiqueProfil(valeur: meilleureCote.map(String.init) ?? StatistiqueProfil.absente,
-                                  libelle: "Meilleur coup"),
-                StatistiqueProfil(valeur: StatistiqueProfil.absente, libelle: "Cote moy. tentée")
+                                  libelle: t("stats.meilleurCoup")),
+                StatistiqueProfil(valeur: StatistiqueProfil.absente, libelle: t("stats.coteMoyenne"))
             ]
         )
     }
@@ -963,10 +964,10 @@ struct MembreMock: Identifiable {
             numero: numero,
             grandsPrixJoues: grandsPrixJoues,
             statistiques: [
-                StatistiqueProfil(valeur: "\(pourcentageReussite)%", libelle: "Paris gagnés"),
-                StatistiqueProfil(valeur: String(pointsMoyensParGrandPrix), libelle: "Pts moy. / GP"),
-                StatistiqueProfil(valeur: String(meilleurCoup), libelle: "Meilleur coup"),
-                StatistiqueProfil(valeur: String(moyenneTentee), libelle: "Cote moy. tentée")
+                StatistiqueProfil(valeur: "\(pourcentageReussite)%", libelle: t("stats.parisGagnes")),
+                StatistiqueProfil(valeur: String(pointsMoyensParGrandPrix), libelle: t("stats.ptsMoyens")),
+                StatistiqueProfil(valeur: String(meilleurCoup), libelle: t("stats.meilleurCoup")),
+                StatistiqueProfil(valeur: String(moyenneTentee), libelle: t("stats.coteMoyenne"))
             ]
         )
     }

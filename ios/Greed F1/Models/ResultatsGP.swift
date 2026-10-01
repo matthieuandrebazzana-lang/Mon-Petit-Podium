@@ -116,9 +116,9 @@ struct LigneResultat: Decodable, Equatable, Identifiable {
     /// « Disqualifié », « Non partant », « Abandon » — ou rien. **Un seul mot** : l'ordre
     /// est celui de la gravité, un disqualifié a d'abord été classé.
     var mention: String? {
-        if disqualifie { return "Disqualifié" }
-        if nonPartant { return "Non partant" }
-        if abandon { return "Abandon" }
+        if disqualifie { return t("resultats.disqualifie") }
+        if nonPartant { return t("resultats.nonPartant") }
+        if abandon { return t("resultats.abandon") }
         return nil
     }
 

@@ -18,22 +18,17 @@ enum FichesGrandPrix {
     /// Une séance du week-end. `cle` suit `SEANCES` côté web, qui en fixe aussi l'ordre.
     struct Seance: Identifiable {
         let cle: String
-        let libelle: String
         let instant: Date?
         var id: String { cle }
+        /// Le nom de la séance dans la langue de l'interface — relu à chaque affichage.
+        var libelle: String { t("seance.\(cle)") }
     }
 
     /// L'ordre des sept séances possibles — `SEANCES` côté web. **Le format du week-end
     /// vient des clés présentes, jamais d'un réglage** : Singapour, seul week-end sprint,
     /// n'a simplement pas d'`el2` ni d'`el3`.
-    private static let ordre: [(cle: String, libelle: String)] = [
-        ("el1", "Essais Libres 1"),
-        ("el2", "Essais Libres 2"),
-        ("qualifications_sprint", "Qualifications Sprint"),
-        ("el3", "Essais Libres 3"),
-        ("sprint", "Sprint"),
-        ("qualifications", "Qualifications"),
-        ("course", "Course")
+    private static let ordre: [String] = [
+        "el1", "el2", "qualifications_sprint", "el3", "sprint", "qualifications", "course"
     ]
 
     /// Instants UTC, recopiés de `GP_2026`.
@@ -84,11 +79,11 @@ enum FichesGrandPrix {
         let iso = ISO8601DateFormatter()
         guard let table = horaires[slug] else {
             let ordinaire: Set = ["el1", "el2", "el3", "qualifications", "course"]
-            return ordre.filter { ordinaire.contains($0.cle) }
-                .map { Seance(cle: $0.cle, libelle: $0.libelle, instant: nil) }
+            return ordre.filter { ordinaire.contains($0) }
+                .map { Seance(cle: $0, instant: nil) }
         }
-        return ordre.filter { table[$0.cle] != nil }.map {
-            Seance(cle: $0.cle, libelle: $0.libelle, instant: table[$0.cle].flatMap(iso.date(from:)))
+        return ordre.filter { table[$0] != nil }.map {
+            Seance(cle: $0, instant: table[$0].flatMap(iso.date(from:)))
         }
     }
 
@@ -111,6 +106,12 @@ enum FichesGrandPrix {
         /// Code ISO 3166-1 alpha-2, en minuscules — il nomme l'asset `drapeau-<code>`.
         let code: String
         var id: Int { annee }
+
+        /// La nationalité dans la langue de l'interface, tirée du code ISO — ``pays``, écrit
+        /// en français, n'est que le repli.
+        var paysAffiche: String {
+            localeInterface.localizedString(forRegionCode: code.uppercased()) ?? pays
+        }
 
         /// Le drapeau de nationalité, le même catalogue que le classement des résultats.
         var drapeau: String { "drapeau-\(code)" }

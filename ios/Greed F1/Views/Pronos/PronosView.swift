@@ -115,7 +115,7 @@ struct PronosView: View {
 
     private var titre: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Mes pronos")
+            Text(t("pronos.titre"))
                 .font(.titre)
                 .tracking(Tracking.titre)
                 .foregroundColor(.texte)            // 15,37:1 sur le beige
@@ -133,12 +133,12 @@ struct PronosView: View {
         BlocEcheance(horaires: lu.gp.horaires)
 
         Spacer().frame(height: 24)   // changement de sujet (§4.6)
-        titreSection("Obligatoires")
+        titreSection(t("pronos.obligatoires"))
 
         if lu.gp.marche(MarcheCote.vainqueur.slug) == nil || lu.gp.marche(MarcheCote.podium.slug) == nil {
             // Le serveur refuserait tout pronostic : le dire avant qu'on remplisse.
             Spacer().frame(height: 10)
-            Text("Les cotes « Vainqueur » et « Podium » ne sont pas encore publiées pour ce Grand Prix.")
+            Text(t("pronos.obligatoiresAbsents"))
                 .font(.corps)
                 .foregroundColor(.secondaire)           // 9,32:1 sur le beige
                 .fixedSize(horizontal: false, vertical: true)
@@ -193,7 +193,7 @@ struct PronosView: View {
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Mes paris bonus")
+                Text(t("pronos.mesBonus"))
                     .font(.label)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)
@@ -206,7 +206,7 @@ struct PronosView: View {
                         .font(.custom("HelveticaNeue-Medium", size: 12))
                         .foregroundColor(.primaire)
                         .contentTransition(.numericText())
-                    Text(" sur \(CotesView.bonusMaximum) max")
+                    Text(t("pronos.surMax", CotesView.bonusMaximum))
                         .font(.custom("HelveticaNeue", size: 12))
                         .foregroundColor(.grisSecondaire)
                 }
@@ -239,11 +239,11 @@ struct PronosView: View {
                 .foregroundColor(.secondaire.opacity(0.60))   // 3,40:1 sur le blanc
                 .accessibilityHidden(true)
 
-            Text("Aucun pari bonus pour l'instant")
+            Text(t("pronos.aucunBonus"))
                 .font(.corps)
                 .foregroundColor(.texte)
 
-            Text("Ils se choisissent parmi les cotes épinglées au tableau des cotes, avec l'étoile.")
+            Text(t("pronos.aucunBonusDetail"))
                 .font(.corpsSm)
                 .foregroundColor(.grisSecondaire)
                 .multilineTextAlignment(.center)
@@ -275,7 +275,7 @@ struct PronosView: View {
 
             if total > 0 {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Total si tout tombe")
+                    Text(t("pronos.totalSiToutTombe"))
                         .font(.label)
                         .tracking(Tracking.label)
                         .textCase(.uppercase)
@@ -288,7 +288,7 @@ struct PronosView: View {
                             .font(.custom("HelveticaNeue-Medium", size: 24))
                             .tracking(-0.60)          // −0,025em × 24
                             .contentTransition(.numericText())
-                        Text("pts")
+                        Text(t("points.unite"))
                             .font(.custom("HelveticaNeue-Medium", size: 14))
                     }
                     .foregroundColor(.primaire)       // 10,88:1 sur le beige
@@ -302,7 +302,7 @@ struct PronosView: View {
                 Task { await valider(lu) }
             } label: {
                 ZStack {
-                    Text("Valider mes pronos")
+                    Text(t("accueil.validerPronos"))
                         .opacity(envoi ? 0 : 1)
                     if envoi {
                         ProgressView().tint(.white)
@@ -322,7 +322,7 @@ struct PronosView: View {
             }
             .buttonStyle(StyleAppui(.bouton))
             .disabled(envoi)
-            .accessibilityLabel(envoi ? "Enregistrement en cours" : "Valider mes pronos")
+            .accessibilityLabel(envoi ? t("pronos.a11y.enregistrement") : t("accueil.validerPronos"))
         }
         .animation(mouvementReduit ? .none : Mouvement.entree(0.18), value: total)
         .animation(mouvementReduit ? .none : Mouvement.entree(0.18), value: erreurEnvoi)
@@ -417,19 +417,19 @@ struct PronosView: View {
         // **La fermeture est vérifiée ici ET en base** : c'est la base qui fait foi, et un
         // `423` peut encore arriver alors que l'horloge du téléphone disait ouvert.
         if lu.gp.horaires.echeance().ferme {
-            refuser("Les pronostics de ce Grand Prix sont fermés : la course est partie.")
+            refuser(t("pronos.refus.fermes"))
             return
         }
         guard let vainqueur = choix[.vainqueur] else {
-            refuser("Choisis d'abord ton vainqueur.")
+            refuser(t("pronos.refus.vainqueur"))
             return
         }
         guard let podium1 = choix[.podium1], let podium2 = choix[.podium2] else {
-            refuser("Le podium demande deux pilotes.")
+            refuser(t("pronos.refus.podium"))
             return
         }
         guard !conflit else {
-            refuser("Ton vainqueur est déjà sur le podium : choisis deux autres pilotes.")
+            refuser(t("pronos.refus.doublon"))
             return
         }
 
@@ -501,7 +501,7 @@ enum EmplacementProno: String, CaseIterable, Identifiable {
         var body: some View {
             Button(action: onOuvrir) {
                 HStack(spacing: 12) {
-                    Text(choisi?.pilote ?? "Non sélectionné")
+                    Text(choisi?.pilote ?? t("pronos.nonSelectionne"))
                         .font(.custom(choisi == nil ? "HelveticaNeue" : "HelveticaNeue-Medium",
                                       size: 15))
                         .foregroundColor(choisi == nil ? marche.encreDouce : .white)
@@ -530,8 +530,8 @@ enum EmplacementProno: String, CaseIterable, Identifiable {
             }
             .buttonStyle(StyleAppui(.grandeSurface))
             .accessibilityLabel(marche.libelle)
-            .accessibilityValue(choisi.map { "\($0.pilote), \($0.points) points" } ?? "Non sélectionné")
-            .accessibilityHint("Choisir un pilote")
+            .accessibilityValue(choisi.map { "\($0.pilote), " + tp("classement.a11y.points", $0.points) } ?? t("pronos.nonSelectionne"))
+            .accessibilityHint(t("pronos.a11y.choisirPilote"))
         }
     }
 }
@@ -562,7 +562,7 @@ private struct BlocObligatoire<Contenu: View>: View {
                 // Blanc à 18 % et non 20 % : c'est la valeur qui tient le blanc au-dessus
                 // de 4,5:1 sur **les deux** aplats — 7,57:1 sur le rouge, 5,44:1 sur le
                 // bleu, qui est le plus clair des deux et donc celui qui contraint.
-                Text("Obligatoire")
+                Text(t("pronos.obligatoire"))
                     .font(.labelSm)
                     .foregroundColor(.white)
                     .padding(.horizontal, 9)
@@ -680,7 +680,7 @@ struct BlocEcheance<Pied: View>: View {
             .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
             .ombreBloc()                                // rayon `bloc` → `ombreBloc` (§4.7)
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("\(echeance.phrase).")
+            .accessibilityLabel(echeance.phrase + ".")
         }
     }
 
@@ -690,9 +690,11 @@ struct BlocEcheance<Pied: View>: View {
         let (j, h, m, s) = (total / 86_400, total % 86_400 / 3600, total % 3600 / 60, total % 60)
         let deux = { (n: Int) in String(format: "%02d", n) }
         if j > 0 {
-            return [(deux(j), "Jours"), (deux(h), "Heures"), (deux(m), "Minutes")]
+            return [(deux(j), t("compteur.jours")), (deux(h), t("compteur.heures")),
+                    (deux(m), t("compteur.minutes"))]
         }
-        return [(deux(h), "Heures"), (deux(m), "Minutes"), (deux(s), "Secondes")]
+        return [(deux(h), t("compteur.heures")), (deux(m), t("compteur.minutes")),
+                (deux(s), t("compteur.secondes"))]
     }
 
     /// Le deux-points entre deux tuiles. **Décoratif** : les unités sont écrites sous
@@ -732,7 +734,7 @@ private struct CarteParisBonus: View {
     let onBasculer: () -> Void
 
     private var nom: String { favori.pilote ?? favori.idOutcomeUnibet }
-    private var marche: String { favori.libelle ?? "Cote retirée" }
+    private var marche: String { favori.libelle ?? t("points.coteRetiree") }
 
     var body: some View {
         Button(action: onBasculer) {
@@ -779,7 +781,7 @@ private struct CarteParisBonus: View {
         .disabled(sature)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(marche), \(nom), \(formaterPoints(favori.points))")
-        .accessibilityValue(actif ? "Retenu en pari bonus" : "Non retenu")
+        .accessibilityValue(actif ? t("pronos.a11y.retenu") : t("pronos.a11y.nonRetenu"))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -818,7 +820,7 @@ private struct FeuilleChoixPilote: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Fermer") { fermer() }
+                    Button(t("commun.fermer")) { fermer() }
                         .foregroundColor(.primaire)
                 }
             }
@@ -867,7 +869,7 @@ private struct FeuilleChoixPilote: View {
         }
         .buttonStyle(StyleAppui(.grandeSurface))
         .disabled(indisponible)
-        .accessibilityValue(indisponible ? "Déjà choisi à un autre emplacement" : "")
+        .accessibilityValue(indisponible ? t("pronos.a11y.dejaChoisi") : "")
     }
 }
 

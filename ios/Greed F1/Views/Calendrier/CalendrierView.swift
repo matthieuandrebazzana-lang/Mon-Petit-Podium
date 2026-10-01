@@ -96,7 +96,7 @@ struct CalendrierView: View {
             }
             // Le titre de l'écran est dans le contenu, à 28 pt : la barre système ferait
             // doublon et se contente de nommer le retour des écrans poussés d'ici.
-            .navigationTitle("Calendrier")
+            .navigationTitle(t("onglet.calendrier"))
             .toolbar(.hidden, for: .navigationBar)
             .task { await calendrier.charger() }
         }
@@ -106,7 +106,7 @@ struct CalendrierView: View {
 
     private var entete: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Calendrier")
+            Text(t("onglet.calendrier"))
                 .font(.titre)
                 .tracking(Tracking.titre)
                 .foregroundColor(.texte)        // 15,37:1 sur le beige
@@ -126,7 +126,7 @@ struct CalendrierView: View {
     }
 
     private var sousTitre: String {
-        guard let restants else { return "Saison 2026" }
+        guard let restants else { return t("commun.saison2026") }
         return GPRestants.libelle(restants)
     }
 
@@ -143,7 +143,7 @@ struct CalendrierView: View {
                 .tint(.secondaire)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .padding(.bottom, espacement)
-                .accessibilityLabel("Chargement des états des Grands Prix")
+                .accessibilityLabel(t("calendrier.a11y.chargement"))
 
         case .echec(let erreur):
             EchecChargement(erreur: erreur) {
@@ -178,7 +178,7 @@ struct CalendrierView: View {
                 // vient forcément de la base : il a donc toujours le sien.
                 NavigationLink {
                     if gp.etat == .termine {
-                        ResultatsGPView(nom: gp.nom, date: gp.date, gpId: gp.gpId)
+                        ResultatsGPView(nom: gp.nom, date: gp.dateAffichee, gpId: gp.gpId)
                     } else {
                         DetailGPView(grandPrix: gp)
                     }
@@ -472,7 +472,7 @@ private struct CarteGrandPrixSaison: View {
                 .lineLimit(1)
                 .fixedSize()
 
-            Text(grandPrix.mois)
+            Text(grandPrix.moisAffiche)
                 .font(.labelSm)
                 .tracking(Tracking.label)
                 .foregroundColor(encreDouce)
@@ -512,9 +512,9 @@ private struct CarteGrandPrixSaison: View {
     /// libellé accessible dit donc ce que l'appui va faire, ce qu'aucun élément visible ne
     /// fait ici.
     private var libelleAccessible: String {
-        "\(grandPrix.nom), \(grandPrix.circuit), le \(grandPrix.jour) \(grandPrix.mois.lowercased()). "
+        t("calendrier.a11y.carte", grandPrix.nom, grandPrix.circuit, grandPrix.jourMoisAffiche)
         + (grandPrix.etat.map { "\($0.libelle). " } ?? "")
-        + (grandPrix.etat == .termine ? "Voir les résultats." : "Voir le week-end.")
+        + (grandPrix.etat == .termine ? t("calendrier.a11y.voirResultats") : t("calendrier.a11y.voirWeekend"))
     }
 }
 
@@ -552,10 +552,10 @@ enum EtatGp {
 
     var libelle: String {
         switch self {
-        case .termine: return "Terminé"
-        case .ferme: return "Fermé"
-        case .ouvert: return "Pronos ouverts"
-        case .aVenir: return "À venir"
+        case .termine: return t("etat.termine")
+        case .ferme: return t("etat.ferme")
+        case .ouvert: return t("etat.ouvert")
+        case .aVenir: return t("etat.aVenir")
         }
     }
 
@@ -582,7 +582,7 @@ enum EtatGp {
     /// bande « Pronostiquer » de la version web mène au tableau des cotes réel, qui n'est
     /// branché qu'à l'étape 7 ; la poser ici promettrait un tableau que rien ne remplit.
     var action: String? {
-        self == .termine ? "Voir les résultats" : nil
+        self == .termine ? t("etat.voirResultats") : nil
     }
 }
 
@@ -636,6 +636,31 @@ struct GrandPrixSaison {
 
     /// L'état de la carte, `nil` s'il est inconnu.
     var etat: EtatGp? { etatConnu ? EtatGp.pour(enBase) : nil }
+
+    /// Le mois de la carte dans la langue de l'interface — « AOÛT » ou « AUG », « DÉC » ou
+    /// « DEC ». ``mois`` reste la clé écrite, en français, que ``GPRestants`` lit.
+    var moisAffiche: String {
+        guard let jour = GPRestants.jourDeCourse(self) else { return mois }
+        return jour.formatted(.dateTime.month(.abbreviated).locale(localeInterface))
+            .replacingOccurrences(of: ".", with: "")
+            .uppercased(with: localeInterface)
+    }
+
+    /// « 23 août » / « 23 August » — le libellé accessible de la carte.
+    var jourMoisAffiche: String {
+        guard let jour = GPRestants.jourDeCourse(self) else { return "\(self.jour) \(mois.lowercased())" }
+        return jour.formatted(.dateTime.day().month(.wide).locale(localeInterface))
+    }
+
+    /// La date complète dans la langue de l'interface — « 1er novembre 2026 »,
+    /// « 1 November 2026 ». Repli sur ``date``, écrite, si le mois n'est pas reconnu.
+    var dateAffichee: String {
+        guard let jour = GPRestants.jourDeCourse(self) else { return date }
+        let texte = jour.formatted(.dateTime.day().month(.wide).year().locale(localeInterface))
+        // Le premier du mois s'écrit « 1er » en français.
+        if langueInterface == .fr, self.jour == "1" { return "1er" + texte.dropFirst() }
+        return texte
+    }
 
     /// La liste statique croisée avec la base — `enrichir` du web.
     ///

@@ -37,11 +37,16 @@ enum GPRestants {
     /// Minuit à la fin du jour de course, en heure locale. `nil` si le mois écrit n'est pas
     /// reconnu — le Grand Prix reste alors compté, jamais effacé en silence.
     static func finDuJourDeCourse(_ gp: GrandPrixSaison) -> Date? {
+        guard let debut = jourDeCourse(gp) else { return nil }
+        return Calendar.current.date(byAdding: .day, value: 1, to: debut)
+    }
+
+    /// Minuit au début du jour de course, **en heure locale** — composé à partir du jour et
+    /// du mois écrits, jamais analysé depuis une date nue : formaté dans le même fuseau, il
+    /// rend exactement le quantième écrit, quel que soit le téléphone.
+    static func jourDeCourse(_ gp: GrandPrixSaison) -> Date? {
         guard let mois = mois[gp.mois], let jour = Int(gp.jour) else { return nil }
-        let calendrier = Calendar.current
-        guard let debut = calendrier.date(from: DateComponents(year: 2026, month: mois, day: jour))
-        else { return nil }
-        return calendrier.date(byAdding: .day, value: 1, to: debut)
+        return Calendar.current.date(from: DateComponents(year: 2026, month: mois, day: jour))
     }
 
     /// Les mois tels que ``GrandPrixSaison/mois`` les écrit.
@@ -52,7 +57,6 @@ enum GPRestants {
 
     /// « Saison 2026 · 9 Grands Prix restants » — l'accord suit le nombre.
     static func libelle(_ compte: Int) -> String {
-        let pluriel = compte > 1 ? "s" : ""
-        return "Saison 2026 · \(compte) Grand\(pluriel) Prix restant\(pluriel)"
+        tp("gpRestants", compte)
     }
 }

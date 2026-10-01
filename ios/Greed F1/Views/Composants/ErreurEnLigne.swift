@@ -23,6 +23,6 @@ struct ErreurEnLigne: View {
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
-            .accessibilityLabel("Erreur : \(erreur.message)")
+            .accessibilityLabel(t("erreur.accessibilite", erreur.message))
     }
 }

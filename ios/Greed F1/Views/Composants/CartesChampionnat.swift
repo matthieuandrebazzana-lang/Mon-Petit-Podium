@@ -79,7 +79,7 @@ struct CarteChampionnat: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
 
-                    Text("\(membres) \(membres > 1 ? "membres" : "membre") · Saison 2026")
+                    Text(tp("championnat.membresSaison", membres))
                         .font(.custom("HelveticaNeue", size: 12))
                         .foregroundColor(.encreSecondaire)        // ≥ 4,97:1 sur les six teintes
                         .lineLimit(1)
@@ -155,7 +155,7 @@ struct CarteChampionnat: View {
                     .foregroundColor(.encreSecondaire)
             }
 
-            Text("Classement")
+            Text(t("championnat.classement"))
                 .font(.labelSm)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
@@ -168,9 +168,9 @@ struct CarteChampionnat: View {
 
     private var libelleRang: String {
         guard let rang = championnat.position?.monRang else {
-            return "Classement indisponible, \(membres) \(membres > 1 ? "membres" : "membre")"
+            return tp("championnat.classementIndisponible", membres)
         }
-        return "Classement : \(rang)\(rang == 1 ? "er" : "e") sur \(membres)"
+        return t("championnat.classementRang", ordinal(rang), membres)
     }
 
     /// La jauge. Elle est **vide avant le premier Grand Prix**, quand tout le monde est
@@ -288,8 +288,8 @@ struct ActionsChampionnat: View {
                 CarteAction(
                     logo: "icone-creer",
                     encreLogo: .primaire,
-                    titre: "Créer un championnat",
-                    sousTitre: "Lance ton championnat 2026"
+                    titre: t("championnat.creer"),
+                    sousTitre: t("championnat.creerSousTitre")
                 )
             }
             .buttonStyle(StyleAppui(.grandeSurface))
@@ -300,8 +300,8 @@ struct ActionsChampionnat: View {
                 CarteAction(
                     logo: "icone-rejoindre",
                     encreLogo: .accent,
-                    titre: "Rejoindre un championnat",
-                    sousTitre: "Entre un code à 6 caractères"
+                    titre: t("championnat.rejoindre"),
+                    sousTitre: t("championnat.rejoindreSousTitre")
                 )
             }
             .buttonStyle(StyleAppui(.grandeSurface))
@@ -330,7 +330,7 @@ struct EtatMesChampionnats<Contenu: View>: View {
             ProgressView()
                 .tint(.secondaire)
                 .frame(maxWidth: .infinity, minHeight: 120)
-                .accessibilityLabel("Chargement des championnats")
+                .accessibilityLabel(t("championnat.chargement"))
 
         case .echec(let erreur):
             EchecChargement(erreur: erreur) {
@@ -366,7 +366,7 @@ struct EchecChargement: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if erreur.estRejouable {
-                Button("Réessayer", action: reessayer)
+                Button(t("commun.reessayer"), action: reessayer)
                     .font(.custom("HelveticaNeue-Medium", size: 15))
                     .foregroundColor(.primaire)     // 9,61:1 sur le beige
                     .frame(minWidth: 44, minHeight: 44)

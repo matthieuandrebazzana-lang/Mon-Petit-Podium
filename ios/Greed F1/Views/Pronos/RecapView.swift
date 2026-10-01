@@ -12,15 +12,32 @@ struct LigneRecap: Identifiable, Hashable {
     enum Genre: String, Hashable { case vainqueur, podium, bonus }
 
     let genre: Genre
-    /// « Vainqueur », « Podium », ou le libellé du marché bonus tel que le bookmaker l'écrit.
-    let libelle: String
+    /// Le libellé reçu à la fabrication. Seul celui d'un bonus est affiché tel quel — c'est
+    /// celui du bookmaker ; les deux obligatoires sont relus dans la langue de l'interface.
+    private let libelleRecu: String
     let pilote: String
     /// `nil` quand la cote a disparu depuis l'épinglage — « Cote retirée », jamais `0`.
     let points: Int?
 
+    init(genre: Genre, libelle: String, pilote: String, points: Int?) {
+        self.genre = genre
+        self.libelleRecu = libelle
+        self.pilote = pilote
+        self.points = points
+    }
+
+    /// « Vainqueur », « Podium », ou le libellé du marché bonus tel que le bookmaker l'écrit.
+    var libelle: String {
+        switch genre {
+        case .vainqueur: return MarcheCote.vainqueur.libelleCourt
+        case .podium:    return MarcheCote.podium.libelleCourt
+        case .bonus:     return libelleRecu
+        }
+    }
+
     var bonus: Bool { genre == .bonus }
 
-    var id: String { "\(genre.rawValue):\(libelle):\(pilote)" }
+    var id: String { "\(genre.rawValue):\(libelleRecu):\(pilote)" }
 
     /// L'aplat de l'étiquette de points. L'ambre des paris bonus, sinon celui du marché —
     /// rouge pour le vainqueur, bleu ardoise pour le podium, comme à la saisie.
@@ -46,7 +63,7 @@ struct LigneRecap: Identifiable, Hashable {
     }
 
     static func bonus(_ favori: Favori) -> LigneRecap {
-        LigneRecap(genre: .bonus, libelle: favori.libelle ?? "Bonus",
+        LigneRecap(genre: .bonus, libelle: favori.libelle ?? t("recap.bonus"),
                    pilote: favori.pilote ?? favori.idOutcomeUnibet, points: favori.points)
     }
 }
@@ -235,11 +252,11 @@ struct RecapView: View {
             coche
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Pronos enregistrés !")
+                Text(t("recap.enregistres"))
                     .font(.custom("HelveticaNeue-Medium", size: 17))
                     .foregroundColor(.white)          // 4,86:1 sur le vert sauge
 
-                Text(termine ? "La course est terminée." : "Tu peux les modifier jusqu'au départ.")
+                Text(termine ? t("recap.courseTerminee") : t("recap.modifiableJusquauDepart"))
                     .font(.custom("HelveticaNeue", size: 13))
                     .foregroundColor(.white)
                     .fixedSize(horizontal: false, vertical: true)
@@ -294,7 +311,7 @@ struct RecapView: View {
         Button {
             if let modifier { modifier() } else { fermer() }
         } label: {
-            Text("Modifier mes pronos")
+            Text(t("recap.modifier"))
                 .font(.custom("HelveticaNeue-Medium", size: 16))
                 .foregroundColor(.white)              // 10,88:1 sur #800111
                 .frame(maxWidth: .infinity)
@@ -322,7 +339,7 @@ struct RecapView: View {
     /// > dit quelque chose.
     private var carteResume: some View {
         VStack(alignment: .leading, spacing: 0) {
-            titreSection("Obligatoires")
+            titreSection(t("pronos.obligatoires"))
 
             Spacer().frame(height: 14)
             rangees(obligatoires)
@@ -331,7 +348,7 @@ struct RecapView: View {
                 Spacer().frame(height: 20)
                 separateur
                 Spacer().frame(height: 16)
-                titreSection("Bonus")
+                titreSection(t("recap.bonus"))
 
                 Spacer().frame(height: 14)
                 rangees(lignesBonus)
@@ -382,7 +399,7 @@ struct RecapView: View {
     /// que la grille rapporterait si tout tombait.
     private var rangeeTotal: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text("Total de points disponibles")
+            Text(t("recap.totalDisponible"))
                 .font(.label)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
@@ -396,7 +413,7 @@ struct RecapView: View {
                 Text(total.enPoints)
                     .font(.custom("HelveticaNeue-Medium", size: 40))
                     .tracking(-1.00)                  // −0,025em × 40
-                Text("pts")
+                Text(t("points.unite"))
                     .font(.custom("HelveticaNeue-Medium", size: 20))
             }
             .foregroundColor(.primaire)               // 10,88:1 sur le blanc
@@ -405,7 +422,7 @@ struct RecapView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Total de points disponibles, \(total) points")
+        .accessibilityLabel(t("recap.a11y.total", tp("classement.a11y.points", total)))
     }
 }
 
@@ -449,7 +466,7 @@ private struct RangeeRecap: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(ligne.bonus ? "Pari bonus, " : "")\(ligne.libelle), "
+            (ligne.bonus ? t("recap.a11y.pariBonus") : "") + "\(ligne.libelle), "
             + "\(ligne.pilote), \(formaterPoints(ligne.points))"
         )
     }
@@ -545,7 +562,7 @@ private struct EnteteDrapeau: View {
         }
         .buttonStyle(StyleAppui(.bouton))
         .accessibilityLabel(libelleRetour)
-        .accessibilityHint("Quitter le récapitulatif")
+        .accessibilityHint(t("recap.a11y.quitter"))
     }
 
     @ViewBuilder private var fond: some View {
@@ -607,7 +624,7 @@ private extension View {
                 bonus: [
                     LigneRecap(genre: .bonus, libelle: "Top 6", pilote: "A.Albon", points: 50)
                 ]),
-            libelleRetour: "Accueil",
+            libelleRetour: t("onglet.accueil"),
             retour: { }
         )
     }

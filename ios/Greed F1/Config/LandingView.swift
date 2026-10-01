@@ -19,6 +19,14 @@ struct LandingView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
+                    // Le sélecteur de langue, discret, au-dessus de tout : il doit être
+                    // trouvable avant de lire le premier mot.
+                    HStack {
+                        Spacer()
+                        SelecteurLangue()
+                    }
+                    .padding(.top, 8)
+
                     Spacer(minLength: 24)
 
                     bandeau
@@ -57,7 +65,7 @@ struct LandingView: View {
     // MARK: - Textes
 
     private var titre: some View {
-        Text("Pronostique chaque\nGrand Prix entre amis.")
+        Text(t("landing.titre"))
             .font(.custom("HelveticaNeue-Medium", size: 32))
             .tracking(-0.8)          // −0,025em, cf. docs/design-system.md §2
             .foregroundColor(.texte)
@@ -67,7 +75,7 @@ struct LandingView: View {
     }
 
     private var sousTitre: some View {
-        Text("Mise sur chaque GP. Grimpe dans le classement devant tes amis.")
+        Text(t("landing.sousTitre"))
             .font(.custom("HelveticaNeue", size: 17))
             .foregroundColor(.secondaire)
             .multilineTextAlignment(.center)
@@ -98,7 +106,7 @@ struct LandingView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 20, height: 20)
-                    Text("Continuer avec Google")
+                    Text(t("auth.google"))
                         .font(.custom("HelveticaNeue-Medium", size: 17))
                         .foregroundColor(.texte)
                 }
@@ -113,7 +121,7 @@ struct LandingView: View {
             NavigationLink {
                 InscriptionView(viewModel: viewModel)
             } label: {
-                LibelleBouton(texte: "Créer un compte", encre: .white)
+                LibelleBouton(texte: t("landing.creerCompte"), encre: .white)
                     .background(Color.primaire)
                     .clipShape(Capsule())
             }
@@ -121,7 +129,7 @@ struct LandingView: View {
             NavigationLink {
                 ConnexionView(viewModel: viewModel)
             } label: {
-                LibelleBouton(texte: "J'ai déjà un compte", encre: .primaire)
+                LibelleBouton(texte: t("landing.dejaCompte"), encre: .primaire)
                     .background(Color.white)
                     .clipShape(Capsule())
             }
@@ -138,7 +146,7 @@ struct LandingView: View {
     private var separateurOu: some View {
         HStack(spacing: 10) {
             Rectangle().fill(Color.texte.opacity(0.1)).frame(height: 1)
-            Text("ou")
+            Text(t("landing.ou"))
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.secondaire)
             Rectangle().fill(Color.texte.opacity(0.1)).frame(height: 1)

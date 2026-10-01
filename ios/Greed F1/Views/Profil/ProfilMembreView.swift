@@ -146,8 +146,8 @@ struct ProfilMembreView: View {
     // MARK: - Ses Grands Prix
 
     private var sesGrandsPrix: some View {
-        LigneGrandsPrix(titre: "Ses Grands Prix", sousTitre: sousTitreGrandsPrix) {
-            HistoriqueGPView(titre: "Ses Grands Prix", profilId: membre.profilId,
+        LigneGrandsPrix(titre: t("profil.sesGrandsPrix"), sousTitre: sousTitreGrandsPrix) {
+            HistoriqueGPView(titre: t("profil.sesGrandsPrix"), profilId: membre.profilId,
                              championnatId: membre.championnatId, rang: membre.rang)
         }
     }
@@ -169,10 +169,10 @@ struct ProfilMembreView: View {
             numero: "44",
             grandsPrixJoues: 2,
             statistiques: [
-                StatistiqueProfil(valeur: "40%", libelle: "Paris gagnés"),
-                StatistiqueProfil(valeur: "33", libelle: "Pts moy. / GP"),
-                StatistiqueProfil(valeur: "22", libelle: "Meilleur coup"),
-                StatistiqueProfil(valeur: "41", libelle: "Cote moy. tentée")
+                StatistiqueProfil(valeur: "40%", libelle: t("stats.parisGagnes")),
+                StatistiqueProfil(valeur: "33", libelle: t("stats.ptsMoyens")),
+                StatistiqueProfil(valeur: "22", libelle: t("stats.meilleurCoup")),
+                StatistiqueProfil(valeur: "41", libelle: t("stats.coteMoyenne"))
             ]
         ))
     }

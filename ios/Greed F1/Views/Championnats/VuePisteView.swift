@@ -201,7 +201,7 @@ struct VuePisteView: View {
                     .truncationMode(.tail)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("\(effectif) \(effectif > 1 ? "membres" : "membre") · Saison 2026")
+                Text(tp("championnat.membresSaison", effectif))
                     .font(.custom("HelveticaNeue", size: 13))
                     .foregroundColor(.encreSecondaire)        // blanc à 70 %, réglé pour un aplat
                     .lineLimit(1)
@@ -251,7 +251,7 @@ struct VuePisteView: View {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 15, weight: .semibold))
-                Text("Classement")
+                Text(t("championnat.classement"))
                     .font(.custom("HelveticaNeue-Medium", size: 13))
             }
             .foregroundColor(.white)                      // ≥ 10,35:1 sur les six teintes
@@ -261,7 +261,7 @@ struct VuePisteView: View {
         }
         .buttonStyle(StyleAppui(.bouton))
         .padding(.vertical, -3)
-        .accessibilityLabel("Retour au classement")
+        .accessibilityLabel(t("piste.retourClassement"))
     }
 
     // MARK: - La zone de jeu
@@ -340,7 +340,7 @@ struct VuePisteView: View {
     /// Le championnat n'a personne à montrer. **Dire ce qui manque** plutôt que laisser un
     /// blanc, qui se lirait comme un chargement en panne.
     private var etatVide: some View {
-        Text("Aucun membre à afficher sur la piste.")
+        Text(t("piste.aucunMembre"))
             .font(.corpsSm)
             .foregroundColor(.secondaire)                 // 9,32:1 sur le beige
             .multilineTextAlignment(.center)
@@ -350,9 +350,9 @@ struct VuePisteView: View {
 
     /// Ce que la piste dit, en toutes lettres — le classement dans l'ordre.
     private var resume: String {
-        guard !membres.isEmpty else { return "Aucun membre à afficher sur la piste." }
-        let lignes = membres.map { "\($0.rang). \($0.pseudo), \($0.totalPoints) points" }
-        return "Piste du championnat \(championnat.nom). " + lignes.joined(separator: ". ") + "."
+        guard !membres.isEmpty else { return t("piste.aucunMembre") }
+        let lignes = membres.map { t("piste.a11y.ligne", $0.rang, $0.pseudo, tp("classement.a11y.points", $0.totalPoints)) }
+        return t("piste.a11y.titre", championnat.nom) + lignes.joined(separator: ". ") + "."
     }
 }
 

@@ -53,7 +53,7 @@ struct AccueilView: View {
                         Spacer().frame(height: 12)
                         blocGrandPrix
 
-                        titreSection("Mes championnats")
+                        titreSection(t("accueil.mesChampionnats"))
 
                         Spacer().frame(height: 10)
                         listeChampionnats
@@ -75,7 +75,7 @@ struct AccueilView: View {
             // Pas de titre : le bouton de retour des écrans poussés d'ici affiche alors le
             // « Retour » générique du système, comme la capture de référence.
             .toolbar(.hidden, for: .navigationBar)
-            .etapesPronos(libelleRetour: "Accueil",
+            .etapesPronos(libelleRetour: t("onglet.accueil"),
                           avancer: { cheminPronos.append($0) }) { cheminPronos.removeAll() }
             // Rechargée à chaque apparition, pas de cache de session (§7.6).
             .task { await mesChampionnats.charger() }
@@ -106,7 +106,7 @@ struct AccueilView: View {
 
             Spacer().frame(height: 12)
 
-            Text("Salut \(pseudoAffiche)")
+            Text(t("accueil.salut", pseudoAffiche))
                 .font(.titreLg)
                 .tracking(Tracking.titreLg)
                 .foregroundColor(.texte)        // 15,37:1 sur le beige
@@ -119,7 +119,7 @@ struct AccueilView: View {
             // `#999999`, qui ne vaut que 2,52:1 sur le beige — sous le plancher de 4,5:1
             // d'un texte ordinaire. `#6B6B6B` y tient 4,71:1 pour un gris que l'œil ne
             // distingue pas du premier. Le contraste se mesure (`ios/CLAUDE.md` §3).
-            Text("Saison 2026 · Formule 1")
+            Text(t("accueil.saisonF1"))
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
         }
@@ -130,7 +130,7 @@ struct AccueilView: View {
     /// (comptes créés avant que l'inscription ne la pose). Un écran ne montre jamais un
     /// trou à la place d'un nom.
     private var pseudoAffiche: String {
-        viewModel.pseudo.isEmpty ? "pilote" : viewModel.pseudo
+        viewModel.pseudo.isEmpty ? t("accueil.pilote") : viewModel.pseudo
     }
 
     // MARK: - Le Grand Prix suivant
@@ -208,7 +208,7 @@ struct AccueilView: View {
     }
 
     private var versionAffichee: some View {
-        Text("Version \(Bundle.main.versionAffichee)")
+        Text(t("accueil.version", Bundle.main.versionAffichee))
             .font(.labelSm)
             .tracking(Tracking.label)
             .textCase(.uppercase)
@@ -247,7 +247,7 @@ private struct Avatar: View {
         .clipShape(Circle())
         // Une photo en `scaledToFill` déborde du disque : la cible reste le disque.
         .contentShape(Circle())
-        .accessibilityLabel("Mon profil")
+        .accessibilityLabel(t("accueil.monProfil"))
     }
 
     private var initiale: some View {
@@ -308,26 +308,19 @@ private struct WidgetGrandPrix: View {
     /// servi par la base, pas une date nue : le formater est juste.
     private var date: String {
         grandPrix.dateCourse?.formatted(.dateTime.day().month(.wide).year()
-            .locale(Locale(identifier: "fr_FR"))) ?? "Date à confirmer"
+            .locale(localeInterface)) ?? t("commun.dateAConfirmer")
     }
 
     /// « 26 sept. 2026 » — l'en-tête quand la pastille « Pronos ouverts » y est posée.
     private var dateAbregee: String {
         grandPrix.dateCourse?.formatted(.dateTime.day().month(.abbreviated).year()
-            .locale(Locale(identifier: "fr_FR"))) ?? "À confirmer"
+            .locale(localeInterface)) ?? t("echeance.aConfirmer")
     }
 
-    /// « 07h00 » — l'écriture du projet, avec le « h ».
+    /// « 07h00 » — l'écriture du projet, avec le « h » ; « 07:00 » en anglais.
     private var heureDepart: String {
-        grandPrix.dateCourse.map { Self.heure.string(from: $0) } ?? "À confirmer"
+        grandPrix.dateCourse.map(heureInterface) ?? t("echeance.aConfirmer")
     }
-
-    private static let heure: DateFormatter = {
-        let formateur = DateFormatter()
-        formateur.locale = Locale(identifier: "fr_FR")
-        formateur.dateFormat = "HH'h'mm"
-        return formateur
-    }()
 
     private func echeance(le maintenant: Date = .now) -> EcheancePronostics {
         EcheancePronostics.pour(statut: grandPrix.statut, dateCourse: grandPrix.dateCourse,
@@ -359,9 +352,9 @@ private struct WidgetGrandPrix: View {
     /// des cotes, le widget n'annonce que le départ et l'ouverture, sans rien à saisir.
     private var libelleBouton: String? {
         switch etat {
-        case .ouvert: return pronosValides ? "Voir mes pronos" : "Valider mes pronos"
+        case .ouvert: return pronosValides ? t("accueil.voirPronos") : t("accueil.validerPronos")
         case .aVenir: return nil
-        case .termine: return "Voir mes résultats"
+        case .termine: return t("accueil.voirResultats")
         case .ferme: return nil
         }
     }
@@ -381,17 +374,15 @@ private struct WidgetGrandPrix: View {
             .buttonStyle(StyleAppui(.grandeSurface))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(
-                "Prochain Grand Prix, \(grandPrix.nom), le \(date). "
-                + "Départ à \(heureDepart). \(echeance().phrase)."
+                t("accueil.a11y.prochainGP", grandPrix.nom, date, heureDepart, echeance().phrase)
             )
-            .accessibilityHint("Voir la fiche du Grand Prix")
+            .accessibilityHint(t("accueil.a11y.voirFiche"))
             .accessibilityAddTraits(.isButton)
         } else {
             surface
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(
-                    "Prochain Grand Prix, \(grandPrix.nom), le \(date). "
-                    + "Départ à \(heureDepart). \(echeance().phrase)."
+                    t("accueil.a11y.prochainGP", grandPrix.nom, date, heureDepart, echeance().phrase)
                 )
         }
     }
@@ -423,7 +414,7 @@ private struct WidgetGrandPrix: View {
             .buttonStyle(StyleAppui(.grandeSurface))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(
-                "Dernier Grand Prix, \(grandPrix.nom), le \(date)."
+                t("accueil.a11y.dernierGP", grandPrix.nom, date)
                 + (StatutResultats.estProvisoire(grandPrix.statutResultats)
                    ? " \(StatutResultats.detail)" : "")
             )
@@ -448,15 +439,14 @@ private struct WidgetGrandPrix: View {
             id: grandPrix.id,
             nom: grandPrix.nom,
             slug: grandPrix.slug,
-            sousTitre: "\(date) · Départ \(heureDepart)"
+            sousTitre: t("accueil.sousTitreGP", date, heureDepart)
         ))) {
             surface
         }
         .buttonStyle(StyleAppui(.grandeSurface))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "Prochain Grand Prix, \(grandPrix.nom), le \(date). "
-            + "Départ à \(heureDepart). \(echeance().phrase)."
+            t("accueil.a11y.prochainGP", grandPrix.nom, date, heureDepart, echeance().phrase)
         )
         .accessibilityHint(libelle)
         .accessibilityAddTraits(.isButton)
@@ -526,7 +516,7 @@ private struct WidgetGrandPrix: View {
 
     private var enTete: some View {
         HStack(alignment: .center, spacing: 8) {
-            Text("Prochain GP")
+            Text(t("accueil.prochainGP"))
                 .font(.labelSm)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
@@ -635,7 +625,7 @@ private struct WidgetGrandPrix: View {
         TimelineView(.periodic(from: .now, by: 1)) { contexte in
             let echeance = echeance(le: contexte.date)
             HStack(spacing: 8) {
-                caseStatut(label: "Départ", valeur: heureDepart)
+                caseStatut(label: t("echeance.depart"), valeur: heureDepart)
                 caseStatut(label: echeance.label, valeur: echeance.texte ?? echeance.substitut)
             }
         }
@@ -699,7 +689,7 @@ private struct SilhouetteWidget: View {
         .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
         .ombreAplat()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Chargement du prochain Grand Prix")
+        .accessibilityLabel(t("accueil.a11y.chargementGP"))
     }
 }
 

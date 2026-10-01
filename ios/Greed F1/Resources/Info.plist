@@ -4,6 +4,13 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>fr_FR</string>
+	<!-- Langues de l'interface, déclarées pour l'App Store et les réglages iOS. Les textes
+	     eux-mêmes vivent dans Localisation/Traductions{FR,EN}.swift, pas dans des .strings. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>fr</string>
+		<string>en</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Greed F1</string>
 	<key>CFBundleExecutable</key>

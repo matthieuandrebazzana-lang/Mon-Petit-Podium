@@ -26,7 +26,7 @@ struct InscriptionView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .semibold))
-                        Text("Retour")
+                        Text(t("commun.retour"))
                             .font(.custom("Helvetica Neue", size: 16))
                             .fontWeight(.medium)
                     }
@@ -39,7 +39,7 @@ struct InscriptionView: View {
                     .frame(height: 40)
                 
                 // Titre "Créer un compte"
-                Text("Créer un compte")
+                Text(t("inscription.titre"))
                     .font(.custom("Helvetica Neue", size: 36))
                     .fontWeight(.bold)
                     .foregroundColor(.black)
@@ -52,7 +52,7 @@ struct InscriptionView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Champ PSEUDO
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("PSEUDO")
+                        Text(t("auth.pseudo"))
                             .font(.custom("Helvetica Neue", size: 12))
                             .fontWeight(.semibold)
                             .foregroundColor(.grisSecondaire)
@@ -75,7 +75,7 @@ struct InscriptionView: View {
                     
                     // Champ EMAIL
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("EMAIL")
+                        Text(t("auth.email"))
                             .font(.custom("Helvetica Neue", size: 12))
                             .fontWeight(.semibold)
                             .foregroundColor(.grisSecondaire)
@@ -99,13 +99,13 @@ struct InscriptionView: View {
                     
                     // Champ MOT DE PASSE
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("MOT DE PASSE")
+                        Text(t("auth.motDePasse"))
                             .font(.custom("Helvetica Neue", size: 12))
                             .fontWeight(.semibold)
                             .foregroundColor(.grisSecondaire)
                             .tracking(1)
                         
-                        SecureField("8 caractères minimum", text: $motDePasse)
+                        SecureField(t("inscription.motDePasseMin"), text: $motDePasse)
                             .textContentType(.newPassword)
                             .font(.custom("Helvetica Neue", size: 16))
                             .padding(.vertical, 12)
@@ -153,7 +153,7 @@ struct InscriptionView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
                     } else {
-                        Text("Créer mon compte")
+                        Text(t("inscription.creer"))
                             .font(.custom("Helvetica Neue", size: 18))
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
@@ -172,7 +172,7 @@ struct InscriptionView: View {
                 NavigationLink {
                     ConnexionView(viewModel: viewModel)
                 } label: {
-                    Text("Déjà un compte ? **Se connecter**")
+                    Text(.init(t("inscription.dejaCompte")))
                         .font(.custom("Helvetica Neue", size: 16))
                         .foregroundColor(.black)
                         .frame(maxWidth: .infinity)

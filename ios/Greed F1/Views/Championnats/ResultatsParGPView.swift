@@ -51,9 +51,9 @@ struct ResultatsParGPView: View {
     }
 
     private var sousTitre: String {
-        guard let gp = gpRegarde else { return "Saison 2026" }
+        guard let gp = gpRegarde else { return t("commun.saison2026") }
         guard let joueurs else { return gp.nom }
-        return "\(gp.nom) · \(joueurs) joueur\(joueurs > 1 ? "s" : "")"
+        return tp("parGP.joueurs", joueurs, gp.nom)
     }
 
     var body: some View {
@@ -94,7 +94,7 @@ struct ResultatsParGPView: View {
 
             Spacer().frame(height: 20)
 
-            Text("Résultats par Grand Prix")
+            Text(t("championnat.resultatsParGP"))
                 .font(.titre)
                 .tracking(Tracking.titre)
                 .foregroundColor(.white)                  // 10,88:1 sur `primaire`
@@ -145,7 +145,7 @@ struct ResultatsParGPView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(StyleAppui(.bouton))
-        .accessibilityLabel("Retour à \(championnat.nom)")
+        .accessibilityLabel(t("commun.retourA", championnat.nom))
     }
 
     // MARK: - Contenu
@@ -156,7 +156,7 @@ struct ResultatsParGPView: View {
             ProgressView()
                 .tint(.secondaire)
                 .frame(maxWidth: .infinity, minHeight: 200)
-                .accessibilityLabel("Chargement des Grands Prix")
+                .accessibilityLabel(t("parGP.a11y.chargementGP"))
 
         case .echec(let erreur):
             EchecChargement(erreur: erreur) {
@@ -178,10 +178,10 @@ struct ResultatsParGPView: View {
     /// Données manquantes, pas une erreur : aucune course n'est encore jugée.
     private var etatVide: some View {
         VStack(spacing: 6) {
-            Text("Aucun Grand Prix terminé")
+            Text(t("parGP.aucunTermine"))
                 .font(.custom("HelveticaNeue-Medium", size: 15))
                 .foregroundColor(.texte)
-            Text("Les paris de chacun apparaîtront ici dès les premiers résultats.")
+            Text(t("parGP.aucunTermineDetail"))
                 .font(.corpsSm)
                 .foregroundColor(.grisSecondaire)             // 5,33:1 sur le blanc
                 .multilineTextAlignment(.center)
@@ -262,7 +262,7 @@ struct ResultatsParGPView: View {
     @ViewBuilder private var blocParis: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("Les paris de chacun")
+                Text(t("parGP.parisDeChacun"))
                     .font(.label)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)
@@ -279,7 +279,7 @@ struct ResultatsParGPView: View {
                 ProgressView()
                     .tint(.secondaire)
                     .frame(maxWidth: .infinity, minHeight: 160)
-                    .accessibilityLabel("Chargement des paris")
+                    .accessibilityLabel(t("parGP.a11y.chargementParis"))
 
             case .echec(let erreur):
                 EchecChargement(erreur: erreur) {
@@ -289,7 +289,7 @@ struct ResultatsParGPView: View {
 
             case .pret(let membres):
                 if membres.isEmpty {
-                    Text("Ce championnat n'a aucun membre.")
+                    Text(t("parGP.aucunMembre"))
                         .font(.corpsSm)
                         .foregroundColor(.grisSecondaire)
                 } else {
@@ -365,7 +365,7 @@ private struct LigneParisMembre: View {
                 .buttonStyle(StyleAppui(.grandeSurface))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(libelleAccessible)
-                .accessibilityValue(ouvert ? "Déplié" : "Replié")
+                .accessibilityValue(ouvert ? t("commun.deplie") : t("commun.replie"))
                 .accessibilityAddTraits(.isButton)
 
                 if ouvert {
@@ -379,7 +379,7 @@ private struct LigneParisMembre: View {
                 identite
                 // La colonne de droite dit quelque chose sur toutes les lignes : sinon
                 // l'œil lit un score manquant plutôt qu'un joueur absent.
-                Text("Rien joué")
+                Text(t("parGP.rienJoue"))
                     .font(.custom("HelveticaNeue", size: 15))
                     .foregroundColor(.grisSecondaire)
                     .fixedSize()
@@ -389,7 +389,7 @@ private struct LigneParisMembre: View {
             .padding(.vertical, 8)
             .frame(minHeight: 44)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(membre.pseudo)\(estMoi ? ", toi" : ""). Aucun prono sur ce Grand Prix.")
+            .accessibilityLabel(t("parGP.a11y.rienJoue", membre.pseudo + (estMoi ? t("parGP.a11y.toi") : "")))
         }
     }
 
@@ -406,7 +406,7 @@ private struct LigneParisMembre: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 (Text(membre.pseudo).foregroundColor(.texte)          // 15,37:1
-                 + Text(estMoi ? " · Toi" : "").foregroundColor(.primaire))
+                 + Text(estMoi ? t("parGP.toi") : "").foregroundColor(.primaire))
                     .font(.custom("HelveticaNeue-Medium", size: 16))
                     .lineLimit(1)
 
@@ -423,8 +423,8 @@ private struct LigneParisMembre: View {
     /// Chaque pilote du podium compte pour un : le nombre dit les lignes du dépli.
     private var sousTitre: String {
         let n = membre.paris.count
-        guard n > 0 else { return "Aucun prono sur ce Grand Prix" }
-        return "\(n) prono\(n > 1 ? "s" : "") validé\(n > 1 ? "s" : "")"
+        guard n > 0 else { return t("parGP.aucunProno") }
+        return tp("parGP.pronosValides", n)
     }
 
     /// Le nombre habillé par ``formaterPoints(_:)``, seul propriétaire du « N pts » ; seul
@@ -435,7 +435,7 @@ private struct LigneParisMembre: View {
                 .font(.custom("HelveticaNeue-Medium", size: 18))
                 .foregroundColor(.primaire)                           // 10,88:1 sur le blanc
                 .lineLimit(1)
-            Text(juge ? "Gagnés" : "En jeu")
+            Text(juge ? t("parGP.gagnes") : t("parGP.enJeu"))
                 .font(.labelSm)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
@@ -446,8 +446,8 @@ private struct LigneParisMembre: View {
 
     private var libelleAccessible: String {
         let points = juge ? membre.totalPoints ?? 0 : membre.potentiel
-        return "\(membre.pseudo)\(estMoi ? ", toi" : ""). \(sousTitre). "
-            + "\(points) points \(juge ? "gagnés" : "en jeu")."
+        return membre.pseudo + (estMoi ? t("parGP.a11y.toi") : "") + ". \(sousTitre). "
+            + (juge ? tp("resultats.a11y.gagnes", points) : tp("parGP.a11y.pointsEnJeu", points)) + "."
     }
 
     /// Le détail, **aligné sur le pseudo** et non sur la voiture : les pronostics
@@ -497,7 +497,7 @@ private struct RangeePronostic: View {
             // Un pari non évaluable ne dit ni « en jeu » ni un score : le mot, sur l'aplat
             // neutre de l'attente (`fondPrincipal` + `secondaire` 9,32:1).
             Text(pronostic.nonEvaluable
-                 ? "Non évaluable"
+                 ? t("parGP.nonEvaluable")
                  : formaterPoints(juge ? pronostic.pointsGagnes : pronostic.points))
                 .font(.custom("HelveticaNeue-Medium", size: 12))
                 .foregroundColor(juge ? .white : .secondaire)
@@ -516,9 +516,9 @@ private struct RangeePronostic: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "\(pronostic.marche), \(pronostic.choix), "
-            + (juge ? (reussi ? "gagné, \(pronostic.pointsGagnes ?? 0) points" : "raté")
-                    : pronostic.nonEvaluable ? "non évaluable"
-                    : "en attente, \(pronostic.points ?? 0) points en jeu")
+            + (juge ? (reussi ? tp("parGP.a11y.gagne", pronostic.pointsGagnes ?? 0) : t("parGP.a11y.rate"))
+                    : pronostic.nonEvaluable ? t("parGP.a11y.nonEvaluable")
+                    : tp("parGP.a11y.enAttente", pronostic.points ?? 0))
         )
     }
 }

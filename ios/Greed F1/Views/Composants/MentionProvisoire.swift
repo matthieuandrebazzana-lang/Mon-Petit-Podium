@@ -15,9 +15,9 @@ enum StatutResultats {
     static let nonEvaluable = "non_evaluable"
 
     /// Le mot affiché, partout le même.
-    static let mention = "Provisoire"
+    static var mention: String { t("provisoire.mention") }
     /// Ce qu'il veut dire, pour VoiceOver.
-    static let detail = "Résultats provisoires : ils deviennent définitifs 24 heures après la course."
+    static var detail: String { t("provisoire.detail") }
 
     static func estProvisoire(_ statut: String?) -> Bool { statut == provisoire }
     static func estNonEvaluable(_ statut: String?) -> Bool { statut == nonEvaluable }

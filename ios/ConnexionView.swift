@@ -25,7 +25,7 @@ struct ConnexionView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .semibold))
-                        Text("Retour")
+                        Text(t("commun.retour"))
                             .font(.custom("Helvetica Neue", size: 16))
                             .fontWeight(.medium)
                     }
@@ -33,12 +33,18 @@ struct ConnexionView: View {
                 }
                 .padding(.leading, 32)
                 .padding(.top, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .trailing) {
+                    SelecteurLangue()
+                        .padding(.trailing, 32)
+                        .padding(.top, 16)
+                }
                 
                 Spacer()
                     .frame(height: 40)
                 
                 // Titre "Bon retour !"
-                Text("Bon retour !")
+                Text(t("connexion.titre"))
                     .font(.custom("Helvetica Neue", size: 36))
                     .fontWeight(.bold)
                     .foregroundColor(.black)
@@ -51,7 +57,7 @@ struct ConnexionView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Champ EMAIL
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("EMAIL")
+                        Text(t("auth.email"))
                             .font(.custom("Helvetica Neue", size: 12))
                             .fontWeight(.semibold)
                             .foregroundColor(.grisSecondaire)
@@ -75,7 +81,7 @@ struct ConnexionView: View {
                     
                     // Champ MOT DE PASSE
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("MOT DE PASSE")
+                        Text(t("auth.motDePasse"))
                             .font(.custom("Helvetica Neue", size: 12))
                             .fontWeight(.semibold)
                             .foregroundColor(.grisSecondaire)
@@ -100,7 +106,7 @@ struct ConnexionView: View {
                         Button {
                             // TODO: Navigation vers reset password
                         } label: {
-                            Text("Mot de passe oublié ?")
+                            Text(t("connexion.oublie"))
                                 .font(.custom("Helvetica Neue", size: 14))
                                 .foregroundColor(.primaire)
                         }
@@ -137,7 +143,7 @@ struct ConnexionView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
                     } else {
-                        Text("Se connecter")
+                        Text(t("connexion.seConnecter"))
                             .font(.custom("Helvetica Neue", size: 18))
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
@@ -158,7 +164,7 @@ struct ConnexionView: View {
                 // formulaire email/mot de passe.
                 HStack(spacing: 10) {
                     Rectangle().fill(Color.gray.opacity(0.15)).frame(height: 1)
-                    Text("ou continuer avec")
+                    Text(t("connexion.ouContinuer"))
                         .font(.custom("Helvetica Neue", size: 13))
                         .foregroundColor(.grisSecondaire)
                     Rectangle().fill(Color.gray.opacity(0.15)).frame(height: 1)
@@ -176,7 +182,7 @@ struct ConnexionView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 20, height: 20)
-                        Text("Continuer avec Google")
+                        Text(t("auth.google"))
                             .font(.custom("Helvetica Neue", size: 16))
                             .fontWeight(.medium)
                             .foregroundColor(.black)
@@ -199,7 +205,7 @@ struct ConnexionView: View {
                 NavigationLink {
                     InscriptionView(viewModel: viewModel)
                 } label: {
-                    Text("Pas encore de compte ? **S'inscrire**")
+                    Text(.init(t("connexion.pasDeCompte")))
                         .font(.custom("Helvetica Neue", size: 16))
                         .foregroundColor(.black)
                         .frame(maxWidth: .infinity)

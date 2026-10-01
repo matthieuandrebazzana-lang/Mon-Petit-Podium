@@ -24,5 +24,5 @@ struct EcranProvisoire: View {
 }
 
 #Preview {
-    EcranProvisoire(titre: "Accueil")
+    EcranProvisoire(titre: t("onglet.accueil"))
 }

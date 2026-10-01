@@ -70,10 +70,10 @@ struct ResultatsGPView: View {
 
                     Spacer().frame(height: 24)      // changement de sujet : 24 pt (§4.6)
                     TitreSectionResultats(
-                        titre: "Résultats du GP",
+                        titre: t("resultats.titre"),
                         sousTitre: resultats.provisoire
-                            ? "Classement provisoire · définitif 24 h après la course"
-                            : "Classement officiel de la course"
+                            ? t("resultats.sousTitreProvisoire")
+                            : t("resultats.sousTitreOfficiel")
                     )
 
                     Spacer().frame(height: 12)
@@ -110,8 +110,8 @@ struct ResultatsGPView: View {
             // « Provisoire » s'y glisse tant que le calcul définitif n'est pas passé : même
             // ligne, même encre, rien de plus à lire.
             Text(resultats.provisoire
-                 ? "Terminé · \(StatutResultats.mention) · \(date)"
-                 : "Terminé · \(date)")
+                 ? t("resultats.enteteProvisoire", EtatGp.termine.libelle, StatutResultats.mention, date)
+                 : t("resultats.entete", EtatGp.termine.libelle, date))
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
                 .accessibilityHint(resultats.provisoire ? StatutResultats.detail : "")
@@ -128,7 +128,7 @@ struct ResultatsGPView: View {
             ProgressView()
                 .tint(.secondaire)
                 .frame(maxWidth: .infinity, minHeight: 120)
-                .accessibilityLabel("Chargement des résultats")
+                .accessibilityLabel(t("resultats.a11y.chargement"))
 
         case .echec(let erreur):
             EchecChargement(erreur: erreur) {
@@ -137,10 +137,10 @@ struct ResultatsGPView: View {
 
         case .indisponible:
             VStack(spacing: 4) {
-                Text("Résultats non disponibles")
+                Text(t("resultats.indisponibles"))
                     .font(.custom("HelveticaNeue-Medium", size: 15))
                     .foregroundColor(.texte)        // 15,37:1 sur le beige
-                Text("Ils apparaîtront ici une fois la course récupérée.")
+                Text(t("resultats.indisponiblesDetail"))
                     .font(.custom("HelveticaNeue", size: 13))
                     .foregroundColor(.grisSecondaire)   // 4,71:1 sur le beige
                     .multilineTextAlignment(.center)
@@ -186,8 +186,8 @@ struct SectionMesResultats: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TitreSectionResultats(titre: "Mes résultats",
-                                  sousTitre: "Ce que tes pronostics ont rapporté")
+            TitreSectionResultats(titre: t("resultats.mesResultats"),
+                                  sousTitre: t("resultats.mesResultatsSousTitre"))
             Spacer().frame(height: 12)
             blocTotal
             Spacer().frame(height: 10)
@@ -203,7 +203,7 @@ struct SectionMesResultats: View {
     /// dit, et la ligne du dessous compte alors des pronostics en attente.
     private var blocTotal: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Mes points ce GP")
+            Text(t("resultats.mesPointsGP"))
                 .font(.label)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
@@ -234,10 +234,9 @@ struct SectionMesResultats: View {
     private var recapitulatif: String {
         guard total != nil else {
             let n = pronostics.count
-            return "\(n) pronostic\(n > 1 ? "s" : "") en attente de validation"
+            return tp("resultats.enAttente", n)
         }
-        return "\(reussis) prono\(reussis > 1 ? "s" : "") réussi\(reussis > 1 ? "s" : "") "
-             + "sur \(juges)"
+        return tp("resultats.reussisSur", reussis, juges)
     }
 }
 
@@ -324,14 +323,14 @@ private struct CartePronostic: View {
         .clipShape(RoundedRectangle(cornerRadius: Rayon.widget, style: .continuous))
         .ombreCarte()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(pronostic.marche), \(pronostic.choix), \(libelleVerdict)")
+        .accessibilityLabel(t("resultats.a11y.pronostic", pronostic.marche, pronostic.choix, libelleVerdict))
     }
 
     private var libelleVerdict: String {
         guard let gagnes = pronostic.pointsGagnes else {
-            return "\(pronostic.points) points en jeu, en attente de validation"
+            return tp("resultats.a11y.enJeu", pronostic.points)
         }
-        return gagnes > 0 ? "\(gagnes) points gagnés" : "raté, aucun point"
+        return gagnes > 0 ? tp("resultats.a11y.gagnes", gagnes) : t("resultats.a11y.rate")
     }
 }
 
@@ -352,7 +351,7 @@ struct PastillePoints: View {
     let points: Int
 
     var body: some View {
-        Text("\((pointsGagnes ?? points).enPoints) pts")
+        Text(t("points.valeur", (pointsGagnes ?? points).enPoints))
             .font(.custom("HelveticaNeue-Medium", size: 13))
             .foregroundColor(encre)
             .lineLimit(1)
@@ -543,7 +542,7 @@ private struct LigneClassementGP: View {
     /// d'être lu. Un pilote non classé n'a pas de résultat du tout, et porte un tiret.
     @ViewBuilder private var pointsFia: some View {
         if ligne.pointsFia > 0 {
-            Text("\(ligne.pointsFia) pt\(ligne.pointsFia > 1 ? "s" : "")")
+            Text(tp("resultats.ptsFia", ligne.pointsFia))
                 .font(.custom("HelveticaNeue-Medium", size: 15))
                 .foregroundColor(.secondaire)       // 9,32:1 sur le beige
                 .lineLimit(1)
@@ -552,7 +551,7 @@ private struct LigneClassementGP: View {
                 .background(Color.fondPrincipal)
                 .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
         } else {
-            Text(ligne.position == nil ? "—" : "0 pt")
+            Text(ligne.position == nil ? "—" : tp("resultats.ptsFia", 0))
                 .font(.custom("HelveticaNeue", size: 15))
                 .foregroundColor(.secondaire)
                 .lineLimit(1)
@@ -561,11 +560,11 @@ private struct LigneClassementGP: View {
     }
 
     private var libelleAccessible: String {
-        let rang = ligne.position.map { "\($0)\($0 == 1 ? "er" : "e")" } ?? "non classé"
-        let pays = nationalite.map { ", \($0.pays)" } ?? ""
+        let rang = ligne.position.map(ordinal) ?? t("resultats.a11y.nonClasse")
+        let pays = nationalite.map { ", \($0.paysAffiche)" } ?? ""
         let points = ligne.pointsFia > 0
-            ? "\(ligne.pointsFia) point\(ligne.pointsFia > 1 ? "s" : "") au championnat"
-            : (ligne.position == nil ? "aucun résultat" : "aucun point")
+            ? tp("resultats.a11y.pointsChampionnat", ligne.pointsFia)
+            : (ligne.position == nil ? t("resultats.a11y.aucunResultat") : t("resultats.a11y.aucunPoint"))
         return "\(rang), \(ligne.prenom) \(ligne.nom)\(pays), \(sousLigne). \(points)."
     }
 }

@@ -158,7 +158,7 @@ struct CreerChampionnatView: View {
     // MARK: - Titre
 
     private var titre: some View {
-        Text("Créer un championnat")
+        Text(t("championnat.creer"))
             .font(.titre)
             .tracking(Tracking.titre)
             .foregroundColor(.texte)            // 15,37:1 sur le beige
@@ -176,7 +176,7 @@ struct CreerChampionnatView: View {
     private var blocIdentite: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 10) {
-                label("Nom du championnat")
+                label(t("creer.nom"))
                 champNom
             }
 
@@ -211,7 +211,7 @@ struct CreerChampionnatView: View {
             .frame(height: 52)                  // > 44 pt, contrainte tactile iOS
             .background(Color.fondPrincipal)
             .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
-            .accessibilityLabel("Nom du championnat")
+            .accessibilityLabel(t("creer.nom"))
     }
 
     /// Le lien du champ : plafonné à la borne du serveur **en écrivant**, pour la même
@@ -231,7 +231,7 @@ struct CreerChampionnatView: View {
     /// `#999999` ne vaut que 2,52:1 ; `#6B6B6B` y tient **4,70:1** pour un gris que l'œil ne
     /// distingue pas du premier. Le contraste se mesure (`ios/CLAUDE.md` §3).
     private var placeholder: Text {
-        Text("Les Potes F1")
+        Text(t("creer.placeholder"))
             .font(.custom("HelveticaNeue", size: 17))
             .foregroundColor(.grisSecondaire)
     }
@@ -247,12 +247,12 @@ struct CreerChampionnatView: View {
                 vignettePhoto
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(vignette == nil ? "Ajouter une photo" : "Changer la photo")
+                    Text(vignette == nil ? t("creer.ajouterPhoto") : t("creer.changerPhoto"))
                         .font(.corps)
                         .foregroundColor(.texte)        // 15,37:1 sur le blanc
                         .lineLimit(1)
 
-                    Text(refusPhoto ?? "Optionnel · JPG, PNG ou WEBP, 2 Mo maximum")
+                    Text(refusPhoto ?? t("creer.photoAide"))
                         .font(.custom("HelveticaNeue", size: 12))
                         // Le refus prend l'encre primaire : c'est la seule chose de l'écran
                         // qui demande à être relue avant de continuer.
@@ -266,8 +266,8 @@ struct CreerChampionnatView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(StyleAppui(.grandeSurface))
-        .accessibilityLabel(vignette == nil ? "Ajouter une photo" : "Changer la photo")
-        .accessibilityHint("Optionnel. Deux mégaoctets maximum.")
+        .accessibilityLabel(vignette == nil ? t("creer.ajouterPhoto") : t("creer.changerPhoto"))
+        .accessibilityHint(t("creer.a11y.photoAide"))
         .onChange(of: choixPhoto) { _ in chargerPhoto() }
     }
 
@@ -318,14 +318,14 @@ struct CreerChampionnatView: View {
                 let donnees = try? await choixPhoto.loadTransferable(type: Data.self),
                 let image = UIImage(data: donnees)
             else {
-                await MainActor.run { refusPhoto = "Photo illisible. Essaie une autre image." }
+                await MainActor.run { refusPhoto = t("photo.illisible") }
                 return
             }
 
             guard donnees.count <= Self.poidsMaximal else {
                 await MainActor.run {
                     let mega = Double(donnees.count) / 1_048_576
-                    refusPhoto = String(format: "Photo trop lourde (%.1f Mo). 2 Mo maximum.", mega)
+                    refusPhoto = t("creer.photoTropLourde", mega)
                     self.choixPhoto = nil
                 }
                 return
@@ -345,7 +345,7 @@ struct CreerChampionnatView: View {
     /// rejoignent-ils ? », et la réponse est : tu n'as rien à faire.
     private var blocCode: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Code d'invitation")
+            Text(t("championnat.codeInvitation"))
                 .font(.label)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
@@ -358,8 +358,8 @@ struct CreerChampionnatView: View {
             }
             .frame(height: 30)
 
-            Text(cree == nil ? "Généré automatiquement à la création."
-                             : "Partage ce code avec tes amis pour qu'ils te rejoignent.")
+            Text(cree == nil ? t("creer.codeAuto")
+                             : t("creer.codePartage"))
                 .font(.custom("HelveticaNeue", size: 12))
                 .foregroundColor(.encreSecondaire)
                 .fixedSize(horizontal: false, vertical: true)
@@ -418,15 +418,15 @@ struct CreerChampionnatView: View {
     /// Le code n'a de valeur que transmis : la feuille de partage système le porte, avec
     /// une phrase qui dit à l'ami quoi en faire.
     private func partage(_ championnat: Championnat) -> some View {
-        ShareLink(item: "Rejoins mon championnat « \(championnat.nom) » sur Greed F1 avec le code \(championnat.codeInvitation).") {
-            Label("Partager le code", systemImage: "square.and.arrow.up")
+        ShareLink(item: t("championnat.messagePartage", championnat.nom, championnat.codeInvitation)) {
+            Label(t("creer.partagerCode"), systemImage: "square.and.arrow.up")
                 .font(.custom("HelveticaNeue-Medium", size: 15))
                 .foregroundColor(.white)
                 .frame(minHeight: 44)                   // contrainte tactile iOS
                 .contentShape(Rectangle())
         }
         .buttonStyle(StyleAppui(.bouton))
-        .accessibilityLabel("Partager le code \(championnat.codeInvitation.map(String.init).joined(separator: " "))")
+        .accessibilityLabel(t("creer.a11y.partagerCode", championnat.codeInvitation.map(String.init).joined(separator: " ")))
     }
 
     // MARK: - Le bouton
@@ -446,7 +446,7 @@ struct CreerChampionnatView: View {
             NavigationLink {
                 ChampionnatDetailView(championnat: cree, mesChampionnats: mesChampionnats)
             } label: {
-                Text("Voir le championnat")
+                Text(t("championnat.voir"))
                     .habillageBoutonPrincipal(actif: true)
             }
             .buttonStyle(StyleAppui(.bouton))
@@ -461,14 +461,14 @@ struct CreerChampionnatView: View {
             ZStack {
                 // Le libellé reste en place, invisible, sous le spinner : le bouton ne
                 // change pas de taille, et le texte revient à l'identique en cas d'échec.
-                Text("Créer le championnat").opacity(envoi ? 0 : 1)
+                Text(t("creer.bouton")).opacity(envoi ? 0 : 1)
                 if envoi { ProgressView().tint(.white) }
             }
             .habillageBoutonPrincipal(actif: nomValide)
         }
         .buttonStyle(StyleAppui(.bouton))
         .disabled(!nomValide || envoi)
-        .accessibilityLabel(envoi ? "Création en cours" : "Créer le championnat")
+        .accessibilityLabel(envoi ? t("creer.a11y.enCours") : t("creer.bouton"))
         // **Le seul changement d'état que l'écran produit de lui-même.** Il s'anime parce
         // qu'il arrive une fois par visite, à la première lettre tapée, et qu'un bouton qui
         // change d'encre d'une image à l'autre se lit comme un défaut d'affichage. Couleur

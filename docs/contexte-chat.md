@@ -12,7 +12,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
-Version iOS actuelle : 0.45.3
+Version iOS actuelle : 0.46.0
 
 ## STACK TECHNIQUE
 
@@ -61,7 +61,7 @@ Pages greed-f1.com/privacy, /terms, /contact
 Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
 
-## CE QUI EST FAIT — VERSION iOS (0.45.3)
+## CE QUI EST FAIT — VERSION iOS (0.46.0)
 
 Navigation TabView 4 onglets (Accueil, Championnats, Calendrier, Profil)
 AccueilView : widget GP navigable avec drapeau + tracé circuit
@@ -75,6 +75,7 @@ Google OAuth : bouton sur Landing + Connexion, OnboardingView pseudo
 Recadrage photo avant upload
 Toutes les données branchées sur l'API réelle
 Mention "Provisoire" sur les résultats provisoires
+Localisation français/anglais (0.46.0) : dictionnaires Swift `Localisation/Traductions{FR,EN}.swift`, `t("clé")` / `tp("clé", n)`, détection au 1er lancement (français si téléphone en français, sinon anglais), choix manuel persisté, toggle FR/EN sur Landing, Connexion et Profil > Paramètres, dates dans la langue choisie, fr + en déclarés (Info.plist + knownRegions)
 
 ## ÉVALUATION DES PRONOSTICS
 
@@ -102,14 +103,12 @@ Test iPad (ouvrir chaque écran sur simulateur iPad)
 
 Fonctionnalités prévues :
 
-Localisation français/anglais
 Notifications push
 f1-ml : modèle de prédiction ML à intégrer
 
 Bugs connus :
 
 Photo de championnat dans le header ChampionnatDetailView (layout à revoir)
-"1 réussi" → accord au pluriel
 Google OAuth iOS non encore testé sur iPhone réel
 
 ## SCRAPER ET OPÉRATIONS

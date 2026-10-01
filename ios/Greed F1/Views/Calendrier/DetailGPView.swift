@@ -58,13 +58,13 @@ struct DetailGPView: View {
                     entete
 
                     Spacer().frame(height: 20)
-                    TitreBloc(titre: "Week-end")
+                    TitreBloc(titre: t("detailGP.weekend"))
                     Spacer().frame(height: 8)
                     ProgrammeWeekend(seances: seances)
 
                     if let fiche {
                         Spacer().frame(height: 24)
-                        TitreBloc(titre: "Circuit")
+                        TitreBloc(titre: t("detailGP.circuit"))
                         Spacer().frame(height: 8)
                         blocTrace
                         Spacer().frame(height: 10)
@@ -72,7 +72,7 @@ struct DetailGPView: View {
 
                         if !fiche.vainqueurs.isEmpty {
                             Spacer().frame(height: 24)
-                            TitreBloc(titre: "Derniers vainqueurs")
+                            TitreBloc(titre: t("detailGP.derniersVainqueurs"))
                             Spacer().frame(height: 8)
                             grilleVainqueurs(fiche.vainqueurs)
                         }
@@ -100,7 +100,7 @@ struct DetailGPView: View {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 15, weight: .semibold))
-                Text("Calendrier")
+                Text(t("onglet.calendrier"))
                     .font(.custom("HelveticaNeue-Medium", size: 13))
             }
             .foregroundColor(.secondaire)
@@ -109,7 +109,7 @@ struct DetailGPView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(StyleAppui(.bouton))
-        .accessibilityLabel("Retour au calendrier")
+        .accessibilityLabel(t("detailGP.retourCalendrier"))
     }
 
     // MARK: - En-tête
@@ -164,7 +164,7 @@ struct DetailGPView: View {
             .background(Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
             .ombreBloc()
-            .accessibilityLabel("Tracé du circuit de \(grandPrix.circuit)")
+            .accessibilityLabel(t("detailGP.a11y.trace", grandPrix.circuit))
     }
 
     /// Quatre chiffres, quatre cases : un carré de deux sur deux, jamais une case inventée.
@@ -172,16 +172,16 @@ struct DetailGPView: View {
     private func grilleStats(_ fiche: FichesGrandPrix.Fiche) -> some View {
         let colonnes = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
         let longueur = fiche.longueurKm.formatted(
-            .number.precision(.fractionLength(3)).locale(Locale(identifier: "fr_FR")))
+            .number.precision(.fractionLength(3)).locale(localeInterface))
 
         return LazyVGrid(columns: colonnes, spacing: 10) {
-            CaseStat(libelle: "Longueur", valeur: "\(longueur) km")
-            CaseStat(libelle: "Tours", valeur: fiche.tours.map(String.init) ?? "—")
-            CaseStat(libelle: "Premier GP", valeur: fiche.premierGp.map(String.init) ?? "—")
-            CaseStat(libelle: "Record du tour",
+            CaseStat(libelle: t("detailGP.longueur"), valeur: t("detailGP.km", longueur))
+            CaseStat(libelle: t("detailGP.tours"), valeur: fiche.tours.map(String.init) ?? "—")
+            CaseStat(libelle: t("detailGP.premierGP"), valeur: fiche.premierGp.map(String.init) ?? "—")
+            CaseStat(libelle: t("detailGP.record"),
                      valeur: fiche.record?.temps ?? "—",
                      detail: fiche.record.map { "\($0.pilote) · \(String($0.annee))" }
-                        ?? "Circuit jamais couru")
+                        ?? t("detailGP.jamaisCouru"))
         }
     }
 
@@ -269,7 +269,7 @@ private struct RangeeSeance: View {
                         .minimumScaleFactor(0.85)
 
                     if imminente {
-                        Text("Bientôt")
+                        Text(t("detailGP.bientot"))
                             .font(.custom("HelveticaNeue-Medium", size: 11))
                             .foregroundColor(.texte)    // 7,86:1 sur ambre
                             .padding(.horizontal, 8)
@@ -280,7 +280,7 @@ private struct RangeeSeance: View {
                     }
                 }
 
-                Text(seance.instant.map(Self.jour) ?? "Horaire à confirmer")
+                Text(seance.instant.map(Self.jour) ?? t("detailGP.horaireAConfirmer"))
                     .font(.custom("HelveticaNeue", size: 13))
                     .foregroundColor(.secondaire)       // 10,55:1 sur blanc
                     .lineLimit(1)
@@ -305,29 +305,19 @@ private struct RangeeSeance: View {
 
     // MARK: Formats — heure locale du téléphone, écriture des maquettes
 
-    private static let formatJour: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "fr_FR")
-        f.setLocalizedDateFormatFromTemplate("EEEdMMM")
-        return f
-    }()
-
-    private static let formatHeure: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "fr_FR")
-        f.dateFormat = "HH'h'mm"
-        return f
-    }()
-
     /// « jeu. 24 sept. » → « Jeu. 24 sept » : le point final du mois fait doublon avec
-    /// celui du jour (`formaterSeance` côté web).
+    /// celui du jour (`formaterSeance` côté web). « Thu 24 Sept » en anglais. Le formateur
+    /// est refait à chaque appel : sa locale suit la langue de l'interface.
     static func jour(_ date: Date) -> String {
-        var texte = formatJour.string(from: date)
+        let f = DateFormatter()
+        f.locale = localeInterface
+        f.setLocalizedDateFormatFromTemplate("EEEdMMM")
+        var texte = f.string(from: date)
         if texte.hasSuffix(".") { texte.removeLast() }
         return texte.prefix(1).uppercased() + texte.dropFirst()
     }
 
-    static func heure(_ date: Date) -> String { formatHeure.string(from: date) }
+    static func heure(_ date: Date) -> String { heureInterface(date) }
 }
 
 // MARK: - Une case de statistique
@@ -423,7 +413,7 @@ private struct CarteVainqueur: View {
                 .minimumScaleFactor(0.85)
 
             // Le mot porte le sens ; le drapeau du fond n'est qu'une texture.
-            Text(vainqueur.pays)
+            Text(vainqueur.paysAffiche)
                 .font(.custom("HelveticaNeue", size: 12))
                 .foregroundColor(.secondaire)
                 .lineLimit(1)

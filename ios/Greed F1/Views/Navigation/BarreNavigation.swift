@@ -33,20 +33,20 @@ struct BarreNavigation: View {
         TabView(selection: $ongletActif) {
             AccueilView(viewModel: viewModel, mesChampionnats: mesChampionnats,
                         ongletActif: $ongletActif)
-                .tabItem { Label("Accueil", image: "icone-accueil") }
+                .tabItem { Label(t("onglet.accueil"), image: "icone-accueil") }
                 .tag(Onglet.accueil)
 
             ChampionnatsView(mesChampionnats: mesChampionnats)
-                .tabItem { Label("Championnats", image: "icone-championnats") }
+                .tabItem { Label(t("onglet.championnats"), image: "icone-championnats") }
                 .tag(Onglet.championnats)
 
             CalendrierView()
-                .tabItem { Label("Calendrier", image: "icone-calendrier") }
+                .tabItem { Label(t("onglet.calendrier"), image: "icone-calendrier") }
                 .tag(Onglet.calendrier)
 
             // La pile porte « Mes Grands Prix » (``HistoriqueGPView``).
             NavigationStack { ProfilView(viewModel: viewModel) }
-                .tabItem { Label("Profil", image: "icone-profil") }
+                .tabItem { Label(t("onglet.profil"), image: "icone-profil") }
                 .tag(Onglet.profil)
         }
         .tint(.primaire)

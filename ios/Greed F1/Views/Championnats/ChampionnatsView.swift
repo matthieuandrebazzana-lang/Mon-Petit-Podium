@@ -71,9 +71,9 @@ struct ChampionnatsView: View {
             // Le titre de l'écran est dans le contenu, à 28 pt : la barre système ferait
             // doublon. Elle reste néanmoins **titrée**, parce que c'est ce titre que le
             // détail affiche à côté de son chevron de retour.
-            .navigationTitle("Championnats")
+            .navigationTitle(t("onglet.championnats"))
             .toolbar(.hidden, for: .navigationBar)
-            .etapesPronos(libelleRetour: "Championnat",
+            .etapesPronos(libelleRetour: t("retour.championnat"),
                           avancer: { cheminPronos.append($0) }) { cheminPronos.removeAll() }
             // Rechargée à chaque apparition, pas de cache de session (§7.6).
             .task { await mesChampionnats.charger() }
@@ -84,7 +84,7 @@ struct ChampionnatsView: View {
 
     private var entete: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Championnats")
+            Text(t("onglet.championnats"))
                 .font(.titre)
                 .tracking(Tracking.titre)
                 .foregroundColor(.texte)        // 15,37:1 sur le beige
@@ -106,8 +106,8 @@ struct ChampionnatsView: View {
     /// Le décompte n'est dit qu'une fois la liste connue : « 0 championnat » pendant le
     /// chargement serait faux.
     private var sousTitre: String {
-        guard case .pret(let liste) = mesChampionnats.etat else { return "Saison 2026" }
-        return "\(liste.count) \(liste.count > 1 ? "championnats" : "championnat") · Saison 2026"
+        guard case .pret(let liste) = mesChampionnats.etat else { return t("commun.saison2026") }
+        return tp("championnats.compteSaison", liste.count)
     }
 
     // MARK: - La liste

@@ -15,33 +15,36 @@ import SwiftUI
 enum PaletteVoiture {
 
     struct Teinte: Identifiable, Equatable {
-        let nom: String
+        /// Clé de traduction — `couleur.<cle>`. Le nom est relu dans la langue de
+        /// l'interface à chaque affichage.
+        let cle: String
         let hex: String
+        var nom: String { t("couleur.\(cle)") }
         var id: String { hex }
         var couleur: Color { EncreSVG.couleur(hex) ?? .primaire }
     }
 
     static let teintes: [Teinte] = [
-        Teinte(nom: "Rouge",      hex: "#CC0000"),
-        Teinte(nom: "Blanc",      hex: "#FFFFFF"),
-        Teinte(nom: "Noir",       hex: "#000000"),
-        Teinte(nom: "Gris",       hex: "#8A8A8A"),
-        Teinte(nom: "Argent",     hex: "#C0C0C0"),
-        Teinte(nom: "Bleu foncé", hex: "#003087"),
-        Teinte(nom: "Bleu clair", hex: "#0090D4"),
-        Teinte(nom: "Turquoise",  hex: "#00A19C"),
-        Teinte(nom: "Vert foncé", hex: "#005C43"),
-        Teinte(nom: "Vert clair", hex: "#00D2BE"),
-        Teinte(nom: "Orange",     hex: "#FF8000"),
-        Teinte(nom: "Jaune",      hex: "#FFD700"),
-        Teinte(nom: "Rose",       hex: "#E8027B"),
-        Teinte(nom: "Violet",     hex: "#960064"),
-        Teinte(nom: "Bordeaux",   hex: "#800111"),
-        Teinte(nom: "Marron",     hex: "#543925"),
-        Teinte(nom: "Amber",      hex: "#E8A020"),
-        Teinte(nom: "Beige",      hex: "#F5F0EB"),
-        Teinte(nom: "Or",         hex: "#B8860B"),
-        Teinte(nom: "Anthracite", hex: "#2D2D2D")
+        Teinte(cle: "rouge",      hex: "#CC0000"),
+        Teinte(cle: "blanc",      hex: "#FFFFFF"),
+        Teinte(cle: "noir",       hex: "#000000"),
+        Teinte(cle: "gris",       hex: "#8A8A8A"),
+        Teinte(cle: "argent",     hex: "#C0C0C0"),
+        Teinte(cle: "bleuFonce", hex: "#003087"),
+        Teinte(cle: "bleuClair", hex: "#0090D4"),
+        Teinte(cle: "turquoise",  hex: "#00A19C"),
+        Teinte(cle: "vertFonce", hex: "#005C43"),
+        Teinte(cle: "vertClair", hex: "#00D2BE"),
+        Teinte(cle: "orange",     hex: "#FF8000"),
+        Teinte(cle: "jaune",      hex: "#FFD700"),
+        Teinte(cle: "rose",       hex: "#E8027B"),
+        Teinte(cle: "violet",     hex: "#960064"),
+        Teinte(cle: "bordeaux",   hex: "#800111"),
+        Teinte(cle: "marron",     hex: "#543925"),
+        Teinte(cle: "amber",      hex: "#E8A020"),
+        Teinte(cle: "beige",      hex: "#F5F0EB"),
+        Teinte(cle: "or",         hex: "#B8860B"),
+        Teinte(cle: "anthracite", hex: "#2D2D2D")
     ]
 
     /// Les défauts de colonne, répétés ici pour que le rendu n'attende personne.
@@ -51,7 +54,7 @@ enum PaletteVoiture {
     /// Nom lisible d'une teinte, pour l'étiquette du sélecteur.
     static func nom(de hex: String) -> String {
         let propre = EncreSVG.normaliser(hex)
-        return teintes.first { EncreSVG.normaliser($0.hex) == propre }?.nom ?? "Personnalisée"
+        return teintes.first { EncreSVG.normaliser($0.hex) == propre }?.nom ?? t("couleur.personnalisee")
     }
 
     /// Luminance relative (WCAG). **Écrite une fois** : deux implémentations du même calcul
@@ -403,7 +406,7 @@ struct VueVoiture: View {
         }
         .aspectRatio(Self.rapport, contentMode: .fit)
         .accessibilityElement()
-        .accessibilityLabel(nom.isEmpty ? "Voiture" : "Voiture de \(nom)")
+        .accessibilityLabel(nom.isEmpty ? t("voiture.a11y") : t("voiture.a11yDe", nom))
     }
 
     // MARK: Découpage

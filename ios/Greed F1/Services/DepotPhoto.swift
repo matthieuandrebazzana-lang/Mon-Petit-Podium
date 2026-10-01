@@ -46,7 +46,7 @@ enum DepotPhoto {
                         dans compartiment: Compartiment,
                         proprietaire: String) async throws -> String {
         guard let image = UIImage(data: donnees), let jpeg = reduire(image) else {
-            throw ErreurAPI.serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+            throw ErreurAPI.serveur(statut: nil, message: t("photo.illisible"))
         }
 
         // Minuscules : c'est la forme de `auth.uid()`, et celle qu'écrit la version web.
@@ -67,7 +67,7 @@ enum DepotPhoto {
         } catch {
             throw ErreurAPI.serveur(
                 statut: nil,
-                message: "Impossible d'envoyer cette photo. Réessaie dans quelques instants."
+                message: t("photo.envoiImpossible")
             )
         }
 

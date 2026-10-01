@@ -132,10 +132,15 @@ struct EcheancePronostics: Equatable {
     /// « 2j 14h 32min ». **`texte` non nul est le seul test à faire** pour savoir s'il y a
     /// quelque chose à décompter.
     let texte: String?
+    /// Clés de traduction de ``label`` et ``substitut`` : **le texte est relu à chaque
+    /// affichage**, si bien qu'un changement de langue n'attend pas la seconde suivante.
+    let cleLabel: String
+    let cleSubstitut: String
+
     /// Le titre au-dessus du décompte — « Fermeture dans », « Ouverture », « Pronostics »…
-    let label: String
+    var label: String { t(cleLabel) }
     /// Le mot qui prend la place du décompte quand il n'y en a pas.
-    let substitut: String
+    var substitut: String { t(cleSubstitut) }
 
     /// Le relevé des cotes est prévu **deux heures** après les qualifications — le délai du
     /// job du samedi. Une prévision, pas une garantie.
@@ -145,7 +150,7 @@ struct EcheancePronostics: Equatable {
     /// 2j 14h 32min », « Ouverture à confirmer », « Pronostics fermés ».
     var phrase: String {
         if let texte { return "\(label) \(texte)" }
-        return "\(label) \(substitut.lowercased())"
+        return "\(label) \(substitut.lowercased(with: localeInterface))"
     }
 
     /// Les cotes sont arrêtées et les pronostics ouverts — `cotesArretees` du web.
@@ -177,14 +182,14 @@ struct EcheancePronostics: Equatable {
             return EcheancePronostics(
                 phase: .ouverture, ferme: false, restant: restant,
                 texte: restant.map(formaterRestant),
-                label: restant == nil ? "Ouverture" : "Ouverture dans",
-                substitut: "À confirmer")
+                cleLabel: restant == nil ? "echeance.ouverture" : "echeance.ouvertureDans",
+                cleSubstitut: "echeance.aConfirmer")
         }
 
         if fermePasse || statut == "termine" {
             return EcheancePronostics(
                 phase: .fermeture, ferme: true, restant: 0, texte: nil,
-                label: "Pronostics", substitut: "Fermés")
+                cleLabel: "echeance.pronostics", cleSubstitut: "echeance.fermes")
         }
 
         // Ouverts. Un départ inconnu n'a aucune fermeture à décompter : le titre annonce
@@ -193,18 +198,18 @@ struct EcheancePronostics: Equatable {
         return EcheancePronostics(
             phase: .fermeture, ferme: false, restant: restant,
             texte: restant.map(formaterRestant),
-            label: restant == nil ? "Départ" : "Fermeture dans",
-            substitut: "À confirmer")
+            cleLabel: restant == nil ? "echeance.depart" : "echeance.fermetureDans",
+            cleSubstitut: "echeance.aConfirmer")
     }
 
     /// « 2j 14h 32min », puis « 32min 10s » dans la dernière heure — `formaterRestant`.
     static func formaterRestant(_ secondes: TimeInterval) -> String {
         let total = max(0, Int(secondes))
         let (j, h, m, s) = (total / 86_400, total % 86_400 / 3600, total % 3600 / 60, total % 60)
-        if j > 0 { return "\(j)j \(h)h \(m)min" }
-        if h > 0 { return "\(h)h \(m)min" }
+        if j > 0 { return t("echeance.format.jhm", j, h, m) }
+        if h > 0 { return t("echeance.format.hm", h, m) }
         // Sous l'heure, les minutes seules ne suffisent plus à dire l'urgence.
-        if m > 0 { return "\(m)min \(s)s" }
-        return "\(s)s"
+        if m > 0 { return t("echeance.format.ms", m, s) }
+        return t("echeance.format.s", s)
     }
 }

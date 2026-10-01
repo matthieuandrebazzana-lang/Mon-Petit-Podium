@@ -51,8 +51,8 @@ extension Int {
 /// Trois états, jamais deux (§6.1) : une valeur, **ou** « Cote retirée » quand l'issue a
 /// disparu du Grand Prix depuis l'épinglage. **Jamais un zéro inventé.**
 func formaterPoints(_ points: Int?) -> String {
-    guard let points else { return "Cote retirée" }
-    return "\(points.enPoints) pts"
+    guard let points else { return t("points.coteRetiree") }
+    return t("points.valeur", points.enPoints)
 }
 
 // MARK: - Les deux marchés obligatoires
@@ -81,16 +81,16 @@ enum MarcheCote: String, CaseIterable, Identifiable {
     /// scraper gardent le nom du bookmaker, seule source légitime.
     var libelle: String {
         switch self {
-        case .vainqueur: return "Vainqueur"
-        case .podium:    return "2e et 3e du podium"
+        case .vainqueur: return t("marche.vainqueur")
+        case .podium:    return t("marche.podiumLong")
         }
     }
 
     /// Le libellé **court** — celui qui tient dans une étiquette de 10 pt au récapitulatif.
     var libelleCourt: String {
         switch self {
-        case .vainqueur: return "Vainqueur"
-        case .podium:    return "Podium"
+        case .vainqueur: return t("marche.vainqueur")
+        case .podium:    return t("marche.podium")
         }
     }
 
@@ -267,7 +267,7 @@ struct CotesView: View {
 
                         if lu.gp.marches.isEmpty {
                             Spacer().frame(height: 24)
-                            Text("Aucune cote n'est encore publiée pour ce Grand Prix.")
+                            Text(t("cotes.aucune"))
                                 .font(.corps)
                                 .foregroundColor(.secondaire)       // 9,32:1 sur le beige
                                 .frame(maxWidth: .infinity)
@@ -302,7 +302,7 @@ struct CotesView: View {
 
     private var titre: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Fais tes paris")
+            Text(t("cotes.titre"))
                 .font(.titre)
                 .tracking(Tracking.titre)
                 .foregroundColor(.texte)            // 15,37:1 sur le beige
@@ -326,7 +326,7 @@ struct CotesView: View {
             HStack(alignment: .firstTextBaseline) {
                 // **L'encre est `secondaire` (9,32:1), pas `texteDoux`** : `#999999` ne
                 // tient pas sur le beige.
-                Text("Mes paris bonus")
+                Text(t("pronos.mesBonus"))
                     .font(.label)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)
@@ -335,7 +335,7 @@ struct CotesView: View {
                 Spacer(minLength: 12)
 
                 if !favoris.isEmpty {
-                    Text("\(favoris.count) \(favoris.count > 1 ? "favoris" : "favori")")
+                    Text(tp("cotes.favoris", favoris.count))
                         .font(.custom("HelveticaNeue", size: 12))
                         .foregroundColor(.grisSecondaire)
                         .contentTransition(.numericText())
@@ -382,7 +382,7 @@ struct CotesView: View {
                 .foregroundColor(.accent)
                 .accessibilityHidden(true)
 
-            Text("Ajoute des paris bonus ci-dessous avec l'étoile, puis retrouve-les à l'écran suivant.")
+            Text(t("cotes.aucunFavori"))
                 .font(.corpsSm)
                 .foregroundColor(.grisSecondaire)
                 .multilineTextAlignment(.center)
@@ -493,9 +493,9 @@ struct CotesView: View {
         .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
         .ombreAplat()                             // aplat de couleur (§4.7)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Marché \(libelle). \(compte) favori\(compte > 1 ? "s" : "").")
-        .accessibilityValue(ouvert ? "Déplié" : "Replié")
-        .accessibilityHint(ouvert ? "Masquer les cotes" : "Afficher les cotes")
+        .accessibilityLabel(t("cotes.a11y.marche", libelle, tp("cotes.favoris", compte)))
+        .accessibilityValue(ouvert ? t("commun.deplie") : t("commun.replie"))
+        .accessibilityHint(ouvert ? t("cotes.a11y.masquer") : t("cotes.a11y.afficher"))
     }
 
     // MARK: - Barre d'action
@@ -504,7 +504,7 @@ struct CotesView: View {
     /// sans favori : les paris bonus sont facultatifs, trois est un maximum, pas un quota.
     private var barreAction: some View {
         NavigationLink(value: EtapePronos.pronos(grandPrix)) {
-            Text("Saisir mes pronos")
+            Text(t("cotes.saisir"))
                 .font(.custom("HelveticaNeue-Medium", size: 16))
                 .foregroundColor(.white)          // 10,88:1 sur #800111
                 .frame(maxWidth: .infinity)
@@ -563,7 +563,7 @@ struct ChargementPronos: View {
         ProgressView()
             .tint(.primaire)
             .frame(maxWidth: .infinity, minHeight: 120)
-            .accessibilityLabel("Chargement des cotes")
+            .accessibilityLabel(t("cotes.a11y.chargement"))
     }
 }
 
@@ -634,7 +634,7 @@ private struct CarteCote: View {
                         Text(points.enPoints)
                             .font(.custom("HelveticaNeue-Medium", size: 20))
                             .tracking(-0.50)      // −0,025em × 20
-                        Text("pts")
+                        Text(t("points.unite"))
                             .font(.custom("HelveticaNeue-Medium", size: 12))
                     }
                     .foregroundColor(.primaire)
@@ -663,9 +663,9 @@ private struct CarteCote: View {
         }
         .buttonStyle(StyleAppui(.grandeSurface))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(nom), \(points) points")
-        .accessibilityValue(retenu ? "En favori" : "Pas en favori")
-        .accessibilityHint(retenu ? "Retirer de mes favoris" : "Ajouter à mes favoris")
+        .accessibilityLabel("\(nom), " + tp("classement.a11y.points", points))
+        .accessibilityValue(retenu ? t("cotes.a11y.enFavori") : t("cotes.a11y.pasEnFavori"))
+        .accessibilityHint(retenu ? t("cotes.a11y.retirerFavori") : t("cotes.a11y.ajouterFavori"))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -786,7 +786,7 @@ private struct ChipPariBonus: View {
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(StyleAppui(.bouton))
-            .accessibilityLabel("Retirer \(nom) de mes favoris")
+            .accessibilityLabel(t("cotes.a11y.retirerNom", nom))
         }
         .padding(.leading, 14)
         .frame(height: 44)
@@ -818,11 +818,9 @@ private struct ModeEmploi: View {
 
     private let fond = Color(hexadecimal: 0xFFF3DC)
 
-    private let etapes = [
-        "Ajoute tes paris bonus avec l'étoile",
-        "Choisis tes 2 pronostics obligatoires (Vainqueur + Podium) depuis l'écran suivant",
-        "Sélectionne jusqu'à 3 paris bonus parmi eux"
-    ]
+    private var etapes: [String] {
+        [t("cotes.etape1"), t("cotes.etape2"), t("cotes.etape3")]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -884,7 +882,7 @@ struct PastillePrevisualisation: View {
                 .frame(width: 6, height: 6)
                 .accessibilityHidden(true)
 
-            Text("Prévisualisation")
+            Text(t("cotes.previsualisation"))
                 .font(.label)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)

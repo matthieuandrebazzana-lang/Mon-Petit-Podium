@@ -102,6 +102,19 @@ uniquement**.
 Le contraste se mesure : texte ordinaire **4,5:1**, grand texte **3:1**. Zones tactiles
 **44 × 44 pt** minimum.
 
+**Aucun texte d'interface en dur : tout passe par `t("clé")`** (`Localisation/`). Deux
+dictionnaires Swift aux clés identiques, rangées par écran — `TraductionsFR.swift`,
+`TraductionsEN.swift` — et **jamais** de `.strings` ni de String Catalog. Une nouvelle
+chaîne = une clé ajoutée **aux deux** fichiers, au même endroit. Le pluriel passe par
+`tp("clé", n)` (clés `clé.un` / `clé.plusieurs` : 0 est singulier en français, pluriel en
+anglais), le rang par `ordinal(n)`, l'heure par `heureInterface(_:)`, toute date par
+`.locale(localeInterface)` — **jamais `fr_FR` en dur** pour un affichage. `t()` lu dans un
+`body` y inscrit la langue comme dépendance (`LanguageManager` est `@Observable`) : rien à
+câbler pour que l'écran suive. Un texte **stocké** (dans un `@State`, un modèle) ne suit
+pas — stocker la clé, traduire à l'affichage. Les données de l'API (marchés Unibet,
+pilotes, GP, écuries) ne se traduisent pas. Vocabulaire anglais : *Championship*,
+*Prediction*, *Bonus picks*, *Calendar*, *Odds*.
+
 ## 4. Règles de commit
 
 - **Incrémenter `MARKETING_VERSION`** dans `ios/Greed F1.xcodeproj/project.pbxproj` (deux
@@ -139,6 +152,11 @@ ios/
 └── Greed F1/
     ├── App/
     │   └── GreedF1App.swift     point d'entrée
+    ├── Localisation/
+    │   ├── LanguageManager.swift    langue active (détection, choix persisté), `t`, `tp`, `ordinal`, `heureInterface`
+    │   ├── TraductionsFR.swift      ┐ mêmes clés, même ordre, rangées par écran
+    │   ├── TraductionsEN.swift      ┘
+    │   └── SelecteurLangue.swift    toggle FR/EN — Landing, Connexion, paramètres du Profil
     ├── Config/
     │   ├── Config.xcconfig          valeurs de connexion — NON VERSIONNÉ, hors bundle
     │   ├── Config.xcconfig.example  gabarit à copier — hors bundle

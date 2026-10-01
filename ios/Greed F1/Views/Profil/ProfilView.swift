@@ -87,7 +87,7 @@ struct ProfilView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    Text("Mon profil")
+                    Text(t("accueil.monProfil"))
                         .font(.titre)
                         .tracking(Tracking.titre)
                         .foregroundColor(.texte)          // 15,37:1 sur le beige
@@ -110,9 +110,9 @@ struct ProfilView: View {
                     grilleStatistiques
 
                     Spacer().frame(height: 12)
-                    LigneGrandsPrix(titre: "Mes Grands Prix",
+                    LigneGrandsPrix(titre: t("profil.mesGrandsPrix"),
                                     sousTitre: StatsProfil.sousTitreGrandsPrix(joues: statistiques.stats?.gpJoues)) {
-                        HistoriqueGPView(titre: "Mes Grands Prix", profilId: viewModel.profil?.id)
+                        HistoriqueGPView(titre: t("profil.mesGrandsPrix"), profilId: viewModel.profil?.id)
                     }
 
                     Spacer().frame(height: 12)
@@ -125,6 +125,9 @@ struct ProfilView: View {
                         Spacer().frame(height: 12)
                         blocAdministration
                     }
+
+                    Spacer().frame(height: 12)
+                    blocParametres
 
                     Spacer().frame(height: 28)
                     deconnexion
@@ -240,7 +243,7 @@ struct ProfilView: View {
         }
         .buttonStyle(StyleAppui(.bouton))
         .disabled(envoiPhoto)
-        .accessibilityLabel("Changer ma photo de profil")
+        .accessibilityLabel(t("profil.a11y.changerPhoto"))
     }
 
     /// Charge la photo choisie et ouvre son recadrage. La sélection est remise à `nil` à la
@@ -253,7 +256,7 @@ struct ProfilView: View {
             let donnees = try? await choix.loadTransferable(type: Data.self),
             let image = UIImage(data: donnees)
         else {
-            erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+            erreurPhoto = .serveur(statut: nil, message: t("photo.illisible"))
             return
         }
         imageACadrer = image
@@ -265,7 +268,7 @@ struct ProfilView: View {
         erreurPhoto = nil
         defer { envoiPhoto = false }
         guard let donnees = image.jpegData(compressionQuality: 0.9) else {
-            erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+            erreurPhoto = .serveur(statut: nil, message: t("photo.illisible"))
             return
         }
         do {
@@ -273,12 +276,12 @@ struct ProfilView: View {
         } catch let erreur as ErreurAPI {
             erreurPhoto = erreur
         } catch {
-            erreurPhoto = .serveur(statut: nil, message: "Photo illisible. Essaie une autre image.")
+            erreurPhoto = .serveur(statut: nil, message: t("photo.illisible"))
         }
     }
 
     private var supprimerLaPhoto: some View {
-        Button("Supprimer la photo") {
+        Button(t("profil.supprimerPhoto")) {
             // Idem : la suppression passera par le backend.
         }
         .font(.corps)
@@ -290,7 +293,7 @@ struct ProfilView: View {
     /// Repli sur « pilote » : une session peut être ouverte sans métadonnée `pseudo`.
     /// Un écran ne montre jamais un trou à la place d'un nom.
     private var pseudoAffiche: String {
-        viewModel.pseudo.isEmpty ? "pilote" : viewModel.pseudo
+        viewModel.pseudo.isEmpty ? t("accueil.pilote") : viewModel.pseudo
     }
 
     // MARK: - Statistiques
@@ -308,7 +311,7 @@ struct ProfilView: View {
 
     private var blocLivree: some View {
         VStack(alignment: .leading, spacing: 0) {
-            titreDeBloc("Ma livrée")
+            titreDeBloc(t("profil.maLivree"))
 
             Spacer().frame(height: 8)
 
@@ -324,7 +327,7 @@ struct ProfilView: View {
 
             rangeeNumero
 
-            rangee(.skin, libelle: "Skin", valeur: nomDuSkin) {
+            rangee(.skin, libelle: t("profil.skin"), valeur: nomDuSkin) {
                 pastilleDuSkin
             } contenu: {
                 grilleSkins
@@ -334,20 +337,20 @@ struct ProfilView: View {
             // d'écurie ils ne peindraient rien ; ils restent en base et reviennent dès que le
             // membre rebascule. La couleur du texte, elle, peint aussi une écurie : toujours là.
             if livree.mode == .perso {
-                rangee(.coque, libelle: "Coque", valeur: PaletteVoiture.nom(de: livree.coque)) {
+                rangee(.coque, libelle: t("profil.coque"), valeur: PaletteVoiture.nom(de: livree.coque)) {
                     pastille(livree.coque)
                 } contenu: {
                     grilleCouleurs(choisie: livree.coque) { livree.coque = $0 }
                 }
 
-                rangee(.ailerons, libelle: "Ailerons", valeur: PaletteVoiture.nom(de: livree.ailerons)) {
+                rangee(.ailerons, libelle: t("profil.ailerons"), valeur: PaletteVoiture.nom(de: livree.ailerons)) {
                     pastille(livree.ailerons)
                 } contenu: {
                     grilleCouleurs(choisie: livree.ailerons) { livree.ailerons = $0 }
                 }
             }
 
-            rangee(.texte, libelle: "Couleur du texte", valeur: PaletteVoiture.nom(de: couleurTexteAffichee)) {
+            rangee(.texte, libelle: t("profil.couleurTexte"), valeur: PaletteVoiture.nom(de: couleurTexteAffichee)) {
                 pastille(couleurTexteAffichee)
             } contenu: {
                 grilleCouleurs(choisie: couleurTexteAffichee) { livree.couleurTexte = $0 }
@@ -380,7 +383,7 @@ struct ProfilView: View {
     }
 
     private var nomDuSkin: String {
-        livree.ecurieChoisie?.nom ?? "Ma livrée"
+        livree.ecurieChoisie?.nom ?? t("profil.maLivreeNom")
     }
 
     // MARK: Rangées
@@ -389,7 +392,7 @@ struct ProfilView: View {
     /// vite qu'ils ne se cherchent dans une liste de quatre-vingt-dix-neuf.
     private var rangeeNumero: some View {
         HStack {
-            Text("Numéro")
+            Text(t("profil.numero"))
                 .font(.custom("HelveticaNeue", size: 17))
                 .foregroundColor(.grisSecondaire)
 
@@ -516,7 +519,7 @@ struct ProfilView: View {
     private var grilleSkins: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
                   spacing: 12) {
-            caseSkin(nom: "Ma livrée", choisi: livree.mode == .perso) {
+            caseSkin(nom: t("profil.maLivreeNom"), choisi: livree.mode == .perso) {
                 livree.mode = .perso
                 livree.ecurie = nil
             } vignette: {
@@ -647,7 +650,7 @@ struct ProfilView: View {
     private var boutonEnregistrer: some View {
         Button(action: enregistrerVoiture) {
             ZStack {
-                Text("Enregistrer ma voiture").opacity(envoiVoiture ? 0 : 1)
+                Text(t("profil.enregistrerVoiture")).opacity(envoiVoiture ? 0 : 1)
                 if envoiVoiture { ProgressView().tint(.white) }
             }
             .font(.custom("HelveticaNeue-Medium", size: 17))
@@ -659,7 +662,7 @@ struct ProfilView: View {
         .buttonStyle(StyleAppui(.bouton))
         .disabled(!aChange || envoiVoiture)
         .animation(mouvementReduit ? nil : Mouvement.entree(0.18), value: aChange)
-        .accessibilityLabel(envoiVoiture ? "Enregistrement en cours" : "Enregistrer ma voiture")
+        .accessibilityLabel(envoiVoiture ? t("pronos.a11y.enregistrement") : t("profil.enregistrerVoiture"))
     }
 
     /// Ce que le `PATCH` transmet. **La couleur du texte ne part que si elle a été
@@ -717,19 +720,19 @@ struct ProfilView: View {
 
     private var blocAdministration: some View {
         VStack(alignment: .leading, spacing: 0) {
-            titreDeBloc("Administration")
+            titreDeBloc(t("admin.titre"))
 
             Spacer().frame(height: 10)
 
             // L'état est **dit**, pas seulement peint : la description change avec lui.
             Toggle(isOn: $viewModel.modeAdminActif) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Mode admin actif")
+                    Text(t("admin.modeActif"))
                         .font(.custom("HelveticaNeue-Medium", size: 17))
                         .foregroundColor(.texte)
                     Text(viewModel.modeAdminActif
-                         ? "Tu vois les Grands Prix comme s'ils étaient ouverts. Rien n'est modifié en base."
-                         : "Tu vois l'app comme un membre ordinaire.")
+                         ? t("admin.modeActifOui")
+                         : t("admin.modeActifNon"))
                         .font(.corpsSm)
                         .foregroundColor(.grisSecondaire)
                         .fixedSize(horizontal: false, vertical: true)
@@ -740,7 +743,7 @@ struct ProfilView: View {
 
             Spacer().frame(height: 12)
 
-            Text("Il repart éteint à chaque lancement.")
+            Text(t("admin.repartEteint"))
                 .font(.corpsSm)
                 .foregroundColor(.grisSecondaire)
                 .fixedSize(horizontal: false, vertical: true)
@@ -752,7 +755,7 @@ struct ProfilView: View {
                 .padding(.vertical, 16)
                 .accessibilityHidden(true)
 
-            Text("Le scraping tourne déjà tout seul après les qualifications. Ce bouton le force entre-temps, sans figer les cotes.")
+            Text(t("admin.scrapingExplication"))
                 .font(.corpsSm)
                 .foregroundColor(.grisSecondaire)
                 .fixedSize(horizontal: false, vertical: true)
@@ -793,7 +796,7 @@ struct ProfilView: View {
     private var boutonScraper: some View {
         Button(action: lancerScraper) {
             ZStack {
-                Text("Scraper les cotes").opacity(envoiScraper ? 0 : 1)
+                Text(t("admin.scraper")).opacity(envoiScraper ? 0 : 1)
                 if envoiScraper { ProgressView().tint(.white) }
             }
             .font(.custom("HelveticaNeue-Medium", size: 17))
@@ -804,7 +807,7 @@ struct ProfilView: View {
         }
         .buttonStyle(StyleAppui(.bouton))
         .disabled(envoiScraper)
-        .accessibilityLabel(envoiScraper ? "Scraping en cours" : "Scraper les cotes")
+        .accessibilityLabel(envoiScraper ? t("admin.a11y.scrapingEnCours") : t("admin.scraper"))
     }
 
     private func lancerScraper() {
@@ -824,13 +827,39 @@ struct ProfilView: View {
         }
     }
 
+    // MARK: - Paramètres
+
+    /// La langue de l'interface — le même ``SelecteurLangue`` que l'accueil et la connexion.
+    /// Bloc blanc au rayon 24, donc `ombreBloc` (§4.7), comme ses voisins.
+    private var blocParametres: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            titreDeBloc(t("profil.parametres"))
+
+            Spacer().frame(height: 10)
+
+            HStack(spacing: 12) {
+                Text(t("langue.titre"))
+                    .font(.custom("HelveticaNeue-Medium", size: 17))
+                    .foregroundColor(.texte)
+                Spacer(minLength: 0)
+                SelecteurLangue()
+            }
+            .frame(minHeight: 44)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
+        .ombreBloc()
+    }
+
     // MARK: - Pied
 
     private var deconnexion: some View {
         Button {
             Task { await viewModel.deconnexion() }
         } label: {
-            Text("Se déconnecter")
+            Text(t("commun.seDeconnecter"))
                 .font(.custom("HelveticaNeue", size: 17))
                 .foregroundColor(.grisSecondaire)          // 4,71:1 sur le beige
                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -847,7 +876,7 @@ struct ProfilView: View {
             Button {
                 confirmationSuppression = true
             } label: {
-                Text("Supprimer mon compte")
+                Text(t("profil.supprimerCompte"))
                     .font(.custom("HelveticaNeue-Medium", size: 13))
                     .foregroundColor(.primaire)             // 9,13:1 sur le beige
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -862,19 +891,19 @@ struct ProfilView: View {
         }
         .animation(mouvementReduit ? nil : Mouvement.entree(0.20), value: erreurSuppression)
         .sensoryFeedback(.error, trigger: erreurSuppression) { _, nouveau in nouveau != nil }
-        .alert("Supprimer mon compte ?", isPresented: $confirmationSuppression) {
-            Button("Annuler", role: .cancel) {}
-            Button("Supprimer", role: .destructive) {
+        .alert(t("profil.supprimerCompteTitre"), isPresented: $confirmationSuppression) {
+            Button(t("commun.annuler"), role: .cancel) {}
+            Button(t("profil.supprimer"), role: .destructive) {
                 confirmationSuppressionFinale = true
             }
         } message: {
-            Text("Cette action est irréversible. Toutes tes données seront supprimées.")
+            Text(t("profil.supprimerCompteMessage"))
         }
-        .alert("Es-tu sûr ?", isPresented: $confirmationSuppressionFinale) {
-            Button("Annuler", role: .cancel) {}
-            Button("Oui, supprimer définitivement", role: .destructive, action: supprimerCompte)
+        .alert(t("profil.esTuSur"), isPresented: $confirmationSuppressionFinale) {
+            Button(t("commun.annuler"), role: .cancel) {}
+            Button(t("profil.supprimerDefinitivement"), role: .destructive, action: supprimerCompte)
         } message: {
-            Text("Tu perdras ton historique, tes pronostics et ta voiture personnalisée.")
+            Text(t("profil.supprimerCompteMessageFinal"))
         }
     }
 
@@ -903,7 +932,7 @@ struct ProfilView: View {
     }
 
     private var versionAffichee: some View {
-        Text("Version \(Bundle.main.versionAffichee)")
+        Text(t("accueil.version", Bundle.main.versionAffichee))
             .font(.labelSm)
             .tracking(Tracking.label)
             .textCase(.uppercase)

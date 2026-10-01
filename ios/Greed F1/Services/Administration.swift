@@ -38,9 +38,9 @@ private struct ReponseAction: Decodable {
 
     var message: String {
         switch statut {
-        case "lance":  return "Scraping lancé, sans figeage. Le compte rendu est dans les logs Railway."
-        case "traite": return "Scraping terminé."
-        default:       return "Demande acceptée par le serveur."
+        case "lance":  return t("admin.lance")
+        case "traite": return t("admin.traite")
+        default:       return t("admin.acceptee")
         }
     }
 }

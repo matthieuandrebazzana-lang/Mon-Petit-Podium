@@ -22,7 +22,8 @@ enum ErreurAPI: Error, Equatable {
     /// affichable, `nil` sinon (liste Pydantic, message technique, corps illisible).
     case serveur(statut: Int?, message: String?)
 
-    /// Le message à afficher, toujours non vide, toujours en français.
+    /// Le message à afficher, toujours non vide, dans la langue de l'interface — sauf le
+    /// `detail` du backend, qui reste en français (donnée de l'API, hors périmètre).
     ///
     /// Le genre l'emporte sur le texte reçu pour le réseau et la session : le serveur
     /// n'y dit rien d'utile. Pour le reste, son `detail` est plus précis que le générique
@@ -30,13 +31,13 @@ enum ErreurAPI: Error, Equatable {
     var message: String {
         switch self {
         case .reseau:
-            return "Connexion au serveur en cours… Réessaie dans quelques secondes."
+            return t("erreur.reseau")
         case .session:
-            return "Session expirée. Reconnecte-toi."
+            return t("auth.erreur.session")
         case .donnees(let message):
-            return message ?? "Ce contenu n'existe pas ou n'est plus accessible."
+            return message ?? t("erreur.introuvable")
         case .serveur(_, let message):
-            return message ?? "Une erreur est survenue. Réessaie."
+            return message ?? t("commun.erreurGenerique")
         }
     }
 
