@@ -170,6 +170,8 @@ valeur mesurée contredit une valeur prescrite. Écrire l'écart et sa raison.
 **Ne pas supprimer le code qui redevient utile.** Le code remplacé mais éprouvé reste en
 place, simplement non monté — le bundler l'élimine du build.
 
+**Après chaque session, mettre à jour `docs/contexte-chat.md`.**
+
 ---
 
 ## 7. Règles permanentes
@@ -204,4 +206,4 @@ seule ligne). Mettre à jour **uniquement le fichier `docs/` concerné** par la 
 
 ## 8. État d'avancement
 
-Version actuelle : 0.87.4
+Version actuelle : 0.87.5
