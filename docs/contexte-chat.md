@@ -12,7 +12,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
-Version iOS actuelle : 0.46.0
+Version iOS actuelle : 0.46.1
 
 ## STACK TECHNIQUE
 
@@ -61,7 +61,7 @@ Pages greed-f1.com/privacy, /terms, /contact
 Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
 
-## CE QUI EST FAIT — VERSION iOS (0.46.0)
+## CE QUI EST FAIT — VERSION iOS (0.46.1)
 
 Navigation TabView 4 onglets (Accueil, Championnats, Calendrier, Profil)
 AccueilView : widget GP navigable avec drapeau + tracé circuit
@@ -76,6 +76,7 @@ Recadrage photo avant upload
 Toutes les données branchées sur l'API réelle
 Mention "Provisoire" sur les résultats provisoires
 Localisation français/anglais (0.46.0) : dictionnaires Swift `Localisation/Traductions{FR,EN}.swift`, `t("clé")` / `tp("clé", n)`, détection au 1er lancement (français si téléphone en français, sinon anglais), choix manuel persisté, toggle FR/EN sur Landing, Connexion et Profil > Paramètres, dates dans la langue choisie, fr + en déclarés (Info.plist + knownRegions)
+Sélecteur de langue retravaillé (0.46.1) : drapeaux emoji 🇫🇷 / 🇬🇧, segment actif en pastille pleine `primaire` + encre blanche, segment inactif sur fond neutre avec drapeau atténué (40 %, désaturé) et texte à 80 % (pas plus bas : 4,5:1 mesuré), pastille qui glisse en 200 ms (fondu sous mouvement réduit). Vérifié au simulateur sur Landing, Connexion et Profil > Paramètres
 
 ## ÉVALUATION DES PRONOSTICS
 

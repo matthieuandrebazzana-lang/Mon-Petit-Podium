@@ -219,4 +219,18 @@ extension Color {
     /// > graphique porteur de sens, et ces tirets en portent un : ils disent que le code
     /// > fait six caractères. Mesuré : 45 % tombe pile à 3,01:1, 50 % donne **3,46:1**.
     static let encreGraphique = Color.white.opacity(0.50)
+
+    /// Encre d'un **segment inactif** d'un sélecteur posé sur ``fondSegmentInactif`` —
+    /// ``secondaire`` à **80 %**.
+    ///
+    /// > Atténuée, mais pas sous le plancher : à 50 % le libellé du segment inactif ne tient
+    /// > que **2,47:1** sur le beige. Mesuré sur le fond du sélecteur : 75 % donne 4,37:1
+    /// > sur le beige (refusé), 80 % donne **4,94:1** sur le beige et **5,36:1** sur le
+    /// > blanc. Le contraste entre les deux états vient donc de la pastille et du drapeau,
+    /// > pas d'une encre illisible.
+    static let encreSegmentInactif = Color.secondaire.opacity(0.80)
+
+    /// Fond neutre d'un sélecteur segmenté — ``secondaire`` à **8 %**, qui se lit sur le
+    /// beige comme sur le blanc d'un bloc.
+    static let fondSegmentInactif = Color.secondaire.opacity(0.08)
 }

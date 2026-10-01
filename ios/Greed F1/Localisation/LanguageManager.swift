@@ -11,6 +11,14 @@ enum Langue: String, CaseIterable, Identifiable {
     /// Libellé du sélecteur — « FR », « EN ».
     var code: String { rawValue.uppercased() }
 
+    /// Drapeau du sélecteur, en **emoji natif** — aucun asset : le système le dessine.
+    var drapeau: String {
+        switch self {
+        case .fr: return "🇫🇷"
+        case .en: return "🇬🇧"
+        }
+    }
+
     /// Locale des dates, des jours et des mois : **celle de la langue choisie**, jamais celle
     /// du téléphone. Un iPhone réglé en anglais qui a choisi le français lit « 15 mars ».
     var locale: Locale {

@@ -115,6 +115,11 @@ pas — stocker la clé, traduire à l'affichage. Les données de l'API (marché
 pilotes, GP, écuries) ne se traduisent pas. Vocabulaire anglais : *Championship*,
 *Prediction*, *Bonus picks*, *Calendar*, *Odds*.
 
+**Le sélecteur de langue est un seul composant** (`SelecteurLangue`) : ses états actif /
+inactif s'y règlent, jamais sur l'écran qui le monte. Son encre inactive
+(`encreSegmentInactif`, `secondaire` à 80 %) ne descend pas plus bas — à 50 % le libellé
+tombe à 2,47:1. L'atténuation franche est portée par le drapeau, redondant avec le code.
+
 ## 4. Règles de commit
 
 - **Incrémenter `MARKETING_VERSION`** dans `ios/Greed F1.xcodeproj/project.pbxproj` (deux
@@ -156,7 +161,7 @@ ios/
     │   ├── LanguageManager.swift    langue active (détection, choix persisté), `t`, `tp`, `ordinal`, `heureInterface`
     │   ├── TraductionsFR.swift      ┐ mêmes clés, même ordre, rangées par écran
     │   ├── TraductionsEN.swift      ┘
-    │   └── SelecteurLangue.swift    toggle FR/EN — Landing, Connexion, paramètres du Profil
+    │   └── SelecteurLangue.swift    toggle 🇫🇷 FR / 🇬🇧 EN (drapeaux emoji, aucun asset) — Landing, Connexion, paramètres du Profil
     ├── Config/
     │   ├── Config.xcconfig          valeurs de connexion — NON VERSIONNÉ, hors bundle
     │   ├── Config.xcconfig.example  gabarit à copier — hors bundle
