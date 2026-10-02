@@ -38,7 +38,7 @@ final class GrandsPrixJoues: ObservableObject {
         var id: UUID { gpId }
 
         /// La clé du drapeau et du tracé — la même normalisation que le calendrier.
-        var slug: String { SlugCircuit.de(nom) }
+        var slug: String { SlugCircuit.de(nom, dateCourse: dateCourse) }
 
         /// L'entrée du calendrier statique : nom et date écrits comme sur le calendrier.
         var fiche: GrandPrixSaison? { GrandPrixSaison.saison2026.first { $0.slug == slug } }

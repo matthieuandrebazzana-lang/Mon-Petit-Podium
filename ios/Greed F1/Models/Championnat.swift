@@ -89,7 +89,7 @@ struct ProchainGP: Codable, Identifiable, Equatable, Hashable {
 extension ProchainGP {
 
     /// La clé des assets et des teintes — ``SlugCircuit``, le seul propriétaire.
-    var slug: String { SlugCircuit.de(nom) }
+    var slug: String { SlugCircuit.de(nom, dateCourse: dateCourse) }
 
     /// Les pronostics sont ouverts — ``EcheancePronostics/cotesArretees(statut:dateCourse:le:)``.
     func pronosticsOuverts(le maintenant: Date = .now) -> Bool {

@@ -115,6 +115,15 @@ pas — stocker la clé, traduire à l'affichage. Les données de l'API (marché
 pilotes, GP, écuries) ne se traduisent pas. Vocabulaire anglais : *Championship*,
 *Prediction*, *Bonus picks*, *Calendar*, *Odds*.
 
+**Un Grand Prix de la base se reconnaît à sa date de course, le nom n'est qu'un repli.**
+Le slug (drapeau, tracé, teintes, croisement avec le calendrier statique) a un seul
+propriétaire : `SlugCircuit.de(_:dateCourse:)` (`Models/GrandPrix.swift`) — l'entrée de
+`GrandPrixSaison.saison2026` courue à ±3 jours, sinon `SlugCircuit.de(nom)`. Ne jamais
+appeler la variante sans date sur une ligne de la base : Unibet a publié « GP Bahrein » à
+la place de Sepang (2026-10-04), et `bahrein` ne désigne aucun asset. Même règle que le
+scraper et le web (`docs/decisions.md` §24). Deux lignes au même week-end : le calendrier
+garde celle qui a des cotes.
+
 **Le sélecteur de langue est un seul composant** (`SelecteurLangue`) : ses états actif /
 inactif s'y règlent, jamais sur l'écran qui le monte. Son encre inactive
 (`encreSegmentInactif`, `secondaire` à 80 %) ne descend pas plus bas — à 50 % le libellé
@@ -128,7 +137,7 @@ tombe à 2,47:1. L'atténuation franche est portée par le drapeau, redondant av
   recopie nulle part.
 - **La version web (`frontend/package.json`, `CLAUDE.md` §8) ne bouge pas** sur un commit
   iOS — la faire bouger laisserait croire à un déploiement Vercel qui n'a pas eu lieu.
-  Même logique que la version backend.
+  Même logique que la version backend (règle commune : `CLAUDE.md` §7).
 - Message de commit **concis, en français**.
 - **Pousser immédiatement** : `git push origin main`. Ne pas attendre de feu vert.
 - **Jamais de ligne `Co-Authored-By`** — Vercel bloque les déploiements automatiques du plan

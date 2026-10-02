@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
 Version backend actuelle : 0.82.1
-Version iOS actuelle : 0.46.1
+Version iOS actuelle : 0.46.2
 
 ## STACK TECHNIQUE
 
@@ -34,6 +34,7 @@ Migrations Supabase : toujours appliquées manuellement dans le SQL Editor
 Docker non disponible → migrations testées en production directement
 29 migrations appliquées (la 29 : `20261001120000_rattachement_par_date`)
 Après chaque session, Claude Code met à jour docs/contexte-chat.md
+Versions : web, backend et iOS sont indépendantes — chacune ne bouge que si son code change (`CLAUDE.md` §7). `CLAUDE.md` §8 suit la version web
 
 ## COMPTE REVIEWER APP STORE
 
@@ -63,7 +64,7 @@ Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 
-## CE QUI EST FAIT — VERSION iOS (0.46.1)
+## CE QUI EST FAIT — VERSION iOS (0.46.2)
 
 Navigation TabView 4 onglets (Accueil, Championnats, Calendrier, Profil)
 AccueilView : widget GP navigable avec drapeau + tracé circuit
@@ -79,6 +80,7 @@ Toutes les données branchées sur l'API réelle
 Mention "Provisoire" sur les résultats provisoires
 Localisation français/anglais (0.46.0) : dictionnaires Swift `Localisation/Traductions{FR,EN}.swift`, `t("clé")` / `tp("clé", n)`, détection au 1er lancement (français si téléphone en français, sinon anglais), choix manuel persisté, toggle FR/EN sur Landing, Connexion et Profil > Paramètres, dates dans la langue choisie, fr + en déclarés (Info.plist + knownRegions)
 Sélecteur de langue retravaillé (0.46.1) : drapeaux emoji 🇫🇷 / 🇬🇧, segment actif en pastille pleine `primaire` + encre blanche, segment inactif sur fond neutre avec drapeau atténué (40 %, désaturé) et texte à 80 % (pas plus bas : 4,5:1 mesuré), pastille qui glisse en 200 ms (fondu sous mouvement réduit). Vérifié au simulateur sur Landing, Connexion et Profil > Paramètres
+Drapeau, tracé et croisement du calendrier par date de course (0.46.2) : `SlugCircuit.de(_:dateCourse:)` (`Models/GrandPrix.swift`), date à ±3 jours puis nom — utilisé par `GrandPrixEnBase`, `ProchainGP` et `GrandPrixJoue` ; deux lignes au même week-end, le calendrier garde celle qui a des cotes. Corrige le widget du prochain GP vide pour « GP Bahrein » couru à Sepang. Vérifié au simulateur en FR et EN (Accueil, Calendrier, Profil)
 
 ## ÉVALUATION DES PRONOSTICS
 

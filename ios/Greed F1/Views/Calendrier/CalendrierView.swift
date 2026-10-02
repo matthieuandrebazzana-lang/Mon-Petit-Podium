@@ -669,7 +669,11 @@ struct GrandPrixSaison {
     /// l'orthographe d'un pays.
     static func saison2026(croiseeAvec enBase: [GrandPrixEnBase]?) -> [GrandPrixSaison] {
         guard let enBase else { return saison2026 }
-        let parSlug = Dictionary(enBase.map { ($0.slug, $0) }, uniquingKeysWith: { premier, _ in premier })
+        // Deux lignes pour un même week-end — une manuelle pas encore adoptée et celle du
+        // scraper : celle qui porte des cotes l'emporte, c'est la seule pronosticable.
+        let parSlug = Dictionary(enBase.map { ($0.slug, $0) }, uniquingKeysWith: { premier, second in
+            !premier.cotesDisponibles && second.cotesDisponibles ? second : premier
+        })
         return saison2026.map { gp in
             var croise = gp
             croise.enBase = parSlug[gp.slug]

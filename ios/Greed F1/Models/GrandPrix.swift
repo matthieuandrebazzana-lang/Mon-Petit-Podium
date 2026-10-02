@@ -47,7 +47,7 @@ struct GrandPrixEnBase: Decodable, Identifiable, Equatable, Hashable {
         cotesDisponibles = !(marches ?? []).isEmpty
     }
 
-    var slug: String { SlugCircuit.de(nom) }
+    var slug: String { SlugCircuit.de(nom, dateCourse: dateCourse) }
 }
 
 // MARK: - Le slug
@@ -64,7 +64,35 @@ struct GrandPrixEnBase: Decodable, Identifiable, Equatable, Hashable {
 /// **Un seul propriétaire** : le widget d'un championnat, celui de l'accueil et le
 /// croisement du calendrier rapprochent tous par cette clé. Deux normalisations auraient
 /// fini par ne plus retrouver le même Grand Prix.
+///
+/// **La date de course passe avant le nom.** Le nom est un libellé d'Unibet, et le
+/// bookmaker ne nomme pas toujours le Grand Prix comme le calendrier : le 1er octobre 2026
+/// il a publié « GP Bahrein » au 4 octobre, la place de Sepang. Le scraper, qui ne pouvait
+/// pas adopter la ligne manuelle « GP Malaisie » sous ce nom, en a inséré une seconde, et
+/// le slug `bahrein` ne répondait à aucun asset : le widget de l'accueil restait vide. Une
+/// seule course par week-end, au moins six jours entre deux : le jour de course désigne le
+/// Grand Prix sans ambiguïté, quel que soit son nom.
 enum SlugCircuit {
+
+    /// L'écart toléré entre le départ en base, un instant UTC, et le jour **écrit** du
+    /// calendrier statique, minuit en heure locale. Las Vegas est écrit le 21 et part le 22
+    /// à 06:00 UTC ; deux week-ends consécutifs sont à sept jours au moins.
+    private static let toleranceDate: TimeInterval = 3 * 86_400
+
+    /// Le slug d'une ligne de la base : celui du Grand Prix du calendrier statique couru ce
+    /// jour-là, sinon celui du nom. Un départ inconnu laisse le nom seul juge.
+    static func de(_ nom: String, dateCourse: Date?) -> String {
+        if let dateCourse, let entree = entreeDuCalendrier(le: dateCourse) { return entree.slug }
+        return de(nom)
+    }
+
+    /// L'entrée du calendrier statique la plus proche de ce départ, dans la tolérance.
+    private static func entreeDuCalendrier(le dateCourse: Date) -> GrandPrixSaison? {
+        GrandPrixSaison.saison2026
+            .compactMap { gp in GPRestants.jourDeCourse(gp).map { (gp, abs($0.timeIntervalSince(dateCourse))) } }
+            .filter { $0.1 <= toleranceDate }
+            .min { $0.1 < $1.1 }?.0
+    }
 
     static func de(_ nom: String) -> String {
         var texte = nom.lowercased()

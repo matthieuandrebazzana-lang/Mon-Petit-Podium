@@ -178,17 +178,17 @@ place, simplement non monté — le bundler l'élimine du build.
 
 ### Version
 
-À **chaque commit qui modifie l'application**, incrémenter la version affichée en bas de
-l'accueil (`frontend/package.json`).
+Trois versions, chacune ne bouge **que** si son code change — la faire bouger ailleurs
+laisserait croire à un déploiement qui n'a pas eu lieu :
 
-> **La version du backend (`backend/app/config.py`) ne bouge QUE si du code backend
-> change.** La faire bouger sur un commit frontend laisserait croire à un déploiement
-> Railway qui n'a pas eu lieu.
+- **web** — `frontend/package.json` (affichée en bas de l'accueil) **et** §8 ci-dessous ;
+- **backend** — `backend/app/config.py` (déploiement Railway) ;
+- **iOS** — `MARKETING_VERSION`, voir `ios/CLAUDE.md` §4.
 
 ### Documentation
 
-À **chaque commit**, incrémenter le numéro de version dans `CLAUDE.md` (section 8, une
-seule ligne). Mettre à jour **uniquement le fichier `docs/` concerné** par la tâche.
+La ligne de §8 suit la version web : elle ne bouge que sur un commit qui touche le web.
+Mettre à jour **uniquement le fichier `docs/` concerné** par la tâche.
 
 **Ne jamais ajouter de contenu narratif ou descriptif dans `CLAUDE.md`** — il doit rester
 **sous 250 lignes en permanence**. Une décision technique importante va dans
