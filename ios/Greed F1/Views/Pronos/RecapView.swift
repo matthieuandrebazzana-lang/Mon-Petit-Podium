@@ -189,7 +189,7 @@ struct RecapView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         EnteteDrapeau(
-                            nom: grandPrix.nom,
+                            nom: grandPrix.nomAffiche,
                             sousTitre: grandPrix.sousTitre,
                             slug: grandPrix.slug,
                             retrait: proxy.safeAreaInsets.top,

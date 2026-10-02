@@ -57,7 +57,7 @@ struct EntreePronosView: View {
 
             case false?:
                 if let dateResultats {
-                    ResultatsGPView(nom: grandPrix.nom, date: dateResultats, gpId: grandPrix.id)
+                    ResultatsGPView(nom: grandPrix.nomAffiche, date: dateResultats, gpId: grandPrix.id)
                 } else {
                     CotesView(grandPrix: grandPrix, donnees: donnees)
                 }

@@ -52,8 +52,8 @@ struct ResultatsParGPView: View {
 
     private var sousTitre: String {
         guard let gp = gpRegarde else { return t("commun.saison2026") }
-        guard let joueurs else { return gp.nom }
-        return tp("parGP.joueurs", joueurs, gp.nom)
+        guard let joueurs else { return gp.nomAffiche }
+        return tp("parGP.joueurs", joueurs, gp.nomAffiche)
     }
 
     var body: some View {
@@ -253,7 +253,7 @@ struct ResultatsParGPView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(StyleAppui(.bouton))
-        .accessibilityLabel(gp.nom)
+        .accessibilityLabel(gp.nomAffiche)
         .accessibilityAddTraits(actif ? .isSelected : [])
     }
 

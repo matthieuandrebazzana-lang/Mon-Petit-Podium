@@ -39,12 +39,18 @@ struct GrandPrixDuChampionnat: Decodable, Identifiable, Equatable, Hashable {
     /// Le libellé d'une pastille du sélecteur — `libelleCourtGp` du web : **le préfixe
     /// « GP » saute, et lui seul**. Identique sur toutes les options, il ne distingue rien
     /// et vole sa largeur au seul mot qui distingue.
+    ///
+    /// Le libellé vient du calendrier statique, traduit — ``GrandPrixSaison/nomCourt`` ;
+    /// le nom en base n'est qu'un repli hors saison.
     var libelleCourt: String {
-        let court = nom.replacingOccurrences(of: #"^GP\s+"#, with: "",
-                                             options: [.regularExpression, .caseInsensitive])
-            .trimmingCharacters(in: .whitespaces)
+        let court = GrandPrixSaison.nomCourtAffiche(slug: slug, repli: nom)
         return court.isEmpty ? t("commun.grandPrix") : court
     }
+
+    var slug: String { SlugCircuit.de(nom, dateCourse: dateCourse) }
+
+    /// Le nom à afficher — ``GrandPrixSaison/nomAffiche(slug:repli:)``, jamais ``nom``.
+    var nomAffiche: String { GrandPrixSaison.nomAffiche(slug: slug, repli: nom) }
 }
 
 // MARK: - Les paris de chacun — `GET /grands-prix/{gp}/pronostics/championnat/{id}`

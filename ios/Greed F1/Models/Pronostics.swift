@@ -13,6 +13,9 @@ struct GrandPrixPronos: Hashable {
     /// La clé des assets `flag-<slug>` — l'en-tête du récapitulatif porte le drapeau.
     let slug: String
     let sousTitre: String
+
+    /// Le nom à afficher — ``GrandPrixSaison/nomAffiche(slug:repli:)``, jamais ``nom``.
+    var nomAffiche: String { GrandPrixSaison.nomAffiche(slug: slug, repli: nom) }
 }
 
 /// Les trois champs dont ``EcheancePronostics`` a besoin — **jamais un calcul local** : le

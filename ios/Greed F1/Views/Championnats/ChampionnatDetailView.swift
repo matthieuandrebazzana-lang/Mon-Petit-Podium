@@ -760,7 +760,7 @@ private struct WidgetGrandPrixSuivant: View {
 
     let grandPrix: ProchainGP
 
-    private var nom: String { grandPrix.nom }
+    private var nom: String { grandPrix.nomAffiche }
 
     /// Ce que dit la seconde ligne — ``EcheancePronostics/phrase``, **le seul calcul
     /// d'échéance de l'app**. Lu à l'affichage : l'écran se recharge à chaque apparition,

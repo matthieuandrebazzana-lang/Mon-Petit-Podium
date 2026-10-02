@@ -374,7 +374,7 @@ private struct WidgetGrandPrix: View {
             .buttonStyle(StyleAppui(.grandeSurface))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(
-                t("accueil.a11y.prochainGP", grandPrix.nom, date, heureDepart, echeance().phrase)
+                t("accueil.a11y.prochainGP", grandPrix.nomAffiche, date, heureDepart, echeance().phrase)
             )
             .accessibilityHint(t("accueil.a11y.voirFiche"))
             .accessibilityAddTraits(.isButton)
@@ -382,7 +382,7 @@ private struct WidgetGrandPrix: View {
             surface
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(
-                    t("accueil.a11y.prochainGP", grandPrix.nom, date, heureDepart, echeance().phrase)
+                    t("accueil.a11y.prochainGP", grandPrix.nomAffiche, date, heureDepart, echeance().phrase)
                 )
         }
     }
@@ -414,7 +414,7 @@ private struct WidgetGrandPrix: View {
             .buttonStyle(StyleAppui(.grandeSurface))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(
-                t("accueil.a11y.dernierGP", grandPrix.nom, date)
+                t("accueil.a11y.dernierGP", grandPrix.nomAffiche, date)
                 + (StatutResultats.estProvisoire(grandPrix.statutResultats)
                    ? " \(StatutResultats.detail)" : "")
             )
@@ -446,7 +446,7 @@ private struct WidgetGrandPrix: View {
         .buttonStyle(StyleAppui(.grandeSurface))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            t("accueil.a11y.prochainGP", grandPrix.nom, date, heureDepart, echeance().phrase)
+            t("accueil.a11y.prochainGP", grandPrix.nomAffiche, date, heureDepart, echeance().phrase)
         )
         .accessibilityHint(libelle)
         .accessibilityAddTraits(.isButton)
@@ -580,7 +580,7 @@ private struct WidgetGrandPrix: View {
     /// 26 pt, avec le crénage négatif qu'/apple-design §15 impose au-delà de 24 : sans lui,
     /// les lettres d'un titre s'éloignent à mesure qu'il grandit.
     private var nomDuGrandPrix: some View {
-        Text(grandPrix.nom)
+        Text(grandPrix.nomAffiche)
             .font(.custom("HelveticaNeue-Medium", size: 26))
             .tracking(-0.52)                              // −0,02em × 26
             .foregroundColor(.white)

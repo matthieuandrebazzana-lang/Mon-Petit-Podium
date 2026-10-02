@@ -616,9 +616,6 @@ extension EtatGp {
 /// ``CalendrierView``.
 struct GrandPrixSaison {
     let slug: String
-    let pays: String
-    let nom: String
-    let circuit: String
     let jour: String
     let mois: String
     /// La date complète, **écrite** — l'en-tête de ``ResultatsGPView`` la porte telle
@@ -636,6 +633,42 @@ struct GrandPrixSaison {
 
     /// L'état de la carte, `nil` s'il est inconnu.
     var etat: EtatGp? { etatConnu ? EtatGp.pour(enBase) : nil }
+
+    /// Pays, nom et circuit **dans la langue de l'interface**, relus à chaque affichage —
+    /// clés `gp.<slug>.*` de `Localisation/`. Rien n'est stocké : un texte stocké ne suivrait
+    /// pas un changement de langue.
+    ///
+    /// **`pays` n'est pas `nom` moins « GP ».** Las Vegas se court aux États-Unis, et le
+    /// drapeau de sa carte est celui des États-Unis : les deux clés répondent à deux
+    /// questions différentes.
+    var pays: String { t("gp.\(slug).pays") }
+    /// « GP Malaisie » / « Malaysian GP ».
+    var nom: String { t("gp.\(slug).nom") }
+    /// Le nom sans « GP » — « Malaisie » / « Malaysia » : la pastille d'un sélecteur.
+    var nomCourt: String { t("gp.\(slug).court") }
+    var circuit: String { t("gp.\(slug).circuit") }
+
+    /// L'entrée de la liste statique qui porte ce slug, `nil` hors saison.
+    static func entree(slug: String) -> GrandPrixSaison? {
+        saison2026.first { $0.slug == slug }
+    }
+
+    /// **Le nom affiché d'un Grand Prix de la base** — le seul propriétaire. Celui de la liste
+    /// statique, traduit, dès que le slug y répond ; le nom d'Unibet n'est qu'un repli hors
+    /// saison. Le nom de la base sert au rattachement (``SlugCircuit``), jamais à
+    /// l'affichage : le 1er octobre 2026 Unibet a publié « GP Bahrein » à la place de Sepang,
+    /// et l'accueil disait Bahreïn quand le calendrier disait Malaisie.
+    static func nomAffiche(slug: String, repli: String) -> String {
+        entree(slug: slug)?.nom ?? repli
+    }
+
+    /// Même règle pour le libellé court ; le repli retire le préfixe « GP » du nom en base.
+    static func nomCourtAffiche(slug: String, repli: String) -> String {
+        if let entree = entree(slug: slug) { return entree.nomCourt }
+        return repli.replacingOccurrences(of: #"^GP\s+"#, with: "",
+                                          options: [.regularExpression, .caseInsensitive])
+            .trimmingCharacters(in: .whitespaces)
+    }
 
     /// Le mois de la carte dans la langue de l'interface — « AOÛT » ou « AUG », « DÉC » ou
     /// « DEC ». ``mois`` reste la clé écrite, en français, que ``GPRestants`` lit.
@@ -689,34 +722,21 @@ struct GrandPrixSaison {
     /// `trace-<slug>` et la table des teintes de ``TeintesDrapeaux`` — et celle du
     /// croisement avec la base, par ``SlugCircuit``.
     ///
-    /// **`pays` n'est pas `nom` moins « GP ».** Las Vegas se court aux États-Unis, et le
-    /// drapeau de sa carte est celui des États-Unis : les deux champs sont écrits
-    /// séparément parce qu'ils répondent à deux questions différentes.
+    /// Pays, nom et circuit ne sont pas écrits ici : ce sont les clés `gp.<slug>.*` des
+    /// deux dictionnaires de `Localisation/`.
     static let saison2026: [GrandPrixSaison] = [
-        .init(slug: "pays-bas", pays: "Pays-Bas", nom: "GP Pays-Bas",
-              circuit: "Zandvoort", jour: "23", mois: "AOÛT", date: "23 août 2026"),
-        .init(slug: "italie", pays: "Italie", nom: "GP Italie",
-              circuit: "Monza", jour: "6", mois: "SEPT", date: "6 septembre 2026"),
-        .init(slug: "espagne", pays: "Espagne", nom: "GP Espagne",
-              circuit: "Madrid", jour: "13", mois: "SEPT", date: "13 septembre 2026"),
-        .init(slug: "azerbaidjan", pays: "Azerbaïdjan", nom: "GP Azerbaïdjan",
-              circuit: "Bakou", jour: "26", mois: "SEPT", date: "26 septembre 2026"),
-        .init(slug: "malaisie", pays: "Malaisie", nom: "GP Malaisie",
-              circuit: "Sepang", jour: "4", mois: "OCT", date: "4 octobre 2026"),
-        .init(slug: "singapour", pays: "Singapour", nom: "GP Singapour",
-              circuit: "Singapour", jour: "11", mois: "OCT", date: "11 octobre 2026"),
-        .init(slug: "etats-unis", pays: "États-Unis", nom: "GP États-Unis",
-              circuit: "Austin", jour: "25", mois: "OCT", date: "25 octobre 2026"),
-        .init(slug: "mexique", pays: "Mexique", nom: "GP Mexique",
-              circuit: "Hermanos Rodríguez", jour: "1", mois: "NOV", date: "1er novembre 2026"),
-        .init(slug: "bresil", pays: "Brésil", nom: "GP Brésil",
-              circuit: "Interlagos", jour: "15", mois: "NOV", date: "15 novembre 2026"),
-        .init(slug: "las-vegas", pays: "États-Unis", nom: "GP Las Vegas",
-              circuit: "Las Vegas", jour: "21", mois: "NOV", date: "21 novembre 2026"),
-        .init(slug: "qatar", pays: "Qatar", nom: "GP Qatar",
-              circuit: "Lusail", jour: "29", mois: "NOV", date: "29 novembre 2026"),
-        .init(slug: "abu-dhabi", pays: "Abu Dhabi", nom: "GP Abu Dhabi",
-              circuit: "Yas Marina", jour: "6", mois: "DÉC", date: "6 décembre 2026")
+        .init(slug: "pays-bas", jour: "23", mois: "AOÛT", date: "23 août 2026"),
+        .init(slug: "italie", jour: "6", mois: "SEPT", date: "6 septembre 2026"),
+        .init(slug: "espagne", jour: "13", mois: "SEPT", date: "13 septembre 2026"),
+        .init(slug: "azerbaidjan", jour: "26", mois: "SEPT", date: "26 septembre 2026"),
+        .init(slug: "malaisie", jour: "4", mois: "OCT", date: "4 octobre 2026"),
+        .init(slug: "singapour", jour: "11", mois: "OCT", date: "11 octobre 2026"),
+        .init(slug: "etats-unis", jour: "25", mois: "OCT", date: "25 octobre 2026"),
+        .init(slug: "mexique", jour: "1", mois: "NOV", date: "1er novembre 2026"),
+        .init(slug: "bresil", jour: "15", mois: "NOV", date: "15 novembre 2026"),
+        .init(slug: "las-vegas", jour: "21", mois: "NOV", date: "21 novembre 2026"),
+        .init(slug: "qatar", jour: "29", mois: "NOV", date: "29 novembre 2026"),
+        .init(slug: "abu-dhabi", jour: "6", mois: "DÉC", date: "6 décembre 2026")
     ]
 }
 

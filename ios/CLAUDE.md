@@ -112,7 +112,9 @@ anglais), le rang par `ordinal(n)`, l'heure par `heureInterface(_:)`, toute date
 `body` y inscrit la langue comme dépendance (`LanguageManager` est `@Observable`) : rien à
 câbler pour que l'écran suive. Un texte **stocké** (dans un `@State`, un modèle) ne suit
 pas — stocker la clé, traduire à l'affichage. Les données de l'API (marchés Unibet,
-pilotes, GP, écuries) ne se traduisent pas. Vocabulaire anglais : *Championship*,
+pilotes, écuries) ne se traduisent pas. **Les Grands Prix, si** : pays, nom (« GP
+Malaisie » / « Malaysian GP ») et circuit sont les clés `gp.<slug>.*`, lues par
+`GrandPrixSaison` — la liste statique n'écrit plus aucun nom. Vocabulaire anglais : *Championship*,
 *Prediction*, *Bonus picks*, *Calendar*, *Odds*.
 
 **Un Grand Prix de la base se reconnaît à sa date de course, le nom n'est qu'un repli.**
@@ -122,7 +124,10 @@ propriétaire : `SlugCircuit.de(_:dateCourse:)` (`Models/GrandPrix.swift`) — l
 appeler la variante sans date sur une ligne de la base : Unibet a publié « GP Bahrein » à
 la place de Sepang (2026-10-04), et `bahrein` ne désigne aucun asset. Même règle que le
 scraper et le web (`docs/decisions.md` §24). Deux lignes au même week-end : le calendrier
-garde celle qui a des cotes.
+garde celle qui a des cotes. **Le nom de la base ne s'affiche jamais** : tout écran montre
+`nomAffiche` (`GrandPrixSaison.nomAffiche(slug:repli:)`, le nom traduit du calendrier
+statique), le nom Unibet n'étant qu'un repli hors saison — sinon l'accueil disait « GP
+Bahrein » quand le calendrier disait « GP Malaisie ».
 
 **Le sélecteur de langue est un seul composant** (`SelecteurLangue`) : ses états actif /
 inactif s'y règlent, jamais sur l'écran qui le monte. Son encre inactive

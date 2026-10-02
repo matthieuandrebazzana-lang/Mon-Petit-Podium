@@ -91,6 +91,9 @@ extension ProchainGP {
     /// La clé des assets et des teintes — ``SlugCircuit``, le seul propriétaire.
     var slug: String { SlugCircuit.de(nom, dateCourse: dateCourse) }
 
+    /// Le nom à afficher — ``GrandPrixSaison/nomAffiche(slug:repli:)``, jamais ``nom``.
+    var nomAffiche: String { GrandPrixSaison.nomAffiche(slug: slug, repli: nom) }
+
     /// Les pronostics sont ouverts — ``EcheancePronostics/cotesArretees(statut:dateCourse:le:)``.
     func pronosticsOuverts(le maintenant: Date = .now) -> Bool {
         EcheancePronostics.cotesArretees(statut: statut, dateCourse: dateCourse, le: maintenant)

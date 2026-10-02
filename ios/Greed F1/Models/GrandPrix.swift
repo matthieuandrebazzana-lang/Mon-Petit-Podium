@@ -48,6 +48,10 @@ struct GrandPrixEnBase: Decodable, Identifiable, Equatable, Hashable {
     }
 
     var slug: String { SlugCircuit.de(nom, dateCourse: dateCourse) }
+
+    /// Le nom à afficher — celui du calendrier statique, traduit. ``nom`` ne sert qu'au
+    /// rattachement : voir ``GrandPrixSaison/nomAffiche(slug:repli:)``.
+    var nomAffiche: String { GrandPrixSaison.nomAffiche(slug: slug, repli: nom) }
 }
 
 // MARK: - Le slug
