@@ -4,25 +4,25 @@ import SwiftUI
 /// et dans les paramètres de `ProfilView`.
 ///
 /// Deux segments dans une capsule, chacun un drapeau (emoji natif, ``Langue/drapeau``) et
-/// un code. Les deux états doivent se distinguer d'un coup d'œil :
+/// un code. **Les deux options restent en couleur pleine, quelle que soit la langue
+/// active** : drapeaux entiers, sans désaturation ni opacité réduite, libellés à pleine
+/// encre. L'état se lit **uniquement à la pastille** :
 ///
-/// - **actif** — pastille pleine `primaire`, encre blanche (**10,88:1**), drapeau entier ;
+/// - **actif** — pastille pleine `primaire` (`#800111`), encre blanche (**10,88:1**) ;
 /// - **inactif** — le fond neutre de la capsule (``Color/fondSegmentInactif``), encre
-///   ``Color/encreSegmentInactif`` (**4,94:1** au pire, sur le beige), drapeau à 40 %,
-///   désaturé et légèrement réduit.
+///   ``Color/encreSegmentInactif`` (`secondaire` plein).
 ///
-/// > **Le texte inactif n'est atténué qu'à 80 %.** Plus bas il passe sous 4,5:1 (2,47:1 à
-/// > 50 %). L'écart entre les états est porté par la pastille et par le drapeau, qui est
-/// > graphique et redondant avec le code : lui peut s'effacer franchement.
+/// Taille : segments de 80 × 40, drapeau à 20 pt, code à ``Font/segment`` (14 pt, 500) —
+/// assez pour être trouvé d'un coup d'œil sur l'accueil, sans dépasser le poids d'un
+/// bouton secondaire. Ces choix tiennent sur les deux fonds où le sélecteur est posé — le
+/// beige de l'accueil et de la connexion, le blanc du bloc Paramètres — sans que l'écran
+/// choisisse son encre.
 ///
-/// Ces choix tiennent sur les deux fonds où le sélecteur est posé — le beige de l'accueil
-/// et de la connexion, le blanc du bloc Paramètres — sans que l'écran choisisse son encre.
-///
-/// Au changement, la pastille glisse sur la courbe de déplacement (200 ms), pendant que
-/// drapeaux et encres échangent leur poids dans la même transaction : un seul geste, une
-/// seule animation. Elle s'interrompt — un second appui en plein vol repart de la position
-/// affichée. **Sous mouvement réduit**, rien ne glisse ni ne change d'échelle : la pastille
-/// passe d'un segment à l'autre en fondu, et les opacités suivent.
+/// Au changement, la pastille glisse sur la courbe de déplacement (200 ms), et les encres
+/// des libellés s'échangent dans la même transaction : un seul geste, une seule animation.
+/// Elle s'interrompt — un second appui en plein vol repart de la position affichée.
+/// **Sous mouvement réduit**, rien ne glisse : la pastille passe d'un segment à l'autre en
+/// fondu.
 struct SelecteurLangue: View {
 
     @EnvironmentObject private var langues: LanguageManager
@@ -35,7 +35,7 @@ struct SelecteurLangue: View {
                 segment(langue)
             }
         }
-        .padding(3)
+        .padding(4)
         .background(Capsule().fill(Color.fondSegmentInactif))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(t("langue.titre"))
@@ -55,18 +55,15 @@ struct SelecteurLangue: View {
                 langues.choisir(langue)
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 7) {
                 Text(langue.drapeau)
-                    .font(.system(size: 15))
-                    .saturation(actif ? 1 : 0)
-                    .opacity(actif ? 1 : 0.4)
-                    .scaleEffect(actif || mouvementReduit ? 1 : 0.88)
+                    .font(.system(size: 20))
                 Text(langue.code)
-                    .font(.label)
-                    .tracking(Tracking.label)
+                    .font(.segment)
+                    .tracking(Tracking.segment)
                     .foregroundColor(actif ? .white : .encreSegmentInactif)
             }
-            .frame(width: 62, height: 32)
+            .frame(width: 80, height: 40)
             .background {
                 if actif {
                     if mouvementReduit {
@@ -80,10 +77,10 @@ struct SelecteurLangue: View {
                     }
                 }
             }
-            // 44 pt de haut de zone tactile autour d'un segment visuel de 62 × 32.
-            .padding(.vertical, 6)
+            // 48 pt de haut de zone tactile : le segment de 80 × 40 plus le liseré de la capsule.
+            .padding(.vertical, 4)
             .contentShape(Rectangle())
-            .padding(.vertical, -6)
+            .padding(.vertical, -4)
         }
         .buttonStyle(StyleAppui(.bouton))
         .accessibilityLabel(langue == .fr ? "Français" : "English")

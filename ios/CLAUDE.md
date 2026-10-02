@@ -130,9 +130,11 @@ statique), le nom Unibet n'étant qu'un repli hors saison — sinon l'accueil di
 Bahrein » quand le calendrier disait « GP Malaisie ».
 
 **Le sélecteur de langue est un seul composant** (`SelecteurLangue`) : ses états actif /
-inactif s'y règlent, jamais sur l'écran qui le monte. Son encre inactive
-(`encreSegmentInactif`, `secondaire` à 80 %) ne descend pas plus bas — à 50 % le libellé
-tombe à 2,47:1. L'atténuation franche est portée par le drapeau, redondant avec le code.
+inactif s'y règlent, jamais sur l'écran qui le monte. **Les deux options restent en couleur
+pleine** — drapeaux entiers, libellé inactif en `encreSegmentInactif` (`secondaire` plein) :
+l'état ne se lit **qu'à la pastille** `primaire`. Ne pas réintroduire de désaturation ni
+d'opacité réduite sur l'option inactive. Taille : segments 80 × 40, drapeau 20 pt, code en
+`Font.segment` (14 pt, 500).
 
 ## 4. Règles de commit
 

@@ -162,6 +162,8 @@ extension Font {
     static let corpsSm = Font.custom("HelveticaNeue",        size: 14)
     static let label   = Font.custom("HelveticaNeue-Medium", size: 11)
     static let labelSm = Font.custom("HelveticaNeue-Medium", size: 10)
+    /// Code d'un sélecteur segmenté (« FR », « EN ») — un label agrandi pour se voir.
+    static let segment = Font.custom("HelveticaNeue-Medium", size: 14)
 }
 
 /// Crénage — **spécifique à la taille**, et **positif** sur les petits labels.
@@ -184,6 +186,8 @@ enum Tracking {
     static let corps: CGFloat = 0
     /// `label` et `labelSm`, tous deux en `.textCase(.uppercase)`.
     static let label: CGFloat = 0.7
+    /// `segment` — même `+0,05em` que `label`, à 14 pt.
+    static let segment: CGFloat = 0.7
 }
 
 // MARK: - Encre graphique sur aplat
@@ -221,14 +225,12 @@ extension Color {
     static let encreGraphique = Color.white.opacity(0.50)
 
     /// Encre d'un **segment inactif** d'un sélecteur posé sur ``fondSegmentInactif`` —
-    /// ``secondaire`` à **80 %**.
+    /// ``secondaire`` **plein**.
     ///
-    /// > Atténuée, mais pas sous le plancher : à 50 % le libellé du segment inactif ne tient
-    /// > que **2,47:1** sur le beige. Mesuré sur le fond du sélecteur : 75 % donne 4,37:1
-    /// > sur le beige (refusé), 80 % donne **4,94:1** sur le beige et **5,36:1** sur le
-    /// > blanc. Le contraste entre les deux états vient donc de la pastille et du drapeau,
-    /// > pas d'une encre illisible.
-    static let encreSegmentInactif = Color.secondaire.opacity(0.80)
+    /// > Les deux options d'un sélecteur restent en couleur pleine : l'état se lit à la
+    /// > pastille, pas à une encre atténuée. Mesuré sur le fond du sélecteur : **8,18:1**
+    /// > sur le beige, **9,22:1** sur le blanc.
+    static let encreSegmentInactif = Color.secondaire
 
     /// Fond neutre d'un sélecteur segmenté — ``secondaire`` à **8 %**, qui se lit sur le
     /// beige comme sur le blanc d'un bloc.
