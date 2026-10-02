@@ -44,6 +44,21 @@ enum Mouvement {
     /// La version web dit la même chose avec `--voiture-stagger`.
     static let decalage: TimeInterval = 0.06
 
+    /// **Réordonnancement de la pile des championnats après un tap** — un ressort
+    /// critique, sans dépassement : rien n'a été lancé, rien ne doit rebondir.
+    static let pile = Animation.spring(response: 0.38, dampingFraction: 1)
+
+    /// **Le même réordonnancement après un swipe** : le doigt a lancé la carte, le ressort
+    /// garde un léger dépassement (/apple-design §4, amortissement 0,8 sur un geste
+    /// porteur d'élan). Il repart de la position où le doigt a lâché la carte, et sa
+    /// réponse courte (0,35 s) aimante la carte en place sans traîner derrière le geste.
+    static let pileLancee = Animation.spring(response: 0.35, dampingFraction: 0.8)
+
+    /// Les relais rapides de la pile des championnats : la face pleine d'une carte qui
+    /// cède la place à sa bande, et l'ombre d'une carte arrivée au fond qui revient une
+    /// fois celle-ci passée derrière ses voisines.
+    static let fonduPile: TimeInterval = 0.14
+
     /// Passage d'écran.
     static let passageEcran: TimeInterval = 0.20
 

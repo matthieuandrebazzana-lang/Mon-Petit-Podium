@@ -22,6 +22,14 @@ enum Materiau {
     /// > mais comme un gris sale, et il dispute le regard au logo et au titre. À 0,075
     /// > (`#F3F3F3`) il est encore là sans dominer.
     static let damierDoux: Double = 0.075
+
+    /// Assombrissement des cartes **du dessous** de la pile des championnats — un noir à
+    /// 18 %, posé sur toute la carte.
+    ///
+    /// > Il dit la profondeur : la carte du dessus garde sa teinte pleine, celles qu'elle
+    /// > recouvre reculent d'un cran. Il ne coûte rien au contraste, il en ajoute — le
+    /// > blanc et ``Color/encreSecondaire`` sont mesurés sur la teinte nue.
+    static let voilePile: Double = 0.18
 }
 
 // MARK: - Le damier

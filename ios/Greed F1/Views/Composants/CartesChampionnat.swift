@@ -66,10 +66,21 @@ extension Championnat {
 struct CarteChampionnat: View {
 
     let championnat: Championnat
+    /// Faux quand l'hôte rogne la carte et porte lui-même l'ombre (``PileChampionnats``) :
+    /// rognée, la sienne serait calculée à chaque image sans jamais se voir.
+    var ombre = true
 
     private var membres: Int { championnat.nombreMembres }
 
     var body: some View {
+        if ombre {
+            surface.ombreAplat()
+        } else {
+            surface
+        }
+    }
+
+    private var surface: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -123,7 +134,6 @@ struct CarteChampionnat: View {
         // la photo en `scaledToFill` — reste touchable, et la carte suivante, peinte
         // par-dessus, vole le tap du bas de la précédente.
         .contentShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
-        .ombreAplat()
     }
 
     /// Le rang, en très grand et en retrait, suivi du total.

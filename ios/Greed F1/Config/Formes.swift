@@ -70,8 +70,15 @@ extension View {
     /// > bloc rouge, violet ou sombre, un marron clair ne se voit plus : celle-ci est plus
     /// > profonde et plus contrastée. Plus la surface est dense, plus elle doit peser sur
     /// > le fond.
-    func ombreAplat() -> some View {
-        self.shadow(color: Color.secondaire.opacity(0.10), radius: 3, y: 2)
-            .shadow(color: Color.secondaire.opacity(0.16), radius: 17, y: 14)
+    ///
+    /// - `intensite` module l'opacité des deux couches sans toucher à leur géométrie : une
+    ///   surface qui s'efface derrière une autre éteint son ombre au lieu de la couper net.
+    /// - `allegee` retire la couche ambiante, la seule coûteuse (flou de 17). Réservé aux
+    ///   surfaces **immobiles pendant qu'une voisine bouge** : chaque image recalcule toutes
+    ///   les ombres de l'écran, y compris celles qui ne changent pas.
+    func ombreAplat(intensite: Double = 1, allegee: Bool = false) -> some View {
+        self.shadow(color: Color.secondaire.opacity(0.10 * intensite), radius: 3, y: 2)
+            .shadow(color: Color.secondaire.opacity(allegee ? 0 : 0.16 * intensite),
+                    radius: allegee ? 0 : 17, y: allegee ? 0 : 14)
     }
 }
