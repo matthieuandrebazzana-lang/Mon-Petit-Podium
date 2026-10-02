@@ -297,24 +297,34 @@ struct ChampionnatDetailView: View {
 
     // MARK: - En-tête
 
-    /// La hauteur totale de l'en-tête, **fixe** : la photo carrée s'y ajuste, jamais
-    /// l'inverse. C'est ce qui garantit qu'elle ne chevauche jamais le bouton ⋯ ni ne
-    /// déborde du bloc au-dessus du sélecteur.
-    private let hauteurEntete: CGFloat = 100
+    /// Le côté de la photo : la hauteur du bloc titre sur une ligne (28 pt de titre, 4 pt,
+    /// 13 pt de sous-titre ≈ 56 pt), mesurée au simulateur — 64 pt la faisait dépasser.
+    private let cotePhoto: CGFloat = 56
 
-    /// **Avec photo, l'en-tête reste un `HStack` pleine largeur** : le titre à gauche, le
-    /// bouton ⋯ et la photo carrée empilés à droite l'un sous l'autre — plus de
-    /// superposition. Sans photo, le `HStack` d'origine reste inchangé.
+    /// Le retrait de l'icône ⋯ dans son cadre de 44 pt (glyphe ≈ 20 pt de large). Retiré
+    /// des deux côtés du bouton pour que les écarts se mesurent **au glyphe**, ce que l'œil
+    /// voit, et non au cadre tactile invisible.
+    private let retraitGlyphe: CGFloat = 12
+
+    /// **Trois colonnes** : le titre à gauche à sa largeur naturelle, la photo, les trois
+    /// points à droite. Deux `Spacer` de même priorité encadrent la photo — le titre est
+    /// servi d'abord, et la place restante se partage à parts égales : la photo tombe à
+    /// équidistance du texte et du ⋯, et le tout se centre sur l'axe vertical du bloc.
+    /// Sans photo, la vignette porte l'initiale (``PhotoChampionnat``) : la mise en page
+    /// ne dépend jamais de sa présence.
     private var entete: some View {
-        Group {
-            if let photo {
-                enteteAvecPhoto(photo)
-            } else {
-                HStack(alignment: .top, spacing: 12) {
-                    titreEtSousTitre
-                    menuChampionnat
-                }
-            }
+        HStack(alignment: .center, spacing: 0) {
+            titreEtSousTitre
+                .layoutPriority(1)
+
+            Spacer(minLength: 16)
+
+            PhotoChampionnat(nom: championnat.nom, photo: photo, cote: cotePhoto)
+
+            Spacer(minLength: 16)
+
+            iconeMenu
+                .padding(.horizontal, -retraitGlyphe)
         }
     }
 
@@ -332,46 +342,7 @@ struct ChampionnatDetailView: View {
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-    }
-
-    /// L'en-tête complet quand une photo existe. À droite, un `VStack` aligné à droite pose
-    /// le bouton ⋯ puis la photo juste en dessous : empilés, jamais superposés, ils ne
-    /// peuvent pas se chevaucher. Le côté de la photo est ce qui reste de l'en-tête une fois
-    /// le bouton (44 pt) et l'espacement (8 pt) retirés ; ``aspectRatio(1, contentMode:
-    /// .fill)`` la garde carrée quelle que soit l'image reçue, sans jamais déborder du
-    /// header. Rayon `champ` (14 pt) sur les quatre coins : elle est posée *à l'intérieur*
-    /// du bloc d'en-tête, pas un aplat qui en épouserait un bord (`Formes.swift`).
-    private func enteteAvecPhoto(_ url: URL) -> some View {
-        let taillePhoto = hauteurEntete - 44 - 8
-
-        return HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 0) {
-                titreEtSousTitre
-                Spacer(minLength: 0)
-            }
-
-            VStack(alignment: .trailing, spacing: 8) {
-                iconeMenu
-
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Color.surface
-                }
-                // **Largeur ET hauteur, pas la hauteur seule.** Le titre à gauche porte
-                // `.frame(maxWidth: .infinity)` : dans le `HStack`, les deux côtés sont
-                // alors également « flexibles », et `aspectRatio(1, .fill)` livré sans
-                // largeur fixe se voit proposer toute la place restante plutôt que de la
-                // déduire de sa hauteur — un rectangle large, jamais un carré. Fixer les
-                // deux côtés au même `taillePhoto` ferme cette ambiguïté.
-                .frame(width: taillePhoto, height: taillePhoto)
-                .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
-                .accessibilityHidden(true)
-            }
-        }
-        .frame(height: hauteurEntete, alignment: .top)
     }
 
     /// La photo **de la liste rechargée** dès qu'elle y figure : ``championnat`` est celui
@@ -413,8 +384,7 @@ struct ChampionnatDetailView: View {
 
     /// Les trois points : icône nue, zone tactile 44 × 44 pt (le plancher iOS). Un `Menu`
     /// natif — il s'ouvre depuis son déclencheur et se referme vers lui, porte seul
-    /// l'accessibilité. Partagé par ``menuChampionnat`` (sans photo) et ``enteteAvecPhoto``
-    /// (avec photo), qui ne diffèrent que par son placement.
+    /// l'accessibilité. Monté par ``entete``, à droite de la photo.
     private var iconeMenu: some View {
         Menu {
             optionsChampionnat
@@ -436,6 +406,9 @@ struct ChampionnatDetailView: View {
         .accessibilityLabel(envoiPhoto ? t("championnat.a11y.envoiPhoto") : t("championnat.a11y.options"))
     }
 
+    /// > **Non monté.** L'en-tête a désormais une seule mise en page, photo ou initiale
+    /// > comprise (``entete``) ; le décalage du ⋯ y est porté par `retraitGlyphe`.
+    ///
     /// Les trois points, **sans photo** : décalé pour que son cadre de 44 pt ne dépasse pas
     /// la marge latérale à droite ni le sommet du titre à gauche.
     private var menuChampionnat: some View {
@@ -445,7 +418,7 @@ struct ChampionnatDetailView: View {
     }
 
     /// > **Non monté.** Le bouton ⋯ est redescendu à côté de la photo au lieu d'être posé
-    /// > dessus (§En-tête, ``enteteAvecPhoto``) : plus de superposition, donc plus besoin
+    /// > dessus (§En-tête, ``entete``) : plus de superposition, donc plus besoin
     /// > d'un déclencheur pensé pour rester lisible sur une image quelconque. Le composant
     /// > reste en place (`CLAUDE.md` §6).
     ///
@@ -638,6 +611,47 @@ struct ChampionnatDetailView: View {
 /// « 3420 » à droite : le même nombre deux fois, et la ligne n'apprend rien de plus. La
 /// version web l'a tranché à l'usage (`screen-13`) en mettant là ce que le score ne dit
 /// pas — les pronostics réussis et le meilleur coup. C'est cette version-là qui est reprise.
+// MARK: - La photo du championnat
+
+/// La photo du championnat, ou son initiale sur l'aplat ``Color/primaire`` (`#800111`).
+///
+/// Comme ``PastilleProfil`` : l'absence de photo est l'état par défaut d'un championnat,
+/// pas un état dégradé — les deux branches vivent ensemble, et l'initiale sert aussi
+/// pendant le chargement, pour qu'une photo lente n'ouvre pas un trou blanc dans l'en-tête.
+/// Carrée, rayon `champ` : posée *à l'intérieur* du bloc d'en-tête (`Formes.swift`).
+private struct PhotoChampionnat: View {
+
+    let nom: String
+    let photo: URL?
+    let cote: CGFloat
+
+    var body: some View {
+        Group {
+            if let photo {
+                AsyncImage(url: photo) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    initiale
+                }
+            } else {
+                initiale
+            }
+        }
+        .frame(width: cote, height: cote)
+        .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
+        .accessibilityHidden(true)
+    }
+
+    /// Blanc sur `#800111` : **10,88:1**.
+    private var initiale: some View {
+        Color.primaire.overlay {
+            Text(nom.trimmingCharacters(in: .whitespaces).first.map { String($0).uppercased() } ?? "?")
+                .font(.custom("HelveticaNeue-Medium", size: cote * 0.40625))
+                .foregroundColor(.white)
+        }
+    }
+}
+
 private struct LigneClassement: View {
 
     let membre: Membre

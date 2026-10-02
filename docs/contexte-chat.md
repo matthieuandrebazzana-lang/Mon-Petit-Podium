@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
 Version backend actuelle : 0.82.1
-Version iOS actuelle : 0.46.4
+Version iOS actuelle : 0.46.5
 
 ## STACK TECHNIQUE
 
@@ -64,7 +64,7 @@ Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 
-## CE QUI EST FAIT — VERSION iOS (0.46.4)
+## CE QUI EST FAIT — VERSION iOS (0.46.5)
 
 Navigation TabView 4 onglets (Accueil, Championnats, Calendrier, Profil)
 AccueilView : widget GP navigable avec drapeau + tracé circuit
@@ -83,6 +83,7 @@ Sélecteur de langue retravaillé (0.46.1) : drapeaux emoji 🇫🇷 / 🇬🇧,
 Drapeau, tracé et croisement du calendrier par date de course (0.46.2) : `SlugCircuit.de(_:dateCourse:)` (`Models/GrandPrix.swift`), date à ±3 jours puis nom — utilisé par `GrandPrixEnBase`, `ProchainGP` et `GrandPrixJoue` ; deux lignes au même week-end, le calendrier garde celle qui a des cotes. Corrige le widget du prochain GP vide pour « GP Bahrein » couru à Sepang. Vérifié au simulateur en FR et EN (Accueil, Calendrier, Profil)
 Noms de GP, pays et circuits traduits (0.46.3) : clés `gp.<slug>.{pays,nom,court,circuit}` dans les deux dictionnaires, lues par `GrandPrixSaison` (plus rien d'écrit en dur dans la liste statique). Anglais au format « Malaysian GP », « Singapore GP ». Le nom affiché vient toujours du calendrier statique — `GrandPrixSaison.nomAffiche(slug:repli:)`, exposé en `nomAffiche` sur `GrandPrixEnBase`, `ProchainGP`, `GrandPrixPronos`, `GrandPrixDuChampionnat` ; le nom de la base ne sert qu'au rattachement. L'accueil dit donc « GP Malaisie » / « Malaysian GP » le 4 octobre, comme le calendrier. Vérifié au simulateur en FR et EN (widget Accueil, Calendrier, carte et fiche du 4 octobre)
 Sélecteur de langue plus visible (0.46.4) : les deux options en couleur pleine quelle que soit la langue active (plus de désaturation ni d'opacité réduite sur le drapeau, libellé inactif en `secondaire` plein — `encreSegmentInactif`, 8,18:1 sur le beige, 9,22:1 sur le blanc) ; l'état ne se lit qu'à la pastille `#800111`. Segments 80 × 40 (au lieu de 62 × 32), drapeau 20 pt, code en `Font.segment` (Helvetica Neue Medium 14, nouveau jeton) ; glissement de la pastille conservé. Vérifié au simulateur sur Landing, Connexion (bascule en direct) et le bloc Paramètres du Profil (reproduit à l'identique, faute de session au simulateur), en FR et EN
+En-tête de ChampionnatDetailView retravaillé (0.46.5) : trois colonnes centrées sur l'axe vertical — titre + membres/saison à gauche à leur largeur naturelle, photo carrée 56 pt (hauteur du bloc titre, rayon `champ`) au milieu, ⋯ à droite. Deux `Spacer` égaux placent la photo à équidistance du texte et du glyphe ⋯ (retrait de 12 pt du cadre tactile, pour mesurer au glyphe). Sans photo — et pendant son chargement — `PhotoChampionnat` peint l'initiale blanche sur `primaire` `#800111` (10,88:1) : une seule mise en page. Vérifié au simulateur avec photo, sans photo et avec un nom sur deux lignes (écarts égaux à 1–2 pt près)
 
 ## ÉVALUATION DES PRONOSTICS
 
@@ -115,7 +116,6 @@ f1-ml : modèle de prédiction ML à intégrer
 
 Bugs connus :
 
-Photo de championnat dans le header ChampionnatDetailView (layout à revoir)
 Google OAuth iOS non encore testé sur iPhone réel
 
 ## SCRAPER ET OPÉRATIONS

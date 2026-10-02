@@ -17,7 +17,8 @@ struct Championnat: Codable, Identifiable, Equatable, Hashable {
     let nombreMembres: Int
     /// Calculé par le serveur depuis le jeton.
     let estCreateur: Bool
-    /// `nil` ⇒ aucune photo, et **rien** ne s'affiche à sa place.
+    /// `nil` ⇒ aucune photo : rien à sa place sur les cartes, l'initiale dans l'en-tête du
+    /// détail (`PhotoChampionnat`).
     let photoUrl: URL?
     /// Le même pour tous les championnats. `nil` si plus aucun GP à venir, ou si sa
     /// lecture a échoué côté serveur.
