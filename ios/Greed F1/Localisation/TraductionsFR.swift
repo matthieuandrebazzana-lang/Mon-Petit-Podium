@@ -430,8 +430,14 @@ enum TraductionsFR {
         "historique.a11y.reussisSur.un": "%2$d sur %1$d pronostic réussi",
         "historique.a11y.reussisSur.plusieurs": "%2$d sur %1$d pronostics réussis",
         "historique.resultatReel": "Résultat réel",
+        "historique.sectionPronos": "Pronostics",
+        "historique.statut.gagne": "Gagné",
+        "historique.statut.perdu": "Perdu",
+        "historique.statut.enAttente": "En attente",
         "historique.videAucunChampionnat": "Rejoins un championnat pour retrouver tes Grands Prix ici.",
         "historique.videAucunGP": "Aucun Grand Prix terminé joué pour l'instant.",
+        "historique.a11y.position": "Grand Prix %1$d sur %2$d",
+        "historique.a11y.ouvrir": "Ouvre le détail des pronostics.",
 
         // MARK: - Voiture et recadrage
         "couleur.rouge": "Rouge",

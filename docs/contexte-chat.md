@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
 Version backend actuelle : 0.82.1
-Version iOS actuelle : 0.46.5
+Version iOS actuelle : 0.47.0
 
 ## STACK TECHNIQUE
 

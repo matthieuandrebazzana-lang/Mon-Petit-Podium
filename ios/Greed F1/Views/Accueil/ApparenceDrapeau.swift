@@ -88,10 +88,46 @@ struct ApparenceDrapeau {
     /// Pas du voile. Assez fin pour ne jamais voiler un drapeau plus que nécessaire.
     private static let pasVoile: Double = 0.05
 
-    private static func voileNecessaire(_ couleurs: [UInt32]) -> Double {
+    /// Le voile qui tient `contraste` pour du blanc sur ce drapeau, ou `nil` hors table.
+    ///
+    /// Pour un texte **ordinaire** posé sur un drapeau (4,5:1), là où le widget n'en porte
+    /// que de grands (3:1). Même mesure, même substrat : seule la cible change.
+    static func voile(pour slug: String, contraste cible: Double) -> Double? {
+        TeintesDrapeaux.table[slug].map { voileNecessaire($0, cible: cible) }
+    }
+
+    /// Le voile qui fait tenir **4,5:1** à l'encre de second rang (blanc à 70 %,
+    /// ``Color/encreSecondaire``) sur ce drapeau, ou `nil` hors table.
+    ///
+    /// Pour le fond flouté de « Mes / Ses Grands Prix » : l'en-tête y pose un titre blanc
+    /// et un sous-titre à 70 %. Mesuré sur la bande la plus claire — le flou mélange les
+    /// bandes, il ne les éclaircit jamais au-delà de la plus claire.
+    static func voileEncreSecondaire(pour slug: String) -> Double? {
+        guard let couleurs = TeintesDrapeaux.table[slug] else { return nil }
+        var voile: Double = 0
+        while voile < 0.9 {
+            let sol = substrat(couleurs, voile: voile)
+            if contraste(composer(sol, vers: 0xFFFFFF, alpha: 0.7), sol) >= 4.5 { break }
+            voile = ((voile + pasVoile) * 100).rounded() / 100
+        }
+        return voile
+    }
+
+    /// Un drapeau dont la bande la plus claire est blanche ou presque — Italie, Pays-Bas,
+    /// Singapour, Qatar… `false` hors table.
+    ///
+    /// Un voile uniforme qui y fait tenir le texte change sa bande blanche en gris, et la
+    /// carte entière se lit pâle et délavée. Ces drapeaux ne sont donc pas voilés partout :
+    /// le voile se limite à la zone du texte, et le reste montre les vraies couleurs.
+    static func estClair(_ slug: String) -> Bool {
+        guard let couleurs = TeintesDrapeaux.table[slug] else { return false }
+        return luminance(bandeLaPlusClaire(couleurs)) >= 0.7
+    }
+
+    private static func voileNecessaire(_ couleurs: [UInt32], cible: Double = contrasteCible) -> Double {
         var voile: Double = 0
         while voile < 0.9,
-              contraste(0xFFFFFF, substrat(couleurs, voile: voile)) < contrasteCible {
+              contraste(0xFFFFFF, substrat(couleurs, voile: voile)) < cible {
             voile = ((voile + pasVoile) * 100).rounded() / 100
         }
         return voile

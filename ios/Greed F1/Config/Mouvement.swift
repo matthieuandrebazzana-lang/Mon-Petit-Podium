@@ -30,6 +30,18 @@ enum Mouvement {
     /// > une apparition automatique, où le dépassement se lirait comme une erreur.
     static let relachement = Animation.spring(response: 0.3, dampingFraction: 0.6)
 
+    /// Déploiement d'une carte en plein écran — la carte du carrousel qui devient le détail
+    /// de son Grand Prix (`matchedGeometryEffect`).
+    ///
+    /// > **Un ressort critique, pas une courbe.** La fermeture peut arriver en plein
+    /// > déploiement : un ressort repart de la position et de la vitesse affichées, là où
+    /// > une courbe à durée fixe repartirait de zéro. **Aucun dépassement** (amortissement
+    /// > 1) : ``relachement`` rebondit, et un écran entier qui rebondit se lit comme une
+    /// > erreur. Le repli est plus vif que le déploiement : on regarde ce qui arrive, pas
+    /// > ce qui s'en va.
+    static let deploiement = Animation.spring(response: 0.34, dampingFraction: 1)
+    static let repli = Animation.spring(response: 0.28, dampingFraction: 1)
+
     /// Échange d'icône — étoile de favori, icônes de nav, interrupteur.
     static let echangeIcone: TimeInterval = 0.18
 
