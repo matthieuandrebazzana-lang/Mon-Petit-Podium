@@ -8,7 +8,6 @@ import TraceCircuitGp, {
   aUnTrace,
   nomCircuit,
   paysDuCircuit,
-  slugCircuit,
 } from "../composants/TracesCircuits.jsx";
 import {
   APPARENCE_REPLI,
@@ -17,6 +16,7 @@ import {
   drapeauDuGp,
 } from "../composants/DrapeauxGP.jsx";
 import { Barre, Pave } from "../composants/Squelette.jsx";
+import { slugDuGp } from "../lib/calendrier2026.js";
 import { useAuth } from "../auth/AuthContexte.jsx";
 import {
   ETATS_GP,
@@ -45,7 +45,7 @@ import {
  * widgets de la fin de saison avec leur pays, leur circuit et leur date.
  *
  * La carte reprend **exactement le mécanisme de couleur du bloc de l'accueil** :
- * même clé (`slugCircuit`), même table de drapeaux, même voile calculé, même
+ * même clé (`slugDuGp`), même table de drapeaux, même voile calculé, même
  * surcouche uniforme. Un Grand Prix se reconnaît donc à ses couleurs d'un écran
  * à l'autre, ce qui n'arriverait pas si le calendrier se peignait tout seul.
  */
@@ -97,7 +97,7 @@ export function CarteGrandPrix({ gp, previsualisation = false }) {
   // circuit. Une seule normalisation du nom pour les deux : ils partagent la
   // même clé, et la faire deux fois laisserait les deux tables se
   // désynchroniser sur un libellé qu'Unibet aurait renommé.
-  const slug = slugCircuit(gp.nom);
+  const slug = slugDuGp(gp);
   const drapeau = drapeauDuGp(slug) ?? APPARENCE_REPLI;
   const trace = aUnTrace(slug);
   const circuit = nomCircuit(slug);

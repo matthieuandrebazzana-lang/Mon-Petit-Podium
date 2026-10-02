@@ -306,14 +306,17 @@ dont `pilote_1` diverge du parent, et `attribuer_points` dérive systématiqueme
 
 ### `public.alertes_admin`
 
-`id`, `gp_id` (cascade), `type`, `cle`, `marche`, `libelle`, `tentatives`,
-`derniere_erreur`, `cree_le`, `modifie_le`. Unique `(gp_id, type, cle)`. Migration 26.
+`id`, `gp_id` (cascade, **nullable** depuis la 29), `type`, `cle`, `marche`, `libelle`,
+`tentatives`, `derniere_erreur`, `cree_le`, `modifie_le`. Unique `(gp_id, type, cle)`
+**`nulls not distinct`** (29) — sans quoi deux alertes sans GP ne se rencontreraient jamais
+et l'upsert en empilerait une par passage. Migrations 26 et 29.
 
 | `type` | Écrite par | `cle` | Effacée par |
 |---|---|---|---|
 | `libelle_non_reconnu` | `rattacher_issues` — une ligne par issue | `id_outcome_unibet` | le rattachement suivant du GP |
 | `rattachement_impossible` | le backend, OpenF1 muette au figeage | `''` | le rattachement suivant du GP |
 | `definitif_en_echec` | `noter_echec_definitif`, `tentatives + 1` par échec | `''` | le backend, au succès du définitif |
+| `grand_prix_ambigu` | le scraper (`unibet._alerter`) : GP d'Unibet désigné par plusieurs lignes, ou par une ligne réelle sous un autre identifiant (`gp_id` NULL), ou doublon déjà formé (`gp_id` = la ligne qui porte l'identifiant) | `id_unibet` | le scraper, au premier rattachement sans ambiguïté |
 
 > **RLS activée, aucune politique, `revoke` pour `anon` et `authenticated`.** Seul le
 > backend la lit (`GET /admin/alertes`, garde `exiger_admin`), qui ne sert un
@@ -599,7 +602,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les vingt-huit migrations
+## 6. Les vingt-neuf migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -631,6 +634,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 26 | `20260926230000_identifiants_issues` | **`cotes.numero_pilote`, `cotes.ecurie_id`**, table `alertes_admin`, `rattacher_issues`, `noter_echec_definitif`. **À appliquer avant le backend `0.79.0`**. Ne remplace aucune fonction | 3 |
 | 27 | `20260927120000_podium_par_pilote` | **`pronostic_podium.points_gagnes_1` / `_2`** — le gain de chaque pilote du podium, jugé par le backend ; `attribuer_points`, `remplacer_verdicts` et `pronostics_du_joueur` remplacés ; rattrapage des podiums déjà jugés depuis leur total. **À appliquer avec le backend `0.80.0`** | 5, 6, **24**, **25** |
 | 28 | `20260928120000_suppression_compte` | **`supprimer_mon_compte(profil)`** — transfère les championnats créés au membre le mieux classé ou les éteint (règle 4.6), efface pronostics, favoris et adhésions. Appelée par `DELETE /profils/moi` (App Store 5.1.1(v)), **avant** la photo de Storage et le compte Supabase Auth. **À appliquer avec le backend `0.81.0`** | 2, 4, 5, **7** |
+| 29 | `20261001120000_rattachement_par_date` | **`alertes_admin.gp_id` nullable**, unicité `nulls not distinct`, type `grand_prix_ambigu` ; **`adopter_grand_prix` remplacée** pour compter aussi `alertes_admin` (cinq tables filles). Avant ou après le backend `0.82.1`, indifféremment | 19, 26 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -658,6 +662,7 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **6** après **24** | l'écriture de `non_evaluable` par `attribuer_points` (le trigger garde `gagne` / `perdu` / `en_attente` cohérents) | rejouer 24 |
 | **5** ou **6** après **25** | `statut_evaluation` dans les pronostics servis (un `non_evaluable` redevient « en attente » à l'écran) | rejouer 25 |
 | **24** ou **25** après **27** | les gains par pilote du podium : plus écrits par le calcul (24, 25), plus servis (25) — les écrans disent le pilote « en attente » | rejouer 27 |
+| **19** après **29** | `alertes_admin` dans le comptage de sécurité de `adopter_grand_prix` (une alerte rattachée à la ligne manuelle serait emportée en cascade) | rejouer 29 |
 
 **La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12
 et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre les écrans

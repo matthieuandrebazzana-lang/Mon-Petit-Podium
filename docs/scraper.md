@@ -205,38 +205,51 @@ Les onze Grands Prix de la fin de saison sont en base **avant** qu'Unibet n'ouvr
 page — c'est ce qui fait exister le calendrier, les fiches et les horaires toute l'année.
 Leur `id_unibet` est donc **inventé** : `manuel-<slug>-2026` (migration 19).
 
-> ### Le scraper reconnaît la ligne à son NOM, et lui fait porter le vrai identifiant
+> ### Le scraper reconnaît la ligne à sa DATE DE COURSE, le nom n'est qu'un repli
 >
-> `_adopter`, appelé en tête de `_enregistrer`, avant toute écriture. Il cherche une ligne
-> dont l'`id_unibet` commence par `manuel-` et dont le nom donne le même `slug()` que celui
-> d'Unibet — **insensible à la casse, aux accents et aux séparateurs**, parce que le
-> bookmaker écrit « GP Pays Bas » une semaine et « GP Pays-Bas » la suivante. S'il en
-> trouve une, un `update` lui donne le vrai `id_unibet`.
+> `_adopter`, appelé en tête de `_enregistrer`, avant toute écriture, applique la décision
+> de `choisir_ligne` (fonction pure, testée dans `tests/test_rattachement_gp.py`) :
 >
-> **L'UUID ne bouge pas.** C'est tout l'intérêt : les pronostics, les favoris et les
-> résultats rattachés à cette ligne restent valides. L'upsert qui suit la retrouve par son
-> identifiant tout neuf et y écrit `date_course`, `date_qualifications` et les cotes comme
-> sur n'importe quelle autre ligne. Le job peut ensuite la figer, puisqu'il visait
-> justement cet UUID.
+> 1. **l'identifiant Unibet** — une ligne le porte déjà : c'est elle, le cas de toutes les
+>    semaines ;
+> 2. **la date de course, à ±3 jours** (`FENETRE_WEEK_END`) — une seule course par
+>    week-end, au moins six jours entre deux. Une ligne **manuelle** seule sur ce week-end
+>    est adoptée **quel que soit son nom** ;
+> 3. **le nom, en repli** — pas de départ chez Unibet, ou aucune ligne ce week-end-là (GP
+>    reporté). Lignes manuelles seulement, comparées par `slug()` (« GP Pays Bas » =
+>    « GP Pays-Bas »).
+>
+> Adopter = un `update` qui donne le vrai `id_unibet` à la ligne. **L'UUID ne bouge pas** :
+> pronostics, favoris et résultats restent valides, et l'upsert qui suit la retrouve par
+> son identifiant tout neuf.
 
-**C'est le seul endroit du scraper qui rapproche par le nom**, et ce n'est pas un
-relâchement de la règle : si les deux lignes avaient un identifiant commun, il n'y aurait
-rien à adopter. Le nom est littéralement la seule chose qu'elles partagent. Le
-rapprochement avec OpenF1 continue de se faire sur la **date** (§10), et celui du job sur le
-`gp_id` (§8).
+**Pourquoi la date d'abord** (`0.82.1`, `decisions.md` §24). Le 1ᵉʳ octobre 2026, Unibet a
+publié « GP Bahrein » au 4 octobre — la course de Bahreïn délocalisée à Sepang — là où la
+migration 19 avait posé « GP Malaisie ». Le rapprochement par le nom n'a rien reconnu, et
+le scraper a inséré une seconde ligne. Le nom change, la date non.
 
-**Trois cas où l'adoption ne se fait pas**, chacun journalisé :
+**Aucun candidat** — ni identifiant, ni ligne ce week-end, ni ligne manuelle de ce nom :
+le Grand Prix est nouveau, `_adopter` rend `None` et l'upsert crée sa ligne, comme avant.
+
+**Deux candidats ou plus : ambiguïté.** Le scraper ne crée rien : un `warning`, une alerte
+admin `grand_prix_ambigu` (`cle` = identifiant Unibet, `libelle` = nom Unibet) et une
+`ErreurScraper` — le GP passe aux échecs du compte rendu, rien n'est écrit.
 
 | Cas | Ce qui se passe |
 |---|---|
-| **Deux lignes manuelles de même nom** | Aucune adoption. Choisir la première venue attacherait les pronostics d'un Grand Prix à un autre — c'est la règle du rapprochement des pilotes (§11), appliquée ici. |
-| **Le doublon est déjà constitué** — une ligne porte déjà le vrai `id_unibet` | Aucune fusion. Un `warning` écrit la commande `adopter_grand_prix` toute faite : seule la fonction SQL sait compter les quatre tables filles avant de supprimer quoi que ce soit. |
-| **Zéro ligne touchée par l'`update`** | Quelqu'un a adopté entre la lecture et l'écriture. Le filtre porte sur le placeholder autant que sur l'identifiant — même précaution que le `PATCH` de figeage (§8). |
+| **Deux lignes ou plus sur le week-end**, ou deux lignes manuelles de même nom en repli | Refus, alerte sans `gp_id`. Choisir la première venue attacherait les pronostics d'un Grand Prix à un autre. |
+| **Une ligne réelle sur le week-end sous un autre identifiant Unibet** | Refus, alerte — le seul refus à candidat unique. Le bookmaker a changé d'événement : créer ferait un doublon, réécrire l'identifiant d'une ligne peut-être figée n'est pas automatique. |
+| **Aucune ligne**, ni ce week-end ni sous ce nom | Pas un refus : Grand Prix nouveau, ligne créée. |
+| **Le doublon est déjà constitué** — une ligne porte le vrai identifiant, une autre court le même week-end | Le scraping continue sur la ligne qui porte l'identifiant. Alerte avec `gp_id`, dont le texte donne la commande `adopter_grand_prix` toute faite. |
+| **Zéro ligne touchée par l'`update`** | Quelqu'un a adopté entre la lecture et l'écriture : la ligne est relue par son identifiant ; introuvable, le GP est remis au passage suivant. |
+
+L'alerte est **effacée** dès qu'un passage rattache le GP sans ambiguïté. Son écriture est
+best effort : sans la migration 29, seul le journal la garde.
 
 > **Le statut de la ligne adoptée est lu comme celui de n'importe quelle autre** : une
 > ligne figée à la main garde ses cotes, l'adoption ne rouvre rien.
 
-**`adopter_grand_prix` (migration 19) reste la voie des deux cas refusés**, et elle seule
+**`adopter_grand_prix` (migration 19, remplacée par la 29 qui compte aussi `alertes_admin`) reste la voie des cas refusés**, et elle seule
 sait résorber un doublon déjà formé. Ce qu'elle n'est plus, c'est un rendez-vous
 hebdomadaire — le geste se faisait le vendredi ou le samedi matin, douze fois dans la
 saison, dans une fenêtre de quelques heures. Voir `bugs-connus.md` §31.

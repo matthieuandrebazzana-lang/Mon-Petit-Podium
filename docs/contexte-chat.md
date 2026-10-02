@@ -12,6 +12,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
+Version backend actuelle : 0.82.1
 Version iOS actuelle : 0.46.1
 
 ## STACK TECHNIQUE
@@ -31,7 +32,7 @@ Deux chats : Claude (décisions + prompts) / Claude Code terminal (code + commit
 Chaque prompt commence par "Lis CLAUDE.md et ios/CLAUDE.md."
 Migrations Supabase : toujours appliquées manuellement dans le SQL Editor
 Docker non disponible → migrations testées en production directement
-27 migrations appliquées
+29 migrations appliquées (la 29 : `20261001120000_rattachement_par_date`)
 Après chaque session, Claude Code met à jour docs/contexte-chat.md
 
 ## COMPTE REVIEWER APP STORE
@@ -60,6 +61,7 @@ Emails fonctionnels via Resend (mot de passe oublié)
 Pages greed-f1.com/privacy, /terms, /contact
 Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
+Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 
 ## CE QUI EST FAIT — VERSION iOS (0.46.1)
 
@@ -83,7 +85,7 @@ Sélecteur de langue retravaillé (0.46.1) : drapeaux emoji 🇫🇷 / 🇬🇧,
 Registre d'évaluateurs par slug exact (18 marchés couverts)
 Statut : en_attente / non_evaluable / gagne / perdu
 Pipeline provisoire (à l'arrivée) → définitif (J+1)
-169 tests de non-régression backend
+192 tests de non-régression backend
 Identifiants canoniques des issues au figeage
 Alertes admin (libellés non reconnus, échecs OpenF1)
 
@@ -113,6 +115,9 @@ Photo de championnat dans le header ChampionnatDetailView (layout à revoir)
 Google OAuth iOS non encore testé sur iPhone réel
 
 ## SCRAPER ET OPÉRATIONS
+
+Rattachement d'un GP Unibet (backend 0.82.1, `docs/decisions.md` §24) : identifiant Unibet, puis date de course à ±3 jours, puis nom en repli. Aucun candidat → GP nouveau, ligne créée. Deux candidats ou plus (ou une ligne réelle du même week-end sous un autre identifiant) → rien créé, alerte admin `grand_prix_ambigu`.
+Le 4 octobre 2026 est le GP de Bahreïn délocalisé à Sepang : ligne unique `16a9c686-392a-4ef0-a624-f112825106d9`, nom Unibet « GP Bahrein », drapeau et tracé de Sepang (slug `malaisie`). Doublon avec la ligne manuelle « GP Malaisie » résorbé le 1er octobre par `adopter_grand_prix`.
 
 Scraper (avec figeage) :
 curl -X POST "https://mon-petit-podium-production.up.railway.app/scraper/declencher" -H "X-Admin-Secret: monpetitpodium2026"

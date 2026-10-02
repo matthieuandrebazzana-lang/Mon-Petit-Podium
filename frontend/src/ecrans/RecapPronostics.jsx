@@ -12,7 +12,7 @@ import {
   FondDrapeau,
   VoileDrapeau,
 } from "../composants/DrapeauxGP.jsx";
-import { slugCircuit } from "../composants/TracesCircuits.jsx";
+import { slugDuGp } from "../lib/calendrier2026.js";
 import {
   IconeAlerte,
   IconeChevronGauche,
@@ -39,7 +39,7 @@ import { useEtatPronostics } from "../lib/useFermeture.js";
    Zone 1 — le hero.
 
    Il porte le drapeau du pays hôte, exactement comme le bloc du prochain Grand
-   Prix de l'accueil : même table (`DrapeauxGP`), même clé (`slugCircuit`), même
+   Prix de l'accueil : même table (`DrapeauxGP`), même clé (`slugDuGp`), même
    voile calculé, et la même surcouche uniforme de 15 % introduite en version
    `0.16.1`. Le récap et l'accueil parlent alors du même Grand Prix avec les
    mêmes couleurs, et la reconnaissance se fait avant d'avoir lu le nom.
@@ -64,7 +64,7 @@ function Hero({ gp, onRetour }) {
   // Un Grand Prix pas encore chargé garde le bordeaux de la marque : c'est le
   // repli documenté de `DrapeauxGP`, et il passe par le même calcul de voile
   // que les drapeaux plutôt que d'être décrété conforme.
-  const drapeau = (gp ? drapeauDuGp(slugCircuit(gp.nom)) : null) ?? APPARENCE_REPLI;
+  const drapeau = (gp ? drapeauDuGp(slugDuGp(gp)) : null) ?? APPARENCE_REPLI;
   const depart = formaterDepart(gp?.date_course);
 
   /* Le titre se cale au centre de la bande la plus claire du drapeau (voir

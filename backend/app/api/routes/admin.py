@@ -47,6 +47,7 @@ from app.api.journal import journaliser_echecs
 from app.api.routes.resultats import RapportJob, traiter_grand_prix
 from app.api.routes.scraper import lancer_scraping
 from app.jobs.resultats import DEFINITIF_EN_ECHEC, SEUIL_ALERTE_DEFINITIF
+from app.scraper.unibet import GRAND_PRIX_AMBIGU
 from app.supabase_client import ErreurSupabase, selectionner
 
 router = APIRouter(tags=["admin"])
@@ -171,11 +172,15 @@ class AlerteAdmin(BaseModel):
     aucun engagé au figeage — `marche` et `libelle` la nomment),
     `rattachement_impossible` (OpenF1 muette au figeage) et
     `definitif_en_echec` (`tentatives` échecs consécutifs du calcul définitif).
+    Un quatrième depuis la migration 29 : `grand_prix_ambigu` — un Grand Prix
+    d'Unibet que le scraper n'a pas su rattacher à une seule ligne. Il peut
+    n'avoir **aucun** `gp_id` (rien n'a été créé) : `gp` reprend alors le nom
+    d'Unibet, porté par `libelle`.
     Chaque champ a une valeur par défaut (règle 3.3 du `CLAUDE.md`).
     """
 
     type: str = ""
-    gp_id: str = ""
+    gp_id: str | None = None
     gp: str = ""
     marche: str | None = None
     libelle: str | None = None
@@ -228,7 +233,11 @@ async def alertes(profil_id: str = Depends(exiger_admin)) -> ReponseAlertes:
         servies.append(
             AlerteAdmin(
                 **{cle: valeur for cle, valeur in ligne.items() if cle != "grands_prix"},
-                gp=str(gp.get("nom") or ""),
+                gp=str(
+                    gp.get("nom")
+                    or (ligne.get("libelle") if ligne.get("type") == GRAND_PRIX_AMBIGU else "")
+                    or ""
+                ),
             )
         )
     return ReponseAlertes(alertes=servies)

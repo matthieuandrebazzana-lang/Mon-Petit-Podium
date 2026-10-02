@@ -34,9 +34,12 @@ tout le monde pronostique sur les mêmes (règle 4.3).
 **Il adopte aussi les lignes posées à la main.** Les onze Grands Prix de la fin
 de saison sont en base avant qu'Unibet n'ouvre leur page, sous un `id_unibet`
 inventé (`manuel-<slug>-2026`) : le scraper, qui se rapproche par cet
-identifiant, en insérait une seconde. Il reconnaît désormais la ligne à son
-**nom** et lui fait porter le vrai identifiant, **sans changer son UUID** — les
-pronostics, favoris et résultats qui s'y rattachent restent valides. Voir
+identifiant, en insérait une seconde. Il reconnaît désormais la ligne à sa
+**date de course** — une seule course par week-end —, son nom ne servant plus que
+de repli, et lui fait porter le vrai identifiant, **sans changer son UUID** — les
+pronostics, favoris et résultats qui s'y rattachent restent valides. Un cas
+ambigu (deux candidats ou plus) ne crée rien et devient une alerte admin ;
+aucun candidat, c'est un Grand Prix nouveau, créé comme avant. Voir `choisir_ligne` et
 `_adopter`.
 
 Depuis l'étape 11, il relève aussi **l'heure des qualifications** au passage.
@@ -52,7 +55,7 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from html import unescape
 from json import JSONDecodeError, loads
 from zoneinfo import ZoneInfo
@@ -64,6 +67,7 @@ from app.supabase_client import (
     ErreurSupabase,
     mettre_a_jour,
     selectionner,
+    supprimer,
     upserter,
 )
 
@@ -168,6 +172,17 @@ CATEGORIE_F1 = "Formule 1"
 # partagée avec la fonction SQL `adopter_grand_prix` (migration 19), qui fait le
 # même geste à la main. Les deux doivent bouger ensemble si le préfixe change.
 PREFIXE_MANUEL = "manuel-"
+
+# **Une course par week-end**, et au moins six jours entre deux départs (Las
+# Vegas, samedi 06:00 UTC → Qatar, dimanche suivant). Trois jours de part et
+# d'autre couvrent un départ décalé d'Unibet ou un samedi soir sans jamais
+# atteindre le week-end voisin. C'est la clé de `choisir_ligne` : le nom d'un
+# Grand Prix change (« GP Bahrein » couru à Sepang), sa date non.
+FENETRE_WEEK_END = timedelta(days=3)
+
+# Type d'alerte admin (`alertes_admin.type`, migration 29) : un Grand Prix
+# d'Unibet que le scraper n'a pas su rattacher à une seule ligne.
+GRAND_PRIX_AMBIGU = "grand_prix_ambigu"
 
 # **Le champ `start` d'Unibet est en UTC**, contrairement à ce que l'étape 4
 # avait conclu. Il vaut « 2608231300 » (AAMMJJHHMM) pour le GP des Pays-Bas
@@ -597,105 +612,236 @@ async def marches(client: httpx.AsyncClient, gp: GrandPrix) -> list[Cote]:
     return cotes
 
 
-async def _adopter(gp: GrandPrix, existe_deja: bool) -> dict | None:
-    """Fait porter son vrai `id_unibet` à une ligne posée à la main.
+def _est_manuelle(ligne: dict) -> bool:
+    return str(ligne.get("id_unibet") or "").startswith(PREFIXE_MANUEL)
 
-    ## Le défaut refermé
 
-    Les onze Grands Prix de la fin de saison sont en base **avant** qu'Unibet
-    n'ouvre leur page : la migration 19 les y a posés pour que le calendrier, les
-    fiches et les horaires existent toute l'année. Leur `id_unibet` est donc
-    inventé (`manuel-<slug>-2026`), et le scraper se rapproche sur `id_unibet` et
-    sur rien d'autre — **il ne reconnaissait pas la ligne et en insérait une
-    seconde.**
-
-    Le doublon n'est pas cosmétique. La ligne du scraper porte les cotes et un
-    **nouvel UUID** ; la ligne manuelle garde l'ancien, donc tout ce qui y pend —
-    pronostics, favoris, résultats. L'accueil et les calendriers se rapprochent,
-    eux, par le nom du circuit : ils pouvaient tomber sur celle des deux qui n'a
-    pas de cotes et annoncer « à venir » un Grand Prix pronosticable. Le geste
-    manuel `adopter_grand_prix` existait pour l'éviter, **à condition d'y penser
-    le vendredi**, chaque semaine de course. C'est le genre de rendez-vous qu'on
-    manque une fois sur douze.
-
-    ## Ce que fait l'adoption
-
-    Un seul `update` : la ligne manuelle prend le vrai `id_unibet`. **Son UUID ne
-    bouge pas** — c'est tout l'intérêt, et c'est ce qui garde valides les
-    pronostics, les favoris et les adhésions qui s'y rattachent. L'appelant
-    continue ensuite son chemin normalement : l'upsert retrouve la ligne par son
-    identifiant tout neuf, y écrit `date_course`, `date_qualifications` et les
-    cotes, et le job peut la figer.
-
-    **Le rapprochement se fait sur le nom, insensible à la casse et aux
-    accents** — `slug()`, qui fond aussi les séparateurs, parce qu'Unibet écrit
-    « GP Pays Bas » une semaine et « GP Pays-Bas » la suivante. C'est le seul
-    critère disponible : si on avait un identifiant commun, il n'y aurait rien à
-    adopter.
-
-    **Deux lignes manuelles de même nom n'en font adopter aucune.** Le cas ne
-    devrait pas exister, mais choisir la première venue attacherait les
-    pronostics d'un Grand Prix à un autre — mieux vaut le doublon, qui se voit,
-    qu'une adoption fausse, qui ne se voit pas. C'est la règle du rapprochement
-    des pilotes (`calcul/points.py`), appliquée ici.
-
-    `existe_deja` dit qu'une ligne porte **déjà** le vrai identifiant : le
-    scraper est passé avant l'adoption, et le doublon est constitué. Il n'y a
-    plus rien à adopter — fusionner deux lignes emporterait en cascade ce qui
-    pend à l'une d'elles — mais il y a tout à signaler, et `adopter_grand_prix`
-    sait le résorber quand la ligne manuelle est vide.
-
-    Renvoie la ligne adoptée (`id`, `statut`), ou `None` s'il n'y avait rien à
-    adopter — le cas de toutes les semaines une fois la saison entamée.
-    """
-    manuels = await selectionner(
-        "grands_prix",
-        {
-            "id_unibet": f"like.{PREFIXE_MANUEL}*",
-            "select": "id,nom,id_unibet,statut",
-        },
-    )
-    if not manuels:
+def _date_course(ligne: dict) -> datetime | None:
+    """Le départ d'une ligne de la base, ou `None` s'il n'est pas écrit."""
+    brute = ligne.get("date_course")
+    if not brute:
+        return None
+    try:
+        return datetime.fromisoformat(str(brute))
+    except ValueError:
         return None
 
+
+def _decrire(lignes: list[dict]) -> str:
+    return ", ".join(f"« {ligne.get('nom')} » ({ligne.get('id_unibet')})" for ligne in lignes)
+
+
+@dataclass
+class Rattachement:
+    """Ce que `choisir_ligne` décide pour un Grand Prix lu chez Unibet.
+
+    Au plus un des deux est posé : `ligne` (la ligne sur laquelle écrire) ou
+    `refus` (rien ne doit être créé, et pourquoi). Aucun des deux : aucun
+    candidat, le Grand Prix est nouveau et l'upsert crée sa ligne.
+    """
+
+    ligne: dict | None = None
+    # La ligne est manuelle et doit d'abord prendre le vrai `id_unibet`.
+    adopter: bool = False
+    # Ce qui l'a désignée : « identifiant », « date » ou « nom ».
+    par: str = ""
+    refus: str | None = None
+    # Les AUTRES lignes du même week-end, quand `ligne` porte déjà l'identifiant :
+    # un doublon déjà constitué, qu'il faut signaler sans y toucher.
+    doublons: list[dict] = field(default_factory=list)
+
+
+def choisir_ligne(gp: GrandPrix, lignes: list[dict]) -> Rattachement:
+    """Désigne la ligne de `grands_prix` qui accueille ce Grand Prix d'Unibet.
+
+    Fonction pure : `lignes` est la table telle que lue, rien n'est écrit ici.
+
+    ## L'ordre des critères
+
+    1. **L'identifiant Unibet.** Une ligne le porte déjà : c'est elle, le cas de
+       toutes les semaines. Les autres lignes du même week-end sont un doublon
+       déjà formé — signalé, jamais fusionné ici (`adopter_grand_prix` seule sait
+       compter ce qui pend à une ligne avant de la supprimer).
+    2. **La date de course.** Une seule course par week-end, au moins six jours
+       entre deux : la ligne dont le départ tombe à `FENETRE_WEEK_END` près
+       désigne le Grand Prix **quel que soit son nom**. C'est ce qui manquait le
+       1er octobre 2026 — Unibet a publié « GP Bahrein » au 4 octobre, la course
+       délocalisée à Sepang, à la place de la ligne manuelle « GP Malaisie ».
+       Le nom ne correspondait pas, le scraper a inséré une seconde ligne.
+    3. **Le nom, en repli seulement** — quand Unibet ne donne pas de départ, ou
+       qu'aucune ligne n'occupe ce week-end (un Grand Prix reporté). Lignes
+       manuelles uniquement, comparées par `slug()` : « GP Pays Bas » et
+       « GP Pays-Bas » se reconnaissent.
+
+    ## Aucun candidat : un Grand Prix nouveau
+
+    Ni identifiant, ni ligne ce week-end, ni ligne manuelle de ce nom : le
+    Grand Prix n'existe pas en base, et l'upsert crée sa ligne comme avant. Le
+    doublon de Sepang ne venait pas de là — une ligne occupait bien ce
+    week-end, c'est le critère du nom qui l'avait manquée.
+
+    ## Ce qui est refusé
+
+    Choisir au hasard attacherait les pronostics d'un Grand Prix à un autre ;
+    créer une ligne à côté referait le doublon. D'où `refus`, qui devient une
+    alerte admin et ne crée rien :
+
+    - **deux lignes ou plus** sur le week-end, ou sous le nom ;
+    - **une ligne non manuelle** sur le week-end, sous un autre identifiant
+      Unibet — le bookmaker a changé d'événement : la créer ferait un doublon,
+      et réécrire l'identifiant d'une ligne peut-être déjà figée n'est pas un
+      geste automatique.
+    """
+    existante = next((l for l in lignes if l.get("id_unibet") == gp.id_unibet), None)
+
+    semaine: list[dict] = []
+    if gp.date_course is not None:
+        for ligne in lignes:
+            if ligne is existante:
+                continue
+            depart = _date_course(ligne)
+            if depart is not None and abs(depart - gp.date_course) <= FENETRE_WEEK_END:
+                semaine.append(ligne)
+
+    if existante is not None:
+        return Rattachement(ligne=existante, par="identifiant", doublons=semaine)
+
+    jour = gp.date_course.date().isoformat() if gp.date_course else "date inconnue"
+
+    if len(semaine) > 1:
+        return Rattachement(
+            refus=f"{gp.nom} ({gp.id_unibet}, {jour}) : {len(semaine)} lignes occupent "
+            f"ce week-end — {_decrire(semaine)}. Rien n'est créé ni adopté."
+        )
+
+    if len(semaine) == 1:
+        seule = semaine[0]
+        if _est_manuelle(seule):
+            return Rattachement(ligne=seule, adopter=True, par="date")
+        return Rattachement(
+            refus=f"{gp.nom} ({gp.id_unibet}, {jour}) : le week-end est déjà occupé par "
+            f"{_decrire([seule])}, sous un autre identifiant Unibet. Rien n'est créé ni "
+            f"adopté."
+        )
+
+    # Repli sur le nom : aucune ligne ce week-end-là, ou pas de départ connu.
     cible = slug(gp.nom)
-    candidats = [
-        ligne for ligne in manuels if slug(str(ligne.get("nom") or "")) == cible
+    par_nom = [
+        l for l in lignes if _est_manuelle(l) and slug(str(l.get("nom") or "")) == cible
     ]
 
-    if not candidats:
-        return None
+    if len(par_nom) == 1:
+        return Rattachement(ligne=par_nom[0], adopter=True, par="nom")
 
-    if len(candidats) > 1:
-        logger.warning(
-            "[scraper] %s : %d lignes manuelles portent ce nom (%s). Aucune n'est "
-            "adoptée — en choisir une au hasard attacherait les pronostics au "
-            "mauvais Grand Prix. À reprendre à la main.",
-            gp.nom,
-            len(candidats),
-            ", ".join(str(ligne.get("id_unibet")) for ligne in candidats),
+    if len(par_nom) > 1:
+        return Rattachement(
+            refus=f"{gp.nom} ({gp.id_unibet}, {jour}) : aucune ligne ce week-end, et "
+            f"{len(par_nom)} lignes manuelles portent ce nom — {_decrire(par_nom)}. Rien "
+            f"n'est créé ni adopté."
         )
+
+    # Aucun candidat : un Grand Prix nouveau, que l'upsert va créer.
+    return Rattachement()
+
+
+async def _alerter(gp: GrandPrix, gp_id: str | None, message: str) -> None:
+    """Écrit l'alerte `grand_prix_ambigu`, une par identifiant Unibet.
+
+    Best effort, comme `rattacher_sans_echec` : sans la migration 29 (`gp_id`
+    nullable, type admis), l'écriture échoue et seul le journal garde la trace.
+    Le refus de créer la ligne, lui, a déjà eu lieu.
+    """
+    try:
+        await upserter(
+            "alertes_admin",
+            [
+                {
+                    "gp_id": gp_id,
+                    "type": GRAND_PRIX_AMBIGU,
+                    "cle": gp.id_unibet,
+                    "libelle": gp.nom,
+                    "derniere_erreur": message[:1000],
+                    "modifie_le": datetime.now(UTC).isoformat(),
+                }
+            ],
+            "gp_id,type,cle",
+        )
+    except ErreurSupabase:
+        logger.exception("[scraper] %s : alerte admin non enregistrée.", gp.nom)
+
+
+async def _effacer_alerte(gp: GrandPrix) -> None:
+    """Retire l'alerte de ce Grand Prix une fois le rattachement résolu."""
+    try:
+        await supprimer(
+            "alertes_admin",
+            {"type": f"eq.{GRAND_PRIX_AMBIGU}", "cle": f"eq.{gp.id_unibet}"},
+        )
+    except ErreurSupabase:
+        logger.exception("[scraper] %s : alerte admin non effacée.", gp.nom)
+
+
+async def _adopter(gp: GrandPrix) -> dict | None:
+    """Rattache un Grand Prix d'Unibet à SA ligne de `grands_prix`, et la rend.
+
+    La décision est celle de `choisir_ligne` — identifiant, puis **date de
+    course**, puis nom en repli. Ce qui suit l'applique :
+
+    - **ligne manuelle désignée** → un seul `update` lui donne le vrai
+      `id_unibet`. **Son UUID ne bouge pas** : les pronostics, favoris et
+      résultats qui s'y rattachent restent valides, et l'upsert de
+      `_enregistrer` la retrouve par son identifiant tout neuf ;
+    - **refus** → `warning`, alerte admin, et `ErreurScraper` : le Grand Prix
+      passe aux échecs du compte rendu, **rien n'est écrit en base** ;
+    - **doublon déjà formé** → `warning` et alerte, avec la commande
+      `adopter_grand_prix` toute faite pour les lignes manuelles. La ligne qui
+      porte l'identifiant est rendue, le scraping continue sur elle.
+
+    Renvoie la ligne (`id`, `statut`…), ou `None` quand aucun candidat
+    n'existe : le Grand Prix est nouveau, l'upsert de `_enregistrer` le crée.
+    """
+    lignes = await selectionner(
+        "grands_prix",
+        {"select": "id,nom,id_unibet,statut,date_course"},
+    )
+    decision = choisir_ligne(gp, lignes)
+
+    if decision.refus is not None:
+        logger.warning("[scraper] %s", decision.refus)
+        await _alerter(gp, None, decision.refus)
+        raise ErreurScraper(decision.refus)
+
+    ligne = decision.ligne
+    if ligne is None:
+        logger.info(
+            "[scraper] %s (%s) : aucune ligne ce week-end ni sous ce nom — Grand "
+            "Prix nouveau, sa ligne est créée.",
+            gp.nom,
+            gp.id_unibet,
+        )
+        await _effacer_alerte(gp)
         return None
 
-    ligne = candidats[0]
+    if decision.doublons:
+        commandes = " ".join(
+            f"select public.adopter_grand_prix('{autre.get('id_unibet')}', '{gp.id_unibet}');"
+            for autre in decision.doublons
+            if _est_manuelle(autre)
+        )
+        message = (
+            f"{gp.nom} ({gp.id_unibet}) : doublon en base — "
+            f"{_decrire(decision.doublons)} court le même week-end. "
+            + (f"À résorber dans le SQL Editor : {commandes}" if commandes else "À reprendre à la main.")
+        )
+        logger.warning("[scraper] %s", message)
+        await _alerter(gp, str(ligne["id"]), message)
+        return ligne
+
+    if not decision.adopter:
+        await _effacer_alerte(gp)
+        return ligne
+
     placeholder = str(ligne.get("id_unibet"))
-
-    if existe_deja:
-        # Le scraper est arrivé avant l'adoption : les deux lignes coexistent.
-        # On ne touche à rien — la ligne manuelle peut porter des pronostics, et
-        # `adopter_grand_prix` est la seule à savoir compter ce qui y pend avant
-        # de supprimer quoi que ce soit.
-        logger.warning(
-            "[scraper] %s : une ligne manuelle (« %s ») porte le même nom que la "
-            "ligne scrapée (« %s »). Doublon en base — à résorber avec "
-            "select public.adopter_grand_prix('%s', '%s'); dans le SQL Editor.",
-            gp.nom,
-            placeholder,
-            gp.id_unibet,
-            placeholder,
-            gp.id_unibet,
-        )
-        return None
 
     # Le filtre porte sur le placeholder autant que sur l'identifiant, pour la
     # raison exacte du `PATCH` de figeage (`jobs/scraper.py`) : si quelqu'un a
@@ -708,22 +854,34 @@ async def _adopter(gp: GrandPrix, existe_deja: bool) -> dict | None:
     )
 
     if not adoptees:
-        logger.info(
-            "[scraper] %s : la ligne manuelle « %s » n'était plus là à l'écriture "
-            "— adoptée entre-temps par quelqu'un d'autre.",
-            gp.nom,
-            placeholder,
+        relues = await selectionner(
+            "grands_prix",
+            {"id_unibet": f"eq.{gp.id_unibet}", "select": "id,statut", "limit": "1"},
         )
-        return None
+        if relues:
+            logger.info(
+                "[scraper] %s : la ligne manuelle « %s » a été adoptée entre-temps.",
+                gp.nom,
+                placeholder,
+            )
+            return relues[0]
+        raise ErreurScraper(
+            f"{gp.nom} : la ligne manuelle « {placeholder} » a changé pendant "
+            f"l'adoption. Rien n'est écrit, nouvel essai au prochain passage."
+        )
 
     logger.info(
-        "[scraper] %s : ligne manuelle adoptée — « %s » devient « %s ». L'UUID %s "
-        "ne change pas, les pronostics et favoris déjà rattachés restent valides.",
+        "[scraper] %s : ligne manuelle adoptée par %s — « %s » (« %s ») devient « %s ». "
+        "L'UUID %s ne change pas, les pronostics et favoris déjà rattachés restent "
+        "valides.",
         gp.nom,
+        decision.par,
         placeholder,
+        ligne.get("nom"),
         gp.id_unibet,
         ligne["id"],
     )
+    await _effacer_alerte(gp)
     return adoptees[0]
 
 
@@ -750,20 +908,13 @@ async def _enregistrer(gp: GrandPrix) -> dict:
     autre** : une ligne manuelle déjà figée à la main garde ses cotes, l'adoption
     ne rouvre rien.
     """
-    existants = await selectionner(
-        "grands_prix",
-        {"id_unibet": f"eq.{gp.id_unibet}", "select": "id,statut", "limit": "1"},
-    )
+    # Le rattachement est tenté à chaque passage et non une fois pour toutes : le
+    # scraper ne sait pas quel Grand Prix Unibet lui servira, et une saison
+    # entière de lignes manuelles attend d'être adoptée, une par week-end. Un
+    # refus lève ici, avant toute écriture.
+    existante = await _adopter(gp)
 
-    # L'adoption ne s'interpose que lorsqu'il y a une ligne manuelle de même nom.
-    # Elle est tentée à chaque passage et non une fois pour toutes : le scraper
-    # ne sait pas quel Grand Prix Unibet lui servira, et une saison entière de
-    # lignes manuelles attend d'être adoptée, une par week-end.
-    adoptee = await _adopter(gp, existe_deja=bool(existants))
-    if adoptee is not None:
-        existants = [adoptee]
-
-    fige = bool(existants) and existants[0].get("statut") in ("cotes_figees", "termine")
+    fige = existante is not None and existante.get("statut") in ("cotes_figees", "termine")
 
     ligne = {"id_unibet": gp.id_unibet, "nom": gp.nom}
     if gp.date_course:
@@ -818,7 +969,7 @@ async def _enregistrer(gp: GrandPrix) -> dict:
     if fige:
         refus = (
             f"{gp.nom} : les cotes sont figées (statut « "
-            f"{existants[0].get('statut')} »), elles ne doivent plus bouger "
+            f"{existante.get('statut')} »), elles ne doivent plus bouger "
             f"(règle 4.3). {len(gp.cotes)} cote(s) lue(s) chez Unibet ont été "
             f"ignorées."
         )

@@ -842,3 +842,37 @@ français : c'est une donnée de l'API. Pour que l'App Store liste les deux lang
 toutefois exiger un dossier `.lproj` par langue dans le bundle — à vérifier à la première
 soumission.
 
+
+## 24. Un Grand Prix se rattache par sa date de course, le nom n'est qu'un repli
+
+**Décision.** Partout où une ligne de `grands_prix` doit être reconnue — par le scraper
+(`unibet.choisir_ligne`), par le web (`slugDuGp`, `lib/calendrier2026.js`) et par l'app iOS
+(`SlugCircuit.de(_:dateCourse:)`) —, le critère est, dans l'ordre : l'identifiant Unibet
+quand il existe, puis **la date de course à ±3 jours** (une seule course par week-end, au
+moins six jours entre deux), puis le nom en repli (pas de date connue, ou Grand Prix
+reporté sans ligne au nouveau week-end). **Aucun candidat** : le Grand Prix est nouveau, le
+scraper crée sa ligne comme avant. **Deux candidats ou plus** : ambiguïté — rien n'est créé
+ni adopté, et une alerte admin `grand_prix_ambigu` remonte (migration 29).
+
+**Raison.** Le 1ᵉʳ octobre 2026, Unibet a publié « GP Bahrein » au 4 octobre : la course de
+Bahreïn délocalisée à Sepang, là où la migration 19 avait posé « GP Malaisie ». Le nom ne
+correspondait pas : le scraper a inséré une seconde ligne, le slug `bahrein` ne désignait
+ni drapeau ni tracé, et le calendrier web ne retrouvait plus la ligne qui portait les cotes.
+Le nom d'un Grand Prix change (renommage, délocalisation, orthographe du bookmaker) ; sa
+date, non. Le doublon ne venait pas de l'absence de candidat — une ligne occupait bien ce
+week-end — mais d'un critère qui l'avait manquée : créer quand rien ne correspond reste donc
+sûr, et c'est ce qui permet d'accueillir un Grand Prix nouveau sans geste manuel.
+
+**Écarté.** *Ajouter un alias `bahrein → malaisie`* — referme ce cas-là et attend le
+suivant. *Refuser aussi quand rien ne correspond* — envisagé puis abandonné : un Grand Prix
+absent de la base est forcément nouveau, et le refuser obligerait à poser chaque saison à
+la main avant que le scraper ne la rencontre. *Choisir le premier de deux candidats* —
+attacherait les pronostics d'un Grand Prix à un autre. *Réécrire l'identifiant d'une ligne
+réelle du même week-end* — elle peut être figée, et la créer à côté referait le doublon ;
+refus et alerte à la place (seul refus à un candidat unique).
+
+**Conséquences assumées.** Sans date chez Unibet, une ligne réelle de même nom n'est pas
+un candidat du repli : un Grand Prix déjà adopté qui changerait d'identifiant sans date
+serait créé une seconde fois — cas jamais observé, Unibet publie toujours le départ. Le nom
+affiché est celui d'Unibet (« GP Bahrein ») là où la ligne est lue
+directement ; le drapeau et le tracé suivent le week-end (Sepang).

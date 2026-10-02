@@ -188,6 +188,14 @@ function descriptionAlerte(alerte) {
       detail: `Il continue de réessayer. Dernière erreur : ${alerte.derniere_erreur ?? "inconnue"}`,
     };
   }
+  if (alerte.type === "grand_prix_ambigu") {
+    return {
+      titre: alerte.gp_id
+        ? "Doublon en base sur ce week-end"
+        : "Grand Prix Unibet non rattaché · rien n'a été créé",
+      detail: alerte.derniere_erreur ?? "",
+    };
+  }
   return { titre: alerte.type, detail: alerte.derniere_erreur ?? "" };
 }
 

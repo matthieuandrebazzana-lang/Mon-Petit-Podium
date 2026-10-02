@@ -8,10 +8,7 @@ import PhotoChampionnat from "../composants/PhotoChampionnat.jsx";
 import ZoneChargement from "../composants/ZoneChargement.jsx";
 import { Pave } from "../composants/Squelette.jsx";
 import TexteEchange from "../composants/TexteEchange.jsx";
-import TraceCircuitGp, {
-  aUnTrace,
-  slugCircuit,
-} from "../composants/TracesCircuits.jsx";
+import TraceCircuitGp, { aUnTrace } from "../composants/TracesCircuits.jsx";
 import {
   APPARENCE_REPLI,
   drapeauDuGp,
@@ -28,6 +25,7 @@ import { chargerAccueilGp, cleAccueilGp } from "../lib/pronostics.js";
 import { useDonnees } from "../lib/useDonnees.js";
 import { useIdentiteCourante } from "../lib/usePseudo.js";
 import { cotesArretees } from "../lib/calendrier.js";
+import { slugDuGp } from "../lib/calendrier2026.js";
 import { formaterDepart } from "../lib/format.js";
 import { useEtatPronostics } from "../lib/useFermeture.js";
 import { APP_VERSION } from "../config.js";
@@ -243,7 +241,7 @@ export function BlocProchainGp({ profilId, previsualisation = false }) {
   // Une seule normalisation du nom pour les deux : ils partagent la même clé, et
   // la faire deux fois laisserait les deux tables se désynchroniser sur un
   // libellé qu'Unibet aurait renommé.
-  const slug = slugCircuit(gp.nom);
+  const slug = slugDuGp(gp);
   const drapeau = drapeauDuGp(slug) ?? APPARENCE_REPLI;
   // La bande du tracé n'existe que s'il y a un tracé à y mettre. Sans ce test,
   // un Grand Prix hors planche laisserait 160px de fond assombri au milieu du

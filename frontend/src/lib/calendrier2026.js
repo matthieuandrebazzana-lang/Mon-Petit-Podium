@@ -250,6 +250,42 @@ export function jourDe(date) {
   return jour ? String(Number(jour)) : null;
 }
 
+/** Écart toléré entre le départ en base et celui de la table : une course par
+ *  week-end, au moins six jours entre deux. Trois jours de part et d'autre ne
+ *  touchent jamais le week-end voisin. */
+const FENETRE_WEEK_END_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * La clé de drapeau et de tracé d'une ligne de la base — **la date de course
+ * d'abord, le nom en repli.**
+ *
+ * Le nom est un libellé d'Unibet, et le bookmaker ne nomme pas toujours le Grand
+ * Prix comme le calendrier : le 1ᵉʳ octobre 2026 il a publié « GP Bahrein » au 4
+ * octobre, la course délocalisée à Sepang. `slugCircuit` en tirait `bahrein`,
+ * clé d'aucun drapeau ni d'aucun tracé : l'accueil perdait son bloc coloré et le
+ * calendrier ne retrouvait plus la ligne — donc ni ses cotes ni son statut. Le
+ * jour de course, lui, désigne le Grand Prix sans ambiguïté, quel que soit son
+ * nom. Même règle que le scraper (`unibet.choisir_ligne`) et que l'app iOS
+ * (`SlugCircuit.de(_:dateCourse:)`).
+ *
+ * **Seul propriétaire de la question** : l'accueil, le calendrier, le récap et
+ * le croisement de `enrichir` passent tous par ici.
+ */
+export function slugDuGp(gp) {
+  const depart = Date.parse(gp?.date_course ?? "");
+  if (Number.isFinite(depart)) {
+    let meilleur = null;
+    for (const entree of GP_2026) {
+      const ecart = Math.abs(Date.parse(entree.seances.course) - depart);
+      if (ecart <= FENETRE_WEEK_END_MS && (!meilleur || ecart < meilleur.ecart)) {
+        meilleur = { slug: entree.slug, ecart };
+      }
+    }
+    if (meilleur) return meilleur.slug;
+  }
+  return slugCircuit(gp?.nom);
+}
+
 /**
  * Les Grands Prix déjà en base, avec leur identifiant, leur statut et leurs
  * cotes.
@@ -271,8 +307,9 @@ export function chargerCotesEnBase(signal) {
  * **Le rapprochement se fait sur le slug de circuit, jamais sur le nom.** Unibet
  * écrit « GP Pays Bas » cette semaine et « GP Pays-Bas » la suivante — c'est
  * déjà la raison pour laquelle `grands_prix` se rapproche par `id_unibet` et non
- * par le nom (étape 4). `slugCircuit` ramène les deux à la même clé, alias
- * compris (« GP Sepang » → `malaisie`).
+ * par le nom (étape 4). `slugDuGp` ramène les deux à la même clé — par la date
+ * de course d'abord, puis par `slugCircuit`, alias compris (« GP Sepang » →
+ * `malaisie`).
  *
  * **Un Grand Prix absent de la base reste servi**, sans identifiant ni statut :
  * c'est le cas normal de toute la saison à venir, pas une panne. C'est aussi ce
@@ -283,9 +320,17 @@ export function chargerCotesEnBase(signal) {
  * bookmaker change l'orthographe d'un pays.
  */
 export function enrichir(grandsPrix = GP_2026, enBase = null) {
-  const parSlug = new Map(
-    (enBase ?? []).map((gp) => [slugCircuit(gp.nom), gp]),
-  );
+  // Deux lignes pour un même week-end — une manuelle pas encore adoptée et
+  // celle du scraper : celle qui porte des cotes l'emporte, c'est la seule
+  // pronosticable.
+  const parSlug = new Map();
+  for (const gp of enBase ?? []) {
+    const slug = slugDuGp(gp);
+    const deja = parSlug.get(slug);
+    if (!deja || (!(deja.marches?.length > 0) && gp.marches?.length > 0)) {
+      parSlug.set(slug, gp);
+    }
+  }
 
   return grandsPrix.map((gp) => {
     const trouve = parSlug.get(gp.slug) ?? null;

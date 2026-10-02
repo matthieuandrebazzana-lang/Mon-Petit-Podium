@@ -158,8 +158,8 @@ def _resultat_du_gp(rapport: dict, gp_id: str) -> dict | None:
 
     **Il ne peut aboutir que si le scraper a écrit sur la ligne visée**, pas sur
     un doublon de sa fabrication. C'est ce que garantit `unibet._adopter`, qui
-    reconnaît une ligne manuelle à son nom et lui fait porter le vrai
-    identifiant Unibet en lui laissant son UUID. Rendre `None` reste possible et
+    reconnaît une ligne manuelle à sa date de course (son nom en repli) et lui
+    fait porter le vrai identifiant Unibet en lui laissant son UUID. Rendre `None` reste possible et
     légitime — Unibet est passé au Grand Prix suivant, ou sa page a échoué — et
     l'appelant le journalise en `error` avec les échecs du scraping.
     """
