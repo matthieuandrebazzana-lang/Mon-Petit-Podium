@@ -103,6 +103,9 @@ enum TraductionsEN {
 
         // MARK: - Accueil
         "accueil.mesChampionnats": "My championships",
+        "accueil.pile.afficher": "Show %@",
+        "accueil.pile.suivant": "Next championship",
+        "accueil.pile.precedent": "Previous championship",
         "accueil.salut": "Hi %@",
         "accueil.saisonF1": "2026 season · Formula 1",
         "accueil.pilote": "driver",

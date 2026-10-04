@@ -220,6 +220,7 @@ ios/
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
     │   ├── Accueil/
     │   │   ├── AccueilView.swift       championnats et GP suivant réels, pastille + bouton selon l’état — `pronosValides` mocké
+    │   │   ├── PileChampionnats.swift  championnats en paquet de cartes : carte du dessus pleine (tap = ouvrir, swipe = réordonner), bandes : tap = aperçu sur place, 2ᵉ tap = ouvrir ; ordre mémorisé par compte (`OrdrePile`)
     │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Composants/

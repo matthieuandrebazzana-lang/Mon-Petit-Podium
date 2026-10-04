@@ -1359,6 +1359,11 @@ extension View {
 **rayon `champ` → aucune ombre** (ce sont les surfaces posées *à l'intérieur* d'un bloc, qui
 ne cassent jamais leur plan), aplat de couleur → `ombreAplat`.
 
+`ombreAplat(intensite:allegee:)` prend deux réglages, pour les surfaces qui bougent :
+`intensite` module l'opacité des deux couches (une surface qui passe derrière une autre
+éteint son ombre au lieu de la couper), `allegee` retire la couche ambiante — la seule
+coûteuse — sur une surface immobile pendant qu'une voisine suit le doigt.
+
 **`lueur-haute`** pose en plus un galbe de lumière très doux sur les aplats de couleur — du
 blanc à très faible opacité, **aucune couleur nouvelle**.
 

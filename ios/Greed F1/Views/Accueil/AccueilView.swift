@@ -33,6 +33,10 @@ struct AccueilView: View {
     /// Le chemin du parcours de pronostics — voir ``EtapePronos``.
     @State private var cheminPronos: [EtapePronos] = []
 
+    /// La bande de la pile dépliée en aperçu — voir ``PileChampionnats``. Tenue ici parce
+    /// qu'un tap **n'importe où** hors de la pile la referme.
+    @State private var apercuPile: UUID?
+
     var body: some View {
         // L'accueil est la **racine de sa propre pile** : c'est de ses deux cartes
         // d'action que part la création d'un championnat. Une pile par onglet, et non
@@ -70,6 +74,15 @@ struct AccueilView: View {
                     .padding(.horizontal, margeLaterale)
                     .padding(.top, 8)
                     .padding(.bottom, 24)
+                    // Un tap hors de la pile referme l'aperçu. Les boutons de l'écran
+                    // passent avant ce geste, et il n'existe que pendant un aperçu.
+                    .contentShape(Rectangle())
+                    .gesture(
+                        TapGesture().onEnded {
+                            withAnimation(Mouvement.pile) { apercuPile = nil }
+                        },
+                        including: apercuPile == nil ? .subviews : .all
+                    )
                 }
             }
             // Pas de titre : le bouton de retour des écrans poussés d'ici affiche alors le
@@ -176,20 +189,18 @@ struct AccueilView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// `NavigationLink` et non `Button`, comme dans ``ChampionnatsView`` : la carte
-    /// tombait auparavant sur un `Button` à l'action vide — elle s'enfonçait sous le doigt
-    /// et rien ne s'ouvrait.
+    /// Les championnats en paquet de cartes — voir ``PileChampionnats``. **Aucun
+    /// championnat ⇒ rien**, comme la liste qu'il remplace : les deux cartes d'action,
+    /// juste en dessous, sont l'état vide.
     private var listeChampionnats: some View {
         EtatMesChampionnats(mesChampionnats: mesChampionnats) { championnats in
-            VStack(spacing: 10) {
-                ForEach(championnats) { championnat in
-                    NavigationLink {
-                        ChampionnatDetailView(championnat: championnat, mesChampionnats: mesChampionnats)
-                    } label: {
-                        CarteChampionnat(championnat: championnat)
-                    }
-                    .buttonStyle(StyleAppui(.grandeSurface))
-                }
+            if !championnats.isEmpty {
+                PileChampionnats(
+                    championnats: championnats,
+                    mesChampionnats: mesChampionnats,
+                    idUtilisateur: viewModel.profil?.id,
+                    apercu: $apercuPile
+                )
             }
         }
     }
