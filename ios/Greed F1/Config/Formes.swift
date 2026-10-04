@@ -12,6 +12,9 @@ import SwiftUI
 enum Rayon {
     /// Blocs principaux.
     static let bloc: CGFloat = 24
+    /// Cartes du carrousel « Mes / Ses Grands Prix » — la seule surface qui occupe presque
+    /// toute la largeur **et** une grande hauteur : 32 pt y gardent la courbure lisible.
+    static let carrousel: CGFloat = 32
     /// Cartes.
     static let carte: CGFloat = 20
     /// Petites cartes et boutons.

@@ -1446,6 +1446,7 @@ Deux textures du web, à transposer ou à abandonner selon le rendu :
 | Entrées, sorties | `cubic-bezier(0.22, 1, 0.36, 1)` | `.timingCurve(0.22, 1, 0.36, 1, duration: …)` |
 | **Déplacements** | `cubic-bezier(0.77, 0, 0.175, 1)` | `.timingCurve(0.77, 0, 0.175, 1, duration: …)` |
 | Relâchement d'un appui | `cubic-bezier(0.34, 1.36, 0.64, 1)` | `.spring(response: 0.3, dampingFraction: 0.6)` |
+| Déploiement / repli d'une carte en plein écran (iOS seul) | — | `.spring(response: 0.34 / 0.28, dampingFraction: 1)` — `Mouvement.deploiement`, `repli` |
 
 | Durée | Emploi |
 |---|---|
@@ -1470,6 +1471,12 @@ Deux textures du web, à transposer ou à abandonner selon le rendu :
 
 > **Le ressort ne s'emploie QUE là où un geste a précédé le mouvement**, jamais sur une
 > apparition automatique, où le dépassement se lirait comme une erreur.
+
+> **Le héros carte → plein écran** (« Mes / Ses Grands Prix ») est un ressort **critique** :
+> le tap a précédé, et la fermeture peut tomber en plein déploiement — le ressort repart de
+> la position affichée. Aucun dépassement : un écran entier qui rebondit se lit comme une
+> erreur. Le contenu entre après 160 ms, les cartes en `decalage` ; sous mouvement réduit,
+> aucun cadre ne bouge, le détail apparaît en fondu.
 
 **Mouvement réduit ≠ moins de sens.** Sous `reduceMotion`, ce qui **informe** reste : le
 chiffre entrant d'une tuile est montré sans voyager, la piste d'un interrupteur garde sa
