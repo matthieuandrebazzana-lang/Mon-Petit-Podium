@@ -184,7 +184,7 @@ ios/
     │   ├── SupabaseConfig.swift     lecture d'Info.plist, rien en dur
     │   ├── Couleurs.swift           palette + typographie du design system
     │   ├── Formes.swift             rayons + les quatre ombres
-    │   ├── Materiaux.swift          damier et lumière spéculaire (les deux calques décoratifs), teintes et damier des cartes de pronostic
+    │   ├── Materiaux.swift          damier et lumière spéculaire (les deux calques décoratifs), teintes et damier des cartes de pronostic, `damierFiligrane` (5 %)
     │   ├── Mouvement.swift          courbes, durées, StyleAppui (retour d'appui)
     │   └── LandingView.swift        écran d'accueil (non connecté)
     ├── Models/
@@ -227,12 +227,13 @@ ios/
     │   │   ├── CartesChampionnat.swift  carte de championnat, cartes d'action, chargement/échec (`EchecChargement`), PARTAGÉS
     │   │   ├── BoutonPrincipal.swift    habillage du bouton de « Créer » et « Rejoindre », PARTAGÉ
     │   │   ├── ErreurEnLigne.swift      refus d'une écriture, sous le bouton — jamais d'alerte
+    │   │   ├── SelecteurSegmente.swift  sélecteur segmenté pleine largeur (une seule pastille `primaire`, ressort `Mouvement.glissement`, fond neutre + damier) — Classement / Piste
     │   │   ├── MentionProvisoire.swift  `StatutResultats` (provisoire, non évaluable) + la mention « Provisoire », PARTAGÉS
     │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
-    │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste, menu « ⋯ » (code, photo si créateur, quitter), photo 56 pt (ou initiale sur `primaire`) à équidistance du titre et du menu — réels
+    │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste (`SelecteurSegmente`), menu « ⋯ » (code, photo si créateur, quitter), photo 100 pt réduite jusqu'à 72 pt pour un nom long, à équidistance du titre et du menu (`DispositionEntete`) — sans photo, rien : texte + ⋯ ; les deux contenus restent montés, seule l'opacité bascule (0,001, pas 0) ; damier en filigrane sur le sélecteur et la carte « Résultats par Grand Prix » — réels
     │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — reçoit le classement
     │   │   ├── ResultatsParGPView.swift     résultats par GP : sélecteur des GP terminés, paris de chacun en accordéon
     │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée

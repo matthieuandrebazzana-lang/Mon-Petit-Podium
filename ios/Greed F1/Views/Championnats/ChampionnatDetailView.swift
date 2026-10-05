@@ -77,6 +77,10 @@ struct ChampionnatDetailView: View {
 
     @State private var vue: Vue = .classement
 
+    /// Vrai dès le premier passage sur « Piste », et pour toujours : c'est lui qui lance
+    /// l'entrée des voitures, **une fois**. La piste est construite avant, invisible.
+    @State private var pisteVue = false
+
     var body: some View {
         ZStack {
             Color.fondPrincipal
@@ -88,10 +92,14 @@ struct ChampionnatDetailView: View {
             // s'arrêter sous le sélecteur « Classement / Piste ». C'est l'opacité du bloc
             // ci-dessous qui les cache là où il se pose, exactement comme l'aplat du
             // bandeau les cache sur l'écran plein.
-            if vue == .piste {
-                SolPiste()
-                    .ignoresSafeArea()
-            }
+            //
+            // **Toujours monté**, en fondu comme le contenu : le recréer à chaque bascule
+            // redessinait la planche plein écran dans la transaction de la pastille. Masqué
+            // à 0,001 et non à 0, pour la même raison que les contenus (`visible(_:)`).
+            SolPiste()
+                .ignoresSafeArea()
+                .opacity(vue == .piste ? 1 : 0.001)
+                .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
 
             // **L'en-tête et le sélecteur ne défilent pas**, le contenu dessous oui. La
             // piste redevient un segment de cet écran : elle s'affiche **en place**, sous
@@ -114,6 +122,13 @@ struct ChampionnatDetailView: View {
                 // Un fondu court entre les deux contenus, et rien d'autre : un segment
                 // se bascule souvent, un glissement latéral finirait par se faire attendre.
                 // L'opacité reste permise en mouvement réduit.
+                //
+                // > **Les deux contenus restent construits**, l'un sur l'autre ; seule leur
+                // > opacité bascule. Un `switch` démontait l'un et construisait l'autre à
+                // > chaque appui — la piste refaisait ses `Canvas`, rechargeait les photos de
+                // > ses cockpits et rejouait l'entrée des voitures dans la même image que le
+                // > départ de la pastille, qui saccadait. Le classement garde en prime sa
+                // > position de défilement.
                 ZStack {
                     switch classement.etat {
                     case .chargement:
@@ -130,20 +145,20 @@ struct ChampionnatDetailView: View {
 
                     case .pret(let servis):
                         let membres = servis.map { $0.avecVoiture(de: monProfil) }
-                        switch vue {
-                        case .classement:
-                            contenuClassement(membres)
-                                .transition(.opacity)
-                        case .piste:
-                            VuePisteView(championnat: championnat, membres: membres,
-                                         integree: true)
-                                .transition(.opacity)
-                        }
+                        contenuClassement(membres)
+                            .visible(vue == .classement)
+                        PisteIntegree(championnat: championnat, membres: membres,
+                                      lancerEntree: pisteVue)
+                            .equatable()
+                            .visible(vue == .piste)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
             }
+        }
+        .onChange(of: vue) { _, nouvelle in
+            if nouvelle == .piste { pisteVue = true }
         }
         // À chaque apparition, retour du profil d'un membre compris : pas de cache de
         // session (`docs/swift-app.md` §7.6). Le classement affiché reste en place.
@@ -297,34 +312,34 @@ struct ChampionnatDetailView: View {
 
     // MARK: - En-tête
 
-    /// Le côté de la photo : la hauteur du bloc titre sur une ligne (28 pt de titre, 4 pt,
-    /// 13 pt de sous-titre ≈ 56 pt), mesurée au simulateur — 64 pt la faisait dépasser.
-    private let cotePhoto: CGFloat = 56
-
     /// Le retrait de l'icône ⋯ dans son cadre de 44 pt (glyphe ≈ 20 pt de large). Retiré
     /// des deux côtés du bouton pour que les écarts se mesurent **au glyphe**, ce que l'œil
     /// voit, et non au cadre tactile invisible.
     private let retraitGlyphe: CGFloat = 12
 
-    /// **Trois colonnes** : le titre à gauche à sa largeur naturelle, la photo, les trois
-    /// points à droite. Deux `Spacer` de même priorité encadrent la photo — le titre est
-    /// servi d'abord, et la place restante se partage à parts égales : la photo tombe à
-    /// équidistance du texte et du ⋯, et le tout se centre sur l'axe vertical du bloc.
-    /// Sans photo, la vignette porte l'initiale (``PhotoChampionnat``) : la mise en page
-    /// ne dépend jamais de sa présence.
-    private var entete: some View {
-        HStack(alignment: .center, spacing: 0) {
-            titreEtSousTitre
-                .layoutPriority(1)
-
-            Spacer(minLength: 16)
-
-            PhotoChampionnat(nom: championnat.nom, photo: photo, cote: cotePhoto)
-
-            Spacer(minLength: 16)
-
-            iconeMenu
-                .padding(.horizontal, -retraitGlyphe)
+    /// **Trois colonnes** : le titre à gauche, la photo, les trois points à droite — tous
+    /// trois centrés sur l'axe vertical, la photo à équidistance du texte et du ⋯, chacun
+    /// mesuré sur sa partie visible. ``DispositionEntete`` choisit le côté de la photo :
+    /// 100 pt, réduite jusqu'à 72 pt si le titre en a besoin. **L'en-tête grandit avec
+    /// elle** : la photo ne se règle plus sur la hauteur du bloc texte.
+    ///
+    /// **Sans photo, rien** : ni initiale ni aplat. L'en-tête redevient le bloc texte à
+    /// gauche et le ⋯ à droite, à sa hauteur naturelle — aucune place réservée.
+    @ViewBuilder private var entete: some View {
+        if let photo {
+            DispositionEntete(titre: championnat.nom) {
+                titreEtSousTitre
+                PhotoChampionnat(nom: championnat.nom, photo: photo)
+                iconeMenu
+                    .padding(.horizontal, -retraitGlyphe)
+            }
+        } else {
+            HStack(alignment: .center, spacing: 16) {
+                titreEtSousTitre
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                iconeMenu
+                    .padding(.horizontal, -retraitGlyphe)
+            }
         }
     }
 
@@ -337,10 +352,11 @@ struct ChampionnatDetailView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
-            // `grisSecondaire` (4,71:1) et non le `#999999` de la maquette (2,52:1).
+            // `secondaire` (9,32:1) : `grisSecondaire` n'y tenait que 4,71:1, trop juste
+            // à 13 pt sur le beige.
             Text(tp("championnat.membresSaison", effectif))
                 .font(.custom("HelveticaNeue", size: 13))
-                .foregroundColor(.grisSecondaire)
+                .foregroundColor(.secondaire)
         }
         .accessibilityElement(children: .combine)
     }
@@ -392,11 +408,11 @@ struct ChampionnatDetailView: View {
             Group {
                 if occupe {
                     ProgressView()
-                        .tint(.grisSecondaire)
+                        .tint(.secondaire)
                 } else {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundColor(.grisSecondaire)   // 4,71:1 sur le beige
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.secondaire)       // 9,32:1 sur le beige
                 }
             }
             .frame(width: 44, height: 44)
@@ -453,15 +469,15 @@ struct ChampionnatDetailView: View {
 
     // MARK: - Le sélecteur
 
-    /// **Un `Picker` segmenté natif** : c'est le contrôle qu'iOS donne à « deux vues du
-    /// même objet », et il porte seul l'accessibilité, le retour d'appui et le glissement
-    /// de la pastille. Rien ici ne le redessine.
+    /// ``SelecteurSegmente`` et non plus le `Picker` segmenté natif : sous iOS 26 celui-ci
+    /// écrivait en blanc sur un gris clair, presque illisible, sans se laisser teinter.
+    /// Actif en pastille `primaire` pleine, inactif en `secondaire` sur fond neutre ; la
+    /// pastille glisse comme celle du contrôle natif.
     private var selecteur: some View {
-        Picker(t("championnat.affichage"), selection: $vue) {
-            Text(t("championnat.classement")).tag(Vue.classement)
-            Text(t("championnat.piste")).tag(Vue.piste)
-        }
-        .pickerStyle(.segmented)
+        SelecteurSegmente(titre: t("championnat.affichage"),
+                          options: [(Vue.classement, t("championnat.classement")),
+                                    (Vue.piste, t("championnat.piste"))],
+                          selection: $vue)
     }
 
     // MARK: - Le contenu « Classement »
@@ -476,7 +492,7 @@ struct ChampionnatDetailView: View {
                 if membres.first?.resultatsProvisoires == true {
                     HStack {
                         Spacer(minLength: 0)
-                        MentionProvisoire()             // 4,71:1 sur le beige
+                        MentionProvisoire(encre: .secondaire)   // 9,32:1 sur le beige
                     }
                     .padding(.horizontal, 4)
                     .padding(.bottom, -4)
@@ -521,7 +537,14 @@ struct ChampionnatDetailView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(Color.surface)
+            // Damier en filigrane, gris d'origine : la carte ouvre des Grands Prix, le
+            // motif du drapeau à damier s'y devine. Sous-titre à 4,98:1 au pire pixel.
+            .background {
+                ZStack {
+                    Color.surface
+                    Damier(opacite: Materiau.damierFiligrane)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
             .ombreCarte()
             .contentShape(Rectangle())
@@ -615,40 +638,142 @@ struct ChampionnatDetailView: View {
 
 /// La photo du championnat, ou son initiale sur l'aplat ``Color/primaire`` (`#800111`).
 ///
-/// Comme ``PastilleProfil`` : l'absence de photo est l'état par défaut d'un championnat,
-/// pas un état dégradé — les deux branches vivent ensemble, et l'initiale sert aussi
-/// pendant le chargement, pour qu'une photo lente n'ouvre pas un trou blanc dans l'en-tête.
-/// Carrée, rayon `champ` : posée *à l'intérieur* du bloc d'en-tête (`Formes.swift`).
+/// **Montée seulement quand le championnat a une photo** (``ChampionnatDetailView``) : sans
+/// photo, l'en-tête n'en réserve plus la place. L'initiale ne sert donc plus que pendant le
+/// chargement, pour qu'une photo lente n'ouvre pas un trou blanc dans l'en-tête.
+/// Carrée, rayon `widget` : à 72–100 pt, le rayon `champ` d'une vignette de 56 pt se
+/// lisait comme un coin presque vif. **Son côté est celui que lui propose** ``DispositionEntete`` :
+/// photo et initiale suivent les mêmes dimensions, sans qu'aucune ne les fixe.
 private struct PhotoChampionnat: View {
 
     let nom: String
     let photo: URL?
-    let cote: CGFloat
 
     var body: some View {
-        Group {
-            if let photo {
-                AsyncImage(url: photo) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    initiale
+        GeometryReader { cadre in
+            Group {
+                if let photo {
+                    AsyncImage(url: photo) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        initiale(cote: cadre.size.width)
+                    }
+                } else {
+                    initiale(cote: cadre.size.width)
                 }
-            } else {
-                initiale
             }
+            .frame(width: cadre.size.width, height: cadre.size.height)
         }
-        .frame(width: cote, height: cote)
-        .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: Rayon.widget, style: .continuous))
         .accessibilityHidden(true)
     }
 
     /// Blanc sur `#800111` : **10,88:1**.
-    private var initiale: some View {
+    private func initiale(cote: CGFloat) -> some View {
         Color.primaire.overlay {
             Text(nom.trimmingCharacters(in: .whitespaces).first.map { String($0).uppercased() } ?? "?")
                 .font(.custom("HelveticaNeue-Medium", size: cote * 0.40625))
                 .foregroundColor(.white)
         }
+    }
+}
+
+// MARK: - Les deux contenus
+
+private extension View {
+    /// Un des deux contenus superposés : visible et actif, ou transparent, inerte et tu
+    /// aux technologies d'assistance — jamais démonté.
+    ///
+    /// > **Masqué à 0,001, pas à 0.** SwiftUI ne dessine pas une vue d'opacité nulle : la
+    /// > piste ne rastérisait alors ses `Canvas` qu'à la première bascule, et la pastille
+    /// > perdait une à trois images au départ — mesuré à l'enregistrement du simulateur,
+    /// > trois lancements sur trois. À 0,001 la vue est dessinée d'avance, et reste
+    /// > invisible : 0,001 × 255 s'arrondit à zéro.
+    func visible(_ affiche: Bool) -> some View {
+        opacity(affiche ? 1 : 0.001)
+            .allowsHitTesting(affiche)
+            .accessibilityHidden(!affiche)
+    }
+}
+
+/// La piste intégrée, **comparée avant d'être réévaluée** (`.equatable()`). Chaque bascule
+/// réévalue l'écran, qui reconstruit le tableau des membres ; à valeurs égales, la piste ne
+/// recalcule ni ses placements ni ses `Canvas`.
+private struct PisteIntegree: View, Equatable {
+
+    let championnat: Championnat
+    let membres: [Membre]
+    let lancerEntree: Bool
+
+    var body: some View {
+        VuePisteView(championnat: championnat, membres: membres,
+                     integree: true, lancerEntree: lancerEntree)
+    }
+}
+
+// MARK: - La disposition de l'en-tête
+
+/// Titre, photo, ⋯ — **centrés sur l'axe vertical**, la photo **à équidistance** du texte
+/// et du ⋯, mesurés sur leurs parties visibles (le texte à sa largeur réelle, le ⋯ à son
+/// glyphe : l'appelant retire le cadre tactile par une marge négative).
+///
+/// **Le côté de la photo se choisit, il ne se subit pas** : 100 pt tant que le titre tient
+/// en deux lignes dans ce qu'il reste ; sinon réduit par pas de 2 pt, jamais sous 72 pt.
+/// Le titre est mesuré par TextKit dans sa police exacte — la question « combien de
+/// lignes ? » n'a pas de réponse côté `Layout`, où un texte limité à deux lignes rend la
+/// même hauteur qu'il soit coupé ou non. Le texte ne reçoit jamais plus que la largeur
+/// laissée par la photo et les deux écarts minimaux : **il ne la chevauche pas.**
+private struct DispositionEntete: Layout {
+
+    let titre: String
+
+    private let coteMax: CGFloat = 100
+    private let coteMin: CGFloat = 72
+    private let ecartMin: CGFloat = 16
+
+    private struct Mesure {
+        let cote: CGFloat
+        let texte: CGSize
+        let menu: CGSize
+        let hauteur: CGFloat
+    }
+
+    private func mesurer(largeur: CGFloat, _ vues: Subviews) -> Mesure {
+        let menu = vues[2].sizeThatFits(.unspecified)
+        let libre = largeur - menu.width - 2 * ecartMin
+        var cote = coteMax
+        while cote > coteMin, lignes(dans: libre - cote) > 2 { cote -= 2 }
+        let texte = vues[0].sizeThatFits(ProposedViewSize(width: max(0, libre - cote), height: nil))
+        return Mesure(cote: cote, texte: texte, menu: menu,
+                      hauteur: max(texte.height, cote, menu.height))
+    }
+
+    /// Le nombre de lignes du titre à cette largeur, dans la police de ``Font/titre``.
+    private func lignes(dans largeur: CGFloat) -> Int {
+        guard largeur > 0, let police = UIFont(name: "HelveticaNeue-Medium", size: 28) else { return .max }
+        let texte = NSAttributedString(string: titre,
+                                       attributes: [.font: police, .kern: Tracking.titre])
+        let boite = texte.boundingRect(with: CGSize(width: largeur, height: .greatestFiniteMagnitude),
+                                       options: [.usesLineFragmentOrigin, .usesFontLeading],
+                                       context: nil)
+        return Int((boite.height / police.lineHeight).rounded())
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let largeur = proposal.width ?? 361
+        return CGSize(width: largeur, height: mesurer(largeur: largeur, subviews).hauteur)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let m = mesurer(largeur: bounds.width, subviews)
+        let ecart = (bounds.width - m.texte.width - m.cote - m.menu.width) / 2
+        subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading,
+                          proposal: ProposedViewSize(m.texte))
+        subviews[1].place(at: CGPoint(x: bounds.minX + m.texte.width + ecart, y: bounds.midY),
+                          anchor: .leading, proposal: ProposedViewSize(width: m.cote, height: m.cote))
+        subviews[2].place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing,
+                          proposal: ProposedViewSize(m.menu))
     }
 }
 
@@ -704,6 +829,21 @@ private struct LigneClassement: View {
               tp("classement.a11y.reussis", membre.pronosticsReussis))
             + (membre.meilleureCote.map { t("classement.a11y.meilleurCoup", $0) } ?? ".")
         )
+    }
+
+    /// > **Non monté.** Le damier est retiré des lignes du classement ; il reste sur le
+    /// > sélecteur et la carte « Résultats par Grand Prix ».
+    ///
+    /// **Le podium porte un damier `primaire` en filigrane** (``Materiau/damierFiligrane``),
+    /// les autres lignes rien. Au pire pixel : `grisSecondaire` 4,83:1, le score 9,87:1,
+    /// le pseudo 15,79:1 — le motif ne coûte rien à la lecture. Il déborde de 4 pt à
+    /// gauche, sous le filet, pour que celui-ci reste posé *dans* la ligne.
+    @ViewBuilder private var fondPodium: some View {
+        if membre.rang <= 3 {
+            Damier(opacite: Materiau.damierFiligrane, encre: .primaire)
+                .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
+                .padding(.horizontal, -4)
+        }
     }
 
     /// Le filet de 4 pt — **l'exception explicite à l'interdiction des bordures fines**
