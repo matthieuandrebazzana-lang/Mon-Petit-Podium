@@ -1452,6 +1452,7 @@ Deux textures du web, à transposer ou à abandonner selon le rendu :
 | **Déplacements** | `cubic-bezier(0.77, 0, 0.175, 1)` | `.timingCurve(0.77, 0, 0.175, 1, duration: …)` |
 | Relâchement d'un appui | `cubic-bezier(0.34, 1.36, 0.64, 1)` | `.spring(response: 0.3, dampingFraction: 0.6)` |
 | Déploiement / repli d'une carte en plein écran (iOS seul) | — | `.spring(response: 0.34 / 0.28, dampingFraction: 1)` — `Mouvement.deploiement`, `repli` |
+| Pastille d'un sélecteur segmenté (iOS seul) | — | `.spring(response: 0.3, dampingFraction: 1)` — `Mouvement.glissement` |
 
 | Durée | Emploi |
 |---|---|

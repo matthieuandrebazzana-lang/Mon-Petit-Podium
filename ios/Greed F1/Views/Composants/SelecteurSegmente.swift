@@ -16,9 +16,18 @@ import SwiftUI
 /// Le fond porte un damier ``Materiau/damierFiligrane`` en `secondaire` — sous la pastille
 /// rien ne transparaît, elle est opaque.
 ///
-/// Au changement, la pastille glisse sur la courbe de déplacement (200 ms) — le glissement
+/// Au changement, la pastille glisse sur le ressort ``Mouvement/glissement`` — le glissement
 /// du contrôle natif qu'il remplace —, et s'interrompt : un second appui en plein vol
-/// repart de la position affichée. **Sous mouvement réduit**, fondu.
+/// repart de la position et de la vitesse affichées. **Sous mouvement réduit**, fondu.
+///
+/// > **Une seule pastille, jamais deux.** Elle vit sous la rangée et épouse, par
+/// > `matchedGeometryEffect(isSource: false)`, le cadre du segment choisi — chaque segment
+/// > publie le sien. Une capsule par segment, insérée sous l'un et retirée de l'autre,
+/// > faisait de chaque bascule une insertion : la pastille n'existait jamais entre les
+/// > deux, et l'appui (`StyleAppui`) l'emportait dans l'échelle de son segment.
+/// >
+/// > **Elle n'attend jamais le contenu** : l'écran qui la monte bascule entre deux vues
+/// > déjà construites (``ChampionnatDetailView``), rien ne se calcule dans sa transaction.
 struct SelecteurSegmente<Valeur: Hashable>: View {
 
     let titre: String
@@ -38,6 +47,13 @@ struct SelecteurSegmente<Valeur: Hashable>: View {
                 segment(option.valeur, libelle: option.libelle)
             }
         }
+        .background {
+            if !mouvementReduit {
+                Capsule()
+                    .fill(Color.primaire)
+                    .matchedGeometryEffect(id: selection, in: pastille, isSource: false)
+            }
+        }
         .padding(3)
         .background {
             ZStack {
@@ -53,7 +69,7 @@ struct SelecteurSegmente<Valeur: Hashable>: View {
     private var animation: Animation {
         mouvementReduit
             ? Mouvement.entree(Mouvement.echangeIcone)
-            : Mouvement.deplacement(Mouvement.passageEcran)
+            : Mouvement.glissement
     }
 
     private func segment(_ valeur: Valeur, libelle: String) -> some View {
@@ -69,17 +85,18 @@ struct SelecteurSegmente<Valeur: Hashable>: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
                 .frame(height: hauteur)
+                // Le cadre que la pastille épouse — publié par chaque segment, actif ou non.
+                // Sous mouvement réduit, la pastille est la sienne, et elle se fond.
                 .background {
-                    if actif {
-                        if mouvementReduit {
+                    if mouvementReduit {
+                        if actif {
                             Capsule()
                                 .fill(Color.primaire)
                                 .transition(.opacity)
-                        } else {
-                            Capsule()
-                                .fill(Color.primaire)
-                                .matchedGeometryEffect(id: "pastille", in: pastille)
                         }
+                    } else {
+                        Color.clear
+                            .matchedGeometryEffect(id: valeur, in: pastille)
                     }
                 }
                 .padding(.vertical, 6)

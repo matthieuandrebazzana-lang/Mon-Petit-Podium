@@ -42,6 +42,15 @@ enum Mouvement {
     static let deploiement = Animation.spring(response: 0.34, dampingFraction: 1)
     static let repli = Animation.spring(response: 0.28, dampingFraction: 1)
 
+    /// **La pastille d'un sélecteur segmenté qui glisse d'un segment à l'autre**
+    /// (``SelecteurSegmente``, `matchedGeometryEffect`).
+    ///
+    /// > **Un ressort critique, pas une courbe** : un second appui en plein vol repart de la
+    /// > position *et de la vitesse* affichées — une courbe à durée fixe repartirait de zéro
+    /// > et marquerait un à-coup. **Aucun dépassement** : un appui n'a pas d'élan à
+    /// > restituer (/apple-design §4), et un segment se bascule trop souvent pour rebondir.
+    static let glissement = Animation.spring(response: 0.3, dampingFraction: 1)
+
     /// Échange d'icône — étoile de favori, icônes de nav, interrupteur.
     static let echangeIcone: TimeInterval = 0.18
 

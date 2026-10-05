@@ -77,6 +77,10 @@ struct ChampionnatDetailView: View {
 
     @State private var vue: Vue = .classement
 
+    /// Vrai dès le premier passage sur « Piste », et pour toujours : c'est lui qui lance
+    /// l'entrée des voitures, **une fois**. La piste est construite avant, invisible.
+    @State private var pisteVue = false
+
     var body: some View {
         ZStack {
             Color.fondPrincipal
@@ -88,10 +92,14 @@ struct ChampionnatDetailView: View {
             // s'arrêter sous le sélecteur « Classement / Piste ». C'est l'opacité du bloc
             // ci-dessous qui les cache là où il se pose, exactement comme l'aplat du
             // bandeau les cache sur l'écran plein.
-            if vue == .piste {
-                SolPiste()
-                    .ignoresSafeArea()
-            }
+            //
+            // **Toujours monté**, en fondu comme le contenu : le recréer à chaque bascule
+            // redessinait la planche plein écran dans la transaction de la pastille. Masqué
+            // à 0,001 et non à 0, pour la même raison que les contenus (`visible(_:)`).
+            SolPiste()
+                .ignoresSafeArea()
+                .opacity(vue == .piste ? 1 : 0.001)
+                .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
 
             // **L'en-tête et le sélecteur ne défilent pas**, le contenu dessous oui. La
             // piste redevient un segment de cet écran : elle s'affiche **en place**, sous
@@ -114,6 +122,13 @@ struct ChampionnatDetailView: View {
                 // Un fondu court entre les deux contenus, et rien d'autre : un segment
                 // se bascule souvent, un glissement latéral finirait par se faire attendre.
                 // L'opacité reste permise en mouvement réduit.
+                //
+                // > **Les deux contenus restent construits**, l'un sur l'autre ; seule leur
+                // > opacité bascule. Un `switch` démontait l'un et construisait l'autre à
+                // > chaque appui — la piste refaisait ses `Canvas`, rechargeait les photos de
+                // > ses cockpits et rejouait l'entrée des voitures dans la même image que le
+                // > départ de la pastille, qui saccadait. Le classement garde en prime sa
+                // > position de défilement.
                 ZStack {
                     switch classement.etat {
                     case .chargement:
@@ -130,20 +145,20 @@ struct ChampionnatDetailView: View {
 
                     case .pret(let servis):
                         let membres = servis.map { $0.avecVoiture(de: monProfil) }
-                        switch vue {
-                        case .classement:
-                            contenuClassement(membres)
-                                .transition(.opacity)
-                        case .piste:
-                            VuePisteView(championnat: championnat, membres: membres,
-                                         integree: true)
-                                .transition(.opacity)
-                        }
+                        contenuClassement(membres)
+                            .visible(vue == .classement)
+                        PisteIntegree(championnat: championnat, membres: membres,
+                                      lancerEntree: pisteVue)
+                            .equatable()
+                            .visible(vue == .piste)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
             }
+        }
+        .onChange(of: vue) { _, nouvelle in
+            if nouvelle == .piste { pisteVue = true }
         }
         // À chaque apparition, retour du profil d'un membre compris : pas de cache de
         // session (`docs/swift-app.md` §7.6). Le classement affiché reste en place.
@@ -307,14 +322,24 @@ struct ChampionnatDetailView: View {
     /// mesuré sur sa partie visible. ``DispositionEntete`` choisit le côté de la photo :
     /// 100 pt, réduite jusqu'à 72 pt si le titre en a besoin. **L'en-tête grandit avec
     /// elle** : la photo ne se règle plus sur la hauteur du bloc texte.
-    /// Sans photo, la vignette porte l'initiale (``PhotoChampionnat``) : la mise en page
-    /// ne dépend jamais de sa présence.
-    private var entete: some View {
-        DispositionEntete(titre: championnat.nom) {
-            titreEtSousTitre
-            PhotoChampionnat(nom: championnat.nom, photo: photo)
-            iconeMenu
-                .padding(.horizontal, -retraitGlyphe)
+    ///
+    /// **Sans photo, rien** : ni initiale ni aplat. L'en-tête redevient le bloc texte à
+    /// gauche et le ⋯ à droite, à sa hauteur naturelle — aucune place réservée.
+    @ViewBuilder private var entete: some View {
+        if let photo {
+            DispositionEntete(titre: championnat.nom) {
+                titreEtSousTitre
+                PhotoChampionnat(nom: championnat.nom, photo: photo)
+                iconeMenu
+                    .padding(.horizontal, -retraitGlyphe)
+            }
+        } else {
+            HStack(alignment: .center, spacing: 16) {
+                titreEtSousTitre
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                iconeMenu
+                    .padding(.horizontal, -retraitGlyphe)
+            }
         }
     }
 
@@ -613,9 +638,9 @@ struct ChampionnatDetailView: View {
 
 /// La photo du championnat, ou son initiale sur l'aplat ``Color/primaire`` (`#800111`).
 ///
-/// Comme ``PastilleProfil`` : l'absence de photo est l'état par défaut d'un championnat,
-/// pas un état dégradé — les deux branches vivent ensemble, et l'initiale sert aussi
-/// pendant le chargement, pour qu'une photo lente n'ouvre pas un trou blanc dans l'en-tête.
+/// **Montée seulement quand le championnat a une photo** (``ChampionnatDetailView``) : sans
+/// photo, l'en-tête n'en réserve plus la place. L'initiale ne sert donc plus que pendant le
+/// chargement, pour qu'une photo lente n'ouvre pas un trou blanc dans l'en-tête.
 /// Carrée, rayon `widget` : à 72–100 pt, le rayon `champ` d'une vignette de 56 pt se
 /// lisait comme un coin presque vif. **Son côté est celui que lui propose** ``DispositionEntete`` :
 /// photo et initiale suivent les mêmes dimensions, sans qu'aucune ne les fixe.
@@ -651,6 +676,39 @@ private struct PhotoChampionnat: View {
                 .font(.custom("HelveticaNeue-Medium", size: cote * 0.40625))
                 .foregroundColor(.white)
         }
+    }
+}
+
+// MARK: - Les deux contenus
+
+private extension View {
+    /// Un des deux contenus superposés : visible et actif, ou transparent, inerte et tu
+    /// aux technologies d'assistance — jamais démonté.
+    ///
+    /// > **Masqué à 0,001, pas à 0.** SwiftUI ne dessine pas une vue d'opacité nulle : la
+    /// > piste ne rastérisait alors ses `Canvas` qu'à la première bascule, et la pastille
+    /// > perdait une à trois images au départ — mesuré à l'enregistrement du simulateur,
+    /// > trois lancements sur trois. À 0,001 la vue est dessinée d'avance, et reste
+    /// > invisible : 0,001 × 255 s'arrondit à zéro.
+    func visible(_ affiche: Bool) -> some View {
+        opacity(affiche ? 1 : 0.001)
+            .allowsHitTesting(affiche)
+            .accessibilityHidden(!affiche)
+    }
+}
+
+/// La piste intégrée, **comparée avant d'être réévaluée** (`.equatable()`). Chaque bascule
+/// réévalue l'écran, qui reconstruit le tableau des membres ; à valeurs égales, la piste ne
+/// recalcule ni ses placements ni ses `Canvas`.
+private struct PisteIntegree: View, Equatable {
+
+    let championnat: Championnat
+    let membres: [Membre]
+    let lancerEntree: Bool
+
+    var body: some View {
+        VuePisteView(championnat: championnat, membres: membres,
+                     integree: true, lancerEntree: lancerEntree)
     }
 }
 
@@ -760,7 +818,6 @@ private struct LigneClassement: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 4)
         .frame(minHeight: 44)                                // plancher tactile iOS
-        .background { fondPodium }
         // **La ligne entière est la cible**, pas ses seuls textes. Sans cela, le lien vers
         // le profil ne répondrait qu'au pseudo et au score, et l'intervalle entre les deux
         // lignes de texte — au milieu de la ligne, là où le doigt tombe — resterait mort.
@@ -774,6 +831,9 @@ private struct LigneClassement: View {
         )
     }
 
+    /// > **Non monté.** Le damier est retiré des lignes du classement ; il reste sur le
+    /// > sélecteur et la carte « Résultats par Grand Prix ».
+    ///
     /// **Le podium porte un damier `primaire` en filigrane** (``Materiau/damierFiligrane``),
     /// les autres lignes rien. Au pire pixel : `grisSecondaire` 4,83:1, le score 9,87:1,
     /// le pseudo 15,79:1 — le motif ne coûte rien à la lecture. Il déborde de 4 pt à

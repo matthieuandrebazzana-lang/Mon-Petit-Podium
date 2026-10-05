@@ -103,6 +103,12 @@ struct VuePisteView: View {
     /// navigation reste la sienne : ni bandeau, ni chrome masqué. Faux, c'est l'écran plein.
     var integree: Bool = false
 
+    /// Vrai quand l'entrée des voitures peut partir. **Intégrée, la piste est montée dès
+    /// l'arrivée sur l'écran, invisible** (``ChampionnatDetailView`` garde ses deux vues
+    /// construites) : partie au montage, l'entrée se jouerait derrière le classement. Elle
+    /// attend donc le premier affichage, et ne se rejoue plus ensuite.
+    var lancerEntree: Bool = true
+
     /// Vrai une fois la piste montée. C'est lui qui lance l'entrée des voitures.
     @State private var enPiste = false
 
@@ -165,12 +171,17 @@ struct VuePisteView: View {
         .toolbar(integree ? .automatic : .hidden, for: .navigationBar, .tabBar)
         // L'entrée part au montage de la piste, pas à celui d'une voiture : les huit
         // partagent une seule bascule, et c'est le retard de chacune qui les échelonne.
-        .onAppear {
-            if mouvementReduit {
-                enPiste = true
-            } else {
-                withAnimation { enPiste = true }
-            }
+        .onAppear { if lancerEntree { entrer() } }
+        .onChange(of: lancerEntree) { _, lancer in
+            if lancer && !enPiste { entrer() }
+        }
+    }
+
+    private func entrer() {
+        if mouvementReduit {
+            enPiste = true
+        } else {
+            withAnimation { enPiste = true }
         }
     }
 
