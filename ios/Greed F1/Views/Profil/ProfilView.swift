@@ -112,7 +112,8 @@ struct ProfilView: View {
                     Spacer().frame(height: 12)
                     LigneGrandsPrix(titre: t("profil.mesGrandsPrix"),
                                     sousTitre: StatsProfil.sousTitreGrandsPrix(joues: statistiques.stats?.gpJoues)) {
-                        HistoriqueGPView(titre: t("profil.mesGrandsPrix"), profilId: viewModel.profil?.id)
+                        HistoriqueGPView(titre: t("profil.mesGrandsPrix"), profilId: viewModel.profil?.id,
+                                         voiture: voitureEnregistree)
                     }
 
                     Spacer().frame(height: 12)
@@ -177,11 +178,7 @@ struct ProfilView: View {
     /// rechargement du profil ne doit pas effacer une couleur que le membre vient de choisir.
     private func synchroniserVoiture(_ profil: Profil?) {
         guard let profil, !aChange else { return }
-        let lue = Livree(mode: profil.livreeMode == .ecurie ? .ecurie : .perso,
-                         ecurie: profil.livreeEcurie,
-                         coque: profil.couleur1,
-                         ailerons: profil.couleur2,
-                         couleurTexte: profil.couleurTexte)
+        let lue = profil.livree
         // `nil` = pas de numéro choisi : le champ reste vide, jamais « 0 ».
         let numeroLu = profil.numero.map(String.init) ?? ""
         livreeEnregistree = lue
@@ -288,6 +285,15 @@ struct ProfilView: View {
         .foregroundColor(.grisSecondaire)                  // 4,71:1 sur le beige
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .buttonStyle(StyleAppui(.bouton))
+    }
+
+    /// La voiture **enregistrée**, jamais celle qu'on règle : « Mes Grands Prix » montre ce
+    /// que les autres voient. `nil` tant que le profil n'est pas lu.
+    private var voitureEnregistree: VoitureMembre? {
+        viewModel.profil.map {
+            VoitureMembre(livree: $0.livree, numero: $0.numero.map(String.init) ?? "",
+                          nom: pseudoAffiche, photo: viewModel.photoProfil)
+        }
     }
 
     /// Repli sur « pilote » : une session peut être ouverte sans métadonnée `pseudo`.

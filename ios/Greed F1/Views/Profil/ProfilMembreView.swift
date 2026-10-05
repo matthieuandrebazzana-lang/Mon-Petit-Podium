@@ -148,7 +148,9 @@ struct ProfilMembreView: View {
     private var sesGrandsPrix: some View {
         LigneGrandsPrix(titre: t("profil.sesGrandsPrix"), sousTitre: sousTitreGrandsPrix) {
             HistoriqueGPView(titre: t("profil.sesGrandsPrix"), profilId: membre.profilId,
-                             championnatId: membre.championnatId, rang: membre.rang)
+                             championnatId: membre.championnatId, rang: membre.rang,
+                             voiture: VoitureMembre(livree: membre.livree, numero: membre.numero,
+                                                    nom: membre.pseudo, photo: membre.photo))
         }
     }
 

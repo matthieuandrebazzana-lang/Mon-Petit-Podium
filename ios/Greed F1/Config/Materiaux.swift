@@ -74,12 +74,24 @@ struct Damier: View {
     /// `Materiau.damier` sur un aplat de couleur, `Materiau.damierDoux` sur du blanc.
     let opacite: Double
 
+    /// L'encre du motif. `nil` garde le gris de la texture source (`#616160`) ; une
+    /// couleur passe l'image en `template` et la peint entièrement de cette encre.
+    var encre: Color? = nil
+
     var body: some View {
         Color.clear
             .overlay {
-                Image("texture-hexa")
-                    .resizable()
-                    .scaledToFill()
+                if let encre {
+                    Image("texture-hexa")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFill()
+                        .foregroundStyle(encre)
+                } else {
+                    Image("texture-hexa")
+                        .resizable()
+                        .scaledToFill()
+                }
             }
             .clipped()
             .opacity(opacite)

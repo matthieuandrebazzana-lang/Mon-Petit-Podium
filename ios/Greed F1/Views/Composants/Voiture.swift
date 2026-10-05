@@ -315,6 +315,26 @@ struct Livree: Equatable {
     }
 }
 
+extension Profil {
+    /// Ce que porte la voiture enregistrée de ce profil.
+    var livree: Livree {
+        Livree(mode: livreeMode == .ecurie ? .ecurie : .perso,
+               ecurie: livreeEcurie,
+               coque: couleur1,
+               ailerons: couleur2,
+               couleurTexte: couleurTexte)
+    }
+}
+
+/// Une voiture prête à peindre : sa livrée et ce qui s'écrit dessus — les arguments de
+/// ``VueVoiture``, regroupés pour passer d'un écran à l'autre.
+struct VoitureMembre: Equatable {
+    let livree: Livree
+    var numero: String = ""
+    var nom: String = ""
+    var photo: URL?
+}
+
 // MARK: - La voiture
 
 /// La voiture vue du dessus, dans ses deux modes.
