@@ -29,6 +29,10 @@ struct HistoriqueGPView: View {
     /// Rang au classement du championnat d'où l'on vient ; `nil` depuis son propre profil.
     var rang: Int?
 
+    /// La voiture du membre, peinte dans le résumé de la saison. `nil` tant que son profil
+    /// n'est pas lu : une silhouette neutre tient la place.
+    var voiture: VoitureMembre?
+
     @StateObject private var donnees: GrandsPrixJoues
 
     /// La carte centrée du carrousel.
@@ -49,9 +53,10 @@ struct HistoriqueGPView: View {
     ///   - profilId: le membre ; `nil` = le compte connecté.
     ///   - championnatId: un championnat partagé ; `nil` = le premier des miens.
     init(titre: String? = nil, profilId: UUID? = nil,
-         championnatId: UUID? = nil, rang: Int? = nil) {
+         championnatId: UUID? = nil, rang: Int? = nil, voiture: VoitureMembre? = nil) {
         self.titreRecu = titre
         self.rang = rang
+        self.voiture = voiture
         _donnees = StateObject(wrappedValue: GrandsPrixJoues(profilId: profilId,
                                                              championnatId: championnatId))
     }
@@ -231,70 +236,144 @@ struct HistoriqueGPView: View {
 
     // MARK: - Résumé de la saison
 
-    /// **Centré** : le total est la seule chose que ce bandeau dit, il se lit au milieu.
-    /// Le rang, quand on vient d'un championnat, se range en pastille dans le coin — à
-    /// l'écart du chiffre, qu'il ne décentre pas.
+    /// **Deux moitiés** : le total à gauche, et la voiture du membre à droite, museau vers
+    /// le texte. **Une seule marge, posée sur le conteneur** : le texte touche le bord
+    /// gauche de la zone utile, la voiture son bord droit, et aucun des deux ne porte de
+    /// marge propre — sans quoi les deux écarts divergent au premier ajustement. La voiture
+    /// est un calque : la hauteur du bandeau est celle du texte, et la voiture s'y règle.
+    /// Le rang, quand on vient d'un championnat, suit l'intitulé en pastille — le coin, où
+    /// il se rangeait, est à la voiture.
     private var resumeSaison: some View {
-        VStack(spacing: 0) {
-            Text(t("historique.totalSaison"))
-                .font(.label)
-                .tracking(Tracking.label)
-                .textCase(.uppercase)
-                .foregroundColor(.encreSecondaire)        // blanc 70 % — 5,75:1
-
-            Spacer().frame(height: 6)
-
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(totalPoints.map(\.enPoints) ?? "—")
-                    .font(.scoreLg)
-                    .tracking(Tracking.scoreLg)
-                    .foregroundColor(.white)              // 10,88:1 sur le bordeaux
-                if totalPoints != nil {
-                    Text(t("points.unite"))
-                        .font(.custom("HelveticaNeue-Medium", size: 15))
-                        .foregroundColor(.white)
-                }
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-
-            Spacer().frame(height: 4)
-
-            // Réussis sur tentés : « 10 réussis » ne dit rien sans le nombre joué.
-            Text(tp("historique.reussisSur", tentes, reussis))
-                .font(.custom("HelveticaNeue", size: 13))
-                .foregroundColor(.encreSecondaire)
+        HStack(spacing: 0) {
+            texteResume
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .overlay { voitureResume }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .padding(.horizontal, 20)
-        .overlay(alignment: .topTrailing) {
-            if let rang {
-                VStack(spacing: 0) {
-                    Text(ordinal(rang))
-                        .font(.custom("HelveticaNeue-Medium", size: 18))
-                        .foregroundColor(.white)
-                    // **Blanc 70 % et non 50 %** : sur la pastille (blanc 15 % sur le
-                    // bordeaux), 50 % ne tient que 3,15:1 — sous le plancher de 4,5:1 d'un
-                    // texte de 10 pt. 70 % y tient 4,76:1.
-                    Text(t("championnat.classement"))
-                        .font(.labelSm)
-                        .tracking(Tracking.label)
-                        .textCase(.uppercase)
-                        .foregroundColor(.encreSecondaire)
-                }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 10)
-                .background(Color.white.opacity(0.15))
-                .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
-                .padding(12)
+        .padding(.horizontal, margeResume)
+        // Damier blanc au niveau des cartes de pronostic : au pire pixel le bordeaux
+        // remonte à peine — blanc 9,83:1, `encreSecondaire` 5,41:1.
+        .background {
+            ZStack {
+                Color.primaire
+                Damier(opacite: Materiau.damierPronostic, encre: .white)
             }
         }
-        .background(Color.primaire)
         .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
         .ombreAplat()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(libelleResume)
+    }
+
+    /// Les trois lignes sont **centrées sur la plus longue**, « réussis sur tentés », et
+    /// c'est elle seule qui donne sa largeur au bloc : son bord gauche est alors celui du
+    /// texte, à la même distance du bord que la voiture du sien. Un gabarit invisible porte
+    /// la hauteur des trois lignes mais la largeur de la dernière — l'intitulé et le total
+    /// y sont réduits à une largeur nulle — et le bloc visible s'y pose en calque : il
+    /// reçoit exactement cette largeur, sans rien mesurer à la main.
+    private var texteResume: some View {
+        VStack(spacing: 0) {
+            enteteResume.fixedSize().frame(width: 0)
+            Spacer().frame(height: 6)
+            totalResume.fixedSize().frame(width: 0)
+            Spacer().frame(height: 4)
+            ligneReussis
+        }
+        .hidden()
+        .overlay {
+            VStack(alignment: .center, spacing: 0) {
+                enteteResume
+                Spacer().frame(height: 6)
+                totalResume
+                Spacer().frame(height: 4)
+                ligneReussis
+            }
+        }
+        .padding(.vertical, 20)
+    }
+
+    private var enteteResume: some View {
+        HStack(spacing: 8) {
+            Text(t("historique.totalSaison"))
+                .font(.label)
+                .tracking(Tracking.label)
+                .textCase(.uppercase)
+                .foregroundColor(.encreSecondaire)    // blanc 70 % — 5,75:1
+                .lineLimit(1)
+            if let rang { pastilleRang(rang) }
+        }
+    }
+
+    private var totalResume: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(totalPoints.map(\.enPoints) ?? "—")
+                .font(.scoreLg)
+                .tracking(Tracking.scoreLg)
+                .foregroundColor(.white)              // 10,88:1 sur le bordeaux
+            if totalPoints != nil {
+                Text(t("points.unite"))
+                    .font(.custom("HelveticaNeue-Medium", size: 15))
+                    .foregroundColor(.white)
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+
+    /// Réussis sur tentés : « 10 réussis » ne dit rien sans le nombre joué.
+    private var ligneReussis: some View {
+        Text(tp("historique.reussisSur", tentes, reussis))
+            .font(.custom("HelveticaNeue", size: 13))
+            .foregroundColor(.encreSecondaire)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+    }
+
+    /// Tournée d'un quart de tour : la planche dessine la voiture museau en haut. Sa
+    /// largeur — la hauteur à l'écran — vaut 88 % du bandeau, sa longueur ne dépasse
+    /// jamais la moitié qui la porte. Elle touche le bord droit de cette moitié : la marge
+    /// est celle du conteneur, pas la sienne. Avant la lecture du profil, une silhouette
+    /// neutre de même emprise : le texte ne bouge pas quand la voiture arrive.
+    private var voitureResume: some View {
+        GeometryReader { cadre in
+            let largeur = min(cadre.size.height * 0.88, cadre.size.width * VueVoiture.rapport)
+            let longueur = largeur / VueVoiture.rapport
+            Group {
+                if let voiture {
+                    VueVoiture(livree: voiture.livree, numero: voiture.numero,
+                               nom: voiture.nom, photo: voiture.photo,
+                               teintePilote: .primaire)
+                } else {
+                    RoundedRectangle(cornerRadius: largeur / 2, style: .continuous)
+                        .fill(Color.white.opacity(0.12))
+                }
+            }
+            .frame(width: largeur, height: longueur)
+            .rotationEffect(.degrees(-90))
+            // L'emprise tournée : la rotation ne change pas le cadre de mise en page.
+            .frame(width: longueur, height: largeur)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// L'écart au bord du bandeau, posé une fois sur le conteneur : le même pour le texte
+    /// à gauche et la voiture à droite.
+    private let margeResume: CGFloat = 20
+
+    /// Le rang seul : « Classement » ne tient pas à côté de l'intitulé dans la moitié
+    /// gauche, et le libellé d'accessibilité le dit en entier. Blanc sur blanc 15 % posé
+    /// sur le bordeaux : 8,1:1, plus de 7:1 sous le damier.
+    private func pastilleRang(_ rang: Int) -> some View {
+        Text(ordinal(rang))
+            .font(.custom("HelveticaNeue-Medium", size: 13))
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .padding(.vertical, 2)
+            .padding(.horizontal, 8)
+            .background(Color.white.opacity(0.15))
+            .clipShape(Capsule())
     }
 
     private var tentes: Int { grandsPrix.map(\.pronostics.count).reduce(0, +) }
