@@ -2,7 +2,8 @@ fastapi>=0.120,<1.0
 uvicorn[standard]>=0.38,<1.0
 pydantic-settings>=2.12,<3.0
 # Client HTTP asynchrone — sert au scraping Unibet et aux appels OpenF1.
-httpx>=0.28,<1.0
+# L'extra `http2` tire `h2` : APNs n'accepte QUE le HTTP/2 (notifications push).
+httpx[http2]>=0.28,<1.0
 # Base de fuseaux horaires de secours pour `zoneinfo`. Sur macOS, Python lit
 # celle du système ; beaucoup d'images Linux minces n'en embarquent aucune, et
 # `ZoneInfo("Europe/Paris")` y lève ZoneInfoNotFoundError. Le scraper convertit

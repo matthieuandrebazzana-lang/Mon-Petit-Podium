@@ -12,8 +12,8 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
-Version backend actuelle : 0.83.0
-Version iOS actuelle : 0.48.0
+Version backend actuelle : 0.84.0
+Version iOS actuelle : 0.49.0
 
 ## STACK TECHNIQUE
 
@@ -32,7 +32,7 @@ Deux chats : Claude (décisions + prompts) / Claude Code terminal (code + commit
 Chaque prompt commence par "Lis CLAUDE.md et ios/CLAUDE.md."
 Migrations Supabase : toujours appliquées manuellement dans le SQL Editor
 Docker non disponible → migrations testées en production directement
-29 migrations appliquées (la 29 : `20261001120000_rattachement_par_date`)
+30 migrations appliquées (la 30 : `20261005120000_push_tokens` — `push_tokens` + `notifications_envoyees`)
 Après chaque session, Claude Code met à jour docs/contexte-chat.md
 Versions : web, backend et iOS sont indépendantes — chacune ne bouge que si son code change (`CLAUDE.md` §7). `CLAUDE.md` §8 suit la version web
 
@@ -64,7 +64,9 @@ Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 
-## CE QUI EST FAIT — VERSION iOS (0.48.0)
+## CE QUI EST FAIT — VERSION iOS (0.49.0)
+
+Notifications push (iOS 0.49.0, backend 0.84.0, migration 30, `docs/decisions.md` §25) : envoyées par Railway via APNs, jamais programmées localement. Job toutes les 5 min, fenêtre de 15 min après l'échéance : quali − 25 h (« ouvrent dans 24h »), quali − 1 h (« sont ouverts »), course − 1 h (« Dernière chance »), passage à `termine` (« résultats disponibles »). `notifications_envoyees` réservée avant l'envoi = jamais de doublon (amorcée pour les GP terminés). Texte dans la langue du jeton (`push_tokens.langue`). Jetons refusés par APNs (410, BadDeviceToken, DeviceTokenNotForTopic) supprimés. Routes : `POST /push/token` {token, langue}, `DELETE /push/token` {token?}, `POST /push/test` (jeton + `X-Admin-Secret`). iOS : `Services/NotificationsPush.swift` — permission demandée une fois connecté (BarreNavigation), jeton → `POST /push/token`, renvoyé au changement de langue, `DELETE` avant `signOut()` et avant la suppression de compte ; `DelegueApplication` (`@UIApplicationDelegateAdaptor`) reçoit le jeton ; bannière affichée app ouverte. Pas de toggle : Réglages iOS. Railway : `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY`, `APNS_BUNDLE_ID`, `APNS_ENV` (`sandbox` pour un build Xcode, **`production` pour TestFlight / App Store**). Dépendance `httpx[http2]` (APNs = HTTP/2 seulement). Compilé, 218 tests backend verts ; non testé de bout en bout : à valider sur iPhone réel avec `POST /push/test`.
 
 Sign in with Apple (0.48.0) : bouton natif noir (`BoutonApple`) sur Landing (en tête, avant Google) et Connexion (après le séparateur, avant Google). Feuille native → `supabase.auth.signInWithIdToken(provider: .apple)` avec nonce SHA-256, AUCUNE route Railway pour la connexion. Nom complet écrit dans les métadonnées du compte au premier login (`full_name`, `name`, `given_name`, `family_name`). Nouveau compte → pseudo `pilote-…` → OnboardingView (mécanisme Google inchangé). Suppression d'un compte Apple : réautorisation Apple (code frais) envoyée dans le corps de `DELETE /profils/moi`, le backend (0.83.0, `app/apple.py`) l'échange puis révoque le jeton — best-effort, journalisé, ne bloque jamais la suppression. Fermer la feuille annule la suppression.
 À CONFIGURER (sinon le flux ne marche pas) : Supabase → Auth → Providers → Apple activé, `com.bazzana.greedf1` dans les Client IDs ; Railway → `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (clé .p8 « Sign in with Apple », PEM, `\n` acceptés). Non testé de bout en bout : à valider sur iPhone réel.
@@ -99,7 +101,7 @@ Pile de marchés sur « Fais tes paris » (0.47.4, mergé sur `main` depuis `fea
 Registre d'évaluateurs par slug exact (18 marchés couverts)
 Statut : en_attente / non_evaluable / gagne / perdu
 Pipeline provisoire (à l'arrivée) → définitif (J+1)
-192 tests de non-régression backend
+218 tests backend (dont 26 notifications push)
 Identifiants canoniques des issues au figeage
 Alertes admin (libellés non reconnus, échecs OpenF1)
 
@@ -120,7 +122,7 @@ Test iPad (ouvrir chaque écran sur simulateur iPad)
 
 Fonctionnalités prévues :
 
-Notifications push
+Notifications push : code fait (iOS 0.49.0, backend 0.84.0) — reste le test sur iPhone réel, puis `APNS_ENV=production` au passage TestFlight
 f1-ml : modèle de prédiction ML à intégrer
 
 Bugs connus :
@@ -134,6 +136,9 @@ Le 4 octobre 2026 est le GP de Bahreïn délocalisé à Sepang : ligne unique `1
 
 Scraper (avec figeage) :
 curl -X POST "https://mon-petit-podium-production.up.railway.app/scraper/declencher" -H "X-Admin-Secret: monpetitpodium2026"
+
+Notification de test (tous les appareils du compte connecté) :
+curl -X POST "https://mon-petit-podium-production.up.railway.app/push/test" -H "X-Admin-Secret: monpetitpodium2026" -H "Authorization: Bearer <jeton d'accès Supabase>"
 
 Recalcul définitif d'un GP :
 curl -X POST "https://mon-petit-podium-production.up.railway.app/jobs/resultats/{gp_id}/recalcul?relire=true" -H "X-Admin-Secret: monpetitpodium2026"

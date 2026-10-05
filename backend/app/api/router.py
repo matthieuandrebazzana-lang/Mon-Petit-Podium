@@ -6,6 +6,7 @@ from app.api.routes import (
     health,
     profils,
     pronostics,
+    push,
     resultats,
     scraper,
 )
@@ -30,3 +31,5 @@ api_router.include_router(resultats.router)
 # en dernier parce qu'elle importe `scraper` et `resultats` — le préfixe
 # `/admin` ne recoupe aucun autre domaine.
 api_router.include_router(admin.router)
+# Notifications push (version backend `0.84.0`) : jetons APNs et test.
+api_router.include_router(push.router)

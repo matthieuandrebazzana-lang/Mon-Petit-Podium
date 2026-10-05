@@ -876,3 +876,62 @@ un candidat du repli : un Grand Prix déjà adopté qui changerait d'identifiant
 serait créé une seconde fois — cas jamais observé, Unibet publie toujours le départ. Le nom
 affiché est celui d'Unibet (« GP Bahrein ») là où la ligne est lue
 directement ; le drapeau et le tracé suivent le week-end (Sepang).
+
+## 25. Les notifications push partent du backend par APNs, jamais d'une programmation locale
+
+**Décision.** Quatre notifications par Grand Prix, toutes envoyées par Railway via APNs
+(`app/apns.py`, `app/jobs/notifications.py`, backend `0.84.0`, migration 30) :
+
+| Événement | Échéance | Texte (fr) |
+|---|---|---|
+| `ouverture_24h` | `date_qualifications` − 25 h | Les pronos pour [GP] ouvrent dans 24h |
+| `ouverture` | `date_qualifications` − 1 h | Les pronos pour [GP] sont ouverts |
+| `derniere_chance` | `date_course` − 1 h | Dernière chance de faire tes pronos pour [GP] |
+| `resultats` | `statut` passé à `termine` | Les résultats du [GP] sont disponibles |
+
+Un job tourne **toutes les 5 minutes** ; un événement daté part s'il tombe dans les
+**15 minutes** qui suivent son échéance, puis il est perdu. La ligne `(gp_id, evenement)` de
+`notifications_envoyees` est **réservée avant l'envoi** (`insert … on conflict do nothing`) :
+seul le tour qui la crée envoie. Chaque appareil reçoit le texte de **la langue enregistrée
+avec son jeton** (`push_tokens.langue`). Un jeton refusé pour de bon par APNs (`410`,
+`BadDeviceToken`, `DeviceTokenNotForTopic`) est supprimé de `push_tokens`.
+
+L'app iOS (`0.49.0`, `Services/NotificationsPush.swift`) demande la permission une fois
+connectée, envoie le jeton à `POST /push/token` avec la langue active — et le renvoie quand
+la langue change —, et le retire par `DELETE /push/token` à la déconnexion et avant la
+suppression du compte. Aucun interrupteur dans l'app : les Réglages d'iOS en tiennent lieu.
+`POST /push/test` (jeton **et** `X-Admin-Secret`) envoie sur-le-champ un test aux appareils
+de l'appelant.
+
+**Raison.** Les échéances ne sont connues que du serveur et peuvent bouger (date de
+qualifications écrite par le scraper, course reportée, résultats arrivés en retard) : une
+notification programmée localement partirait à une heure périmée, ou ne saurait rien du
+passage à `termine`. Le backend porte déjà deux schedulers ; un troisième ne coûte rien.
+La fenêtre de 15 minutes couvre un redéploiement ou une sortie de veille Railway (trois
+tours pour attraper l'échéance) ; au-delà, une « dernière chance » arriverait après le
+départ.
+
+**Écarté.** *Notifications locales programmées par l'app* — échéances figées au moment de
+la programmation, et rien pour les résultats. *Une fenêtre de ± 2 minutes* — un seul tour
+manqué perdait l'événement. *Réserver après l'envoi* — un échec entre l'envoi et l'écriture
+renverrait la notification à tout le monde au tour suivant ; on préfère en perdre une que
+la doubler. *Un service tiers (Firebase, OneSignal)* — une dépendance et un SDK de plus pour
+une seule plateforme.
+
+**Conséquences assumées.**
+- **Une panne d'APNs pendant le tour perd la notification** : la ligne est déjà réservée.
+- **Le jeton est la clé primaire** de `push_tokens` : un autre compte qui se connecte sur le
+  même iPhone en prend la propriété. Une déconnexion par perte de session (`401`, jeton
+  expiré) n'appelle pas `DELETE` — la ligne reste, et change de propriétaire au prochain
+  compte connecté sur l'appareil.
+- **`APNS_ENV` doit suivre le build** : `sandbox` pour un build Xcode (entitlement
+  `aps-environment = development`), `production` pour TestFlight et l'App Store. Un jeton
+  d'un environnement est refusé par la passerelle de l'autre (`BadDeviceToken`) — et donc
+  **supprimé** : basculer la variable sans réinstaller purge les jetons de l'autre monde,
+  qui se réenregistrent au lancement suivant.
+- **Le nom du GP est celui de la base** (anglais par une petite table de `slug` dans le
+  job, repli « GP X » → « X GP »). Le calendrier statique, qui corrige « GP Bahrein » couru
+  à Sepang (§24), n'existe que dans le web et l'app : une ligne mal nommée par Unibet le
+  reste dans la notification.
+- Un seul processus porte le scheduler ; à plusieurs instances, la clé primaire empêcherait
+  encore le doublon.

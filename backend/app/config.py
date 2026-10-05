@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Version de l'API, alignée sur celle du frontend.
 # À incrémenter à chaque commit qui modifie l'application.
-VERSION = "0.83.0"
+VERSION = "0.84.0"
 
 # Toujours autorisées : le serveur de dev Vite, pour ne jamais casser le local.
 ORIGINES_LOCALES = [
@@ -96,6 +96,28 @@ class Settings(BaseSettings):
     apple_private_key: str = ""
     # L'audience du jeton natif est le bundle identifier de l'app iOS.
     apple_client_id: str = "com.bazzana.greedf1"
+
+    # — Notifications push (APNs) —
+    # Clé `.p8` « Apple Push Notifications service » (Sandbox & Production),
+    # collée en PEM dans `APNS_KEY`, retours à la ligne écrits `\n` acceptés.
+    # `APNS_ENV` vaut `sandbox` (build Xcode, entitlement `development`) ou
+    # `production` (TestFlight, App Store) : un jeton d'appareil n'est valable
+    # que sur la passerelle de son environnement. Sans ces quatre valeurs, le
+    # job de notifications ne démarre pas et `POST /push/test` rend `503`.
+    apns_key_id: str = ""
+    apns_team_id: str = ""
+    apns_key: str = ""
+    apns_bundle_id: str = "com.bazzana.greedf1"
+    apns_env: str = "sandbox"
+
+    @property
+    def apns_configure(self) -> bool:
+        return bool(
+            self.apns_key_id.strip()
+            and self.apns_team_id.strip()
+            and self.apns_key.strip()
+            and self.apns_bundle_id.strip()
+        )
 
     @property
     def apple_configure(self) -> bool:

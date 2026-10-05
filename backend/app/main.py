@@ -4,8 +4,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import apns
 from app.api.router import api_router
 from app.config import VERSION, get_settings
+from app.jobs import notifications as job_notifications
 from app.jobs import resultats as job_resultats
 from app.jobs import scraper as job_scraper
 from app.supabase_client import client as client_supabase
@@ -40,6 +42,8 @@ async def cycle_de_vie(_: FastAPI):
     if settings.supabase_configure:
         job_resultats.demarrer()
         job_scraper.demarrer()
+        # Ne démarre que si la clé APNs est là — il le journalise sinon.
+        job_notifications.demarrer()
     else:
         logger.warning(
             "[resultats] Surveillance non démarrée : Supabase n'est pas configuré."
@@ -52,6 +56,8 @@ async def cycle_de_vie(_: FastAPI):
 
     job_resultats.arreter()
     job_scraper.arreter()
+    job_notifications.arreter()
+    await apns.fermer_client()
     await fermer_client()
 
 
