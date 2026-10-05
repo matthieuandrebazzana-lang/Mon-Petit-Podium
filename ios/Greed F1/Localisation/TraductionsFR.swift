@@ -342,6 +342,8 @@ enum TraductionsFR {
         "cotes.a11y.marche": "Marché %1$@. %2$@.",
         "cotes.a11y.masquer": "Masquer les cotes",
         "cotes.a11y.afficher": "Afficher les cotes",
+        "cotes.a11y.ouvrir": "Ouvrir %@",
+        "cotes.a11y.fermer": "Fermer %@",
         "cotes.saisir": "Saisir mes pronos",
         "cotes.a11y.chargement": "Chargement des cotes",
         "cotes.a11y.enFavori": "En favori",

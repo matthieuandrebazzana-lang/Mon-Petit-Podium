@@ -342,6 +342,8 @@ enum TraductionsEN {
         "cotes.a11y.marche": "Market %1$@. %2$@.",
         "cotes.a11y.masquer": "Hide odds",
         "cotes.a11y.afficher": "Show odds",
+        "cotes.a11y.ouvrir": "Open %@",
+        "cotes.a11y.fermer": "Close %@",
         "cotes.saisir": "Enter my predictions",
         "cotes.a11y.chargement": "Loading odds",
         "cotes.a11y.enFavori": "Favourited",
