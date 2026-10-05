@@ -392,6 +392,9 @@ final class AuthViewModel: ObservableObject {
         if await compteApple() {
             corps = SuppressionCompte(appleAuthorizationCode: try await ReautorisationApple().codeAutorisation())
         }
+        // Tant que la session vit : la route le demande. La cascade de `auth.users`
+        // l'effacerait de toute façon, mais pas si la suppression échoue à mi-chemin.
+        await NotificationsPush.partage.retirer()
         try await APIClient.partage.envoyer("profils/moi", methode: .delete, corps: corps)
         try? await supabase.auth.signOut()
         oublierCompte()
@@ -402,6 +405,8 @@ final class AuthViewModel: ObservableObject {
         estEnChargement = true
         messageErreur = nil
         
+        // Avant `signOut()` : la route a besoin de la session encore valide.
+        await NotificationsPush.partage.retirer()
         do {
             try await supabase.auth.signOut()
             oublierCompte()

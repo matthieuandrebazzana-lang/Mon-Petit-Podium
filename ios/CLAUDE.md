@@ -136,6 +136,17 @@ l'état ne se lit **qu'à la pastille** `primaire`. Ne pas réintroduire de dés
 d'opacité réduite sur l'option inactive. Taille : segments 80 × 40, drapeau 20 pt, code en
 `Font.segment` (14 pt, 500).
 
+**Les notifications push partent du backend, jamais de l'app** (`docs/decisions.md` §25).
+`Services/NotificationsPush.swift` est le **seul propriétaire** du jeton APNs : permission
+demandée une fois connecté (`.task` sur `BarreNavigation`), jeton reçu par
+`DelegueApplication` (`@UIApplicationDelegateAdaptor`) puis envoyé à `POST /push/token` avec
+`langueInterface` — c'est la langue des notifications, et un changement de langue le
+renvoie. `DELETE /push/token` part **avant** `signOut()` et avant `DELETE /profils/moi` :
+après, la session n'existe plus. Ne jamais ajouter de `UNNotificationRequest` local ni
+d'interrupteur dans l'app (les Réglages d'iOS en tiennent lieu). L'entitlement
+`aps-environment` vaut `development` ; un build TestFlight / App Store signe en
+`production`, et Railway doit alors passer `APNS_ENV=production`.
+
 ## 4. Règles de commit
 
 - **Incrémenter `MARKETING_VERSION`** dans `ios/Greed F1.xcodeproj/project.pbxproj` (deux
@@ -212,6 +223,7 @@ ios/
     │   ├── DonneesPronostics.swift  cotes + favoris (+ mes pronos en direct), bascule de favori, `POST …/pronostics`
     │   ├── Administration.swift   `POST /admin/action` — scraper sans figeage, jamais le secret
     │   ├── DepotPhoto.swift       photo réduite (800 px, JPEG 0,85) → Supabase Storage, rend l'URL `?v=`
+    │   ├── NotificationsPush.swift  permission, jeton APNs → `POST`/`DELETE /push/token`, langue ; `DelegueApplication`
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
     │   ├── ContentView.swift

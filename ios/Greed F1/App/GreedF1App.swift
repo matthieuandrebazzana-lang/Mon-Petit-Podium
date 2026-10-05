@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct GreedF1App: App {
+    /// Seul moyen de recevoir le jeton APNs (`NotificationsPush`).
+    @UIApplicationDelegateAdaptor(DelegueApplication.self) private var delegue
     @StateObject private var authViewModel = AuthViewModel()
     /// Langue de l'interface — injectée ici, lue par ``t(_:)`` partout (`LanguageManager`).
     @StateObject private var langues = LanguageManager.shared
@@ -21,6 +23,9 @@ struct GreedF1App: App {
                         OnboardingView(viewModel: authViewModel)
                     } else {
                         BarreNavigation(viewModel: authViewModel)
+                            // Permission demandée une fois connecté et le pseudo choisi ;
+                            // iOS ne montre la feuille qu'une fois, la suite est silencieuse.
+                            .task { await NotificationsPush.partage.activer() }
                     }
                 } else {
                     LandingView(viewModel: authViewModel)
@@ -29,6 +34,8 @@ struct GreedF1App: App {
             // Réveil de Railway dès le lancement, sans attendre la réponse : le temps
             // d'atteindre un écran qu'il sert, le service est levé (docs/swift-app.md §3.1).
             .onAppear { APIClient.partage.reveiller() }
+            // Les notifications partent dans la langue enregistrée avec le jeton.
+            .onChange(of: langues.langue) { NotificationsPush.partage.langueChangee() }
             .environmentObject(langues)
             // Les formats système (dates, nombres) suivent la langue choisie, pas le téléphone.
             .environment(\.locale, langues.locale)
