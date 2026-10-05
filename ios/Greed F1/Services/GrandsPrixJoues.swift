@@ -43,6 +43,10 @@ final class GrandsPrixJoues: ObservableObject {
         /// L'entrée du calendrier statique : nom et date écrits comme sur le calendrier.
         var fiche: GrandPrixSaison? { GrandPrixSaison.saison2026.first { $0.slug == slug } }
 
+        /// Le drapeau du fond flouté ; `nil` = le beige du design system (GP hors
+        /// calendrier, ou drapeau sans teinte mesurée).
+        var slugDrapeau: String? { fiche != nil && TeintesDrapeaux.table[slug] != nil ? slug : nil }
+
         var reussis: Int { pronostics.filter { ($0.pointsGagnes ?? 0) > 0 }.count }
     }
 
@@ -58,14 +62,19 @@ final class GrandsPrixJoues: ObservableObject {
 
     private let profilId: UUID?
     private let championnatId: UUID?
+    /// Un seul Grand Prix — l'écran « Mes résultats » de l'accueil. `nil` = la saison.
+    private let gpId: UUID?
     private var enCours = false
 
     /// - Parameters:
     ///   - profilId: le membre à lire ; `nil` = le compte connecté.
     ///   - championnatId: un championnat partagé avec lui ; `nil` = le premier des miens.
-    init(profilId: UUID?, championnatId: UUID?) {
+    ///   - gpId: ce seul Grand Prix, **résultats disponibles ou non** — l'accueil le dit
+    ///     terminé avant que le scraper n'ait jugé : ses paris s'affichent alors en attente.
+    init(profilId: UUID?, championnatId: UUID?, gpId: UUID? = nil) {
         self.profilId = profilId
         self.championnatId = championnatId
+        self.gpId = gpId
     }
 
     func charger() async {
@@ -107,7 +116,8 @@ final class GrandsPrixJoues: ObservableObject {
         let idChampionnat = championnat.uuidString.lowercased()
         let saison: [GrandPrixDuChampionnat] =
             try await APIClient.partage.requete("championnats/\(idChampionnat)/calendrier")
-        let termines = saison.filter(\.resultatsDisponibles)
+        let termines = gpId.map { id in saison.filter { $0.id == id } }
+            ?? saison.filter(\.resultatsDisponibles)
 
         let joues = try await withThrowingTaskGroup(of: (Int, GrandPrixJoue?).self) { groupe in
             for (rang, gp) in termines.enumerated() {

@@ -30,6 +30,25 @@ enum Materiau {
     /// > recouvre reculent d'un cran. Il ne coûte rien au contraste, il en ajoute — le
     /// > blanc et ``Color/encreSecondaire`` sont mesurés sur la teinte nue.
     static let voilePile: Double = 0.18
+
+    /// Le damier des cartes de pronostic — un filigrane, plus bas encore que
+    /// ``damierDoux`` : la carte porte déjà une teinte de verdict.
+    static let damierPronostic: Double = 0.06
+
+    /// **Le repli sans damier** des cartes de pronostic : `false` le retire partout d'un
+    /// coup, si le rendu se révèle trop chargé sur iPhone réel.
+    static let damierSurPronostics = true
+
+    /// Teinte d'une carte de pronostic **gagné** — `vertSauge` à 7 % sur le blanc.
+    ///
+    /// > Mesuré, damier compris : le marché en `grisSecondaire` y tient **4,51:1** au pire
+    /// > pixel. Le vert sauge, lui, n'y tient plus que **4,12:1** — d'où le verdict en
+    /// > pastille pleine (blanc sur vert, 4,86:1) et non en texte vert.
+    static let teinteGagne: Double = 0.07
+
+    /// Teinte d'une carte de pronostic **perdu** — `primaire` à 4 %. Le bordeaux est plus
+    /// sombre que le vert : à 5 % le gris du marché tombait à 4,47:1 sur le damier.
+    static let teintePerdu: Double = 0.04
 }
 
 // MARK: - Le damier

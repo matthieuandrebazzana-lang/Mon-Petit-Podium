@@ -145,8 +145,9 @@ enum EtapePronos: Hashable {
 
     /// La porte d'entrée des widgets — c'est elle qui choisit le premier écran.
     case entree(GrandPrixPronos)
-    /// La porte d'entrée **après la course** : sa grille s'il en a une, sinon le
-    /// classement officiel. `date` est la date écrite, celle de ``ResultatsGPView``.
+    /// La porte d'entrée **après la course** : ses résultats (``MesResultatsGPView``) s'il
+    /// a joué, sinon le classement officiel. `date` est la date écrite, celle de
+    /// ``ResultatsGPView``.
     case resultats(GrandPrixPronos, date: String)
     case cotes(GrandPrixPronos)
     case pronos(GrandPrixPronos)
@@ -172,8 +173,9 @@ extension View {
                                  avancer: avancer, retour: retour)
 
             case let .resultats(gp, date):
-                EntreePronosView(grandPrix: gp, libelleRetour: libelleRetour,
-                                 avancer: avancer, retour: retour, dateResultats: date)
+                // Le détail du carrousel du profil — le même GP, la même vue. La branche
+                // `dateResultats` d'``EntreePronosView`` reste en place, non montée.
+                MesResultatsGPView(grandPrix: gp, date: date)
 
             case let .cotes(gp):
                 CotesView(grandPrix: gp)

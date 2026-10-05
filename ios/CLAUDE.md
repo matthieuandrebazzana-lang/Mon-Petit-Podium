@@ -184,7 +184,7 @@ ios/
     │   ├── SupabaseConfig.swift     lecture d'Info.plist, rien en dur
     │   ├── Couleurs.swift           palette + typographie du design system
     │   ├── Formes.swift             rayons + les quatre ombres
-    │   ├── Materiaux.swift          damier et lumière spéculaire (les deux calques décoratifs)
+    │   ├── Materiaux.swift          damier et lumière spéculaire (les deux calques décoratifs), teintes et damier des cartes de pronostic
     │   ├── Mouvement.swift          courbes, durées, StyleAppui (retour d'appui)
     │   └── LandingView.swift        écran d'accueil (non connecté)
     ├── Models/
@@ -243,6 +243,7 @@ ios/
     │   │   └── FichesGrandPrix.swift  séances + fiches circuit, transcrites de `GP_2026` et `CIRCUITS`
     │   ├── Resultats/
     │   │   ├── ResultatsGPView.swift       classement officiel réel ; « Mes résultats » non monté
+    │   │   ├── MesResultatsGPView.swift    « Voir mes résultats » de l'accueil : fond drapeau flouté + `ContenuDetailGrandPrix` (le détail du carrousel), repli sur le classement officiel si rien joué
     │   │   └── NationalitesPilotes.swift   pilote → pays, contrepartie de `lib/nationalites.js`
     │   ├── Pronos/
     │   │   ├── EntreePronosView.swift  porte d'entrée : récap si grille en base, sinon cotes
@@ -252,7 +253,7 @@ ios/
     │   └── Profil/
     │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`)
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
-    │       ├── HistoriqueGPView.swift   « Ses / Mes Grands Prix » : résumé saison, résumé centré (réussis / tentés), carrousel de cartes GP (drapeau net + tracé ; drapeau clair : haut nu, voile sous le texte), fond = drapeau actif étiré et flouté, en fondu, tap → la carte se déploie en détail plein écran (`matchedGeometryEffect`), une carte par pronostic — données réelles (`GrandsPrixJoues`)
+    │       ├── HistoriqueGPView.swift   « Ses / Mes Grands Prix » : résumé saison, résumé centré (réussis / tentés), carrousel de cartes GP (drapeau net + tracé ; drapeau clair : haut nu, voile sous le texte), fond = drapeau actif étiré et flouté, en fondu, tap → la carte se déploie en détail plein écran (`matchedGeometryEffect`) ; `ContenuDetailGrandPrix` et `CarteVerdict` (carte teintée + damier, verdict en pastille pleine) y sont PARTAGÉS avec `MesResultatsGPView` — données réelles (`GrandsPrixJoues`)
     │       └── ComposantsProfil.swift   pastille, en-tête, grille, `BlocStatistiques`, `LigneGrandsPrix`, PARTAGÉS
     ├── Resources/               ← EMBARQUÉ dans l'app
     │   ├── Info.plist               hors bundle (exception d'appartenance)

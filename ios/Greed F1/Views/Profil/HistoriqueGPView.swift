@@ -68,7 +68,7 @@ struct HistoriqueGPView: View {
 
     /// Le slug du drapeau actif ; `nil` = le beige du design system.
     private var slugFond: String? {
-        gpActif.flatMap { $0.fiche != nil && TeintesDrapeaux.table[$0.slug] != nil ? $0.slug : nil }
+        gpActif?.slugDrapeau
     }
 
     /// Un drapeau derrière l'en-tête : son encre passe au blanc.
@@ -616,7 +616,7 @@ private enum IdHeros: Hashable {
 /// fondu. Deux drapeaux qui se croisent en opacité laissent voir le beige à mi-course —
 /// un éclair clair à chaque balayage. Deux calques montés au plus : le flou ne se calcule
 /// pas pour les cartes qu'on ne voit pas.
-private struct FondDrapeauFlou: View {
+struct FondDrapeauFlou: View {
 
     let slug: String?
 
@@ -733,13 +733,34 @@ private struct DetailGrandPrixJoue: View {
         .accessibilityHidden(true)
     }
 
-    private var slugFond: String? {
-        gp.fiche != nil && TeintesDrapeaux.table[gp.slug] != nil ? gp.slug : nil
-    }
+    private var slugFond: String? { gp.slugDrapeau }
 
     // MARK: Le contenu
 
     private var contenu: some View {
+        ContenuDetailGrandPrix(gp: gp, deploye: deploye)
+            .allowsHitTesting(deploye)
+    }
+}
+
+// MARK: - Le contenu du détail
+
+/// L'en-tête centré (nom, date, points, réussis sur tentés, « Provisoire »), puis **une
+/// carte par pronostic**, puis le podium réel — sur le drapeau flouté que pose l'hôte.
+///
+/// **Deux hôtes, un seul contenu** : la carte déployée du carrousel
+/// (``DetailGrandPrixJoue``) et l'écran « Mes résultats » du widget de l'accueil
+/// (``MesResultatsGPView``). C'est le même Grand Prix : deux mises en page écrites
+/// séparément divergeraient au premier ajustement.
+///
+/// `deploye` pilote l'entrée décalée des blocs (``EntreeDetail``) ; un hôte sans héros
+/// passe `true`, et tout est là d'emblée.
+struct ContenuDetailGrandPrix: View {
+
+    let gp: GrandsPrixJoues.GrandPrixJoue
+    var deploye = true
+
+    var body: some View {
         ScrollView {
             VStack(spacing: 0) {
                 entete
@@ -772,7 +793,6 @@ private struct DetailGrandPrixJoue: View {
         }
         .scrollIndicators(.hidden)
         .contentShape(Rectangle())
-        .allowsHitTesting(deploye)
     }
 
     private var entete: some View {
@@ -836,7 +856,7 @@ private struct DetailGrandPrixJoue: View {
                 .modifier(EntreeDetail(deploye: deploye, rang: rang))
             VStack(spacing: 10) {
                 ForEach(Array(pronostics.enumerated()), id: \.element.id) { index, pronostic in
-                    CartePronostic(pronostic: pronostic, provisoire: gp.provisoire)
+                    CarteVerdict(pronostic: pronostic, provisoire: gp.provisoire)
                         .modifier(EntreeDetail(deploye: deploye, rang: rang + index))
                 }
             }
@@ -863,7 +883,7 @@ private struct DetailGrandPrixJoue: View {
 /// L'entrée d'un bloc du détail : fondu et 12 pt de montée, une fois le fond assez grand
 /// pour le porter, puis chaque bloc ``Mouvement/decalage`` après le précédent. La sortie
 /// est immédiate et commune — on ne regarde pas partir ce qu'on vient de fermer.
-private struct EntreeDetail: ViewModifier {
+struct EntreeDetail: ViewModifier {
 
     let deploye: Bool
     let rang: Int
@@ -891,20 +911,27 @@ private struct EntreeDetail: ViewModifier {
 // MARK: - Une carte de pronostic
 
 /// Un pronostic du détail : l'icône du verdict, le marché, ce qui a été joué, le verdict
-/// en toutes lettres, puis les points.
+/// en pastille, puis les points — **la carte entière dit le verdict**, teinte comprise.
 ///
-/// **Sur le blanc**, où les encres de ``Verdict`` et ``PastillePoints`` sont mesurées —
-/// les mêmes couples, à plus grande taille :
+/// | État | Fond de carte | Icône | Verdict | Points |
+/// |---|---|---|---|---|
+/// | gagné | `vertSauge` à 7 % | ✓ blanc sur vert plein (4,86:1) | « GAGNÉ » blanc sur vert (4,86:1) | vert, grand texte (≥ 4,12:1) |
+/// | perdu | `primaire` à 4 % | ✗ blanc sur bordeaux plein (10,88:1) | « PERDU » blanc sur bordeaux (10,88:1) | `0` en `grisSecondaire` |
+/// | en attente | blanc | horloge grise sur beige | « EN ATTENTE » gris sur beige (4,71:1) | en jeu, en gris |
 ///
-/// | État | Encre | Icône sur son aplat |
-/// |---|---|---|
-/// | gagné | vert sauge, **4,86:1** | 4,01:1 sur le vert à 15 % |
-/// | perdu | bordeaux `primaire`, **8,6:1** | 8,94:1 sur le bordeaux à 10 % |
-/// | en attente, non évaluable | `grisSecondaire`, **5,33:1** | 4,71:1 sur le beige |
+/// > **Le verdict est une pastille pleine, pas un texte vert.** Mesuré : le vert sauge
+/// > tombe à **4,12:1** sur la carte teintée et damée, sous le plancher d'un texte
+/// > ordinaire. Blanc sur vert plein, il tient 4,86:1 — et se lit de plus loin.
+/// >
+/// > **L'unité « pts » reste grise** à côté d'un nombre vert : le nombre est un grand
+/// > texte (3:1 suffit), l'unité, à 12 pt, n'en est pas un.
 ///
 /// En attente, les points sont ceux **en jeu**, en gris — jamais en rouge, qui annoncerait
 /// un échec qui n'a pas eu lieu. Non évaluable : un tiret, il n'y a rien à juger.
-private struct CartePronostic: View {
+///
+/// Le damier (``Materiau/damierPronostic``) se coupe d'un coup par
+/// ``Materiau/damierSurPronostics``.
+struct CarteVerdict: View {
 
     let pronostic: PronosticMembre
     /// Le Grand Prix est provisoire : un verdict déjà rendu peut encore bouger.
@@ -917,45 +944,49 @@ private struct CartePronostic: View {
         return pronostic.nonEvaluable ? .nonEvaluable : .enAttente
     }
 
+    private var forme: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous)
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             icone
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(pronostic.marche)
                     .font(.labelSm)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)
-                    .foregroundColor(.grisSecondaire)     // 5,33:1 sur le blanc
+                    .foregroundColor(.grisSecondaire)     // ≥ 4,51:1 sur les trois fonds
                     .lineLimit(2)
                 Text(pronostic.choix)
-                    .font(.custom("HelveticaNeue-Medium", size: 16))
+                    .font(.custom("HelveticaNeue-Medium", size: 17))
                     .foregroundColor(.texte)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
-                HStack(spacing: 8) {
-                    Text(libelleEtat)
-                        .font(.custom("HelveticaNeue-Medium", size: 13))
-                        .foregroundColor(encre)
+                HStack(spacing: 6) {
+                    pastilleVerdict
                     if provisoire && pronostic.pointsGagnes != nil {
                         MentionProvisoire()
                     }
                 }
-                .padding(.top, 1)
+                .padding(.top, 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .trailing, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(valeur)
-                        .font(.custom("HelveticaNeue-Medium", size: 22))
+                        .font(.custom("HelveticaNeue-Medium", size: 26))
+                        .tracking(Tracking.score)
                         .monospacedDigit()
+                        .foregroundColor(encrePoints)
                     if etat != .nonEvaluable {
                         Text(t("points.unite"))
                             .font(.custom("HelveticaNeue", size: 12))
+                            .foregroundColor(.grisSecondaire)
                     }
                 }
-                .foregroundColor(encre)
                 if etat == .enAttente {
                     Text(t("parGP.enJeu"))
                         .font(.custom("HelveticaNeue", size: 11))
@@ -966,22 +997,65 @@ private struct CartePronostic: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
+        .background { fond }
+        .clipShape(forme)
+        .overlay { forme.strokeBorder(bordure, lineWidth: 1) }
         .ombreCarte()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(libelleAccessible)
     }
 
+    // MARK: Le fond
+
+    private var fond: some View {
+        ZStack {
+            Color.surface
+            teinte
+            if Materiau.damierSurPronostics {
+                Damier(opacite: Materiau.damierPronostic)
+            }
+        }
+    }
+
+    private var teinte: Color {
+        switch etat {
+        case .gagne: return Color.vertSauge.opacity(Materiau.teinteGagne)
+        case .perdu: return Color.primaire.opacity(Materiau.teintePerdu)
+        case .enAttente, .nonEvaluable: return .clear
+        }
+    }
+
+    /// Le liseré du verdict : il détache la carte teintée du drapeau voilé.
+    private var bordure: Color {
+        switch etat {
+        case .gagne: return Color.vertSauge.opacity(0.25)
+        case .perdu: return Color.primaire.opacity(0.18)
+        case .enAttente, .nonEvaluable: return .clear
+        }
+    }
+
+    // MARK: Le verdict
+
     private var icone: some View {
         ZStack {
             Circle().fill(aplat)
             Image(systemName: symbole)
-                .font(.system(size: 15, weight: etat == .enAttente ? .medium : .bold))
-                .foregroundColor(encre)
+                .font(.system(size: 16, weight: etat == .gagne || etat == .perdu ? .bold : .medium))
+                .foregroundColor(encreIcone)
         }
-        .frame(width: 36, height: 36)
+        .frame(width: 38, height: 38)
         .accessibilityHidden(true)
+    }
+
+    private var pastilleVerdict: some View {
+        Text(libelleEtat)
+            .font(.labelSm)
+            .tracking(Tracking.label)
+            .textCase(.uppercase)
+            .foregroundColor(encreIcone)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(aplat, in: Capsule())
     }
 
     private var symbole: String {
@@ -993,20 +1067,24 @@ private struct CartePronostic: View {
         }
     }
 
+    /// L'aplat de l'icône **et** de la pastille : plein pour un verdict rendu.
     private var aplat: Color {
         switch etat {
-        case .gagne: return Color.vertSauge.opacity(0.15)
-        case .perdu: return Color.primaire.opacity(0.10)
+        case .gagne: return .vertSauge
+        case .perdu: return .primaire
         case .enAttente, .nonEvaluable: return .fondPrincipal
         }
     }
 
-    private var encre: Color {
+    private var encreIcone: Color {
         switch etat {
-        case .gagne: return .vertSauge
-        case .perdu: return .primaire
+        case .gagne, .perdu: return .white
         case .enAttente, .nonEvaluable: return .grisSecondaire
         }
+    }
+
+    private var encrePoints: Color {
+        etat == .gagne ? .vertSauge : .grisSecondaire
     }
 
     private var libelleEtat: String {
@@ -1208,7 +1286,7 @@ private struct CarteGrandPrixJoue: View {
 /// Les pronostics d'un Grand Prix joué — obligatoires, bonus, puis le podium réel. **Le
 /// seul propriétaire de ce contenu** pour la partie basse de ``CarteGrandPrixJoue``, non
 /// montée. Le détail déployé (``DetailGrandPrixJoue``) a ses propres cartes
-/// (``CartePronostic``).
+/// (``CarteVerdict``).
 private struct DetailPronosGP: View {
 
     let gp: GrandsPrixJoues.GrandPrixJoue
@@ -1317,7 +1395,7 @@ private struct RangeeHistorique: View {
 
 // MARK: - Une marche du podium
 
-private struct TuilePodium: View {
+struct TuilePodium: View {
 
     let position: Int
     let pilote: LigneResultat
