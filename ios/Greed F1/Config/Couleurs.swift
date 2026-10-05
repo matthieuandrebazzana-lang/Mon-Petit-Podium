@@ -45,6 +45,12 @@ extension Color {
     /// que leur mot ne tient pas en ambre.
     static let accent = Color(hexadecimal: 0xE8A020)
 
+    /// Jaune vif — `#FFD700`, **l'étoile des favoris** (``EtoileJaune``), et rien d'autre.
+    ///
+    /// **Ne s'emploie jamais seul** : sur le blanc il ne vaut que **1,40:1**. Il est toujours
+    /// cerné d'un trait `texte`, qui porte le contraste de l'élément graphique.
+    static let jauneEtoile = Color(hexadecimal: 0xFFD700)
+
     /// Bleu ardoise — `#2C4A6E`, le `bleu-ardoise` de `frontend/src/lib/couleurs.js`.
     ///
     /// **C'est l'aplat du marché « 2e et 3e du podium »**, et il n'en peint aucun autre :
@@ -135,6 +141,29 @@ extension Color {
     /// > donne `#D9B3B8`, soit **4,47:1** — sous le plancher de 4,5:1 d'un texte
     /// > ordinaire. À 70 % il y tient **5,75:1**.
     static let encreSecondaire = Color.white.opacity(0.70)
+}
+
+// MARK: - Teintes des marchés bonus
+
+/// Les six teintes des marchés bonus de « Fais tes paris » — **une par marché, dans l'ordre
+/// de la liste**, le cycle recommençant au septième. Douces, et distinctes du rouge du
+/// vainqueur comme du bleu ardoise du podium, qui restent les deux seuls aplats obligatoires.
+///
+/// **Mesurées, pas choisies** : le blanc tient sur chacune, et chacune tient sur le blanc
+/// (la pastille de l'en-tête l'écrit en encre) — terracotta **6,01:1**, sauge **4,86:1**,
+/// ocre **5,31:1**, mauve **6,26:1**, orange doux **4,96:1**, menthe **5,11:1**.
+extension Color {
+
+    static let terracotta = Color(hexadecimal: 0x9E4A3A)
+    static let ocre       = Color(hexadecimal: 0x8A6516)
+    static let mauve      = Color(hexadecimal: 0x7D5279)
+    static let orangeDoux = Color(hexadecimal: 0xA65E14)
+    static let menthe     = Color(hexadecimal: 0x2D7A6B)
+
+    /// Ordonnées pour que deux voisines ne soient jamais deux chaudes ou deux vertes.
+    static let teintesMarcheBonus: [Color] = [
+        terracotta, vertSauge, ocre, mauve, orangeDoux, menthe
+    ]
 }
 
 extension Color {

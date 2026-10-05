@@ -118,6 +118,23 @@ enum MarcheCote: String, CaseIterable, Identifiable {
         MarcheCote(rawValue: slug)?.aplat ?? .secondaire
     }
 
+    /// L'aplat du `rang`-ième marché bonus de la pile — ``Color/teintesMarcheBonus``, dans
+    /// l'ordre de la liste. Les deux obligatoires gardent le leur (``aplat(slug:)``).
+    static func aplatBonus(rang: Int) -> Color {
+        Color.teintesMarcheBonus[rang % Color.teintesMarcheBonus.count]
+    }
+
+    /// Le vainqueur et le podium **ne se jouent pas en pari bonus** : ils sont déjà les
+    /// deux pronostics obligatoires. **Seule la liste des paris bonus de ``PronosView`` les
+    /// écarte** : dans « Fais tes paris » ils s'épinglent comme les autres. Le slug réel est `vainqueur` / `podium` ; le préfixe
+    /// `vainqueur_course` couvre une variante de nommage du scraper.
+    static func exclueDesBonus(slug: String?) -> Bool {
+        guard let slug else { return false }
+        return slug == MarcheCotes.vainqueur
+            || slug.hasPrefix("vainqueur_course")
+            || slug.hasPrefix(MarcheCotes.podium)
+    }
+
     /// Le libellé d'en-tête d'un marché quelconque.
     static func libelle(de marche: MarcheCotes) -> String {
         MarcheCote(rawValue: marche.marche)?.libelle ?? marche.libelle
@@ -193,7 +210,8 @@ extension View {
 
 // MARK: - L'écran
 
-/// **Fais tes paris** — le tableau des cotes, et l'épinglage des favoris.
+/// **Fais tes paris** — le tableau des cotes, et l'épinglage des favoris. Les marchés sont
+/// une pile de cartes repliables (``PileMarches``), toutes fermées à l'arrivée.
 ///
 /// Référence visuelle : `Ressources/Screenshots/screen-24-cotes-haut.PNG`.
 ///
@@ -220,8 +238,8 @@ struct CotesView: View {
     /// Le refus d'un épinglage, posé sous la rangée des favoris — jamais une alerte.
     @State private var erreurFavori: ErreurAPI?
 
-    /// Le marché déplié — **un seul à la fois**, et aucun à l'arrivée : la liste des
-    /// marchés Unibet se lit d'abord comme un sommaire.
+    /// Le marché déplié de l'ancien accordéon — **non monté** depuis la pile de marchés
+    /// (``PileMarches``), qui tient elle-même ses cartes ouvertes, plusieurs à la fois.
     @State private var marcheOuvert: MarcheCotes.ID?
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
@@ -238,6 +256,8 @@ struct CotesView: View {
             ?? DonneesPronostics(gpId: grandPrix.id, avecMesPronostics: false))
     }
 
+    /// Tous les favoris, vainqueur et podium compris : l'exclusion des paris bonus ne vaut
+    /// que pour la liste de ``PronosView`` (``MarcheCote/exclueDesBonus(slug:)``).
     private var favoris: [Favori] { donnees.donnees?.favoris ?? [] }
 
     var body: some View {
@@ -276,9 +296,12 @@ struct CotesView: View {
                                 .multilineTextAlignment(.center)
                         }
 
-                        ForEach(lu.gp.marches) { marche in
+                        if !lu.gp.marches.isEmpty {
                             Spacer().frame(height: 24)   // changement de sujet (§4.6)
-                            sectionMarche(marche)
+                            PileMarches(marches: lu.gp.marches, favoris: favoris,
+                                        estEpingle: estEpingle) { cote, marche in
+                                basculer(cote, dans: marche)
+                            }
                         }
                     }
                 }
@@ -402,6 +425,8 @@ struct CotesView: View {
 
     /// Un marché **en accordéon** : l'en-tête se touche, la grille de ses cotes se déplie
     /// dessous. Les marchés Unibet sont trop nombreux pour être tous dépliés d'un coup.
+    ///
+    /// **Non monté** : remplacé par ``PileMarches``, gardé en place (`CLAUDE.md` §6).
     private func sectionMarche(_ marche: MarcheCotes) -> some View {
         let ouvert = marcheOuvert == marche.id
 
@@ -574,10 +599,16 @@ struct ChargementPronos: View {
 /// La brique de la grille à deux colonnes : un pilote, ce qu'il rapporte, et l'étoile qui
 /// le met de côté.
 ///
+/// **Compacte** : le nom sur une ligne, les points dessous, l'étoile à droite, centrée sur
+/// les deux — rien d'autre, aucun vide. Toute la carte est le bouton : sa zone tactile
+/// (``hauteur`` × une demi-largeur d'écran) dépasse largement les 44 × 44 pt.
+///
 /// **Hauteur fixe, et c'est ce qui fait la grille.** Deux cartes d'une même rangée doivent
-/// finir à la même ligne quel que soit le nom qu'elles portent : une hauteur libre donnerait
-/// des rangées en dents de scie dès qu'un pilote a un nom plus long que son voisin. Le nom
-/// est donc sur **une seule ligne**, tronqué au-delà.
+/// finir à la même ligne quel que soit le nom qu'elles portent : le nom est donc sur **une
+/// seule ligne**, réduit puis tronqué au-delà.
+///
+/// **Sans `onBasculer`, pas d'étoile ni de bouton** — `favori` pose alors la petite étoile
+/// pleine d'``EtoileFavori`` à côté du nom. La pile de marchés passe toujours `onBasculer`.
 ///
 /// **La teinte d'écurie se pose PAR-DESSUS le blanc, elle ne le remplace pas.** Un aplat
 /// semi-transparent posé seul laisserait passer le beige de la page : la carte cesserait
@@ -586,19 +617,24 @@ struct ChargementPronos: View {
 /// Contrastes mesurés sur les onze teintes, fond compris : le nom tient au pire **14,5:1**,
 /// les points **9,0:1**, et l'étoile au repos **3,16:1** — au-dessus du plancher de 3:1
 /// exigé d'un élément graphique porteur de sens, qu'elle est ici.
-private struct CarteCote: View {
+struct CarteCote: View {
 
     let nom: String
     let points: Int
     /// La teinte d'écurie, `nil` hors pilote connu (``GrillePilotes``).
     let couleurEcurie: Color?
     let retenu: Bool
-    let onBasculer: () -> Void
+    /// `false` dans une carte de ``PileMarches`` : posée sur un aplat, la carte s'en
+    /// détache sans ombre.
+    var ombre = true
+    /// Le pilote est un favori ailleurs — l'étoile pleine, purement indicative.
+    var favori = false
+    /// `nil` : marché exclu des bonus, la carte ne s'épingle pas.
+    let onBasculer: (() -> Void)?
 
-    /// La hauteur des cartes, écrite une fois. C'est celle de la version web (90 px),
-    /// élargie de deux points pour que l'étoile y tienne sa zone tactile sans mordre sur
-    /// la ligne des points.
-    private let hauteur: CGFloat = 92
+    /// La hauteur des cartes, écrite une fois : liseré 3, rembourrage 8 + 8, nom 17,
+    /// interligne 1, points 19. **``PileMarches`` en calcule la hauteur de ses grilles.**
+    static let hauteur: CGFloat = 56
 
     /// Le liseré reste discret sur les livrées claires (1,5:1 sur le turquoise Mercedes) et
     /// aucune opacité n'y change rien — à 100 % il ne monterait qu'à 1,8:1, la couleur étant
@@ -611,64 +647,135 @@ private struct CarteCote: View {
     private let opaciteFond: Double = 0.094
 
     var body: some View {
-        Button(action: onBasculer) {
-            VStack(alignment: .leading, spacing: 0) {
-                if let teinte = couleurEcurie {
-                    teinte.opacity(opaciteLisere)
-                        .frame(height: 3)
-                        .accessibilityHidden(true)
-                }
+        if let onBasculer {
+            Button(action: onBasculer) { carte }
+                .buttonStyle(StyleAppui(.grandeSurface))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(libelleAccessible)
+                .accessibilityValue(retenu ? t("cotes.a11y.enFavori") : t("cotes.a11y.pasEnFavori"))
+                .accessibilityHint(retenu ? t("cotes.a11y.retirerFavori") : t("cotes.a11y.ajouterFavori"))
+                .accessibilityAddTraits(.isButton)
+        } else {
+            carte
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(libelleAccessible)
+                .accessibilityValue(favori ? t("cotes.a11y.enFavori") : "")
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(nom)
-                        .font(.custom("HelveticaNeue-Medium", size: 15))
-                        .foregroundColor(.texte)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+    private var libelleAccessible: String {
+        "\(nom), " + tp("classement.a11y.points", points)
+    }
 
-                    Spacer(minLength: 6)
+    private var carte: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let teinte = couleurEcurie {
+                teinte.opacity(opaciteLisere)
+                    .frame(height: 3)
+                    .accessibilityHidden(true)
+            }
+
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        if favori { EtoileFavori() }
+                        Text(nom)
+                            .font(.custom("HelveticaNeue-Medium", size: 14))
+                            .foregroundColor(.texte)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
 
                     // Le rouge de la marque sur le blanc de la carte : 10,9:1, et 9,0:1 au
-                    // pire des onze fonds teintés. **Graisse 500** — les 700 de la version
-                    // web sont un écart que `ios/CLAUDE.md` §3 ne reprend pas : Helvetica
-                    // Neue n'a ici que le 400 et le 500.
-                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    // pire des onze fonds teintés. **Graisse 500** — Helvetica Neue n'a ici
+                    // que le 400 et le 500 (`ios/CLAUDE.md` §3).
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
                         Text(points.enPoints)
-                            .font(.custom("HelveticaNeue-Medium", size: 20))
-                            .tracking(-0.50)      // −0,025em × 20
+                            .font(.custom("HelveticaNeue-Medium", size: 16))
+                            .tracking(-0.40)      // −0,025em × 16
                         Text(t("points.unite"))
-                            .font(.custom("HelveticaNeue-Medium", size: 12))
+                            .font(.custom("HelveticaNeue-Medium", size: 11))
                     }
                     .foregroundColor(.primaire)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                    // L'étoile chevauche le rembourrage, jamais le texte : les points lui
-                    // laissent la place à droite.
-                    .padding(.trailing, 34)
                 }
-                .padding(12)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: hauteur, alignment: .top)
-            .background {
-                ZStack {
-                    Color.surface
-                    if let teinte = couleurEcurie { teinte.opacity(opaciteFond) }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if onBasculer != nil {
+                    EtoileParisBonus(actif: retenu)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: Rayon.widget, style: .continuous))
-            .ombreCarte()
-            .overlay(alignment: .bottomTrailing) {
-                EtoileParisBonus(actif: retenu)
-                    .frame(width: 44, height: 44)   // plancher tactile iOS
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: Self.hauteur, alignment: .top)
+        .background {
+            ZStack {
+                Color.surface
+                if let teinte = couleurEcurie { teinte.opacity(opaciteFond) }
             }
         }
-        .buttonStyle(StyleAppui(.grandeSurface))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(nom), " + tp("classement.a11y.points", points))
-        .accessibilityValue(retenu ? t("cotes.a11y.enFavori") : t("cotes.a11y.pasEnFavori"))
-        .accessibilityHint(retenu ? t("cotes.a11y.retirerFavori") : t("cotes.a11y.ajouterFavori"))
-        .accessibilityAddTraits(.isButton)
+        .clipShape(RoundedRectangle(cornerRadius: Rayon.widget, style: .continuous))
+        .modifier(OmbreFacultative(active: ombre))
+    }
+}
+
+/// La petite étoile **pleine** d'un favori — purement indicative, jamais un contrôle.
+/// ``EtoileJaune`` à 12 pt. Masquée à VoiceOver : la valeur de la ligne le dit.
+struct EtoileFavori: View {
+    var body: some View {
+        EtoileJaune(cote: 12)
+            .accessibilityHidden(true)
+    }
+}
+
+/// `icone-etoile` en ``Color/jauneEtoile``, **cernée d'un trait `texte`**. Le jaune seul ne
+/// tient que 1,40:1 sur le blanc : c'est le contour qui porte le contraste — **17,4:1** sur
+/// le blanc, **14,5:1** au pire des onze teintes d'écurie (l'encre du nom des cartes), et
+/// le jaune s'en détache à 12,4:1 : l'étoile se lit sur n'importe quel fond de carte. Le contour n'est pas un second tracé : c'est le même asset, en encre foncée,
+/// décalé d'un demi-point dans huit directions sous l'étoile jaune.
+struct EtoileJaune: View {
+    let cote: CGFloat
+    var epaisseur: CGFloat = 0.75
+
+    private static let directions: [CGSize] = [
+        CGSize(width: 1, height: 0), CGSize(width: -1, height: 0),
+        CGSize(width: 0, height: 1), CGSize(width: 0, height: -1),
+        CGSize(width: 0.7, height: 0.7), CGSize(width: -0.7, height: 0.7),
+        CGSize(width: 0.7, height: -0.7), CGSize(width: -0.7, height: -0.7)
+    ]
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<Self.directions.count, id: \.self) { i in
+                etoile(.texte)
+                    .offset(x: Self.directions[i].width * epaisseur,
+                            y: Self.directions[i].height * epaisseur)
+            }
+            etoile(.jauneEtoile)
+        }
+        .frame(width: cote, height: cote)
+        .drawingGroup()                           // neuf calques, une seule texture
+    }
+
+    private func etoile(_ encre: Color) -> some View {
+        Image("icone-etoile")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .foregroundColor(encre)
+    }
+}
+
+/// L'ombre de carte, ou rien — `ombreCarte()` ne se retire pas d'un booléen.
+private struct OmbreFacultative: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        if active { content.ombreCarte() } else { content }
     }
 }
 
@@ -685,7 +792,9 @@ private struct CarteCote: View {
 /// system ne vaut que **2,85:1** sur du blanc, sous le plancher de 3:1 exigé d'un élément
 /// graphique porteur de sens — et le signe est ici le seul indicateur de l'état « pas
 /// encore ajouté ». Le marron `secondaire` à 60 % le porte à **3,40:1** sans introduire de
-/// couleur nouvelle, **3,16:1** au pire des onze teintes d'écurie.
+/// couleur nouvelle, **3,16:1** au pire des onze teintes d'écurie. Ce gris est celui du
+/// tableau des cotes ; `jaune` passe à ``EtoileJaune`` pour ``PronosView``, comme dans sa
+/// feuille de choix — le contour `texte` y porte le contraste (17,4:1 sur le blanc).
 ///
 /// **La coche est une encre foncée sur un aplat ambre, jamais une coche ambre.** `#E8A020`
 /// tracé sur le blanc ne vaut que 2,2:1 ; le même ambre **en aplat** avec l'encre `#1A1A1A`
@@ -704,6 +813,8 @@ struct EtoileParisBonus: View {
 
     let actif: Bool
     var inverse = false
+    /// L'étoile jaune d'``EtoileJaune`` au lieu du gris — ``PronosView`` seulement.
+    var jaune = false
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
@@ -711,9 +822,7 @@ struct EtoileParisBonus: View {
 
     var body: some View {
         ZStack {
-            Image("icone-etoile")
-                .renderingMode(.template)
-                .foregroundColor(.secondaire.opacity(0.60))
+            etoile
                 .opacity(actif ? 0 : 1)
                 .scaleEffect(echelle(visible: !actif))
 
@@ -736,6 +845,16 @@ struct EtoileParisBonus: View {
                                    : Mouvement.entree(Mouvement.echangeIcone),
                    value: actif)
         .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private var etoile: some View {
+        if jaune {
+            EtoileJaune(cote: cote)
+        } else {
+            Image("icone-etoile")
+                .renderingMode(.template)
+                .foregroundColor(.secondaire.opacity(0.60))
+        }
     }
 
     /// **Jamais `scale(0)`** : une chose doit avoir une silhouette avant d'être remplie.

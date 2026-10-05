@@ -248,7 +248,8 @@ ios/
     │   │   └── NationalitesPilotes.swift   pilote → pays, contrepartie de `lib/nationalites.js`
     │   ├── Pronos/
     │   │   ├── EntreePronosView.swift  porte d'entrée : récap si grille en base, sinon cotes
-    │   │   ├── CotesView.swift      marchés réels en accordéon, étoile = favori serveur, `EtapePronos`
+    │   │   ├── CotesView.swift      « Fais tes paris » : favoris, mode d'emploi, étoile = favori serveur sur tous les marchés (`EtoileParisBonus`, grise d'origine), `EtoileFavori` indicative jaune cernée (`EtoileJaune`, feuille de choix de `PronosView` seulement), `MarcheCote.exclueDesBonus` (vainqueur / podium hors de la liste bonus de `PronosView`, seul endroit), `EtapePronos` ; l'accordéon d'avant reste en place, non monté
+    │   │   ├── PileMarches.swift    marchés en pile de cartes repliables (mécanique de `PileChampionnats`) : toutes fermées à l'arrivée, tap sur l'en-tête = ouvrir / fermer sur place, plusieurs ouvertes à la fois, aucun swipe ; bonus teintés dans l'ordre (`Color.teintesMarcheBonus`) ; décalage en `padding` (grille paresseuse), hauteur dépliée calculée depuis `CarteCote.hauteur`
     │   │   ├── PronosView.swift     saisie préremplie, bonus parmi les favoris, `POST` + `423`
     │   │   └── RecapView.swift      récapitulatif, après le `200` ou d'entrée (grille relue)
     │   └── Profil/

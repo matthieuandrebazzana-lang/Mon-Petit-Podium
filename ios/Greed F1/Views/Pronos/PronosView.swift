@@ -95,7 +95,8 @@ struct PronosView: View {
                 emplacement: emplacement,
                 cotes: donnees.donnees?.gp.marche(emplacement.marche.slug)?.cotes ?? [],
                 choisi: choix[emplacement],
-                indisponibles: indisponibles(pour: emplacement)
+                indisponibles: indisponibles(pour: emplacement),
+                favoris: Set((donnees.donnees?.favoris ?? []).map { ClePilote.de($0.pilote) })
             ) { cote in
                 choix[emplacement] = cote
                 erreurEnvoi = nil
@@ -211,7 +212,15 @@ struct PronosView: View {
                         .foregroundColor(.grisSecondaire)
                 }
             }
-            .padding(.horizontal, 4)
+            // Le bandeau est une carte blanche : sur `fondPrincipal`, le damier ferait
+            // tomber `grisSecondaire` à 4,42:1 ; sur le blanc il tient **4,98:1**.
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background {
+                Color.surface.overlay { Damier(opacite: Materiau.damierFiligrane) }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
+            .ombreCarte()
 
             if favoris.isEmpty {
                 zoneVide
@@ -335,8 +344,11 @@ struct PronosView: View {
 
     // MARK: - La règle
 
+    /// Les favoris **proposables en pari bonus** : ni vainqueur ni podium
+    /// (``MarcheCote/exclueDesBonus(slug:)``), même épinglés avant cette règle.
     private func favorisTries(_ lu: DonneesPronostics.Donnees) -> [Favori] {
-        OrdreMarches.trier(lu.favoris, slug: \.marche)
+        OrdreMarches.trier(lu.favoris.filter { !MarcheCote.exclueDesBonus(slug: $0.marche) },
+                           slug: \.marche)
     }
 
     /// Les bonus **encore épinglés** — `bonusEpingles` du web. Un bonus enregistré dont la
@@ -364,8 +376,9 @@ struct PronosView: View {
     /// podium pour **la somme de ses deux pilotes** (§6.3), plus les bonus retenus.
     private func total(_ lu: DonneesPronostics.Donnees) -> Int {
         let obligatoires = choix.values.reduce(0) { $0 + $1.points }
-        let retenus = Set(bonusRetenus(lu.favoris))
-        return obligatoires + lu.favoris
+        let bonusPossibles = favorisTries(lu)
+        let retenus = Set(bonusRetenus(bonusPossibles))
+        return obligatoires + bonusPossibles
             .filter { retenus.contains($0.idOutcomeUnibet) }
             .reduce(0) { $0 + ($1.points ?? 0) }
     }
@@ -433,7 +446,7 @@ struct PronosView: View {
             return
         }
 
-        let retenus = bonusRetenus(lu.favoris)
+        let retenus = bonusRetenus(favorisTries(lu))
         envoi = true
         defer { envoi = false }
         do {
@@ -575,9 +588,13 @@ private struct BlocObligatoire<Contenu: View>: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Damier en filigrane, **gris d'origine et non blanc** : au pire pixel le champ
+        // vide garde son encre douce à 4,73:1 sur le rouge, 4,80:1 sur le bleu — un damier
+        // blanc l'aurait fait tomber à 4,41:1 et 4,39:1.
         .background {
             ZStack {
                 marche.aplat
+                Damier(opacite: Materiau.damierFiligrane)
                 LueurHaute()
             }
         }
@@ -652,11 +669,13 @@ struct BlocEcheance<Pied: View>: View {
             let echeance = horaires.echeance(le: contexte.date)
 
             VStack(spacing: 12) {
+                // **`secondaire` et non `grisSecondaire`** : sur le beige damé, le second
+                // tombe à 4,41:1 au pire pixel ; le premier y tient largement.
                 Text(echeance.label)
                     .font(.label)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)
-                    .foregroundColor(.grisSecondaire)
+                    .foregroundColor(.secondaire)
 
                 if let restant = echeance.restant, echeance.texte != nil {
                     HStack(alignment: .top, spacing: 10) {
@@ -676,7 +695,9 @@ struct BlocEcheance<Pied: View>: View {
             }
             .frame(maxWidth: .infinity)
             .padding(20)
-            .background(Color.fondPrincipal)
+            .background {
+                Color.fondPrincipal.overlay { Damier(opacite: Materiau.damierFiligrane) }
+            }
             .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
             .ombreBloc()                                // rayon `bloc` → `ombreBloc` (§4.7)
             .accessibilityElement(children: .contain)
@@ -767,12 +788,20 @@ private struct CarteParisBonus: View {
                     .lineLimit(1)
 
                 // La rangée retenue est **déjà ambre** : `inverse` échange les deux encres.
-                EtoileParisBonus(actif: actif, inverse: true)
+                EtoileParisBonus(actif: actif, inverse: true, jaune: true)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .frame(minHeight: 44)
-            .background(actif ? Color.accent : Color.surface)
+            // Damier à 5 % sur l'ambre retenu : le marché en `encreSecondaireAmbre` y tient
+            // encore **4,66:1** au pire pixel (4,84:1 sans).
+            .background {
+                if actif {
+                    Color.accent.overlay { Damier(opacite: Materiau.damierFiligrane) }
+                } else {
+                    Color.surface
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
             .ombreCarte()
             .opacity(sature ? 0.5 : 1)
@@ -800,6 +829,9 @@ private struct FeuilleChoixPilote: View {
     let choisi: Cote?
     /// Les ``ClePilote`` des pilotes pris ailleurs.
     let indisponibles: Set<String>
+    /// Les ``ClePilote`` des pilotes épinglés en favori au tableau des cotes, tous marchés
+    /// confondus — l'étoile pleine d'``EtoileFavori``, **indicative** : elle ne retient rien.
+    let favoris: Set<String>
     let onChoisir: (Cote) -> Void
 
     @Environment(\.dismiss) private var fermer
@@ -832,6 +864,7 @@ private struct FeuilleChoixPilote: View {
     private func ligne(_ cote: Cote) -> some View {
         let actif = choisi?.id == cote.id
         let indisponible = !actif && indisponibles.contains(ClePilote.de(cote.pilote))
+        let favori = favoris.contains(ClePilote.de(cote.pilote))
 
         return Button {
             onChoisir(cote)
@@ -845,11 +878,14 @@ private struct FeuilleChoixPilote: View {
                         .accessibilityHidden(true)
                 }
 
-                Text(cote.pilote)
-                    .font(.custom("HelveticaNeue-Medium", size: 15))
-                    .foregroundColor(.texte)      // 15,37:1 sur le blanc
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 6) {
+                    Text(cote.pilote)
+                        .font(.custom("HelveticaNeue-Medium", size: 15))
+                        .foregroundColor(.texte)      // 15,37:1 sur le blanc
+                        .lineLimit(1)
+                    if favori { EtoileFavori() }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(formaterPoints(cote.points))
                     .font(.custom("HelveticaNeue-Medium", size: 13))
@@ -869,7 +905,8 @@ private struct FeuilleChoixPilote: View {
         }
         .buttonStyle(StyleAppui(.grandeSurface))
         .disabled(indisponible)
-        .accessibilityValue(indisponible ? t("pronos.a11y.dejaChoisi") : "")
+        .accessibilityValue(indisponible ? t("pronos.a11y.dejaChoisi")
+                            : favori ? t("cotes.a11y.enFavori") : "")
     }
 }
 

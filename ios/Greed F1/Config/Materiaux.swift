@@ -40,9 +40,10 @@ enum Materiau {
     static let damierSurPronostics = true
 
     /// Le damier **en filigrane d'un écran clair** — 5 %, au milieu de la fourchette de
-    /// 4 à 6 % : il se devine sans se lire. Posé sur le détail d'un championnat, et nulle
-    /// part ailleurs pour l'instant : le fond du sélecteur Classement / Piste, les trois
-    /// lignes du podium, la carte « Résultats par Grand Prix ».
+    /// 4 à 6 % : il se devine sans se lire. Posé sur le détail d'un championnat (le fond
+    /// du sélecteur Classement / Piste, les trois lignes du podium, la carte « Résultats
+    /// par Grand Prix ») et sur la saisie des pronostics (les blocs vainqueur et podium,
+    /// le compte à rebours, les paris bonus retenus).
     ///
     /// > Mesuré au pire pixel : `grisSecondaire` tient **4,83:1** sur le podium (damier
     /// > `primaire`), **4,98:1** sur la carte (damier gris) ; `secondaire` **7,56:1** dans
