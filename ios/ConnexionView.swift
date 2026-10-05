@@ -159,7 +159,7 @@ struct ConnexionView: View {
                 Spacer()
                     .frame(height: 24)
 
-                // Séparateur puis Google — même ordre que Connexion.jsx (`BoutonsOAuth`,
+                // Séparateur puis Apple et Google — même ordre que Connexion.jsx (`BoutonsOAuth`,
                 // ordre par défaut) : le séparateur annonce ce bouton-ci, posé après le
                 // formulaire email/mot de passe.
                 HStack(spacing: 10) {
@@ -173,6 +173,12 @@ struct ConnexionView: View {
 
                 Spacer()
                     .frame(height: 16)
+
+                BoutonApple(viewModel: viewModel, rayon: 24)
+                    .padding(.horizontal, 32)
+
+                Spacer()
+                    .frame(height: 12)
 
                 Button {
                     Task { await viewModel.connexionOAuth(fournisseur: .google) }

@@ -12,15 +12,15 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
-Version backend actuelle : 0.82.1
-Version iOS actuelle : 0.47.4
+Version backend actuelle : 0.83.0
+Version iOS actuelle : 0.48.0
 
 ## STACK TECHNIQUE
 
 Frontend : React, Vite, Tailwind CSS v4 → Vercel (greed-f1.com + greed-f1.vercel.app)
 Backend : FastAPI → Railway (mon-petit-podium-production.up.railway.app)
 Base de données : Supabase/PostgreSQL (projet ID: ycsxcythvtcruiomrgvv)
-Auth : Supabase Auth — email/password + Google OAuth actif
+Auth : Supabase Auth — email/password + Google OAuth actif + Sign in with Apple (iOS natif, 0.48.0)
 Emails : Resend via SMTP Supabase, domaine greed-f1.com vérifié
 App iOS : Swift 5.0, SwiftUI, iOS 17.0+, Xcode 26.6, simulateur iPhone 17 Pro iOS 26.5
 Bundle ID : com.bazzana.greedf1, SDK Supabase Swift 2.55.2
@@ -64,7 +64,10 @@ Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 
-## CE QUI EST FAIT — VERSION iOS (0.47.4)
+## CE QUI EST FAIT — VERSION iOS (0.48.0)
+
+Sign in with Apple (0.48.0) : bouton natif noir (`BoutonApple`) sur Landing (en tête, avant Google) et Connexion (après le séparateur, avant Google). Feuille native → `supabase.auth.signInWithIdToken(provider: .apple)` avec nonce SHA-256, AUCUNE route Railway pour la connexion. Nom complet écrit dans les métadonnées du compte au premier login (`full_name`, `name`, `given_name`, `family_name`). Nouveau compte → pseudo `pilote-…` → OnboardingView (mécanisme Google inchangé). Suppression d'un compte Apple : réautorisation Apple (code frais) envoyée dans le corps de `DELETE /profils/moi`, le backend (0.83.0, `app/apple.py`) l'échange puis révoque le jeton — best-effort, journalisé, ne bloque jamais la suppression. Fermer la feuille annule la suppression.
+À CONFIGURER (sinon le flux ne marche pas) : Supabase → Auth → Providers → Apple activé, `com.bazzana.greedf1` dans les Client IDs ; Railway → `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (clé .p8 « Sign in with Apple », PEM, `\n` acceptés). Non testé de bout en bout : à valider sur iPhone réel.
 
 Navigation TabView 4 onglets (Accueil, Championnats, Calendrier, Profil)
 AccueilView : widget GP navigable avec drapeau + tracé circuit
@@ -111,7 +114,7 @@ Google OAuth branding validé et publié sur Google Cloud
 
 Bloquants App Store :
 
-Sign in with Apple (bloqué — en attente compte Apple Developer 99€/an)
+Sign in with Apple : code fait (iOS 0.48.0) — reste la configuration Supabase + Railway et le test sur iPhone réel
 Screenshots finaux (iPhone + iPad)
 Test iPad (ouvrir chaque écran sur simulateur iPad)
 

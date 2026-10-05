@@ -226,6 +226,7 @@ ios/
     │   ├── Composants/
     │   │   ├── CartesChampionnat.swift  carte de championnat, cartes d'action, chargement/échec (`EchecChargement`), PARTAGÉS
     │   │   ├── BoutonPrincipal.swift    habillage du bouton de « Créer » et « Rejoindre », PARTAGÉ
+    │   │   ├── BoutonApple.swift        « Continuer avec Apple » NATIF (`SignInWithAppleButton`, style noir), jamais redessiné — Landing + Connexion ; logique dans `AuthViewModel` (`signInWithIdToken`, nonce, révocation à la suppression)
     │   │   ├── ErreurEnLigne.swift      refus d'une écriture, sous le bouton — jamais d'alerte
     │   │   ├── SelecteurSegmente.swift  sélecteur segmenté pleine largeur (une seule pastille `primaire`, ressort `Mouvement.glissement`, fond neutre + damier) — Classement / Piste
     │   │   ├── MentionProvisoire.swift  `StatutResultats` (provisoire, non évaluable) + la mention « Provisoire », PARTAGÉS

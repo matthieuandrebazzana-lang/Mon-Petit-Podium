@@ -1,4 +1,5 @@
 import AuthenticationServices
+import CryptoKit
 import Foundation
 import SwiftUI
 import Supabase
@@ -59,6 +60,11 @@ final class AuthViewModel: ObservableObject {
     }
     
     private let supabase = SupabaseManager.partage.client
+
+    /// Le nonce **en clair** de la demande Apple en cours. Apple reçoit son empreinte
+    /// SHA-256 et la recopie dans le jeton d'identité ; Supabase reçoit le clair et
+    /// vérifie qu'ils correspondent — un jeton intercepté ne se rejoue pas.
+    private var nonceApple: String?
     
     init() {
         Task {
@@ -132,8 +138,8 @@ final class AuthViewModel: ObservableObject {
         estEnChargement = false
     }
 
-    /// Connecte via un fournisseur tiers — Google aujourd'hui, Apple suivra une fois le
-    /// compte développeur Apple configuré (même appel, `provider: .apple`).
+    /// Connecte via un fournisseur tiers **web** — Google. Apple passe par la feuille
+    /// native, voir ``connexionApple(_:)``.
     ///
     /// Ouvre le navigateur système via `ASWebAuthenticationSession`, le chemin recommandé
     /// sur iOS (`docs/swift-app.md` §2.7) : `supabase-swift` la pilote lui-même derrière
@@ -160,6 +166,96 @@ final class AuthViewModel: ObservableObject {
         }
 
         estEnChargement = false
+    }
+
+    // MARK: - Sign in with Apple
+
+    /// Remplit la demande que le bouton natif s'apprête à présenter : nom et email
+    /// demandés, nonce haché. Appelée par ``BoutonApple`` juste avant la feuille.
+    func preparerRequeteApple(_ requete: ASAuthorizationAppleIDRequest) {
+        let nonce = Self.nonceAleatoire()
+        nonceApple = nonce
+        requete.requestedScopes = [.fullName, .email]
+        requete.nonce = Self.sha256(nonce)
+    }
+
+    /// Connecte avec Sign in with Apple : **la feuille native, puis Supabase directement**
+    /// (`signInWithIdToken`, fournisseur `.apple`) — aucune route Railway, Supabase valide
+    /// lui-même le jeton d'identité contre les clés publiques d'Apple. Le bundle identifier
+    /// doit figurer dans les *Client IDs* du fournisseur Apple du tableau de bord Supabase.
+    ///
+    /// Un premier compte reçoit un pseudo `pilote-…` du trigger, comme Google :
+    /// ``pseudoAConfigurer`` l'envoie alors à l'onboarding, rien à câbler de plus.
+    ///
+    /// **Apple ne donne le nom qu'à la toute première autorisation**, jamais ensuite :
+    /// il est donc écrit aussitôt dans les métadonnées du compte, sous les clés que Google
+    /// y pose déjà (`full_name`, `name`). L'email, lui, est dans le jeton à chaque fois, et
+    /// Supabase le range seul.
+    func connexionApple(_ resultat: Result<ASAuthorization, Error>) async {
+        messageErreur = nil
+
+        let autorisation: ASAuthorization
+        switch resultat {
+        case .success(let reussite):
+            autorisation = reussite
+        case .failure(let erreur as ASAuthorizationError) where erreur.code == .canceled:
+            // Feuille fermée par l'utilisateur : ni erreur, ni action.
+            return
+        case .failure:
+            messageErreur = t("auth.erreur.oauth")
+            return
+        }
+
+        guard let identifiant = autorisation.credential as? ASAuthorizationAppleIDCredential,
+              let donneesJeton = identifiant.identityToken,
+              let jeton = String(data: donneesJeton, encoding: .utf8),
+              let nonce = nonceApple
+        else {
+            messageErreur = t("auth.erreur.oauth")
+            return
+        }
+
+        estEnChargement = true
+        defer { estEnChargement = false }
+
+        do {
+            let session = try await supabase.auth.signInWithIdToken(
+                credentials: OpenIDConnectCredentials(provider: .apple, idToken: jeton, nonce: nonce)
+            )
+            nonceApple = nil
+            estConnecte = true
+
+            if let nom = identifiant.fullName,
+               case let complet = PersonNameComponentsFormatter().string(from: nom),
+               !complet.isEmpty {
+                var donnees: [String: AnyJSON] = ["full_name": .string(complet), "name": .string(complet)]
+                if let prenom = nom.givenName { donnees["given_name"] = .string(prenom) }
+                if let famille = nom.familyName { donnees["family_name"] = .string(famille) }
+                // Un échec ici ne doit pas défaire la connexion : le nom n'est qu'un
+                // complément, le compte existe.
+                _ = try? await supabase.auth.update(user: UserAttributes(data: donnees))
+            }
+
+            await chargerProfil(id: session.user.id)
+        } catch {
+            messageErreur = t("auth.erreur.oauth")
+        }
+    }
+
+    /// Le compte connecté s'est-il créé ou lié par Apple ?
+    private func compteApple() async -> Bool {
+        guard let identites = try? await supabase.auth.session.user.identities else { return false }
+        return identites.contains { $0.provider == "apple" }
+    }
+
+    private static func nonceAleatoire(longueur: Int = 32) -> String {
+        let alphabet = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var generateur = SystemRandomNumberGenerator()
+        return String((0..<longueur).map { _ in alphabet.randomElement(using: &generateur)! })
+    }
+
+    private static func sha256(_ texte: String) -> String {
+        SHA256.hash(data: Data(texte.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Enregistre le pseudo choisi à l'onboarding — écriture **directe** dans
@@ -280,12 +376,23 @@ final class AuthViewModel: ObservableObject {
     /// appel (le compte n'existe plus), exactement comme après une
     /// déconnexion ordinaire.
     ///
+    /// **Un compte Apple redemande d'abord une autorisation** (feuille Face ID) : son code
+    /// frais part avec la requête, et Railway s'en sert pour révoquer le jeton Apple
+    /// (règle 5.1.1(v), `backend/app/apple.py`) — l'appareil ne peut pas révoquer seul,
+    /// Apple exige un secret signé par la clé du compte développeur. Fermer la feuille
+    /// annule la suppression : rien n'est touché.
+    ///
     /// - Throws: une ``ErreurAPI`` dont le message est affichable. Si elle est
     ///   levée, rien n'a été touché **sauf** ce que `DELETE /profils/moi` a pu
     ///   accomplir avant l'échec — la route est conçue pour tolérer un second
-    ///   appel (`app/api/routes/profils.py`).
+    ///   appel (`app/api/routes/profils.py`). Une `ASAuthorizationError` si la
+    ///   réautorisation Apple a été annulée ou a échoué.
     func supprimerCompte() async throws {
-        try await APIClient.partage.envoyer("profils/moi", methode: .delete)
+        var corps: SuppressionCompte?
+        if await compteApple() {
+            corps = SuppressionCompte(appleAuthorizationCode: try await ReautorisationApple().codeAutorisation())
+        }
+        try await APIClient.partage.envoyer("profils/moi", methode: .delete, corps: corps)
         try? await supabase.auth.signOut()
         oublierCompte()
     }
@@ -303,6 +410,74 @@ final class AuthViewModel: ObservableObject {
         }
         
         estEnChargement = false
+    }
+}
+
+// MARK: - Révocation Apple
+
+/// Corps de `DELETE /profils/moi` — absent pour un compte email ou Google.
+private struct SuppressionCompte: Encodable {
+    let appleAuthorizationCode: String
+
+    enum CodingKeys: String, CodingKey {
+        case appleAuthorizationCode = "apple_authorization_code"
+    }
+}
+
+/// Redemande une autorisation Apple hors du bouton — `ASAuthorizationController` nu,
+/// enveloppé dans une continuation — pour obtenir un **code d'autorisation frais**, que
+/// seul le serveur sait échanger puis révoquer.
+@MainActor
+private final class ReautorisationApple: NSObject, ASAuthorizationControllerDelegate,
+                                          ASAuthorizationControllerPresentationContextProviding {
+
+    private var suite: CheckedContinuation<String, Error>?
+    /// Retenu le temps de la feuille : rien d'autre ne le garde en vie.
+    private var controleur: ASAuthorizationController?
+
+    func codeAutorisation() async throws -> String {
+        let requete = ASAuthorizationAppleIDProvider().createRequest()
+        let controleur = ASAuthorizationController(authorizationRequests: [requete])
+        controleur.delegate = self
+        controleur.presentationContextProvider = self
+        self.controleur = controleur
+        return try await withCheckedThrowingContinuation { suite in
+            self.suite = suite
+            controleur.performRequests()
+        }
+    }
+
+    nonisolated func authorizationController(controller: ASAuthorizationController,
+                                             didCompleteWithAuthorization authorization: ASAuthorization) {
+        let code = (authorization.credential as? ASAuthorizationAppleIDCredential)?
+            .authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
+        MainActor.assumeIsolated {
+            if let code {
+                suite?.resume(returning: code)
+            } else {
+                suite?.resume(throwing: ASAuthorizationError(.invalidResponse))
+            }
+            suite = nil
+            self.controleur = nil
+        }
+    }
+
+    nonisolated func authorizationController(controller: ASAuthorizationController,
+                                             didCompleteWithError error: Error) {
+        MainActor.assumeIsolated {
+            suite?.resume(throwing: error)
+            suite = nil
+            self.controleur = nil
+        }
+    }
+
+    nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        MainActor.assumeIsolated {
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .first { $0.isKeyWindow } ?? ASPresentationAnchor()
+        }
     }
 }
 

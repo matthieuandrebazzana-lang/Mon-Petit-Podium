@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Version de l'API, alignée sur celle du frontend.
 # À incrémenter à chaque commit qui modifie l'application.
-VERSION = "0.82.1"
+VERSION = "0.83.0"
 
 # Toujours autorisées : le serveur de dev Vite, pour ne jamais casser le local.
 ORIGINES_LOCALES = [
@@ -83,6 +83,27 @@ class Settings(BaseSettings):
     # secret-ci ne sert plus qu'aux appels qui n'ont pas de session Supabase,
     # et ne quitte donc jamais Railway.
     admin_secret: str = ""
+
+    # — Sign in with Apple —
+    # Servent UNIQUEMENT à révoquer le jeton Apple d'un compte supprimé (App
+    # Store, règle 5.1.1(v)) : la connexion elle-même passe par Supabase, qui
+    # valide le jeton d'identité sans rien demander à Railway. La clé privée
+    # (`.p8`, « Sign in with Apple » coché) se colle en PEM, retours à la ligne
+    # écrits `\n` acceptés. Vides par défaut : la suppression de compte reste
+    # possible, la révocation est sautée et journalisée.
+    apple_team_id: str = ""
+    apple_key_id: str = ""
+    apple_private_key: str = ""
+    # L'audience du jeton natif est le bundle identifier de l'app iOS.
+    apple_client_id: str = "com.bazzana.greedf1"
+
+    @property
+    def apple_configure(self) -> bool:
+        return bool(
+            self.apple_team_id.strip()
+            and self.apple_key_id.strip()
+            and self.apple_private_key.strip()
+        )
 
     @property
     def admin_configure(self) -> bool:

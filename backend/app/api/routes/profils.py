@@ -29,6 +29,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
+from app import apple
 from app.api.deps import utilisateur_courant
 from app.api.journal import echec_lisible as _echec_lisible
 from app.api.journal import journaliser_echecs
@@ -436,9 +437,21 @@ async def modifier_mon_profil(
     return ProfilServi(**modifiees[0])
 
 
+class SuppressionCompte(BaseModel):
+    """Corps facultatif de `DELETE /profils/moi`.
+
+    `apple_authorization_code` : code d'autorisation frais, redemandé par l'app
+    iOS au moment de la suppression d'un compte Apple, pour révoquer le jeton
+    (règle 5.1.1(v), `app/apple.py`). Absent pour un compte email ou Google.
+    """
+
+    apple_authorization_code: str | None = Field(default=None, max_length=2048)
+
+
 @router.delete("/moi", status_code=status.HTTP_204_NO_CONTENT)
 @journaliser_echecs(DOMAINE, "Suppression de ton compte")
 async def supprimer_mon_compte(
+    corps: SuppressionCompte | None = None,
     utilisateur: str = Depends(utilisateur_courant),
 ) -> Response:
     """Supprime le compte de l'appelant — App Store, règle 5.1.1(v).
@@ -456,6 +469,10 @@ async def supprimer_mon_compte(
        endroit où « championnat transféré au bon membre » se décide, et un
        échec ici laisserait un championnat à transférer plus tard sans que
        personne ne le sache.
+    1 bis. **La révocation Sign in with Apple**, si l'app a transmis un code
+       d'autorisation. Même arbitrage que la photo : son échec est journalisé,
+       il ne retient pas le compte — refuser une suppression parce qu'Apple ne
+       répond pas irait contre la règle même qu'elle sert.
     2. **La photo de profil**, dans Storage. Son échec **n'empêche pas la
        suite** : un objet orphelin en Storage n'est plus référencé par
        personne dès que `public.profils` disparaît (étape 3), donc invisible
@@ -479,6 +496,17 @@ async def supprimer_mon_compte(
         await appeler_fonction("supprimer_mon_compte", {"p_profil": utilisateur})
     except ErreurSupabase as erreur:
         raise echec_lisible("Suppression de ton compte", erreur) from erreur
+
+    if corps and corps.apple_authorization_code:
+        try:
+            await apple.revoquer(corps.apple_authorization_code)
+        except Exception as erreur:  # noqa: BLE001 — journalisé, jamais bloquant
+            _logger.warning(
+                "[%s] Jeton Apple non révoqué pour %s — %s",
+                DOMAINE,
+                utilisateur,
+                erreur,
+            )
 
     try:
         await supprimer_objets_storage(COMPARTIMENT_AVATARS, chemins_avatar(utilisateur))

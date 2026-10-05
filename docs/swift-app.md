@@ -302,10 +302,17 @@ Points à connaître :
 
 > ### État réel côté production
 > **Google est configuré dans le tableau de bord Supabase et actif** :
-> `frontend/src/composants/BoutonsOAuth.jsx` porte `GOOGLE_ACTIF = true`. **Apple reste à
-> faire** — `APPLE_ACTIF = false` côté web, non implémenté côté iOS — une fois le compte
-> développeur Apple configuré ; il suivra exactement le même flux (`provider: .apple`),
-> et il est **obligatoire sur l'App Store** dès lors que Google est proposé.
+> `frontend/src/composants/BoutonsOAuth.jsx` porte `GOOGLE_ACTIF = true`. **Apple est
+> implémenté côté iOS depuis la `0.48.0`** — mais **pas** par `signInWithOAuth` : la
+> feuille native (`SignInWithAppleButton`, ``BoutonApple``) rend un jeton d'identité que
+> `signInWithIdToken(provider: .apple, nonce:)` envoie à Supabase. Aucune route Railway
+> pour se connecter. Le bundle identifier doit figurer dans les *Client IDs* du
+> fournisseur Apple de Supabase. Apple ne donne le nom qu'au premier login : il est écrit
+> aussitôt dans les métadonnées (`full_name`, `name`). **La suppression d'un compte Apple
+> révoque le jeton** (règle 5.1.1(v)) : l'app redemande une autorisation, en transmet le
+> code frais dans le corps de `DELETE /profils/moi`, et `backend/app/apple.py` l'échange
+> puis appelle `/auth/revoke` avec un `client_secret` ES256 signé par la clé `.p8` —
+> l'appareil ne peut pas révoquer seul. Côté web, `APPLE_ACTIF = false` reste à basculer.
 
 ### 2.8 Réinitialisation du mot de passe
 

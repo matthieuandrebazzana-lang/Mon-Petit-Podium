@@ -93,11 +93,14 @@ struct LandingView: View {
 
     // MARK: - Boutons
 
-    /// Google d'abord, séparateur « ou », puis les deux boutons habituels : le raccourci
-    /// le plus rapide passe en tête. Contrepartie exacte de `Landing.jsx`
-    /// (`BoutonsOAuth separateurApres`).
+    /// Apple puis Google, séparateur « ou », puis les deux boutons habituels : les
+    /// raccourcis les plus rapides passent en tête. Contrepartie de `Landing.jsx`
+    /// (`BoutonsOAuth separateurApres`). Apple, au moins aussi visible que Google
+    /// (App Store, règle 4.8), en premier.
     private var boutons: some View {
         VStack(spacing: 12) {
+            BoutonApple(viewModel: viewModel, rayon: 28)   // capsule : 56 / 2
+
             Button {
                 Task { await viewModel.connexionOAuth(fournisseur: .google) }
             } label: {

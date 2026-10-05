@@ -13,3 +13,7 @@ tzdata>=2025.1
 # boucle d'événements de FastAPI : aucun processus ni thread supplémentaire, ce
 # qui compte sur le plan gratuit de Railway.
 APScheduler>=3.11,<4.0
+# Signature ES256 du `client_secret` qu'exige Apple pour révoquer le jeton d'un
+# compte supprimé (App Store, règle 5.1.1(v)). L'extra `crypto` tire
+# `cryptography`, sans laquelle PyJWT ne sait pas signer en ES256.
+PyJWT[crypto]>=2.9,<3.0

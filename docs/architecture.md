@@ -144,6 +144,7 @@ par appel.
 | `SUPABASE_ANON_KEY` | idem |
 | `SUPABASE_SERVICE_ROLE_KEY` | idem |
 | `ADMIN_SECRET` | les trois routes d'administration **en `curl`** refusent tout le monde (`503`). `POST /admin/action`, elle, n'en dépend pas |
+| `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | la suppression d'un compte Apple réussit, mais **le jeton Apple n'est pas révoqué** (journalisé) — règle App Store 5.1.1(v). `APPLE_CLIENT_ID` vaut `com.bazzana.greedf1` par défaut |
 | `ENVIRONMENT` | vaut `development`, donc `/docs` reste public |
 | `FRONTEND_URL` | non bloquante — l'origine Vercel est la valeur par défaut |
 | `CORS_ORIGINS` | origines supplémentaires, séparées par des virgules |
