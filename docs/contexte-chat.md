@@ -123,6 +123,7 @@ Test iPad (ouvrir chaque écran sur simulateur iPad)
 Fonctionnalités prévues :
 
 Notifications push : code fait (iOS 0.49.0, backend 0.84.0) — reste le test sur iPhone réel, puis `APNS_ENV=production` au passage TestFlight
+Notifications push : `42501 permission denied` sur `push_tokens` / `notifications_envoyees` — appliquer la migration 31 (`grant … to service_role`, `bugs-connus.md` §39)
 f1-ml : modèle de prédiction ML à intégrer
 
 Bugs connus :

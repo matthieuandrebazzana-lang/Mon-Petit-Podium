@@ -1720,3 +1720,31 @@ monte ``Verdict`` à côté de la pastille, comme ``ResultatsGPView`` et « Mes 
 - Devant un verdict « en attente » sur un pronostic jugé, **vérifier la colonne en base**
   avant de toucher au rendu : ajouter une déduction côté écran masquerait la migration
   manquante et créerait un second propriétaire du verdict.
+
+## 39. `permission denied for table push_tokens` / `notifications_envoyees` (`0.84.0`)
+
+**Symptôme.** Dans les logs Railway, le job de notifications échoue à chaque tour sur
+`notifications_envoyees`, et `POST /push/token` sur `push_tokens` — `code 42501`. L'app
+iOS reçoit `422`.
+
+**Cause supposée, fausse : la clé anonyme.** Le backend appelle PostgREST avec la clé de
+service sur toutes les tables (`supabase_client._entetes_service`) ; le job et la route ne
+font pas exception. Le `422` n'est pas non plus un corps invalide : l'app envoie
+`{"token": "<hex>", "langue": "fr"|"en"}`, conforme à `JetonPush` ; c'est le statut par
+lequel `journaliser_echecs` transporte **toute** panne Supabase.
+
+**Cause réelle.** `service_role` a `bypassrls`, **pas** les privilèges de table. La
+migration 30 n'accordait rien à `service_role`, et ces deux tables n'ont pas reçu les
+privilèges par défaut dont bénéficient les tables plus anciennes. `42501 permission
+denied for table` est un refus de `grant`, pas de RLS.
+
+**Correctif.** Migration 31 : `grant select, insert, update, delete … to service_role`
+sur les deux tables.
+
+### Ce qu'il ne faut pas refaire
+
+- Créer une table sans `grant` explicite à `service_role` : ne pas compter sur les
+  privilèges par défaut du projet.
+- Lire un `422` d'une route décorée par `journaliser_echecs` comme une erreur de
+  validation : la cause est dans les logs Railway, pas dans le corps envoyé.
+

@@ -602,7 +602,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les vingt-neuf migrations
+## 6. Les trente et une migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -635,6 +635,8 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 27 | `20260927120000_podium_par_pilote` | **`pronostic_podium.points_gagnes_1` / `_2`** — le gain de chaque pilote du podium, jugé par le backend ; `attribuer_points`, `remplacer_verdicts` et `pronostics_du_joueur` remplacés ; rattrapage des podiums déjà jugés depuis leur total. **À appliquer avec le backend `0.80.0`** | 5, 6, **24**, **25** |
 | 28 | `20260928120000_suppression_compte` | **`supprimer_mon_compte(profil)`** — transfère les championnats créés au membre le mieux classé ou les éteint (règle 4.6), efface pronostics, favoris et adhésions. Appelée par `DELETE /profils/moi` (App Store 5.1.1(v)), **avant** la photo de Storage et le compte Supabase Auth. **À appliquer avec le backend `0.81.0`** | 2, 4, 5, **7** |
 | 29 | `20261001120000_rattachement_par_date` | **`alertes_admin.gp_id` nullable**, unicité `nulls not distinct`, type `grand_prix_ambigu` ; **`adopter_grand_prix` remplacée** pour compter aussi `alertes_admin` (cinq tables filles). Avant ou après le backend `0.82.1`, indifféremment | 19, 26 |
+| 30 | `20261005120000_push_tokens` | **`push_tokens`** (un jeton APNs par appareil, clé = jeton) et **`notifications_envoyees`** (réservation `(gp_id, evenement)`, aucune politique). **À appliquer avant le backend `0.84.0`** | 3 |
+| 31 | `20261005180000_push_droits_service` | **`grant` explicite à `service_role`** sur les deux tables de la 30 — sans lui, `42501 permission denied for table` malgré la clé de service (`bugs-connus.md` §39) | **30** |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -892,7 +894,7 @@ Depuis la v0.9.0 ils ne quittent plus le serveur : **il faut ouvrir les logs Rai
 | `42P01` | relation inexistante | **migration non appliquée** |
 | `42703` | colonne inexistante | migration partiellement appliquée, ou rejouée dans le désordre |
 | `42883` | fonction inexistante | migration non appliquée |
-| `42501` | droits insuffisants | fonction `service_role` appelée sous une autre identité |
+| `42501` | droits insuffisants | fonction `service_role` appelée sous une autre identité ; ou **table sans `grant` à `service_role`** — la clé de service contourne la RLS, pas les privilèges (migration 31) |
 | `42P17` | **récursion de politique** | sous-requête littérale réinsérée dans une politique RLS (§2) |
 | `23505` | violation d'unicité | collision de code d'invitation, ou favori déjà épinglé |
 | `23503` | violation de clé étrangère | référence vers une ligne supprimée |

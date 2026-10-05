@@ -1,0 +1,32 @@
+-- =============================================================================
+--  Migration 31 — Notifications push : droits de `service_role` sur les tables
+-- =============================================================================
+--
+-- Symptôme (logs Railway, backend 0.84.0 avec la migration 30 appliquée) :
+--
+--   [notifications] Tour de surveillance en échec.
+--     permission denied for table notifications_envoyees · code 42501 · statut 403
+--   [push] Enregistrement des notifications —
+--     permission denied for table push_tokens · code 42501 · statut 403
+--
+-- et `POST /push/token` qui rend `422` — le statut par lequel
+-- `journaliser_echecs` transporte toute panne Supabase, pas une erreur de
+-- validation du corps.
+--
+-- **Ce n'était pas la clé.** Le backend appelle déjà PostgREST avec la clé de
+-- service, sur toutes les tables (`supabase_client._entetes_service`). Mais
+-- `service_role` ne contourne que la RLS (`bypassrls`), **pas les privilèges
+-- de table** : `42501 permission denied for table` est un refus de GRANT.
+-- La migration 30 n'accordait rien à `service_role`, et ces deux tables, créées
+-- depuis le SQL Editor, n'ont pas reçu les privilèges par défaut que les tables
+-- plus anciennes tiennent du projet.
+--
+-- Les privilèges sont donc désormais **explicites**, sans dépendre des
+-- privilèges par défaut du projet.
+--
+-- Idempotente (un `grant` déjà accordé ne fait rien). Après la 30, avant ou
+-- après le backend, indifféremment : elle ne change aucune signature.
+-- =============================================================================
+
+grant select, insert, update, delete on public.push_tokens            to service_role;
+grant select, insert, update, delete on public.notifications_envoyees to service_role;
