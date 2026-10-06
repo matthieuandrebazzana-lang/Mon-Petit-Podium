@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
 Version backend actuelle : 0.84.0
-Version iOS actuelle : 0.49.1
+Version iOS actuelle : 0.49.2
 
 ## STACK TECHNIQUE
 
@@ -64,7 +64,9 @@ Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 
-## CE QUI EST FAIT — VERSION iOS (0.49.1)
+## CE QUI EST FAIT — VERSION iOS (0.49.2)
+
+Bouton du widget « Prochain GP » de l'accueil (0.49.2) : `pronosValides` n'est plus mocké. `ProchainGrandPrix.aDesPronostics` lit en direct (RLS) s'il existe au moins un pronostic du joueur pour ce GP, relu au retour du parcours de pronostics. Ouvert + pronos → « Voir mes pronos » ; ouvert sans → « Faire mes pronos » (cotes, puis saisie) ; fermé + pronos → « Voir mes pronos » (récap) ; fermé sans → rien ; existence inconnue (chargement / échec) → aucun bouton, widget toujours tappable.
 
 Icône de l'app (0.49.1) : le carré G de `assets/logo-05.svg` seul (rect arrondi en dégradé + motif + tracé du G), rendu par cairosvg bord à bord, sans marge, `rx` retiré (coins carrés : iOS applique son masque ; PNG opaque, comme l'exige l'App Store) → `assets/AppIcon-1024.png`, puis 14 tailles iPhone (20 à 68 pt, format « All Sizes » `universal`/`ios`) dans `AppIcon.appiconset`. Le script n'est pas versionné : rejouer = re-parser le SVG, viewBox recadré sur le carré.
 

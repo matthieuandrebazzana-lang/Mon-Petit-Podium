@@ -93,6 +93,10 @@ struct AccueilView: View {
             // Rechargée à chaque apparition, pas de cache de session (§7.6).
             .task { await mesChampionnats.charger() }
             .task { await prochainGP.charger() }
+            // Retour du parcours de pronostics : une grille vient peut-être d'être envoyée.
+            .onChange(of: cheminPronos.isEmpty) { _, vide in
+                if vide { Task { await prochainGP.relirePronostics() } }
+            }
         }
     }
 
@@ -164,9 +168,7 @@ struct AccueilView: View {
             Spacer().frame(height: 24)
 
         case .pret(let gp?):
-            // **Maquette** : `true` tant que la passe réseau n'a pas branché la lecture de
-            // la grille enregistrée — basculer à `false` pour voir « Valider mes pronos ».
-            WidgetGrandPrix(grandPrix: gp, pronosValides: true)
+            WidgetGrandPrix(grandPrix: gp, aDesPronostics: prochainGP.aDesPronostics)
             Spacer().frame(height: 24)   // changement de sujet : 24 pt (§4.6)
 
         case .pret(nil):
@@ -288,9 +290,10 @@ private struct Avatar: View {
 private struct WidgetGrandPrix: View {
 
     let grandPrix: GrandPrixEnBase
-    /// Une grille est déjà enregistrée pour ce Grand Prix. Ne décide que du libellé du
-    /// bouton : la destination, ``EntreePronosView``, choisit seule entre cotes et récap.
-    let pronosValides: Bool
+    /// Au moins un pronostic du joueur est en base pour ce Grand Prix — `nil` tant qu'on ne
+    /// sait pas. Ne décide que du bouton : la destination, ``EntreePronosView``, choisit
+    /// seule entre cotes et récap.
+    let aDesPronostics: Bool?
 
     @Environment(\.modePrevisualisation) private var previsualisation
 
@@ -358,15 +361,22 @@ private struct WidgetGrandPrix: View {
         return .aVenir
     }
 
-    /// Le libellé du bouton du bas, `nil` quand il n'y a rien à faire — course partie,
-    /// résultats pas encore tombés, **ou pronostics pas encore ouverts** : avant le relevé
-    /// des cotes, le widget n'annonce que le départ et l'ouverture, sans rien à saisir.
+    /// Le libellé du bouton du bas, `nil` quand il n'y a rien à faire.
+    ///
+    /// - **Ouvert** : « Voir mes pronos » s'il en a en base, sinon « Faire mes pronos ».
+    /// - **Fermé** : « Voir mes pronos » s'il en a, sinon rien — plus rien à saisir.
+    /// - **À venir** : rien, avant le relevé des cotes il n'y a rien à saisir.
+    /// - **Existence inconnue** (lecture en cours ou échouée) : rien plutôt qu'un bouton
+    ///   faux — le widget reste tappable, ``EntreePronosView`` tranche.
     private var libelleBouton: String? {
         switch etat {
-        case .ouvert: return pronosValides ? t("accueil.voirPronos") : t("accueil.validerPronos")
+        case .ouvert:
+            guard let aDesPronostics else { return nil }
+            return aDesPronostics ? t("accueil.voirPronos") : t("accueil.faireMesPronos")
+        case .ferme:
+            return aDesPronostics == true ? t("accueil.voirPronos") : nil
         case .aVenir: return nil
         case .termine: return t("accueil.voirResultats")
-        case .ferme: return nil
         }
     }
 

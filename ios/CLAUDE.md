@@ -216,7 +216,7 @@ ios/
     │   ├── ClassementChampionnat.swift  `GET /championnats/{id}/classement` — un appel, deux segments
     │   ├── StatistiquesProfil.swift  `GET /profils/{id}/stats` — le sien comme celui d'un membre
     │   ├── CalendrierSaison.swift  `GET /scraper/cotes` — états et `gp_id` du calendrier
-    │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil, lecture directe `grands_prix`
+    │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil, lecture directe `grands_prix` + existence d'un pronostic du joueur (`pronostics`, RLS)
     │   ├── ResultatsGrandPrix.swift  `GET /grands-prix/{id}/resultats` — 404 / `disponible: false` ⇒ indisponible
     │   ├── GrandsPrixJoues.swift  « Ses / Mes Grands Prix » : calendrier du championnat, puis paris (filtrés sur le membre) + résultats de chaque GP terminé
     │   ├── ResultatsParGrandPrix.swift  `GET /championnats/{id}/calendrier` puis `GET /grands-prix/{gp}/pronostics/championnat/{id}`, un GP à la fois
@@ -231,7 +231,7 @@ ios/
     │   │   ├── BarreNavigation.swift  TabView à 4 onglets + apparence de la barre
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
     │   ├── Accueil/
-    │   │   ├── AccueilView.swift       championnats et GP suivant réels, pastille + bouton selon l’état — `pronosValides` mocké
+    │   │   ├── AccueilView.swift       championnats et GP suivant réels, pastille + bouton selon l’état et l’existence d’un pronostic (`ProchainGrandPrix.aDesPronostics`) : « Faire » si ouvert sans, « Voir » si ouvert ou fermé avec, rien sinon
     │   │   ├── PileChampionnats.swift  championnats en paquet de cartes : carte du dessus pleine (tap = ouvrir, swipe = réordonner), bandes : tap = aperçu sur place, 2ᵉ tap = ouvrir ; ordre mémorisé par compte (`OrdrePile`)
     │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer

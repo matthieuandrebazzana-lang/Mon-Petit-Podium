@@ -114,6 +114,7 @@ enum TraductionsFR {
         "commun.dateAConfirmer": "Date à confirmer",
         "accueil.voirPronos": "Voir mes pronos",
         "accueil.validerPronos": "Valider mes pronos",
+        "accueil.faireMesPronos": "Faire mes pronos",
         "accueil.voirResultats": "Voir mes résultats",
         "accueil.a11y.prochainGP": "Prochain Grand Prix, %1$@, le %2$@. Départ à %3$@. %4$@.",
         "accueil.a11y.voirFiche": "Voir la fiche du Grand Prix",
