@@ -159,9 +159,6 @@ struct RecapView: View {
 
     private let margeLaterale: CGFloat = 16
 
-    /// Rembourrage de la carte de résumé. Mesuré sur `screen-28` : 48 px à 3×.
-    private let rembourrageCarte: CGFloat = 16
-
     /// **La course est terminée** : la grille ne se modifie plus. Le bandeau cesse de le
     /// promettre et le bouton « Modifier mes pronos » disparaît.
     private var termine: Bool { grille.horaires.statut == "termine" }
@@ -176,64 +173,127 @@ struct RecapView: View {
         (obligatoires + lignesBonus).reduce(0) { $0 + ($1.points ?? 0) }
     }
 
+    /// Le drapeau du fond — `nil` hors table des teintes : ``FondDrapeauFlou`` pose alors le
+    /// beige seul. Même règle que ``GrandsPrixJoues/GrandPrixJoue/slugDrapeau``.
+    private var slugFond: String? {
+        TeintesDrapeaux.table[grandPrix.slug] != nil ? grandPrix.slug : nil
+    }
+
     var body: some View {
-        // Le `GeometryReader` ne sert qu'à **une** mesure : la hauteur de la barre d'état.
-        // Le drapeau est un fond perdu qui part du haut de l'écran, et le rembourrage haut
-        // de son contenu est exactement cette valeur — la deviner aurait posé le bouton de
-        // retour sur l'heure d'un appareil et trop bas sur un autre.
-        GeometryReader { proxy in
-            ZStack {
-                Color.fondPrincipal
-                    .ignoresSafeArea()
+        // **Le fond du détail du carrousel** (``FondDrapeauFlou``) : le drapeau flouté et
+        // voilé sur tout l'écran. Le voile est calculé pour que ``Color/encreSecondaire``
+        // y tienne 4,5:1 — tout ce qui est hors carte s'écrit donc en blanc, sans ombre.
+        ZStack {
+            FondDrapeauFlou(slug: slugFond)
 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        EnteteDrapeau(
-                            nom: grandPrix.nomAffiche,
-                            sousTitre: grandPrix.sousTitre,
-                            slug: grandPrix.slug,
-                            retrait: proxy.safeAreaInsets.top,
-                            libelleRetour: libelleRetour,
-                            retour: retour
-                        )
+            ScrollView {
+                VStack(spacing: 0) {
+                    entete
 
-                        Spacer().frame(height: 16)
-                        bandeauConfirmation
+                    Spacer().frame(height: 20)
+                    bandeauConfirmation
 
-                        Spacer().frame(height: 12)   // espacement entre blocs (§4.6)
-                        blocEcheance
+                    Spacer().frame(height: 12)   // espacement entre blocs (§4.6)
+                    blocEcheance
 
-                        Spacer().frame(height: 12)
-                        carteResume
+                    section(t("pronos.obligatoires"), lignes: obligatoires)
+
+                    if !lignesBonus.isEmpty {
+                        section(t("recap.bonus"), lignes: lignesBonus)
                     }
-                    .padding(.bottom, 24)
                 }
-                // Le contenu part du **haut de l'écran**, pas du bas de la barre d'état :
-                // c'est ce qui laisse le drapeau remonter jusque sous l'heure. Le bas garde
-                // sa zone sûre — rien ne doit courir sous l'indicateur d'accueil.
-                .ignoresSafeArea(edges: .top)
+                .padding(.bottom, 32)
             }
+            .scrollIndicators(.hidden)
         }
         // > *Écart signalé (`CLAUDE.md` §6).* **La barre de navigation native est retirée,
-        // > et le retour vit dans l'en-tête.** Trois raisons, toutes mesurées au
-        // > simulateur :
-        // >
-        // > 1. Le bouton natif prend son libellé du titre de l'écran précédent, qui est
-        // >    vide : il afficherait « Retour », et il ne remonterait que d'un cran — la
-        // >    saisie —, là où ce bouton-ci vide le parcours entier.
-        // > 2. Sous iOS 26, un élément de barre reçoit d'office sa capsule de verre, qui
-        // >    se pose en clair sur le drapeau et n'est ni dans la capture ni dans le
-        // >    design system.
-        // > 3. Barre visible, la zone sûre haute l'englobe : le drapeau commencerait 44 pt
-        // >    plus bas, ou passerait dessous et laisserait l'heure du système en encre
-        // >    sombre à **2,31:1** sur le bleu d'Azerbaïdjan. Barre masquée, la zone sûre
-        // >    se réduit à la barre d'état, le drapeau commence pile dessous — c'est ce
-        // >    que montre `screen-27` — et l'heure garde le beige de l'app.
+        // > et le retour vit dans l'en-tête.** Le bouton natif prendrait son libellé du
+        // > titre de l'écran précédent, qui est vide, et ne remonterait que d'un cran — la
+        // > saisie —, là où celui-ci vide le parcours entier. Sous iOS 26, il recevrait en
+        // > outre d'office sa capsule de verre, absente du design system.
         // >
         // > Masquer la barre, contrairement à `navigationBarBackButtonHidden`, **préserve
-        // > le retour par glissement**. Le prix est que le bouton défile avec l'en-tête ;
-        // > le geste reste, lui, disponible partout.
+        // > le retour par glissement**.
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    // MARK: - L'en-tête
+
+    /// Le retour, puis **l'en-tête du détail du carrousel** (``ContenuDetailGrandPrix``) :
+    /// nom, date et départ, puis le total en grand — ce que la grille rapporterait si tout
+    /// tombait. « Disponibles » n'est pas décoratif : ces points ne sont **pas acquis**.
+    private var entete: some View {
+        VStack(spacing: 0) {
+            HStack {
+                boutonRetour
+                Spacer(minLength: 0)
+            }
+
+            Spacer().frame(height: 12)
+
+            Text(grandPrix.nomAffiche)
+                .font(.titreLg)
+                .tracking(Tracking.titreLg)
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .accessibilityAddTraits(.isHeader)
+
+            Spacer().frame(height: 4)
+
+            // Blanc 70 % : le voile du fond est calculé pour qu'il tienne 4,5:1.
+            Text(grandPrix.sousTitre)
+                .font(.custom("HelveticaNeue", size: 14))
+                .foregroundColor(.encreSecondaire)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Spacer().frame(height: 20)
+
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(total.enPoints)
+                    .font(.scoreLg)
+                    .tracking(Tracking.scoreLg)
+                Text(t("points.unite"))
+                    .font(.custom("HelveticaNeue-Medium", size: 15))
+            }
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .accessibilityHidden(true)
+
+            Spacer().frame(height: 4)
+
+            Text(t("recap.totalDisponible"))
+                .font(.label)
+                .tracking(Tracking.label)
+                .textCase(.uppercase)
+                .foregroundColor(.encreSecondaire)
+                .accessibilityLabel(t("recap.a11y.total", tp("classement.a11y.points", total)))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, margeLaterale)
+        .padding(.top, 4)
+    }
+
+    /// **44 × 44 pt malgré un chevron de 17** : la zone tactile est posée par le
+    /// `contentShape`, sans quoi seuls les glyphes seraient touchables.
+    private var boutonRetour: some View {
+        Button(action: retour) {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .medium))
+                Text(libelleRetour)
+                    .font(.custom("HelveticaNeue", size: 17))
+                    .lineLimit(1)
+            }
+            .foregroundColor(.white)
+            .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(StyleAppui(.bouton))
+        .accessibilityLabel(libelleRetour)
+        .accessibilityHint(t("recap.a11y.quitter"))
     }
 
     // MARK: - Le bandeau de confirmation
@@ -328,106 +388,106 @@ struct RecapView: View {
         .padding(.top, 4)
     }
 
-    // MARK: - La carte de résumé
+    // MARK: - Les pronostics
 
-    /// Ce qui a été pronostiqué, marché par marché, et ce que ça vaut en tout.
-    ///
-    /// > **Pas de séparateur entre deux rangées**, contrairement à ce que la consigne
-    /// > demandait : `screen-28-recap-bas.PNG` n'en montre qu'aux **ruptures de section**
-    /// > — avant « Bonus » et avant le total. Un filet toutes les trois lignes découpe ce
-    /// > qui doit se lire comme une liste ; posé aux deux endroits où le sujet change, il
-    /// > dit quelque chose.
-    private var carteResume: some View {
+    /// Un titre de section, puis **une carte par pronostic** — la mise en page des sections
+    /// de ``ContenuDetailGrandPrix``, aux mêmes espacements.
+    private func section(_ titre: String, lignes: [LigneRecap]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            titreSection(t("pronos.obligatoires"))
-
-            Spacer().frame(height: 14)
-            rangees(obligatoires)
-
-            if !lignesBonus.isEmpty {
-                Spacer().frame(height: 20)
-                separateur
-                Spacer().frame(height: 16)
-                titreSection(t("recap.bonus"))
-
-                Spacer().frame(height: 14)
-                rangees(lignesBonus)
-            }
-
-            Spacer().frame(height: 20)
-            separateur
-            Spacer().frame(height: 16)
-            rangeeTotal
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(rembourrageCarte)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
-        .ombreCarte()                                 // rayon `carte` → `ombreCarte` (§4.7)
-        .padding(.horizontal, margeLaterale)
-    }
-
-    private func titreSection(_ texte: String) -> some View {
-        Text(texte)
-            .font(.label)
-            .tracking(Tracking.label)
-            .textCase(.uppercase)
-            .foregroundColor(.grisSecondaire)         // 5,33:1 sur le blanc
-    }
-
-    private func rangees(_ lignes: [LigneRecap]) -> some View {
-        VStack(spacing: 18) {
-            ForEach(lignes) { RangeeRecap(ligne: $0) }
-        }
-    }
-
-    /// Le filet des ruptures de section. **Il n'a pas de propriétaire dans le design
-    /// system** — c'est le premier écran qui en emploie un ; le jour où un second en a
-    /// besoin, il montera dans `Config/Formes.swift` plutôt que d'être recopié ici.
-    private var separateur: some View {
-        Rectangle()
-            .fill(Color.secondaire.opacity(0.12))
-            .frame(height: 1)
-            .accessibilityHidden(true)
-    }
-
-    /// Le total, en gros. **C'est le chiffre qu'on vient chercher**, et il est écrit dans
-    /// l'encre de la marque plutôt qu'en noir : le reste de la carte est une liste, lui est
-    /// une conclusion.
-    ///
-    /// « Disponibles » n'est pas décoratif : ces points ne sont **pas acquis**, ils sont ce
-    /// que la grille rapporterait si tout tombait.
-    private var rangeeTotal: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(t("recap.totalDisponible"))
+            Text(titre)
                 .font(.label)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
-                .foregroundColor(.grisSecondaire)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 140, alignment: .leading)
+                .foregroundColor(.encreSecondaire)        // 4,5:1 sur le fond, par le voile
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 4)
+                .padding(.top, 24)
+                .padding(.bottom, 10)
+                .accessibilityAddTraits(.isHeader)
 
-            Spacer(minLength: 8)
-
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(total.enPoints)
-                    .font(.custom("HelveticaNeue-Medium", size: 40))
-                    .tracking(-1.00)                  // −0,025em × 40
-                Text(t("points.unite"))
-                    .font(.custom("HelveticaNeue-Medium", size: 20))
+            VStack(spacing: 10) {
+                ForEach(lignes) { CarteRecap(ligne: $0) }
             }
-            .foregroundColor(.primaire)               // 10,88:1 sur le blanc
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(t("recap.a11y.total", tp("classement.a11y.points", total)))
+        .padding(.horizontal, margeLaterale)
     }
 }
 
-// MARK: - Une rangée
+// MARK: - Une carte de pronostic
 
+/// Un pronostic du récapitulatif, **dans la forme de ``CarteVerdict``**, sans pastille : le
+/// marché en petit, le choix en grand, les points à droite — sur le blanc damé. Le marché
+/// est déjà écrit en toutes lettres, une icône ne faisait que le répéter.
+/// Rien n'est encore jugé : ni teinte, ni liseré, ni verdict.
+///
+/// Une cote retirée depuis l'épinglage : un tiret et « Cote retirée », jamais `0`.
+private struct CarteRecap: View {
+
+    let ligne: LigneRecap
+
+    var body: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(ligne.libelle)
+                    .font(.labelSm)
+                    .tracking(Tracking.label)
+                    .textCase(.uppercase)
+                    .foregroundColor(.grisSecondaire)     // ≥ 4,51:1 sur le blanc damé
+                    .lineLimit(2)
+                Text(ligne.pilote)
+                    .font(.custom("HelveticaNeue-Medium", size: 17))
+                    .foregroundColor(.texte)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .trailing, spacing: 1) {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text(ligne.points?.enPoints ?? "–")
+                        .font(.custom("HelveticaNeue-Medium", size: 26))
+                        .tracking(Tracking.score)
+                        .monospacedDigit()
+                        .foregroundColor(.texte)
+                    if ligne.points != nil {
+                        Text(t("points.unite"))
+                            .font(.custom("HelveticaNeue", size: 12))
+                            .foregroundColor(.grisSecondaire)
+                    }
+                }
+                if ligne.points == nil {
+                    Text(t("points.coteRetiree"))
+                        .font(.custom("HelveticaNeue", size: 11))
+                        .foregroundColor(.grisSecondaire)
+                }
+            }
+            .fixedSize()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .background {
+            ZStack {
+                Color.surface
+                if Materiau.damierSurPronostics {
+                    Damier(opacite: Materiau.damierPronostic)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
+        .ombreCarte()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            (ligne.bonus ? t("recap.a11y.pariBonus") : "") + "\(ligne.libelle), "
+            + "\(ligne.pilote), \(formaterPoints(ligne.points))"
+        )
+    }
+}
+
+// MARK: - Une rangée (non montée)
+
+/// **Non montée depuis le passage aux cartes** (`CLAUDE.md` §6 : le code éprouvé reste en
+/// place). La rangée de l'ancienne carte de résumé blanche.
+///
 /// Le marché au-dessus, le pilote en dessous, les points au bout.
 ///
 /// **Le marché est écrit au-dessus de chaque nom et non une fois par groupe** : le podium
@@ -472,8 +532,11 @@ private struct RangeeRecap: View {
     }
 }
 
-// MARK: - L'en-tête
+// MARK: - L'en-tête (non monté)
 
+/// **Non monté depuis le fond drapeau flouté** (`CLAUDE.md` §6 : le code éprouvé reste en
+/// place).
+///
 /// Le drapeau du pays hôte en fond perdu, le nom du Grand Prix et son horaire dessus.
 ///
 /// **La pile de calques est celle de l'accueil et du calendrier, et elle ne se défait

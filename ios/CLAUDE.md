@@ -264,7 +264,7 @@ ios/
     │   │   ├── CotesView.swift      « Fais tes paris » : favoris, mode d'emploi, étoile = favori serveur sur tous les marchés (`EtoileParisBonus`, grise d'origine), `EtoileFavori` indicative jaune cernée (`EtoileJaune`, feuille de choix de `PronosView` seulement), `MarcheCote.exclueDesBonus` (vainqueur / podium hors de la liste bonus de `PronosView`, seul endroit), `EtapePronos` ; l'accordéon d'avant reste en place, non monté
     │   │   ├── PileMarches.swift    marchés en pile de cartes repliables (mécanique de `PileChampionnats`) : toutes fermées à l'arrivée, tap sur l'en-tête = ouvrir / fermer sur place, plusieurs ouvertes à la fois, aucun swipe ; bonus teintés dans l'ordre (`Color.teintesMarcheBonus`) ; décalage en `padding` (grille paresseuse), hauteur dépliée calculée depuis `CarteCote.hauteur`
     │   │   ├── PronosView.swift     saisie préremplie, bonus parmi les favoris, `POST` + `423`
-    │   │   └── RecapView.swift      récapitulatif, après le `200` ou d'entrée (grille relue)
+    │   │   └── RecapView.swift      récapitulatif, après le `200` ou d'entrée (grille relue) : fond `FondDrapeauFlou`, en-tête blanc (nom, date · départ, total disponible en grand), bandeau vert + `BlocEcheance` sur le flou, une `CarteRecap` par pronostic (forme de `CarteVerdict` sans pastille d’icône, damier 6 %) ; `EnteteDrapeau` et `RangeeRecap` non montés
     │   └── Profil/
     │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`)
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles

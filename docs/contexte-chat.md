@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
 Version backend actuelle : 0.84.0
-Version iOS actuelle : 0.49.3
+Version iOS actuelle : 0.49.4
 
 ## STACK TECHNIQUE
 
@@ -65,7 +65,9 @@ Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
-## CE QUI EST FAIT — VERSION iOS (0.49.3)
+## CE QUI EST FAIT — VERSION iOS (0.49.4)
+
+Récapitulatif des pronostics restylé (0.49.4) : `RecapView` reprend le détail du carrousel du profil — fond `FondDrapeauFlou` sur tout l'écran, en-tête blanc (retour, nom, date · départ, total en `scoreLg` + « Total de points disponibles »), bandeau vert et `BlocEcheance` (damier, bouton « Modifier mes pronos ») inchangés posés sur le flou, puis sections OBLIGATOIRES / BONUS en cartes `CarteRecap` (forme de `CarteVerdict` : pastille ronde à l'aplat du marché — trophée / médaille / étoile —, marché en petit, pilote en grand, points à droite, blanc + damier 6 %). Navigation et données inchangées ; l'ancien en-tête drapeau (`EnteteDrapeau`) et `RangeeRecap` restent dans le fichier, non montés. Vérifié au simulateur (Malaisie, Singapour).
 
 Drapeau de Singapour (0.49.3) : `flag-singapour` n'est plus deux bandes rouge / blanc mais le vrai drapeau — croissant et cinq étoiles blancs sur la moitié rouge, tracés de `country-flag-icons/3x2/SG.svg`, rouge `#EF3340` (celui de `TeintesDrapeaux`). Côté web, réaligné en 0.87.3.
 
