@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
 Version backend actuelle : 0.84.0
-Version iOS actuelle : 0.49.0
+Version iOS actuelle : 0.49.1
 
 ## STACK TECHNIQUE
 
@@ -64,7 +64,9 @@ Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 
-## CE QUI EST FAIT — VERSION iOS (0.49.0)
+## CE QUI EST FAIT — VERSION iOS (0.49.1)
+
+Icône de l'app (0.49.1) : le carré G de `assets/logo-05.svg` seul (rect arrondi en dégradé + motif + tracé du G), rendu par cairosvg bord à bord, sans marge, `rx` retiré (coins carrés : iOS applique son masque ; PNG opaque, comme l'exige l'App Store) → `assets/AppIcon-1024.png`, puis 14 tailles iPhone (20 à 68 pt, format « All Sizes » `universal`/`ios`) dans `AppIcon.appiconset`. Le script n'est pas versionné : rejouer = re-parser le SVG, viewBox recadré sur le carré.
 
 Notifications push (iOS 0.49.0, backend 0.84.0, migration 30, `docs/decisions.md` §25) : envoyées par Railway via APNs, jamais programmées localement. Job toutes les 5 min, fenêtre de 15 min après l'échéance : quali − 25 h (« ouvrent dans 24h »), quali − 1 h (« sont ouverts »), course − 1 h (« Dernière chance »), passage à `termine` (« résultats disponibles »). `notifications_envoyees` réservée avant l'envoi = jamais de doublon (amorcée pour les GP terminés). Texte dans la langue du jeton (`push_tokens.langue`). Jetons refusés par APNs (410, BadDeviceToken, DeviceTokenNotForTopic) supprimés. Routes : `POST /push/token` {token, langue}, `DELETE /push/token` {token?}, `POST /push/test` (jeton + `X-Admin-Secret`). iOS : `Services/NotificationsPush.swift` — permission demandée une fois connecté (BarreNavigation), jeton → `POST /push/token`, renvoyé au changement de langue, `DELETE` avant `signOut()` et avant la suppression de compte ; `DelegueApplication` (`@UIApplicationDelegateAdaptor`) reçoit le jeton ; bannière affichée app ouverte. Pas de toggle : Réglages iOS. Railway : `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY`, `APNS_BUNDLE_ID`, `APNS_ENV` (`sandbox` pour un build Xcode, **`production` pour TestFlight / App Store**). Dépendance `httpx[http2]` (APNs = HTTP/2 seulement). Compilé, 218 tests backend verts ; non testé de bout en bout : à valider sur iPhone réel avec `POST /push/test`.
 
