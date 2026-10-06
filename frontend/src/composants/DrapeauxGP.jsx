@@ -95,10 +95,13 @@ export const DRAPEAUX = {
     base: "#CC3128",
     couleurs: ["#CC3128", "#F8F9FB", "#262956", "#F3C839"],
   },
+  // Rouge sur blanc, avec le croissant et les cinq étoiles blancs dans la
+  // moitié haute. Deux bandes égales n'en disaient rien.
   singapour: {
-    type: "horizontal",
+    type: "svg",
+    svg: "singapour",
+    base: "#EF3340",
     couleurs: ["#EF3340", "#FFFFFF"],
-    parts: [1, 1],
   },
   // Bannière étoilée : treize bandes et cinquante étoiles dans un canton.
   "etats-unis": {

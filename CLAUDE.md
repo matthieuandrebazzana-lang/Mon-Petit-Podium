@@ -206,4 +206,4 @@ Mettre à jour **uniquement le fichier `docs/` concerné** par la tâche.
 
 ## 8. État d'avancement
 
-Version actuelle : 0.87.2
+Version actuelle : 0.87.3

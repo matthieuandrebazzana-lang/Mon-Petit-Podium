@@ -11,7 +11,7 @@ Ce fichier est à coller au début d'un nouveau chat Claude pour reprendre le tr
 Application web (PWA) + app native iOS. Permet à des amis de créer des championnats privés, inviter des membres via un code à 6 caractères, faire des pronostics avant chaque Grand Prix F1 en utilisant les vraies cotes bookmaker Unibet, et gagner des points selon les résultats réels.
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
-Version web actuelle : 0.87.2
+Version web actuelle : 0.87.3
 Version backend actuelle : 0.84.0
 Version iOS actuelle : 0.49.3
 
@@ -43,7 +43,7 @@ Pseudo : Reviewer
 Membre de : Team Bazzana (données réelles saison 2026)
 Mot de passe : à noter séparément
 
-## CE QUI EST FAIT — VERSION WEB (0.87.2)
+## CE QUI EST FAIT — VERSION WEB (0.87.3)
 
 Authentification email/password + Google OAuth + onboarding pseudo
 Championnats privés avec photo, code d'invitation, classement
@@ -63,10 +63,11 @@ Pages greed-f1.com/privacy, /terms, /contact
 Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
+Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
 ## CE QUI EST FAIT — VERSION iOS (0.49.3)
 
-Drapeau de Singapour (0.49.3) : `flag-singapour` n'est plus deux bandes rouge / blanc mais le vrai drapeau — croissant et cinq étoiles blancs sur la moitié rouge, tracés de `country-flag-icons/3x2/SG.svg`, rouge `#EF3340` (celui de `TeintesDrapeaux`). Corrigé côté iOS seulement : `DRAPEAUX.singapour` (web) reste en bandes, et rejouer `extraire-gp.mjs` écraserait le fichier — à corriger côté web pour réaligner (`ios/CLAUDE.md` §6).
+Drapeau de Singapour (0.49.3) : `flag-singapour` n'est plus deux bandes rouge / blanc mais le vrai drapeau — croissant et cinq étoiles blancs sur la moitié rouge, tracés de `country-flag-icons/3x2/SG.svg`, rouge `#EF3340` (celui de `TeintesDrapeaux`). Côté web, réaligné en 0.87.3.
 
 Bouton du widget « Prochain GP » de l'accueil (0.49.2) : `pronosValides` n'est plus mocké. `ProchainGrandPrix.aDesPronostics` lit en direct (RLS) s'il existe au moins un pronostic du joueur pour ce GP, relu au retour du parcours de pronostics. Ouvert + pronos → « Voir mes pronos » ; ouvert sans → « Faire mes pronos » (cotes, puis saisie) ; fermé + pronos → « Voir mes pronos » (récap) ; fermé sans → rien ; existence inconnue (chargement / échec) → aucun bouton, widget toujours tappable.
 

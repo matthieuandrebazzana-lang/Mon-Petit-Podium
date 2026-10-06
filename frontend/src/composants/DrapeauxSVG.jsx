@@ -1,11 +1,11 @@
 /**
- * Les six drapeaux dessinés — extraits de `assets/flags.svg`.
+ * Les drapeaux dessinés — extraits de `assets/flags.svg`, sauf deux (voir plus bas).
  *
  * Six pays hôtes que le CSS ne reproduisait pas honnêtement : la Malaisie et ses
  * quatorze bandes, la bannière étoilée, l'aigle mexicain, la sphère céleste
- * brésilienne, la dentelure du Qatar et le quadrillage d'Abu Dhabi. Les six
- * autres drapeaux du calendrier (Pays-Bas, Italie, Espagne, Azerbaïdjan,
- * Singapour) restent en `linear-gradient` : deux ou trois bandes franches sont
+ * brésilienne, la dentelure du Qatar et le quadrillage d'Abu Dhabi — puis le
+ * croissant et les étoiles de Singapour. Les autres drapeaux du calendrier
+ * (Pays-Bas, Italie, Espagne, Azerbaïdjan) restent en `linear-gradient` : deux ou trois bandes franches sont
  * exactement ce que le CSS sait dire, et un dessin n'y apporterait rien.
  *
  * **Extraction, jamais reproduction.** Les chemins, rectangles et polygones sont
@@ -38,7 +38,7 @@
  */
 
 /**
- * Les sept drapeaux, par slug de pays.
+ * Les huit drapeaux, par slug de pays.
  *
  * **Les clés sont des PAYS, pas des Grands Prix**, et la table le montrait
  * déjà : `las-vegas` n'y figure pas, il emprunte `etats-unis`. C'est ce qui
@@ -129,9 +129,27 @@ export const DRAPEAUX_SVG = {
     ],
   },
 
+  /* Singapour — croissant et cinq étoiles blancs sur la moitié rouge. Les
+     tracés sont ceux de `ios/…/flag-singapour.svg` (eux-mêmes repris de
+     `country-flag-icons/3x2/SG.svg`), au caractère près : deux bandes égales
+     n'en disaient rien. */
+  "singapour": {
+    viewBox: "0 0 900 600",
+    formes: [
+      { f: "#EF3340", r: [0, 0, 900, 300] },
+      { f: "#FFFFFF", r: [0, 300, 900, 300] },
+      { f: "#FFFFFF", d: "M129.7 150c0-48.8 29-90.9 70.6-109.9-3.4-.3-6.8-.5-10.2-.5-61 0-110.4 49.4-110.4 110.4s49.4 110.4 110.4 110.4c3.4 0 6.9-.2 10.2-.5-41.7-19-70.6-61.1-70.6-109.9z" },
+      { f: "#FFFFFF", d: "M260.9 90.1l16.9-12.3H257l-6.5-19.9-6.5 19.9h-20.8l16.9 12.3-6.5 19.8 16.9-12.3 16.9 12.3z" },
+      { f: "#FFFFFF", d: "M298.2 204.6l16.9-12.2h-20.9l-6.5-19.9-6.4 19.9h-20.9l16.9 12.2-6.5 19.9 16.9-12.3 16.9 12.3z" },
+      { f: "#FFFFFF", d: "M200.7 133.8l16.9-12.3h-20.9l-6.4-19.8-6.5 19.8h-20.9l16.9 12.3-6.4 19.9 16.9-12.3 16.9 12.3z" },
+      { f: "#FFFFFF", d: "M338.1 121.5h-20.9l-6.5-19.8-6.4 19.8h-20.9l16.9 12.3-6.5 19.9 16.9-12.3 16.9 12.3-6.4-19.9z" },
+      { f: "#FFFFFF", d: "M223.7 204.6l16.9-12.2h-20.9l-6.4-19.9-6.5 19.9h-20.9l16.9 12.2-6.4 19.9 16.9-12.3 16.9 12.3z" },
+    ],
+  },
+
   /* ------------------------------------------------------------------------
-     Le septième drapeau ne vient PAS de la planche — écart signalé (CLAUDE.md
-     §6), et c'est le seul du module.
+     Le Royaume-Uni ne vient PAS de la planche non plus — écart signalé
+     (CLAUDE.md §6).
 
      `assets/flags.svg` ne dessine que des pays HÔTES. Le Royaume-Uni n'en est
      pas un cette saison ; il entre ici parce qu'une NATIONALITÉ de pilote en a
