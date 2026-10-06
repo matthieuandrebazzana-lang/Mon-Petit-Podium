@@ -18,7 +18,7 @@ struct ErreurEnLigne: View {
             .font(.corps)
             // L'encre primaire : c'est la seule chose de l'écran qui demande à être relue
             // avant de continuer. 9,61:1 sur le beige.
-            .foregroundColor(.primaire)
+            .foregroundColor(.encrePrimaire)
             .fixedSize(horizontal: false, vertical: true)
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)

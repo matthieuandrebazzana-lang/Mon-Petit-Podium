@@ -122,7 +122,7 @@ struct HistoriqueGPView: View {
                         // Blanc : la teinte `primaire` de l'app disparaît sur le drapeau voilé.
                         Image(systemName: "xmark")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.encreSurAplat)
                     }
                     .accessibilityLabel(t("commun.fermer"))
                 }
@@ -208,7 +208,7 @@ struct HistoriqueGPView: View {
                 .font(.titre)
                 .tracking(Tracking.titre)
                 // Blanc sur le drapeau voilé (≥ 4,5:1 par construction) · 15,37:1 sur le beige.
-                .foregroundColor(surDrapeau ? .white : .texte)
+                .foregroundColor(surDrapeau ? .encreSurAplat : .texte)
                 .accessibilityAddTraits(.isHeader)
 
             // `grisSecondaire` tient 4,71:1 sur le beige ; le blanc à 70 % tient 4,5:1 sur
@@ -257,7 +257,7 @@ struct HistoriqueGPView: View {
         .background {
             ZStack {
                 Color.primaire
-                Damier(opacite: Materiau.damierPronostic, encre: .white)
+                Damier(opacite: Materiau.damierPronostic, encre: .encreSurAplat)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
@@ -310,11 +310,11 @@ struct HistoriqueGPView: View {
             Text(totalPoints.map(\.enPoints) ?? "—")
                 .font(.scoreLg)
                 .tracking(Tracking.scoreLg)
-                .foregroundColor(.white)              // 10,88:1 sur le bordeaux
+                .foregroundColor(.encreSurAplat)              // 10,88:1 sur le bordeaux
             if totalPoints != nil {
                 Text(t("points.unite"))
                     .font(.custom("HelveticaNeue-Medium", size: 15))
-                    .foregroundColor(.white)
+                    .foregroundColor(.encreSurAplat)
             }
         }
         .lineLimit(1)
@@ -346,7 +346,7 @@ struct HistoriqueGPView: View {
                                teintePilote: .primaire)
                 } else {
                     RoundedRectangle(cornerRadius: largeur / 2, style: .continuous)
-                        .fill(Color.white.opacity(0.12))
+                        .fill(Color.encreSurAplat.opacity(0.12))
                 }
             }
             .frame(width: largeur, height: longueur)
@@ -368,11 +368,11 @@ struct HistoriqueGPView: View {
     private func pastilleRang(_ rang: Int) -> some View {
         Text(ordinal(rang))
             .font(.custom("HelveticaNeue-Medium", size: 13))
-            .foregroundColor(.white)
+            .foregroundColor(.encreSurAplat)
             .lineLimit(1)
             .padding(.vertical, 2)
             .padding(.horizontal, 8)
-            .background(Color.white.opacity(0.15))
+            .background(Color.encreSurAplat.opacity(0.15))
             .clipShape(Capsule())
     }
 
@@ -496,7 +496,7 @@ private struct PointsPagination: View {
 
     // Le point actif porte le sens : blanc plein sur le drapeau, `primaire` sur le beige
     // (8,6:1). Les autres ne font que compter.
-    private var encreActive: Color { surDrapeau ? .white : .primaire }
+    private var encreActive: Color { surDrapeau ? .encreSurAplat : .encrePrimaire }
     private var encreInactive: Color { surDrapeau ? .encreGraphique : .secondaire.opacity(0.25) }
 }
 
@@ -535,7 +535,7 @@ private struct CarteCarrousel: View {
                         .font(.custom("HelveticaNeue", size: 11))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Color.black.opacity(0.25))
+                        .background(Color.voile.opacity(0.25))
                         .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
                 }
                 Spacer(minLength: 8)
@@ -573,7 +573,7 @@ private struct CarteCarrousel: View {
                 .ombreTexteDrapeau()
             }
         }
-        .foregroundColor(.white)
+        .foregroundColor(.encreSurAplat)
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background { fond }
@@ -608,7 +608,7 @@ private struct CarteCarrousel: View {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .foregroundColor(.white.opacity(0.30))
+                        .foregroundColor(.encreSurAplat.opacity(0.30))
                         .padding(36)
                 }
                 .overlay {
@@ -616,12 +616,12 @@ private struct CarteCarrousel: View {
                         // Nu en haut, voilé sous le nom : le voile plein est atteint avant
                         // la première ligne de texte du bas (≈ 58 % de la hauteur).
                         LinearGradient(stops: [
-                            .init(color: .black.opacity(0), location: 0.30),
-                            .init(color: .black.opacity(voile), location: 0.56),
-                            .init(color: .black.opacity(voile), location: 1),
+                            .init(color: .voile.opacity(0), location: 0.30),
+                            .init(color: .voile.opacity(voile), location: 0.56),
+                            .init(color: .voile.opacity(voile), location: 1),
                         ], startPoint: .top, endPoint: .bottom)
                     } else {
-                        Color.black.opacity(voile)
+                        Color.voile.opacity(voile)
                     }
                 }
                 .clipped()
@@ -661,7 +661,7 @@ private struct PastilleCarte: ViewModifier {
             content
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(Color.black.opacity(voile))
+                .background(Color.voile.opacity(voile))
                 .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
         } else {
             content.ombreTexteDrapeau()
@@ -732,7 +732,7 @@ struct FondDrapeauFlou: View {
                     // `opaque` : sans lui le flou ronge les bords en transparence.
                     .blur(radius: rayonFlou, opaque: true)
             }
-            .overlay { Color.black.opacity(ApparenceDrapeau.voileEncreSecondaire(pour: slug) ?? 0.4) }
+            .overlay { Color.voile.opacity(ApparenceDrapeau.voileEncreSecondaire(pour: slug) ?? 0.4) }
             .clipped()
     }
 }
@@ -879,7 +879,7 @@ struct ContenuDetailGrandPrix: View {
             Text(gp.fiche?.nom ?? gp.nom)
                 .font(.titreLg)
                 .tracking(Tracking.titreLg)
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
@@ -904,7 +904,7 @@ struct ContenuDetailGrandPrix: View {
                         .font(.custom("HelveticaNeue-Medium", size: 15))
                 }
             }
-            .foregroundColor(.white)
+            .foregroundColor(.encreSurAplat)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(tp("classement.a11y.points", gp.totalPoints ?? 0))
 
@@ -912,15 +912,15 @@ struct ContenuDetailGrandPrix: View {
 
             Text(tp("historique.reussisSur", gp.pronostics.count, gp.reussis))
                 .font(.custom("HelveticaNeue", size: 14))
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
                 .accessibilityLabel(tp("historique.a11y.reussisSur", gp.pronostics.count, gp.reussis))
 
             if gp.provisoire {
                 Spacer().frame(height: 10)
-                MentionProvisoire(encre: .white)
+                MentionProvisoire(encre: .encreSurAplat)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.15))
+                    .background(Color.encreSurAplat.opacity(0.15))
                     .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
             }
         }
@@ -1157,13 +1157,13 @@ struct CarteVerdict: View {
 
     private var encreIcone: Color {
         switch etat {
-        case .gagne, .perdu: return .white
+        case .gagne, .perdu: return .encreSurAplat
         case .enAttente, .nonEvaluable: return .grisSecondaire
         }
     }
 
     private var encrePoints: Color {
-        etat == .gagne ? .vertSauge : .grisSecondaire
+        etat == .gagne ? .encreSucces : .grisSecondaire
     }
 
     private var libelleEtat: String {
@@ -1245,13 +1245,13 @@ private struct CarteGrandPrixJoue: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(gp.fiche?.nom ?? gp.nom)
                             .font(.custom("HelveticaNeue-Medium", size: 18))
-                            .foregroundColor(.white)
+                            .foregroundColor(.encreSurAplat)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
                             .ombreTexteDrapeau()
                         Text(gp.fiche?.dateAffichee ?? "")
                             .font(.custom("HelveticaNeue", size: 13))
-                            .foregroundColor(.white)
+                            .foregroundColor(.encreSurAplat)
                             .lineLimit(1)
                             .ombreTexteDrapeau()
                     }
@@ -1265,7 +1265,7 @@ private struct CarteGrandPrixJoue: View {
                 HStack(alignment: .lastTextBaseline, spacing: 12) {
                     Text(tp("historique.reussisSur", gp.pronostics.count, gp.reussis))
                         .font(.custom("HelveticaNeue-Medium", size: 14))
-                        .foregroundColor(.white)
+                        .foregroundColor(.encreSurAplat)
                         .lineLimit(1)
                         .ombreTexteDrapeau()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1274,10 +1274,10 @@ private struct CarteGrandPrixJoue: View {
                         Text(gp.totalPoints.map(\.enPoints) ?? "—")
                             .font(.custom("HelveticaNeue-Medium", size: 34))
                             .tracking(-0.85)              // grand chiffre : −0,025em × 34
-                            .foregroundColor(.white)
+                            .foregroundColor(.encreSurAplat)
                         Text(t("points.unite"))
                             .font(.custom("HelveticaNeue", size: 14))
-                            .foregroundColor(.white)
+                            .foregroundColor(.encreSurAplat)
                     }
                     .fixedSize()
                     .ombreTexteDrapeau()
@@ -1286,7 +1286,7 @@ private struct CarteGrandPrixJoue: View {
 
             Image(systemName: "chevron.down")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
                 .rotationEffect(.degrees(ouvert ? 180 : 0))
                 .frame(width: 16)
                 .accessibilityHidden(true)
@@ -1307,11 +1307,11 @@ private struct CarteGrandPrixJoue: View {
     private var badgeStatut: some View {
         Text(gp.provisoire ? StatutResultats.mention : EtatGp.termine.libelle)
             .font(.custom("HelveticaNeue", size: 11))
-            .foregroundColor(.white)
+            .foregroundColor(.encreSurAplat)
             .lineLimit(1)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(Color.white.opacity(0.20))
+            .background(Color.encreSurAplat.opacity(0.20))
             .clipShape(RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous))
             .fixedSize()
     }
@@ -1341,10 +1341,10 @@ private struct CarteGrandPrixJoue: View {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .foregroundColor(.white.opacity(0.30))
+                        .foregroundColor(.encreSurAplat.opacity(0.30))
                         .padding(.vertical, 20)
                 }
-                .overlay { Color.black.opacity(0.25) }
+                .overlay { Color.voile.opacity(0.25) }
                 .clipped()
                 .accessibilityHidden(true)
         } else {
@@ -1426,7 +1426,7 @@ private struct DetailPronosGP: View {
 /// le texte de la carte est plus grand, et le drapeau couvre toute la surface.
 private extension View {
     func ombreTexteDrapeau() -> some View {
-        self.shadow(color: .black.opacity(0.6), radius: 4, x: 0, y: 2)
+        self.shadow(color: .voile.opacity(0.6), radius: 4, x: 0, y: 2)
     }
 }
 

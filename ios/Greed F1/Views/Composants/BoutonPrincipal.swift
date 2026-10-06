@@ -11,7 +11,7 @@ extension View {
     func habillageBoutonPrincipal(actif: Bool) -> some View {
         self
             .font(.custom("HelveticaNeue-Medium", size: 18))
-            .foregroundColor(actif ? .white : .secondaire)
+            .foregroundColor(actif ? .encreSurAplat : .secondaire)
             .frame(maxWidth: .infinity)
             .frame(height: 56)              // > 44 pt, contrainte tactile iOS
             .background(actif ? Color.primaire : Color.secondaire.opacity(0.22))

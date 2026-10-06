@@ -49,7 +49,7 @@ struct BarreNavigation: View {
                 .tabItem { Label(t("onglet.profil"), image: "icone-profil") }
                 .tag(Onglet.profil)
         }
-        .tint(.primaire)
+        .tint(.encrePrimaire)
         // La voiture du compte connecté, pour les écrans qui peignent le classement :
         // ``AuthViewModel`` en est la seule source (``Membre/avecVoiture(de:)``).
         .environment(\.monProfil, viewModel.profil)
@@ -67,7 +67,7 @@ struct BarreNavigation: View {
     /// > **Inerte sous iOS 26.** Le « Liquid Glass » y reprend la main sur toute la barre :
     /// > mesuré au simulateur iPhone 17 Pro / iOS 26.5, le fond reste `#FEFAF7` et l'encre
     /// > inactive `#1C1815` (17:1) quoi qu'on demande ici — `unselectedItemTintColor` est
-    /// > ignoré de même. Seul `.tint(.primaire)` passe (actif mesuré à **11,33:1**).
+    /// > ignoré de même. Seul `.tint(.encrePrimaire)` passe (actif mesuré à **11,33:1**).
     /// > Ce bloc ne sert donc qu'aux versions **iOS 17 et 18**, où le gris système par défaut
     /// > tombe à ~2,5:1 sur ce fond clair. Il n'y est pas vérifié : aucun runtime antérieur
     /// > n'est installé.
@@ -93,10 +93,12 @@ struct BarreNavigation: View {
     /// **L'inactif est `grisSecondaire` (#6B6B6B), pas le gris système.** Sur le beige
     /// `#F5F0EB` le gris d'iOS mesure **2,52:1** — sous le plancher de 4,5:1 du libellé
     /// comme sous celui de 3:1 de l'icône. `#6B6B6B` y tient **4,71:1**.
-    /// L'actif `#800111` y tient **9,61:1**.
+    /// L'actif `#800111` y tient **9,61:1**. Les deux sont des jetons dynamiques : en
+    /// sombre, `#AEAEB2` et `#FF6961` (``Color/encrePrimaire``), le fond suivant
+    /// ``Color/fondPrincipal``.
     private static func habiller(_ agencement: UITabBarItemAppearance) {
         let inactif = UIColor(Color.grisSecondaire)
-        let actif = UIColor(Color.primaire)
+        let actif = UIColor(Color.encrePrimaire)
 
         agencement.normal.iconColor = inactif
         agencement.normal.titleTextAttributes = [

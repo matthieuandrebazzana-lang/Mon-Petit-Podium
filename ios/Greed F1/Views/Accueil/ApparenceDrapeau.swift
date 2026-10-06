@@ -69,10 +69,10 @@ struct ApparenceDrapeau {
             >= Self.contrasteCible
 
         self.voile = voile
-        self.encreDouce = douxTient ? .white.opacity(0.70) : .white
+        self.encreDouce = douxTient ? .encreSurAplat.opacity(0.70) : .encreSurAplat
         self.encreDouceGrasse = !douxTient
-        self.pastille = surfacesClaires ? .white.opacity(0.20) : .black.opacity(0.25)
-        self.surface = surfacesClaires ? .white.opacity(0.12) : .black.opacity(0.20)
+        self.pastille = surfacesClaires ? .encreSurAplat.opacity(0.20) : .voile.opacity(0.25)
+        self.surface = surfacesClaires ? .encreSurAplat.opacity(0.12) : .voile.opacity(0.20)
         self.ombreNom = couleurs.count > 1
     }
 

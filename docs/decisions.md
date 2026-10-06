@@ -935,3 +935,46 @@ une seule plateforme.
   reste dans la notification.
 - Un seul processus porte le scheduler ; à plusieurs instances, la clé primaire empêcherait
   encore le doublon.
+
+## 26. Mode sombre par jetons dynamiques, et un écran de réglages centralisé
+
+**Décision.** L'app iOS (`0.50.0`) a un mode sombre. Toutes les couleurs passent par les
+jetons de `Config/Couleurs.swift`, déclarés en `Color(clair:sombre:)` sur
+`UIColor(dynamicProvider:)` ; aucune vue ne contient plus de `.white`, `.black` ou de
+littéral. Palette sombre : fond `#1C1C1E`, surfaces `#2C2C2E`, texte `#FFFFFF`, texte
+secondaire `#EBEBF0`, rouge `#C0182A` (tableau complet : `docs/swift-app.md` §4.2 bis).
+
+`Config/ThemeManager.swift` (`@Observable` + `ObservableObject`, comme `LanguageManager`)
+porte la préférence Automatique / Clair / Sombre, enregistrée dans `UserDefaults`
+(`apparenceInterface`, absente = automatique), et la pose par
+`overrideUserInterfaceStyle` sur toutes les fenêtres, en fondu croisé de 0,25 s
+(`Mouvement.basculeApparence`).
+
+`ReglagesView` (poussée par l'engrenage de `ProfilView`) regroupe apparence, langue,
+notifications (ouvre `openNotificationSettingsURLString`), déconnexion, suppression du
+compte et version. Le bloc « Paramètres » du profil et ses boutons de compte sont retirés.
+
+**Écarts à la demande, mesurés.**
+- `#C0182A` reste l'**aplat** de `primaire` (blanc dessus 6,17:1), mais il ne tient que
+  **2,76:1** en texte sur le fond sombre et **2,26:1** sur une surface. Un jeton
+  `encrePrimaire` (`#FF6961`, 6,03:1 · 4,94:1) porte le rouge en texte et en trait.
+- `grisSecondaire` passe à `#AEAEB2`, pas `#EBEBF0` : il se serait confondu avec le texte
+  blanc. `#6B6B6B` n'y tenait que 3,19:1.
+- Les teintes de championnat gardent leur couleur, avec un filet blanc à 10 % en sombre.
+
+**Raison.** Une couleur dynamique est résolue par le système à chaque rendu, y compris
+par UIKit (barre d'onglets, alertes) : un jeton suffit, sans `colorScheme` lu écran par
+écran, qui divergerait au premier oubli. L'override de fenêtre plutôt que
+`.preferredColorScheme` : une fois un mode forcé, `.preferredColorScheme(nil)` ne rend pas
+toujours la main au système, et il ne couvre pas UIKit. Un fondu plutôt qu'un changement
+instantané : un saut de luminosité sur tout l'écran est brutal, et un fondu ne déplace
+rien, donc il reste sous « Réduire les animations ». Réglages poussés plutôt qu'en
+feuille : c'est le geste de l'app Réglages d'iOS, et la pile du Profil existe déjà.
+
+**Écarté.** *Couleurs du catalogue d'assets* : un second propriétaire de la palette, hors
+du code qui documente les contrastes. *`.preferredColorScheme` seul* : retour à
+« Automatique » peu fiable. *Interrupteur de notifications dans l'app* : déjà écarté au
+§25, les Réglages d'iOS en tiennent lieu. *Tout passer en jetons dynamiques, pastilles sur
+drapeau comprises* : la pastille « Terminé » serait devenue un vert sauge à 2,87:1 sur
+`#2C2C2E` ; ce qui est posé sur une image fixe garde les valeurs claires (`…Fixe`).
+

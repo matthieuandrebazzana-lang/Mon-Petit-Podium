@@ -7,6 +7,8 @@ struct GreedF1App: App {
     @StateObject private var authViewModel = AuthViewModel()
     /// Langue de l'interface — injectée ici, lue par ``t(_:)`` partout (`LanguageManager`).
     @StateObject private var langues = LanguageManager.shared
+    /// Apparence forcée ou automatique — posée sur les fenêtres (`ThemeManager`).
+    @StateObject private var theme = ThemeManager.shared
 
     init() {
         BarreNavigation.appliquerApparence()
@@ -33,10 +35,15 @@ struct GreedF1App: App {
             }
             // Réveil de Railway dès le lancement, sans attendre la réponse : le temps
             // d'atteindre un écran qu'il sert, le service est levé (docs/swift-app.md §3.1).
-            .onAppear { APIClient.partage.reveiller() }
+            .onAppear {
+                APIClient.partage.reveiller()
+                // La fenêtre existe maintenant : le choix enregistré peut s'y poser.
+                theme.appliquer()
+            }
             // Les notifications partent dans la langue enregistrée avec le jeton.
             .onChange(of: langues.langue) { NotificationsPush.partage.langueChangee() }
             .environmentObject(langues)
+            .environmentObject(theme)
             // Les formats système (dates, nombres) suivent la langue choisie, pas le téléphone.
             .environment(\.locale, langues.locale)
         }

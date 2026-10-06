@@ -271,7 +271,7 @@ private struct RangeeSeance: View {
                     if imminente {
                         Text(t("detailGP.bientot"))
                             .font(.custom("HelveticaNeue-Medium", size: 11))
-                            .foregroundColor(.texte)    // 7,86:1 sur ambre
+                            .foregroundColor(.encreSurClair)  // 7,86:1 sur ambre
                             .padding(.horizontal, 8)
                             .padding(.vertical, 2)
                             .background(Color.accent)
@@ -340,7 +340,7 @@ private struct CaseStat: View {
             Text(valeur)
                 .font(.custom("HelveticaNeue-Medium", size: 22).monospacedDigit())
                 .tracking(-0.44)
-                .foregroundColor(.primaire)             // 12,21:1 sur blanc
+                .foregroundColor(.encrePrimaire)             // 12,21:1 sur blanc
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 

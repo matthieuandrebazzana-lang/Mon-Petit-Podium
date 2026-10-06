@@ -29,7 +29,7 @@ struct ConnexionView: View {
                             .font(.custom("Helvetica Neue", size: 16))
                             .fontWeight(.medium)
                     }
-                    .foregroundColor(.primaire)
+                    .foregroundColor(.encrePrimaire)
                 }
                 .padding(.leading, 32)
                 .padding(.top, 16)
@@ -47,7 +47,7 @@ struct ConnexionView: View {
                 Text(t("connexion.titre"))
                     .font(.custom("Helvetica Neue", size: 36))
                     .fontWeight(.bold)
-                    .foregroundColor(.black)
+                    .foregroundColor(.texte)
                     .padding(.horizontal, 32)
                 
                 Spacer()
@@ -74,7 +74,7 @@ struct ConnexionView: View {
                             .overlay(
                                 Rectangle()
                                     .frame(height: 1)
-                                    .foregroundColor(.gray.opacity(0.3)),
+                                    .foregroundColor(.grisSecondaire),
                                 alignment: .bottom
                             )
                     }
@@ -95,7 +95,7 @@ struct ConnexionView: View {
                             .overlay(
                                 Rectangle()
                                     .frame(height: 1)
-                                    .foregroundColor(.gray.opacity(0.3)),
+                                    .foregroundColor(.grisSecondaire),
                                 alignment: .bottom
                             )
                     }
@@ -108,21 +108,21 @@ struct ConnexionView: View {
                         } label: {
                             Text(t("connexion.oublie"))
                                 .font(.custom("Helvetica Neue", size: 14))
-                                .foregroundColor(.primaire)
+                                .foregroundColor(.encrePrimaire)
                         }
                     }
                 }
                 .padding(24)
-                .background(Color.white)
+                .background(Color.surface)
                 .cornerRadius(16)
-                .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 2)
+                .shadow(color: Color.encreOmbre.opacity(0.05), radius: 10, x: 0, y: 2)
                 .padding(.horizontal, 32)
                 
                 // Message d'erreur
                 if let erreur = viewModel.messageErreur {
                     Text(erreur)
                         .font(.custom("Helvetica Neue", size: 14))
-                        .foregroundColor(.red)
+                        .foregroundColor(.encrePrimaire)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                         .padding(.top, 16)
@@ -139,14 +139,14 @@ struct ConnexionView: View {
                 } label: {
                     if viewModel.estEnChargement {
                         ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .progressViewStyle(CircularProgressViewStyle(tint: .encreSurAplat))
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
                     } else {
                         Text(t("connexion.seConnecter"))
                             .font(.custom("Helvetica Neue", size: 18))
                             .fontWeight(.semibold)
-                            .foregroundColor(.white)
+                            .foregroundColor(.encreSurAplat)
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
                     }
@@ -163,11 +163,11 @@ struct ConnexionView: View {
                 // ordre par défaut) : le séparateur annonce ce bouton-ci, posé après le
                 // formulaire email/mot de passe.
                 HStack(spacing: 10) {
-                    Rectangle().fill(Color.gray.opacity(0.15)).frame(height: 1)
+                    Rectangle().fill(Color.secondaire.opacity(0.15)).frame(height: 1)
                     Text(t("connexion.ouContinuer"))
                         .font(.custom("Helvetica Neue", size: 13))
                         .foregroundColor(.grisSecondaire)
-                    Rectangle().fill(Color.gray.opacity(0.15)).frame(height: 1)
+                    Rectangle().fill(Color.secondaire.opacity(0.15)).frame(height: 1)
                 }
                 .padding(.horizontal, 32)
 
@@ -191,16 +191,16 @@ struct ConnexionView: View {
                         Text(t("auth.google"))
                             .font(.custom("Helvetica Neue", size: 16))
                             .fontWeight(.medium)
-                            .foregroundColor(.black)
+                            .foregroundColor(.texte)
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
                 }
-                .background(Color.white)
+                .background(Color.surface)
                 .cornerRadius(24)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.gray.opacity(0.25), lineWidth: 1)
+                        .stroke(Color.secondaire.opacity(0.25), lineWidth: 1)
                 )
                 .disabled(viewModel.estEnChargement)
                 .padding(.horizontal, 32)
@@ -213,7 +213,7 @@ struct ConnexionView: View {
                 } label: {
                     Text(.init(t("connexion.pasDeCompte")))
                         .font(.custom("Helvetica Neue", size: 16))
-                        .foregroundColor(.black)
+                        .foregroundColor(.texte)
                         .frame(maxWidth: .infinity)
                 }
                 .padding(.bottom, 32)

@@ -336,8 +336,8 @@ private struct CarteGrandPrixSaison: View {
                     .scaledToFill()
 
                 LueurHaute()
-                Color.black.opacity(apparence.voile)
-                Color.black.opacity(0.15)
+                Color.voile.opacity(apparence.voile)
+                Color.voile.opacity(0.15)
             }
         } else {
             // Pays hors table : l'aplat de la marque, et aucun assombrissement — il n'a ni
@@ -378,7 +378,7 @@ private struct CarteGrandPrixSaison: View {
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
-            .foregroundColor(.white.opacity(0.60))
+            .foregroundColor(.encreSurAplat.opacity(0.60))
             .padding(.horizontal, 32)
             .padding(.vertical, 20)
             .allowsHitTesting(false)
@@ -439,7 +439,7 @@ private struct CarteGrandPrixSaison: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(grandPrix.nom)
                     .font(.custom("HelveticaNeue-Medium", size: 16))
-                    .foregroundColor(.white)
+                    .foregroundColor(.encreSurAplat)
                     .ombreTexte()
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -467,7 +467,7 @@ private struct CarteGrandPrixSaison: View {
             Text(grandPrix.jour)
                 .font(.custom("HelveticaNeue-Medium", size: 64))
                 .tracking(-1.92)                              // −0,03em × 64
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
                 .ombreTexte()
                 .lineLimit(1)
                 .fixedSize()
@@ -496,7 +496,7 @@ private struct CarteGrandPrixSaison: View {
         if let action {
             Text(action)
                 .font(.custom("HelveticaNeue-Medium", size: 15))
-                .foregroundColor(.vertSauge)       // 4,86:1 sur blanc
+                .foregroundColor(.encreSucces)       // 4,86:1 sur blanc · sombre 6,92:1
                 .frame(maxWidth: .infinity)
                 .frame(height: hauteurBande)
                 .background(Color.surface)
@@ -528,7 +528,7 @@ private struct CarteGrandPrixSaison: View {
 /// divergent pas.
 private extension View {
     func ombreTexte() -> some View {
-        self.shadow(color: .black.opacity(0.45), radius: 1.5, y: 1)
+        self.shadow(color: .voile.opacity(0.45), radius: 1.5, y: 1)
     }
 }
 
@@ -560,9 +560,10 @@ enum EtatGp {
     }
 
     /// Fond de la pastille. Blanc partout sauf sur « Pronos ouverts » — voir
-    /// ``CarteGrandPrixSaison/pastilleEtat``.
+    /// ``CarteGrandPrixSaison/pastilleEtat``. **Les mêmes dans les deux modes** : la
+    /// pastille est posée sur le drapeau, qui ne change pas d'apparence (jetons `…Fixe`).
     var fondPastille: Color {
-        self == .ouvert ? .accent : .surface
+        self == .ouvert ? .accent : .surfaceFixe
     }
 
     /// Encre de la pastille, mesurée sur son fond : vert sauge **4,86:1**, rouge de la
@@ -570,9 +571,9 @@ enum EtatGp {
     var encrePastille: Color {
         switch self {
         case .termine: return .vertSauge
-        case .ferme: return .primaire
-        case .ouvert: return .texte
-        case .aVenir: return .secondaire
+        case .ferme: return .primaireFixe
+        case .ouvert: return .encreSurClair
+        case .aVenir: return .secondaireFixe
         }
     }
 

@@ -57,8 +57,14 @@ struct SolPiste: View {
     /// ``PlancheSVG`` ne lit que `fill` : l'opacité passe donc par la substitution d'encre,
     /// qui est le mécanisme prévu pour ça. Sans elle, la ligne médiane sortirait en
     /// `#1d1d1b` plein et se lirait comme un rail.
+    ///
+    /// **Le sol suit l'apparence** : son `#f4efea` est le beige de l'app, et il passe derrière
+    /// l'en-tête de ``ChampionnatDetailView`` — il devient donc ``Color/fondPrincipal``, et
+    /// les scores posés dessus en `texte` restent lisibles dans les deux modes. Les kerbs
+    /// rouges ne bougent pas.
     private static let substitutions: [String: Color] = [
-        "#1d1d1b": Color(hexadecimal: 0x1D1D1B).opacity(0.11)
+        "#1d1d1b": .ligneMedianePiste,
+        "#f4efea": .fondPrincipal
     ]
 
     var body: some View {
@@ -207,7 +213,7 @@ struct VuePisteView: View {
                 Text(championnat.nom)
                     .font(.custom("HelveticaNeue-Medium", size: 22))
                     .tracking(-0.44)                          // `-0,02 × 22`, la règle des titres
-                    .foregroundColor(.white)                  // ≥ 10,35:1 sur les six teintes
+                    .foregroundColor(.encreSurAplat)                  // ≥ 10,35:1 sur les six teintes
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .accessibilityAddTraits(.isHeader)
@@ -265,7 +271,7 @@ struct VuePisteView: View {
                 Text(t("championnat.classement"))
                     .font(.custom("HelveticaNeue-Medium", size: 13))
             }
-            .foregroundColor(.white)                      // ≥ 10,35:1 sur les six teintes
+            .foregroundColor(.encreSurAplat)                      // ≥ 10,35:1 sur les six teintes
             .padding(.horizontal, 16)
             .frame(height: 44)
             .contentShape(Rectangle())

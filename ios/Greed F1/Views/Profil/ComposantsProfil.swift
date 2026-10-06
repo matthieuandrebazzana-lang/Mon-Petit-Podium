@@ -45,7 +45,7 @@ struct PastilleProfil: View {
         fond.overlay {
             Text(pseudo.first.map { String($0).uppercased() } ?? "?")
                 .font(.custom("HelveticaNeue-Medium", size: taille * 0.40625))
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
         }
     }
 }
@@ -94,7 +94,7 @@ struct EnteteProfil<Avatar: View>: View {
                 Text(pseudo)
                     .font(.custom("HelveticaNeue-Medium", size: 22))
                     .tracking(-0.44)                      // -0,02 em, la règle des titres
-                    .foregroundColor(.white)              // 10,88:1 sur #800111
+                    .foregroundColor(.encreSurAplat)              // 10,88:1 sur #800111
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
@@ -177,7 +177,7 @@ struct BlocStatistiques: View {
                 .opacity(0.45)
                 .overlay {
                     ProgressView()
-                        .tint(.primaire)
+                        .tint(.encrePrimaire)
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(t("profil.a11y.chargementStats"))
@@ -207,7 +207,7 @@ struct GrilleStatistiques: View {
                     Text(statistique.valeur)
                         .font(.score)
                         .tracking(Tracking.score)
-                        .foregroundColor(.primaire)       // 12,60:1 sur le blanc
+                        .foregroundColor(.encrePrimaire)       // 12,60:1 sur le blanc
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
 
@@ -244,7 +244,7 @@ struct TuileDrapeauDamier: View {
     var body: some View {
         Image("icone-drapeau-damier")
             .renderingMode(.template)
-            .foregroundColor(.white)              // 10,88:1 sur #800111
+            .foregroundColor(.encreSurAplat)              // 10,88:1 sur #800111
             .frame(width: 44, height: 44)
             .background(Color.primaire)
             .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
@@ -305,5 +305,22 @@ extension StatsProfil {
     static func sousTitreGrandsPrix(joues: Int?) -> String {
         guard let joues, joues > 0 else { return t("commun.saison2026") }
         return tp("profil.gpJouesSaison", joues)
+    }
+}
+
+/// Titre d'un bloc blanc — profil, réglages. L'encre est `grisSecondaire`, jamais
+/// `texteDoux` : sur le blanc, #999999 ne vaut que 2,85:1 — sous le plancher de 4,5:1
+/// d'un texte de 11 pt. En sombre, `#AEAEB2` sur `#2C2C2E` : 6,30:1.
+struct TitreDeBloc: View {
+    let texte: String
+
+    var body: some View {
+        Text(texte)
+            .font(.label)
+            .tracking(Tracking.label)
+            .textCase(.uppercase)
+            .foregroundColor(.grisSecondaire)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
     }
 }

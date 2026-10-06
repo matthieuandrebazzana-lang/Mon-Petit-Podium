@@ -81,7 +81,7 @@ struct SelecteurSegmente<Valeur: Hashable>: View {
             Text(libelle)
                 .font(.segment)
                 .tracking(Tracking.segment)
-                .foregroundColor(actif ? .white : .encreSegmentInactif)
+                .foregroundColor(actif ? .encreSurAplat : .encreSegmentInactif)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
                 .frame(height: hauteur)

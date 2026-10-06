@@ -116,7 +116,7 @@ struct LandingView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)
             }
-            .background(Color.white)
+            .background(Color.surface)
             .clipShape(Capsule())
 
             separateurOu
@@ -124,7 +124,7 @@ struct LandingView: View {
             NavigationLink {
                 InscriptionView(viewModel: viewModel)
             } label: {
-                LibelleBouton(texte: t("landing.creerCompte"), encre: .white)
+                LibelleBouton(texte: t("landing.creerCompte"), encre: .encreSurAplat)
                     .background(Color.primaire)
                     .clipShape(Capsule())
             }
@@ -132,15 +132,15 @@ struct LandingView: View {
             NavigationLink {
                 ConnexionView(viewModel: viewModel)
             } label: {
-                LibelleBouton(texte: t("landing.dejaCompte"), encre: .primaire)
-                    .background(Color.white)
+                LibelleBouton(texte: t("landing.dejaCompte"), encre: .encrePrimaire)
+                    .background(Color.surface)
                     .clipShape(Capsule())
             }
 
             if let erreur = viewModel.messageErreur {
                 Text(erreur)
                     .font(.custom("HelveticaNeue", size: 13))
-                    .foregroundColor(.primaire)
+                    .foregroundColor(.encrePrimaire)
                     .multilineTextAlignment(.center)
             }
         }

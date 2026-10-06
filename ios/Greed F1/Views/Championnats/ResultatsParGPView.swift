@@ -97,7 +97,7 @@ struct ResultatsParGPView: View {
             Text(t("championnat.resultatsParGP"))
                 .font(.titre)
                 .tracking(Tracking.titre)
-                .foregroundColor(.white)                  // 10,88:1 sur `primaire`
+                .foregroundColor(.encreSurAplat)                  // 10,88:1 sur `primaire`
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
@@ -140,7 +140,7 @@ struct ResultatsParGPView: View {
                     .font(.custom("HelveticaNeue-Medium", size: 17))
                     .lineLimit(1)
             }
-            .foregroundColor(.white)
+            .foregroundColor(.encreSurAplat)
             .frame(minWidth: 44, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -239,7 +239,7 @@ struct ResultatsParGPView: View {
             Text(gp.libelleCourt)
                 .font(.custom(actif ? "HelveticaNeue-Medium" : "HelveticaNeue", size: 16))
                 // Actif : blanc sur `primaire`, 10,88:1. Inactif : 5,33:1 sur le blanc.
-                .foregroundColor(actif ? .white : .grisSecondaire)
+                .foregroundColor(actif ? .encreSurAplat : .grisSecondaire)
                 .lineLimit(1)
                 .padding(.horizontal, 18)
                 .frame(minHeight: 44)
@@ -406,7 +406,7 @@ private struct LigneParisMembre: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 (Text(membre.pseudo).foregroundColor(.texte)          // 15,37:1
-                 + Text(estMoi ? t("parGP.toi") : "").foregroundColor(.primaire))
+                 + Text(estMoi ? t("parGP.toi") : "").foregroundColor(.encrePrimaire))
                     .font(.custom("HelveticaNeue-Medium", size: 16))
                     .lineLimit(1)
 
@@ -433,7 +433,7 @@ private struct LigneParisMembre: View {
         VStack(alignment: .trailing, spacing: 2) {
             Text(formaterPoints(juge ? membre.totalPoints : membre.potentiel))
                 .font(.custom("HelveticaNeue-Medium", size: 18))
-                .foregroundColor(.primaire)                           // 10,88:1 sur le blanc
+                .foregroundColor(.encrePrimaire)                           // 10,88:1 sur le blanc
                 .lineLimit(1)
             Text(juge ? t("parGP.gagnes") : t("parGP.enJeu"))
                 .font(.labelSm)
@@ -500,7 +500,7 @@ private struct RangeePronostic: View {
                  ? t("parGP.nonEvaluable")
                  : formaterPoints(juge ? pronostic.pointsGagnes : pronostic.points))
                 .font(.custom("HelveticaNeue-Medium", size: 12))
-                .foregroundColor(juge ? .white : .secondaire)
+                .foregroundColor(juge ? .encreSurAplat : .secondaire)
                 .lineLimit(1)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)

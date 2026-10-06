@@ -268,7 +268,7 @@ private struct Avatar: View {
             .overlay {
                 Text(pseudo.first.map { String($0).uppercased() } ?? "?")
                     .font(.custom("HelveticaNeue-Medium", size: 18))
-                    .foregroundColor(.white)      // 10,88:1 sur #800111
+                    .foregroundColor(.encreSurAplat)      // 10,88:1 sur #800111
             }
     }
 }
@@ -486,8 +486,8 @@ private struct WidgetGrandPrix: View {
                     .scaledToFill()
 
                 LueurHaute()
-                Color.black.opacity(apparence.voile)
-                Color.black.opacity(0.15)
+                Color.voile.opacity(apparence.voile)
+                Color.voile.opacity(0.15)
             }
         } else {
             // Pays hors table : l'aplat de la marque, et aucun assombrissement — il n'a ni
@@ -527,7 +527,7 @@ private struct WidgetGrandPrix: View {
     private func bouton(_ libelle: String) -> some View {
         Text("\(libelle) →")
             .font(.custom("HelveticaNeue-Medium", size: 15))
-            .foregroundColor(.primaire)
+            .foregroundColor(.encrePrimaire)
             .lineLimit(1)
             .frame(maxWidth: .infinity)
             .frame(height: 44)
@@ -541,12 +541,12 @@ private struct WidgetGrandPrix: View {
                 .font(.labelSm)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
                 .lineLimit(1)
                 .fixedSize()
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(apparence?.pastille ?? Color.white.opacity(0.20))
+                .background(apparence?.pastille ?? Color.encreSurAplat.opacity(0.20))
                 .clipShape(Capsule())
 
             if etat == .termine && StatutResultats.estProvisoire(grandPrix.statutResultats) {
@@ -556,12 +556,12 @@ private struct WidgetGrandPrix: View {
                     .font(.labelSm)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)
-                    .foregroundColor(.white)
+                    .foregroundColor(.encreSurAplat)
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(apparence?.pastille ?? Color.white.opacity(0.20))
+                    .background(apparence?.pastille ?? Color.encreSurAplat.opacity(0.20))
                     .clipShape(Capsule())
             }
 
@@ -604,7 +604,7 @@ private struct WidgetGrandPrix: View {
         Text(grandPrix.nomAffiche)
             .font(.custom("HelveticaNeue-Medium", size: 26))
             .tracking(-0.52)                              // −0,02em × 26
-            .foregroundColor(.white)
+            .foregroundColor(.encreSurAplat)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .ombrePortee(apparence?.ombreNom ?? false)
@@ -627,7 +627,7 @@ private struct WidgetGrandPrix: View {
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
-            .foregroundColor(.white.opacity(0.60))
+            .foregroundColor(.encreSurAplat.opacity(0.60))
             .frame(maxWidth: .infinity)
             .frame(height: hauteurTrace)
             .padding(.horizontal, -rembourrage)
@@ -664,14 +664,14 @@ private struct WidgetGrandPrix: View {
 
             Text(valeur)
                 .font(.custom("HelveticaNeue-Medium", size: 15))
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(apparence?.surface ?? Color.white.opacity(0.12))
+        .background(apparence?.surface ?? Color.encreSurAplat.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
     }
 
@@ -684,7 +684,7 @@ private struct WidgetGrandPrix: View {
 private extension View {
     @ViewBuilder func ombrePortee(_ active: Bool) -> some View {
         if active {
-            self.shadow(color: .black.opacity(0.45), radius: 1.5, y: 1)
+            self.shadow(color: .voile.opacity(0.45), radius: 1.5, y: 1)
         } else {
             self
         }
@@ -703,7 +703,7 @@ private struct SilhouetteWidget: View {
             Color.primaire
             LueurHaute()
             ProgressView()
-                .tint(.white)
+                .tint(.encreSurAplat)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 360)

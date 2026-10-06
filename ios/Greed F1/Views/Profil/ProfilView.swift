@@ -1,7 +1,8 @@
 import PhotosUI
 import SwiftUI
 
-/// Onglet **Profil** — identité, statistiques, livrée, déconnexion.
+/// Onglet **Profil** — identité, statistiques, livrée ; l'engrenage mène aux réglages
+/// (``ReglagesView`` : apparence, langue, notifications, compte).
 ///
 /// Références visuelles : `Ressources/Screenshots/screen-20-mon-profil-haut.PNG` et
 /// `screen-21-mon-profil-bas.PNG`, écran par écran.
@@ -66,18 +67,6 @@ struct ProfilView: View {
     @State private var retourScraper: String?
     @State private var erreurScraper: ErreurAPI?
 
-    /// Suppression de compte (App Store, règle 5.1.1(v)) : deux alertes système
-    /// chaînées, **jamais** une feuille maison — c'est le seul geste de l'écran
-    /// assez grave pour justifier l'interruption d'une alerte, et deux fois
-    /// plutôt qu'une (`/apple-design` §16, agence : la confirmation se réserve
-    /// aux actions vraiment destructrices et irréversibles). `DELETE
-    /// /profils/moi` fait tout côté serveur ; l'échec se dit sous le bouton,
-    /// comme le reste de cet écran, jamais dans une troisième alerte.
-    @State private var confirmationSuppression = false
-    @State private var confirmationSuppressionFinale = false
-    @State private var envoiSuppression = false
-    @State private var erreurSuppression: ErreurAPI?
-
     // MARK: - Corps
 
     var body: some View {
@@ -87,11 +76,15 @@ struct ProfilView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    Text(t("accueil.monProfil"))
-                        .font(.titre)
-                        .tracking(Tracking.titre)
-                        .foregroundColor(.texte)          // 15,37:1 sur le beige
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(alignment: .center, spacing: 12) {
+                        Text(t("accueil.monProfil"))
+                            .font(.titre)
+                            .tracking(Tracking.titre)
+                            .foregroundColor(.texte)      // 15,37:1 sur le beige
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        boutonReglages
+                    }
 
                     Spacer().frame(height: 12)
                     entete
@@ -127,17 +120,6 @@ struct ProfilView: View {
                         blocAdministration
                     }
 
-                    Spacer().frame(height: 12)
-                    blocParametres
-
-                    Spacer().frame(height: 28)
-                    deconnexion
-
-                    Spacer().frame(height: 8)
-                    suppressionCompte
-
-                    Spacer().frame(height: 16)
-                    versionAffichee
                 }
                 .padding(.horizontal, margeLaterale)
                 .padding(.top, 8)
@@ -223,15 +205,15 @@ struct ProfilView: View {
                             // pas sa propre couleur.
                             Circle()
                                 .fill(.ultraThinMaterial)
-                                .overlay { ProgressView().tint(.primaire) }
+                                .overlay { ProgressView().tint(.encrePrimaire) }
                         }
                     }
 
                 Image(systemName: "camera.fill")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.primaire)           // 10,88:1 sur le blanc
+                    .foregroundColor(.encrePrimaire)           // 10,88:1 sur le blanc · sombre 4,94:1
                     .frame(width: 24, height: 24)
-                    .background(Color.white, in: Circle())
+                    .background(Color.surface, in: Circle())
             }
             // Le disque fait 64 pt, le bouton 66 : le plancher tactile de 44 pt est tenu
             // par le disque lui-même, l'icône n'est qu'une indication.
@@ -508,7 +490,7 @@ struct ProfilView: View {
             ZStack {
                 Circle().fill(EncreSVG.couleur(livree.coque) ?? .primaire)
                 Circle()
-                    .fill(EncreSVG.couleur(livree.ailerons) ?? .white)
+                    .fill(EncreSVG.couleur(livree.ailerons) ?? .blancLivree)
                     .mask(alignment: .trailing) {
                         Rectangle().frame(width: 15)
                     }
@@ -567,7 +549,7 @@ struct ProfilView: View {
                         if choisi {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(.encreSurAplat)
                                 .frame(width: 22, height: 22)
                                 .background(Color.primaire, in: Circle())
                                 .padding(5)
@@ -575,12 +557,12 @@ struct ProfilView: View {
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous)
-                            .strokeBorder(choisi ? Color.primaire : .clear, lineWidth: 2)
+                            .strokeBorder(choisi ? Color.encrePrimaire : .clear, lineWidth: 2)
                     }
 
                 Text(nom)
                     .font(.custom("HelveticaNeue", size: 11))
-                    .foregroundColor(choisi ? .primaire : .grisSecondaire)
+                    .foregroundColor(choisi ? .encrePrimaire : .grisSecondaire)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -623,14 +605,14 @@ struct ProfilView: View {
                             .overlay {
                                 if estChoisie {
                                     Circle()
-                                        .strokeBorder(Color.primaire, lineWidth: 2)
+                                        .strokeBorder(Color.encrePrimaire, lineWidth: 2)
                                         .padding(-3)
                                 }
                             }
 
                         Text(teinte.nom)
                             .font(.custom("HelveticaNeue", size: 10))
-                            .foregroundColor(estChoisie ? .primaire : .grisSecondaire)
+                            .foregroundColor(estChoisie ? .encrePrimaire : .grisSecondaire)
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                     }
@@ -657,10 +639,10 @@ struct ProfilView: View {
         Button(action: enregistrerVoiture) {
             ZStack {
                 Text(t("profil.enregistrerVoiture")).opacity(envoiVoiture ? 0 : 1)
-                if envoiVoiture { ProgressView().tint(.white) }
+                if envoiVoiture { ProgressView().tint(.encreSurAplat) }
             }
             .font(.custom("HelveticaNeue-Medium", size: 17))
-            .foregroundColor(.white)
+            .foregroundColor(.encreSurAplat)
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(Color.primaire.opacity(aChange ? 1 : 0.45))
             .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
@@ -803,10 +785,10 @@ struct ProfilView: View {
         Button(action: lancerScraper) {
             ZStack {
                 Text(t("admin.scraper")).opacity(envoiScraper ? 0 : 1)
-                if envoiScraper { ProgressView().tint(.white) }
+                if envoiScraper { ProgressView().tint(.encreSurAplat) }
             }
             .font(.custom("HelveticaNeue-Medium", size: 17))
-            .foregroundColor(.white)
+            .foregroundColor(.encreSurAplat)
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(Color.primaire)
             .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
@@ -833,128 +815,28 @@ struct ProfilView: View {
         }
     }
 
-    // MARK: - Paramètres
+    // MARK: - Réglages
 
-    /// La langue de l'interface — le même ``SelecteurLangue`` que l'accueil et la connexion.
-    /// Bloc blanc au rayon 24, donc `ombreBloc` (§4.7), comme ses voisins.
-    private var blocParametres: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            titreDeBloc(t("profil.parametres"))
-
-            Spacer().frame(height: 10)
-
-            HStack(spacing: 12) {
-                Text(t("langue.titre"))
-                    .font(.custom("HelveticaNeue-Medium", size: 17))
-                    .foregroundColor(.texte)
-                Spacer(minLength: 0)
-                SelecteurLangue()
-            }
-            .frame(minHeight: 44)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
-        .ombreBloc()
-    }
-
-    // MARK: - Pied
-
-    private var deconnexion: some View {
-        Button {
-            Task { await viewModel.deconnexion() }
+    /// L'engrenage qui pousse ``ReglagesView`` — en haut à droite, à hauteur du titre.
+    /// Zone tactile de 44 × 44 pt ; le symbole est ramené au bord de la marge par un
+    /// retrait négatif, pour s'aligner sur le bord droit des blocs.
+    private var boutonReglages: some View {
+        NavigationLink {
+            ReglagesView(viewModel: viewModel)
         } label: {
-            Text(t("commun.seDeconnecter"))
-                .font(.custom("HelveticaNeue", size: 17))
-                .foregroundColor(.grisSecondaire)          // 4,71:1 sur le beige
-                .frame(maxWidth: .infinity, minHeight: 44)
+            Image(systemName: "gearshape")
+                .font(.system(size: 22, weight: .regular))
+                .foregroundColor(.secondaire)     // 9,32:1 sur le beige · sombre 14,32:1
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(StyleAppui(.bouton))
+        .padding(.trailing, -11)
+        .accessibilityLabel(t("reglages.a11y.ouvrir"))
     }
 
-    /// **Sous « Se déconnecter », jamais avant.** Wayfinding d'`/apple-design`
-    /// §16 : la sortie ordinaire et réversible se rencontre d'abord, la sortie
-    /// destructrice et irréversible en dernier — le pouce qui vise la première
-    /// ne doit pas tomber sur la seconde par réflexe de position.
-    private var suppressionCompte: some View {
-        VStack(spacing: 10) {
-            Button {
-                confirmationSuppression = true
-            } label: {
-                Text(t("profil.supprimerCompte"))
-                    .font(.custom("HelveticaNeue-Medium", size: 13))
-                    .foregroundColor(.primaire)             // 9,13:1 sur le beige
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(StyleAppui(.bouton))
-            .disabled(envoiSuppression)
-
-            if let erreurSuppression {
-                ErreurEnLigne(erreur: erreurSuppression)
-                    .transition(.opacity)
-            }
-        }
-        .animation(mouvementReduit ? nil : Mouvement.entree(0.20), value: erreurSuppression)
-        .sensoryFeedback(.error, trigger: erreurSuppression) { _, nouveau in nouveau != nil }
-        .alert(t("profil.supprimerCompteTitre"), isPresented: $confirmationSuppression) {
-            Button(t("commun.annuler"), role: .cancel) {}
-            Button(t("profil.supprimer"), role: .destructive) {
-                confirmationSuppressionFinale = true
-            }
-        } message: {
-            Text(t("profil.supprimerCompteMessage"))
-        }
-        .alert(t("profil.esTuSur"), isPresented: $confirmationSuppressionFinale) {
-            Button(t("commun.annuler"), role: .cancel) {}
-            Button(t("profil.supprimerDefinitivement"), role: .destructive, action: supprimerCompte)
-        } message: {
-            Text(t("profil.supprimerCompteMessageFinal"))
-        }
-    }
-
-    /// Lancée depuis la seconde alerte. **Pas liée à l'écran**, comme
-    /// ``enregistrerVoiture()`` : changer d'onglet pendant l'appel ne l'annule
-    /// pas — un compte à moitié supprimé serait pire qu'un écran quitté.
-    private func supprimerCompte() {
-        guard !envoiSuppression else { return }
-        erreurSuppression = nil
-        envoiSuppression = true
-
-        Task {
-            do {
-                try await viewModel.supprimerCompte()
-                // Rien à faire ici : `oublierCompte()` (dans le view model)
-                // publie `estConnecte = false`, et c'est `GreedF1App` qui
-                // bascule seul vers `LandingView` — le même chemin qu'une
-                // déconnexion ordinaire.
-            } catch let refus as ErreurAPI {
-                envoiSuppression = false
-                erreurSuppression = refus
-            } catch {
-                envoiSuppression = false
-            }
-        }
-    }
-
-    private var versionAffichee: some View {
-        Text(t("accueil.version", Bundle.main.versionAffichee))
-            .font(.labelSm)
-            .tracking(Tracking.label)
-            .textCase(.uppercase)
-            .foregroundColor(.grisSecondaire)
-            .frame(maxWidth: .infinity)
-    }
-
-    /// Titre de section. L'encre est `grisSecondaire`, jamais `texteDoux` : sur le blanc,
-    /// #999999 ne vaut que 2,85:1 — sous le plancher de 4,5:1 d'un texte de 11 pt.
     private func titreDeBloc(_ texte: String) -> some View {
-        Text(texte)
-            .font(.label)
-            .tracking(Tracking.label)
-            .textCase(.uppercase)
-            .foregroundColor(.grisSecondaire)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        TitreDeBloc(texte: texte)
     }
 }
 

@@ -54,12 +54,12 @@ struct RecadrageImageView: View {
             let fenetre = fenetreRecadrage(dans: geo)
 
             ZStack {
-                Color.black.ignoresSafeArea()
+                Color.voile.ignoresSafeArea()
 
                 imageAffichee(fenetre: fenetre)
 
                 MasqueRecadrage(fenetre: fenetre, cercle: forme == .cercle)
-                    .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
+                    .fill(Color.voile.opacity(0.55), style: FillStyle(eoFill: true))
                     .allowsHitTesting(false)
 
                 VStack {
@@ -73,7 +73,7 @@ struct RecadrageImageView: View {
             .gesture(gestePincement(fenetre: fenetre))
             .simultaneousGesture(gesteGlissement(fenetre: fenetre))
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Color.voile.ignoresSafeArea())
         .statusBarHidden()
     }
 
@@ -221,7 +221,7 @@ struct RecadrageImageView: View {
             } label: {
                 Text(t("recadrage.utiliser"))
                     .font(.custom("HelveticaNeue-Medium", size: 17))
-                    .foregroundColor(.white)
+                    .foregroundColor(.encreSurAplat)
                     .frame(maxWidth: .infinity, minHeight: 52)
                     .background(Color.primaire)
                     .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))

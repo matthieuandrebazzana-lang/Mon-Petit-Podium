@@ -4,12 +4,12 @@ import SwiftUI
 struct ContentView: View {
     var body: some View {
         ZStack {
-            Color.white
+            Color.fondPrincipal
                 .ignoresSafeArea()
 
             Text("Greed F1")
                 .font(.system(size: 44, weight: .bold, design: .default))
-                .foregroundStyle(Color.primaire)
+                .foregroundStyle(Color.encrePrimaire)
         }
     }
 }

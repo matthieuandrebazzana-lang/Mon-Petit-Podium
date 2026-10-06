@@ -77,7 +77,7 @@ enum PaletteVoiture {
     /// regarde. La palette compte du blanc, de l'argent, du beige et du jaune : un numéro
     /// blanc dessus serait invisible, et le cas n'a rien de théorique.
     static func encreSur(_ aplat: String) -> Color {
-        luminance(aplat) > 0.45 ? .texte : .white
+        luminance(aplat) > 0.45 ? .encreSurClair : .encreSurAplat
     }
 }
 
@@ -449,7 +449,7 @@ struct VueVoiture: View {
         guard ecurie == nil else { return [:] }
         return [
             Self.encreCoque: EncreSVG.couleur(livree.coque) ?? .primaire,
-            Self.encreAilerons: EncreSVG.couleur(livree.ailerons) ?? .white
+            Self.encreAilerons: EncreSVG.couleur(livree.ailerons) ?? .blancLivree
         ]
     }
 
@@ -482,7 +482,7 @@ struct VueVoiture: View {
                     // rapport qu'`Avatar` applique déjà à son diamètre explicite. Une
                     // initiale dans un rond est la même question.
                     .font(.custom("HelveticaNeue-Medium", size: diametre * 0.44))
-                    .foregroundColor(.white)
+                    .foregroundColor(.encreSurAplat)
                 if let photo {
                     AsyncImage(url: photo) { image in
                         image.resizable().scaledToFill()

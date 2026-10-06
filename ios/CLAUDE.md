@@ -102,6 +102,19 @@ uniquement**.
 Le contraste se mesure : texte ordinaire **4,5:1**, grand texte **3:1**. Zones tactiles
 **44 × 44 pt** minimum.
 
+**Clair et sombre : uniquement par jetons** (`docs/decisions.md` §26, tableau dans
+`docs/swift-app.md` §4.2 bis). Une couleur qui suit l'apparence se déclare dans
+`Couleurs.swift` par `Color(clair:sombre:)` ; une vue ne lit **jamais** `colorScheme` pour
+choisir une encre, et ne contient **aucun** `.white`, `.black` ni littéral — un `grep` doit
+rester vide hors de `Couleurs.swift` et `DrapeauxGP.swift`. Trois pièges mesurés :
+`primaire` est un **aplat** (`#C0182A` en sombre, 2,26:1 en texte sur une surface) — le
+rouge en texte ou en trait est `encrePrimaire` ; le blanc posé sur un aplat est
+`encreSurAplat`, l'encre foncée sur l'ambre `encreSurClair`, toutes deux fixes ; ce qui
+est posé **sur un drapeau** (qui ne change pas) garde les valeurs claires (`…Fixe`).
+L'apparence a un seul propriétaire, `Config/ThemeManager.swift` (Auto / Clair / Sombre,
+`overrideUserInterfaceStyle` sur les fenêtres) ; vérifier chaque écran retouché dans les
+deux modes (`xcrun simctl ui booted appearance dark`).
+
 **Aucun texte d'interface en dur : tout passe par `t("clé")`** (`Localisation/`). Deux
 dictionnaires Swift aux clés identiques, rangées par écran — `TraductionsFR.swift`,
 `TraductionsEN.swift` — et **jamais** de `.strings` ni de String Catalog. Une nouvelle
@@ -151,7 +164,7 @@ d'interrupteur dans l'app (les Réglages d'iOS en tiennent lieu). L'entitlement
 
 - **Incrémenter `MARKETING_VERSION`** dans `ios/Greed F1.xcodeproj/project.pbxproj` (deux
   occurrences, Debug et Release). C'est `CFBundleShortVersionString`, et **la seule source**
-  du numéro affiché : `LandingView` le lit via `Bundle.main.versionAffichee`, il ne se
+  du numéro affiché : `LandingView` et `ReglagesView` le lisent via `Bundle.main.versionAffichee`, il ne se
   recopie nulle part.
 - **La version web (`frontend/package.json`, `CLAUDE.md` §8) ne bouge pas** sur un commit
   iOS — la faire bouger laisserait croire à un déploiement Vercel qui n'a pas eu lieu.
@@ -188,12 +201,13 @@ ios/
     │   ├── LanguageManager.swift    langue active (détection, choix persisté), `t`, `tp`, `ordinal`, `heureInterface`
     │   ├── TraductionsFR.swift      ┐ mêmes clés, même ordre, rangées par écran
     │   ├── TraductionsEN.swift      ┘
-    │   └── SelecteurLangue.swift    toggle 🇫🇷 FR / 🇬🇧 EN (drapeaux emoji, aucun asset) — Landing, Connexion, paramètres du Profil
+    │   └── SelecteurLangue.swift    toggle 🇫🇷 FR / 🇬🇧 EN (drapeaux emoji, aucun asset) — Landing, Connexion, Réglages
     ├── Config/
     │   ├── Config.xcconfig          valeurs de connexion — NON VERSIONNÉ, hors bundle
     │   ├── Config.xcconfig.example  gabarit à copier — hors bundle
     │   ├── SupabaseConfig.swift     lecture d'Info.plist, rien en dur
-    │   ├── Couleurs.swift           palette + typographie du design system
+    │   ├── Couleurs.swift           palette (jetons clair / sombre, encres fixes) + typographie du design system
+    │   ├── ThemeManager.swift       apparence Auto / Clair / Sombre — seul propriétaire, `overrideUserInterfaceStyle`
     │   ├── Formes.swift             rayons + les quatre ombres
     │   ├── Materiaux.swift          damier et lumière spéculaire (les deux calques décoratifs), teintes et damier des cartes de pronostic, `damierFiligrane` (5 %)
     │   ├── Mouvement.swift          courbes, durées, StyleAppui (retour d'appui)
@@ -232,7 +246,7 @@ ios/
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
     │   ├── Accueil/
     │   │   ├── AccueilView.swift       championnats et GP suivant réels, pastille + bouton selon l’état et l’existence d’un pronostic (`ProchainGrandPrix.aDesPronostics`) : « Faire » si ouvert sans, « Voir » si ouvert ou fermé avec, rien sinon
-    │   │   ├── PileChampionnats.swift  championnats en paquet de cartes : carte du dessus pleine (tap = ouvrir, swipe = réordonner), bandes : tap = aperçu sur place, 2ᵉ tap = ouvrir ; ordre mémorisé par compte (`OrdrePile`)
+    │   │   ├── PileChampionnats.swift  championnats en paquet de cartes : carte du dessus pleine (tap = ouvrir, swipe = réordonner), bandes réduites de 3 % par cran vers le fond (`Perspective`, plancher 44 pt) : tap = aperçu sur place, 2ᵉ tap = ouvrir ; ordre mémorisé par compte (`OrdrePile`)
     │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Composants/
@@ -266,7 +280,8 @@ ios/
     │   │   ├── PronosView.swift     saisie préremplie, bonus parmi les favoris, `POST` + `423`
     │   │   └── RecapView.swift      récapitulatif, après le `200` ou d'entrée (grille relue) : fond `FondDrapeauFlou`, en-tête blanc (nom, date · départ, total disponible en grand), bandeau vert + `BlocEcheance` sur le flou, une `CarteRecap` par pronostic (forme de `CarteVerdict` sans pastille d’icône, damier 6 %) ; `EnteteDrapeau` et `RangeeRecap` non montés
     │   └── Profil/
-    │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`)
+    │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`), engrenage → Réglages
+    │       ├── ReglagesView.swift       apparence, langue, notifications (Réglages d'iOS), déconnexion, suppression du compte, version
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
     │       ├── HistoriqueGPView.swift   « Ses / Mes Grands Prix » : résumé saison en deux moitiés (total, réussis / tentés, rang à gauche ; voiture du membre à droite, reçue de l’appelant), carrousel de cartes GP (drapeau net + tracé ; drapeau clair : haut nu, voile sous le texte), fond = drapeau actif étiré et flouté, en fondu, tap → la carte se déploie en détail plein écran (`matchedGeometryEffect`) ; `ContenuDetailGrandPrix` et `CarteVerdict` (carte teintée + damier, verdict en pastille pleine) y sont PARTAGÉS avec `MesResultatsGPView` — données réelles (`GrandsPrixJoues`)
     │       └── ComposantsProfil.swift   pastille, en-tête, grille, `BlocStatistiques`, `LigneGrandsPrix`, PARTAGÉS

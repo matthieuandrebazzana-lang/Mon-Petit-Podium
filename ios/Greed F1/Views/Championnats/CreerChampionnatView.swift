@@ -199,7 +199,7 @@ struct CreerChampionnatView: View {
         TextField("", text: lienNom, prompt: placeholder)
             .font(.custom("HelveticaNeue", size: 17))
             .foregroundColor(.texte)
-            .tint(.primaire)
+            .tint(.encrePrimaire)
             .textInputAutocapitalization(.words)
             .autocorrectionDisabled()
             .submitLabel(.done)
@@ -256,7 +256,7 @@ struct CreerChampionnatView: View {
                         .font(.custom("HelveticaNeue", size: 12))
                         // Le refus prend l'encre primaire : c'est la seule chose de l'écran
                         // qui demande à être relue avant de continuer.
-                        .foregroundColor(refusPhoto == nil ? .grisSecondaire : .primaire)
+                        .foregroundColor(refusPhoto == nil ? .grisSecondaire : .encrePrimaire)
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
                 }
@@ -389,7 +389,7 @@ struct CreerChampionnatView: View {
             if let caractere = caractereCode(index) {
                 Text(String(caractere))
                     .font(.custom("HelveticaNeue-Medium", size: 26))
-                    .foregroundColor(.white)            // 9,61:1 sur primaire
+                    .foregroundColor(.encreSurAplat)            // 9,61:1 sur primaire
                     .transition(transitionCaractere)
             } else {
                 Capsule()
@@ -421,7 +421,7 @@ struct CreerChampionnatView: View {
         ShareLink(item: t("championnat.messagePartage", championnat.nom, championnat.codeInvitation)) {
             Label(t("creer.partagerCode"), systemImage: "square.and.arrow.up")
                 .font(.custom("HelveticaNeue-Medium", size: 15))
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
                 .frame(minHeight: 44)                   // contrainte tactile iOS
                 .contentShape(Rectangle())
         }
@@ -462,7 +462,7 @@ struct CreerChampionnatView: View {
                 // Le libellé reste en place, invisible, sous le spinner : le bouton ne
                 // change pas de taille, et le texte revient à l'identique en cas d'échec.
                 Text(t("creer.bouton")).opacity(envoi ? 0 : 1)
-                if envoi { ProgressView().tint(.white) }
+                if envoi { ProgressView().tint(.encreSurAplat) }
             }
             .habillageBoutonPrincipal(actif: nomValide)
         }

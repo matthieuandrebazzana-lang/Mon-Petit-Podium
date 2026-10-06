@@ -289,7 +289,7 @@ private struct EnTeteMarche: View {
                 .font(.custom("HelveticaNeue-Medium", size: 13))
                 .tracking(0.5)
                 .textCase(.uppercase)
-                .foregroundColor(.white)          // 10,88:1 · 11,04:1 · bonus ≥ 4,86:1
+                .foregroundColor(.encreSurAplat)          // 10,88:1 · 11,04:1 · bonus ≥ 4,86:1
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
 
@@ -311,7 +311,7 @@ private struct EnTeteMarche: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)          // ≥ 4,86:1 sur les huit aplats (sauge)
+                .foregroundColor(.encreSurAplat)          // ≥ 4,86:1 sur les huit aplats (sauge)
                 .rotationEffect(.degrees(ouvert ? 90 : 0))
         }
         .padding(.horizontal, 16)

@@ -1175,6 +1175,42 @@ enum Palette {
 }
 ```
 
+### 4.2 bis Mode sombre — colonne sombre des jetons
+
+Depuis iOS `0.50.0`, les jetons qui suivent l'apparence sont déclarés par
+`Color(clair:sombre:)` (`UIColor(dynamicProvider:)`) dans `Config/Couleurs.swift`, seul
+propriétaire. Une vue ne lit jamais `colorScheme` pour choisir une encre. Contrastes
+mesurés sur `#1C1C1E` (fond) et `#2C2C2E` (surfaces).
+
+| Jeton | Clair | Sombre | Mesure (sombre) |
+|---|---|---|---|
+| `fondPrincipal` | `#F5F0EB` | `#1C1C1E` | — |
+| `surface` | `#FFFFFF` | `#2C2C2E` | — |
+| `texte` | `#1A1A1A` | `#FFFFFF` | 17,01 · 13,94 |
+| `secondaire` | `#543925` | `#EBEBF0` | 14,32 · 11,73 |
+| `grisSecondaire` | `#6B6B6B` | `#AEAEB2` | 7,69 · 6,30 |
+| `primaire` (**aplat**) | `#800111` | `#C0182A` | blanc dessus 6,17 |
+| `encrePrimaire` (**texte, trait**) | `#800111` | `#FF6961` | 6,03 · 4,94 |
+| `primaireFonce` | `#5A000C` | `#A3142A` | blanc dessus 7,80 |
+| `encreSucces` (vert en texte) | `#4A7C59` | `#7BC793` | 8,45 · 6,92 |
+| `ambreClair` | `#FFF8E1` | `#3A3222` | blanc dessus 12,66 |
+| `fondModeEmploi` | `#FFF3DC` | `#3A3222` | `secondaire` 10,65 |
+| `encreOmbre` (les 4 ombres) | `#543925` | noir | — |
+| `filetAplat` | transparent | blanc 10 % | — |
+
+**`#C0182A` n'est jamais une encre** : 2,76:1 sur le fond, 2,26:1 sur une surface. Tout
+rouge en texte ou en trait passe par `encrePrimaire`.
+
+**Encres fixes** (ne suivent pas l'apparence) : `encreSurAplat` (blanc, sur un aplat de
+couleur), `encreSurClair` (`#1A1A1A`, sur l'ambre, le jaune, une livrée claire), `voile`
+(noir, sur une image), `surfaceFixe` / `primaireFixe` / `secondaireFixe` (ce qui est posé
+sur un drapeau, qui ne change pas), `blancLivree`. Aucun `.white` ni `.black` dans une vue.
+
+Inchangés : drapeaux, tracés, livrées, teintes de championnat et de marché, `accent`,
+`vertSauge`, `bleuArdoise`. Les teintes de championnat prennent `filetAplat` en bordure,
+sans quoi Minuit (`#16151D`) tombe à 1,06:1 contre le fond sombre. Le sol de la vue piste
+(`#f4efea`) est substitué par `fondPrincipal`.
+
 ### 4.3 Palette élargie — quatre teintes, périmètre borné
 
 ```swift

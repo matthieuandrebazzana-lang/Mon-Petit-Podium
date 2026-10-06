@@ -3,9 +3,10 @@ import SwiftUI
 /// Les championnats de l'accueil, **empilés comme un paquet de cartes**.
 ///
 /// La carte du dessus est la ``CarteChampionnat`` de toujours, entière ; un tap l'ouvre.
-/// Toutes les autres dépassent au-dessus d'elle d'une bande de 44 pt — le nom et le
-/// classement, sur leur teinte assombrie — et **toutes restent visibles** : vingt
-/// championnats, vingt bandes.
+/// Toutes les autres dépassent au-dessus d'elle d'une bande — le nom et le classement,
+/// sur leur teinte assombrie — et **toutes restent visibles** : vingt championnats, vingt
+/// bandes. **Le paquet a de la profondeur** : chaque carte est un peu plus petite que
+/// celle de devant, bande comprise (``Perspective``).
 ///
 /// **Seule la carte du dessus se glisse.** Vers le haut elle part au fond et la suivante
 /// se découvre ; vers le bas, la carte du fond redescend au premier plan. Une bande ne
@@ -74,9 +75,8 @@ struct PileChampionnats: View {
     /// l'écran qui se pousse.
     @State private var ordreAuRetour: [UUID]?
 
-    /// La partie visible de chaque carte du dessous — le plancher tactile iOS, et la
-    /// hauteur où un nom de 15 pt et son classement tiennent sur une ligne.
-    private let depassement: CGFloat = 44
+    /// La bande de chaque carte du dessous, **avant réduction** — voir ``Perspective``.
+    private let depassement = Perspective.bande
 
     init(championnats: [Championnat], mesChampionnats: MesChampionnats,
          idUtilisateur: UUID?, apercu: Binding<UUID?>) {
@@ -129,7 +129,7 @@ struct PileChampionnats: View {
 
     private func paquet(rangs: [UUID: Int]) -> some View {
         let rangApercu = apercu.flatMap { rangs[$0] }
-        let descente = descenteApercu
+        let descente = rangApercu.map(descenteApercu) ?? 0
         return ZStack(alignment: .top) {
             ForEach(championnats) { championnat in
                 JupePile(
@@ -171,19 +171,20 @@ struct PileChampionnats: View {
             }
         }
         // Les bandes sont décalées vers le haut : la place qu'elles occupent est réservée ici.
-        .padding(.top, CGFloat(nombre - 1) * depassement)
+        .padding(.top, Perspective.decalage(nombre - 1))
         // Et celle que prennent les cartes de devant en descendant sous un aperçu, en bas :
         // l'accueil s'écarte avec elles, dans le même ressort.
         .padding(.bottom, descente)
     }
 
     /// De combien descendent les cartes de devant l'aperçu : sa hauteur pleine, moins la
-    /// bande qu'il occupait déjà, moins un chevauchement qui glisse la carte suivante sur
-    /// son bas. **8 pt et non `Rayon.carte`** comme au repos : la jauge est posée à 16 pt
-    /// du bas, et 20 pt de chevauchement en laissaient dépasser un trait.
-    private var descenteApercu: CGFloat {
+    /// bande qu'il occupait déjà — réduite à sa profondeur —, moins un chevauchement qui
+    /// glisse la carte suivante sur son bas. **8 pt et non `Rayon.carte`** comme au repos :
+    /// la jauge est posée à 16 pt du bas, et 20 pt de chevauchement en laissaient dépasser
+    /// un trait.
+    private func descenteApercu(rang: Int) -> CGFloat {
         guard let apercu, let hauteur = hauteursPleines[apercu] else { return 0 }
-        return max(0, hauteur - depassement - 8)
+        return max(0, hauteur - Perspective.depassement(rang) - 8)
     }
 
     /// L'ordre d'empilement, du plus haut au plus bas :
@@ -305,6 +306,37 @@ struct PileChampionnats: View {
     }
 }
 
+// MARK: - La perspective
+
+/// La profondeur du paquet : **chaque cran vers le fond retire 3 %** à la carte — largeur,
+/// hauteur, bande visible, texte —, centrée. 1 pour la carte du dessus, 0,97, 0,94…
+///
+/// **Plafonnée à cinq crans** (0,85) : au-delà la vingtième bande deviendrait illisible,
+/// et passerait sous le plancher tactile. La bande nue mesure donc 52 pt — 44 / 0,85
+/// arrondi —, et **la plus petite garde ses 44 pt** : 50,4 · 48,9 · 47,3 · 45,8 · 44,2.
+private enum Perspective {
+
+    static let pas: CGFloat = 0.03
+    static let crans = 5
+    static let bande: CGFloat = 52
+
+    static func echelle(_ profondeur: Int) -> CGFloat {
+        1 - pas * CGFloat(min(max(profondeur, 0), crans))
+    }
+
+    /// La bande visible d'une carte, à sa profondeur.
+    static func depassement(_ profondeur: Int) -> CGFloat {
+        bande * echelle(profondeur)
+    }
+
+    /// De combien le haut d'une carte monte au-dessus de celui de la carte du dessus : la
+    /// somme des bandes, chacune à sa taille.
+    static func decalage(_ profondeur: Int) -> CGFloat {
+        guard profondeur > 0 else { return 0 }
+        return (1...profondeur).reduce(0) { $0 + depassement($1) }
+    }
+}
+
 // MARK: - L'ordre mémorisé
 
 /// L'ordre de la pile, **un par compte**, dans `UserDefaults` — le seul propriétaire de
@@ -419,17 +451,20 @@ private struct CartePile: View {
                 }
                 .frame(height: hauteur, alignment: .top)
                 .clipShape(forme)
+                // En sombre, la teinte Pantone tombe à 1,06:1 contre le fond : le filet
+                // dessine le bord de chaque carte du paquet (invisible en clair).
+                .overlay(forme.strokeBorder(Color.filetAplat, lineWidth: 1))
                 .contentShape(forme)
                 // En vol, l'ombre s'éteint au rythme du trajet : sur la bande voisine elle se
                 // voit, et elle ne doit pas disparaître d'un coup quand la carte passe derrière.
                 .ombreAplat(intensite: enVol ? 0 : 1, allegee: ombreAllegee)
         }
         .buttonStyle(StyleAppui(.grandeSurface))
-        // Le paquet se resserre vers le fond — 4 pt par carte et par côté, plafonné à
-        // trois crans pour que la vingtième bande garde la largeur de son nom. L'aperçu
-        // reprend toute la largeur : il se détache du paquet sans le quitter.
-        .padding(.horizontal, apercu ? 0 : CGFloat(min(profondeur, 3)) * 4)
-        .offset(y: -CGFloat(profondeur) * depassement + descente + geste.dy)
+        // Le paquet rapetisse vers le fond, centré, depuis le haut de chaque carte : la
+        // bande visible rétrécit avec elle. L'aperçu reprend sa taille pleine : il se
+        // détache du paquet sans le quitter.
+        .scaleEffect(apercu ? 1 : Perspective.echelle(profondeur), anchor: .top)
+        .offset(y: -Perspective.decalage(profondeur) + descente + geste.dy)
         // En vol, elle passe au-dessus des bandes : elle ne doit pas leur voler le tap.
         .allowsHitTesting(!enVol)
         // Priorité haute : sans elle, le ScrollView de l'accueil captait le geste vertical
@@ -519,11 +554,12 @@ private struct JupePile: View {
     let enVol: Bool
 
     var body: some View {
+        let echelle = Perspective.echelle(profondeur)
         Color.teinteChampionnat(pour: championnat.cleTeinte)
-            .overlay(Color.black.opacity(Materiau.voilePile))
+            .overlay(Color.voile.opacity(Materiau.voilePile))
             .frame(height: depassement)
-            .padding(.horizontal, CGFloat(min(profondeur, 3)) * 4)
-            .offset(y: -CGFloat(profondeur) * depassement + Rayon.carte)
+            .scaleEffect(echelle, anchor: .top)
+            .offset(y: -Perspective.decalage(profondeur) + Rayon.carte * echelle)
             .opacity(enVol ? 1 : 0)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
@@ -551,20 +587,20 @@ private struct FaceDessous: View {
             Color.teinteChampionnat(pour: championnat.cleTeinte)
             Damier(opacite: Materiau.damier)
             LueurHaute()
-            Color.black.opacity(Materiau.voilePile)
+            Color.voile.opacity(Materiau.voilePile)
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(championnat.nom)
                     .font(.custom("HelveticaNeue-Medium", size: 15))
                     .tracking(-0.15)                              // −0,01em × 15
-                    .foregroundColor(.white)
+                    .foregroundColor(.encreSurAplat)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(alignment: .firstTextBaseline, spacing: 0) {
                     Text(championnat.position.map { String($0.monRang) } ?? "–")
                         .font(.custom("HelveticaNeue-Medium", size: 15))
-                        .foregroundColor(.white)
+                        .foregroundColor(.encreSurAplat)
                     Text("/\(membres)")
                         .font(.custom("HelveticaNeue-Medium", size: 13))
                         .foregroundColor(.encreSecondaire)

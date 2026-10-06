@@ -54,6 +54,14 @@ enum Mouvement {
     /// Échange d'icône — étoile de favori, icônes de nav, interrupteur.
     static let echangeIcone: TimeInterval = 0.18
 
+    /// **Bascule clair ↔ sombre de toute l'app** (``ThemeManager``) — un fondu croisé de la
+    /// fenêtre, courbe de sortie.
+    ///
+    /// > Un geste rare, donc animé ; un fondu, jamais un déplacement — il n'empêche qu'un
+    /// > saut brutal de luminosité sur tout l'écran (/apple-design §14). C'est un fondu,
+    /// > donc il reste **sous mouvement réduit** : il ne déplace rien.
+    static let basculeApparence: TimeInterval = 0.25
+
     /// **Décalage entre deux entrées voisines** — le « stagger » d'une série qui apparaît
     /// d'un coup.
     ///

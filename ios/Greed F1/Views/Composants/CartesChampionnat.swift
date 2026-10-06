@@ -87,7 +87,7 @@ struct CarteChampionnat: View {
                     Text(championnat.nom)
                         .font(.custom("HelveticaNeue-Medium", size: 20))
                         .tracking(-0.40)                          // −0,02em × 20
-                        .foregroundColor(.white)
+                        .foregroundColor(.encreSurAplat)
                         .lineLimit(1)
 
                     Text(tp("championnat.membresSaison", membres))
@@ -105,7 +105,7 @@ struct CarteChampionnat: View {
                     AsyncImage(url: photo) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
-                        Color.white.opacity(0.15)
+                        Color.encreSurAplat.opacity(0.15)
                     }
                     .frame(width: 56, height: 56)
                     .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
@@ -129,6 +129,10 @@ struct CarteChampionnat: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous))
+        // En sombre, la teinte Pantone tombe à 1,06:1 contre le fond (Minuit) : le filet
+        // ``Color/filetAplat`` dessine le bord. Invisible en clair.
+        .overlay(RoundedRectangle(cornerRadius: Rayon.carte, style: .continuous)
+            .strokeBorder(Color.filetAplat, lineWidth: 1))
         // **La cible est la forme visible, et rien d'autre.** `clipShape` rogne le dessin,
         // pas la zone de tap : sans cette ligne, tout ce qui déborde du cadre — le damier,
         // la photo en `scaledToFill` — reste touchable, et la carte suivante, peinte
@@ -158,7 +162,7 @@ struct CarteChampionnat: View {
                 Text(championnat.position.map { String($0.monRang) } ?? "–")
                     .font(.custom("HelveticaNeue-Medium", size: 48))
                     .tracking(-1.44)                              // −0,03em × 48
-                    .foregroundColor(.white.opacity(0.80))
+                    .foregroundColor(.encreSurAplat.opacity(0.80))
                 Text("/\(membres)")
                     .font(.custom("HelveticaNeue-Medium", size: 24))
                     .tracking(-0.60)                              // −0,025em × 24
@@ -189,9 +193,9 @@ struct CarteChampionnat: View {
     private var jauge: some View {
         GeometryReader { geometrie in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.30))
+                Capsule().fill(Color.encreSurAplat.opacity(0.30))
                 Capsule()
-                    .fill(Color.white)
+                    .fill(Color.encreSurAplat)
                     .frame(width: geometrie.size.width * championnat.fractionLeader)
             }
         }
@@ -297,7 +301,7 @@ struct ActionsChampionnat: View {
             } label: {
                 CarteAction(
                     logo: "icone-creer",
-                    encreLogo: .primaire,
+                    encreLogo: .encrePrimaire,
                     titre: t("championnat.creer"),
                     sousTitre: t("championnat.creerSousTitre")
                 )
@@ -378,7 +382,7 @@ struct EchecChargement: View {
             if erreur.estRejouable {
                 Button(t("commun.reessayer"), action: reessayer)
                     .font(.custom("HelveticaNeue-Medium", size: 15))
-                    .foregroundColor(.primaire)     // 9,61:1 sur le beige
+                    .foregroundColor(.encrePrimaire)     // 9,61:1 sur le beige
                     .frame(minWidth: 44, minHeight: 44)
                     .buttonStyle(StyleAppui(.bouton))
             }

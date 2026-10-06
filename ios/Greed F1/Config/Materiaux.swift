@@ -130,9 +130,9 @@ struct LueurHaute: View {
     var body: some View {
         EllipticalGradient(
             stops: [
-                .init(color: .white.opacity(0.22), location: 0),
-                .init(color: .white.opacity(0.06), location: 0.45),
-                .init(color: .white.opacity(0), location: 0.70)
+                .init(color: .encreSurAplat.opacity(0.22), location: 0),
+                .init(color: .encreSurAplat.opacity(0.06), location: 0.45),
+                .init(color: .encreSurAplat.opacity(0), location: 0.70)
             ],
             center: UnitPoint(x: 0.5, y: -0.25),
             startRadiusFraction: 0,

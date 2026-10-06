@@ -49,10 +49,10 @@ struct LigneRecap: Identifiable, Hashable {
         }
     }
 
-    /// L'encre de cette étiquette. **L'ambre n'accepte que ``Color/texte``** (7,86:1) ; le
+    /// L'encre de cette étiquette. **L'ambre n'accepte que ``Color/encreSurClair``** (7,86:1) ; le
     /// blanc y tomberait à 2,2:1. Sur les deux autres aplats, le blanc tient 10,88:1 et
     /// 11,04:1.
-    var encre: Color { bonus ? .texte : .white }
+    var encre: Color { bonus ? .encreSurClair : .encreSurAplat }
 
     /// Une ligne obligatoire — vainqueur ou podium. **La seule fabrique** des deux chemins
     /// qui mènent au récapitulatif : après le `200`, et à la relecture d'une grille déjà
@@ -234,7 +234,7 @@ struct RecapView: View {
             Text(grandPrix.nomAffiche)
                 .font(.titreLg)
                 .tracking(Tracking.titreLg)
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
@@ -258,7 +258,7 @@ struct RecapView: View {
                 Text(t("points.unite"))
                     .font(.custom("HelveticaNeue-Medium", size: 15))
             }
-            .foregroundColor(.white)
+            .foregroundColor(.encreSurAplat)
             .lineLimit(1)
             .accessibilityHidden(true)
 
@@ -287,7 +287,7 @@ struct RecapView: View {
                     .font(.custom("HelveticaNeue", size: 17))
                     .lineLimit(1)
             }
-            .foregroundColor(.white)
+            .foregroundColor(.encreSurAplat)
             .frame(minWidth: 44, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -314,11 +314,11 @@ struct RecapView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("recap.enregistres"))
                     .font(.custom("HelveticaNeue-Medium", size: 17))
-                    .foregroundColor(.white)          // 4,86:1 sur le vert sauge
+                    .foregroundColor(.encreSurAplat)          // 4,86:1 sur le vert sauge
 
                 Text(termine ? t("recap.courseTerminee") : t("recap.modifiableJusquauDepart"))
                     .font(.custom("HelveticaNeue", size: 13))
-                    .foregroundColor(.white)
+                    .foregroundColor(.encreSurAplat)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -344,9 +344,9 @@ struct RecapView: View {
     private var coche: some View {
         Image(systemName: "checkmark")
             .font(.system(size: 22, weight: .medium))
-            .foregroundColor(.white)
+            .foregroundColor(.encreSurAplat)
             .frame(width: 46, height: 46)
-            .background(Color.white.opacity(0.20))
+            .background(Color.encreSurAplat.opacity(0.20))
             .clipShape(Circle())
             .accessibilityHidden(true)
     }
@@ -373,7 +373,7 @@ struct RecapView: View {
         } label: {
             Text(t("recap.modifier"))
                 .font(.custom("HelveticaNeue-Medium", size: 16))
-                .foregroundColor(.white)              // 10,88:1 sur #800111
+                .foregroundColor(.encreSurAplat)              // 10,88:1 sur #800111
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background {
@@ -578,7 +578,7 @@ private struct EnteteDrapeau: View {
             Text(nom)
                 .font(.titre)
                 .tracking(Tracking.titre)
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .ombrePortee(apparence?.ombreNom ?? false)
@@ -618,8 +618,8 @@ private struct EnteteDrapeau: View {
                     .font(.custom("HelveticaNeue", size: 17))
                     .lineLimit(1)
             }
-            .foregroundColor(.white)
-            .shadow(color: .black.opacity(0.45), radius: 1.5, y: 1)
+            .foregroundColor(.encreSurAplat)
+            .shadow(color: .voile.opacity(0.45), radius: 1.5, y: 1)
             .frame(minWidth: 44, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -638,8 +638,8 @@ private struct EnteteDrapeau: View {
                     .scaledToFill()
 
                 LueurHaute()
-                Color.black.opacity(apparence.voile)
-                Color.black.opacity(0.15)
+                Color.voile.opacity(apparence.voile)
+                Color.voile.opacity(0.15)
             }
             // Le drapeau est plus grand que la bande : sans ce rognage, `scaledToFill` le
             // laisserait déborder par-dessus le bandeau de confirmation.
@@ -663,7 +663,7 @@ private struct EnteteDrapeau: View {
 private extension View {
     @ViewBuilder func ombrePortee(_ active: Bool) -> some View {
         if active {
-            self.shadow(color: .black.opacity(0.45), radius: 1.5, y: 1)
+            self.shadow(color: .voile.opacity(0.45), radius: 1.5, y: 1)
         } else {
             self
         }

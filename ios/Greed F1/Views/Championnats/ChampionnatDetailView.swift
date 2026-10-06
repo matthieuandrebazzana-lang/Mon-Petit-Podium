@@ -451,16 +451,16 @@ struct ChampionnatDetailView: View {
             Group {
                 if occupe {
                     ProgressView()
-                        .tint(.white)
+                        .tint(.encreSurAplat)
                         .scaleEffect(0.8)
                 } else {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(.encreSurAplat)
                 }
             }
             .frame(width: 32, height: 32)
-            .background(Color.black.opacity(0.4), in: Capsule())
+            .background(Color.voile.opacity(0.4), in: Capsule())
             .contentShape(Capsule())
         }
         .disabled(occupe)
@@ -579,7 +579,7 @@ struct ChampionnatDetailView: View {
         } label: {
             Text(t("championnat.vuePiste"))
                 .font(.custom("HelveticaNeue-Medium", size: 18))
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)              // > 44 pt, contrainte tactile iOS
                 .background {
@@ -674,7 +674,7 @@ private struct PhotoChampionnat: View {
         Color.primaire.overlay {
             Text(nom.trimmingCharacters(in: .whitespaces).first.map { String($0).uppercased() } ?? "?")
                 .font(.custom("HelveticaNeue-Medium", size: cote * 0.40625))
-                .foregroundColor(.white)
+                .foregroundColor(.encreSurAplat)
         }
     }
 }
@@ -866,7 +866,7 @@ private struct LigneClassement: View {
     private var rang: some View {
         Text(String(membre.rang))
             .font(.custom("HelveticaNeue-Medium", size: 16))
-            .foregroundColor(membre.rang <= 3 ? .primaire : .grisSecondaire)
+            .foregroundColor(membre.rang <= 3 ? .encrePrimaire : .grisSecondaire)
             .frame(width: 20, alignment: .leading)
     }
 
@@ -888,7 +888,7 @@ private struct LigneClassement: View {
             Text(String(membre.totalPoints))
                 .font(.custom("HelveticaNeue-Medium", size: 20))
                 .tracking(-0.50)                              // −0,025em × 20
-                .foregroundColor(.primaire)                   // 10,88:1 sur le blanc
+                .foregroundColor(.encrePrimaire)                   // 10,88:1 sur le blanc
                 .lineLimit(1)
 
             Text(t("points.unite"))
@@ -932,7 +932,7 @@ private struct WidgetGrandPrixSuivant: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(nom)
                     .font(.custom("HelveticaNeue-Medium", size: 16))
-                    .foregroundColor(.white)              // 10,88:1 sur #800111
+                    .foregroundColor(.encreSurAplat)              // 10,88:1 sur #800111
                     .lineLimit(1)
 
                 // **`encreSecondaire` (blanc à 70 %, 5,75:1) et non le blanc à 60 % de

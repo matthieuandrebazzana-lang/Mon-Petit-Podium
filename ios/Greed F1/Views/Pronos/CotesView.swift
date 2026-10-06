@@ -481,7 +481,7 @@ struct CotesView: View {
                 .font(.custom("HelveticaNeue-Medium", size: 13))
                 .tracking(0.5)
                 .textCase(.uppercase)
-                .foregroundColor(.white)          // 10,88:1 · 11,04:1 · 11,6:1
+                .foregroundColor(.encreSurAplat)          // 10,88:1 · 11,04:1 · 11,6:1
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -503,7 +503,7 @@ struct CotesView: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)          // ≥ 10,88:1 sur les trois aplats
+                .foregroundColor(.encreSurAplat)          // ≥ 10,88:1 sur les trois aplats
                 .rotationEffect(.degrees(ouvert ? 90 : 0))
                 .accessibilityHidden(true)
         }
@@ -533,7 +533,7 @@ struct CotesView: View {
         NavigationLink(value: EtapePronos.pronos(grandPrix)) {
             Text(t("cotes.saisir"))
                 .font(.custom("HelveticaNeue-Medium", size: 16))
-                .foregroundColor(.white)          // 10,88:1 sur #800111
+                .foregroundColor(.encreSurAplat)          // 10,88:1 sur #800111
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background {
@@ -588,7 +588,7 @@ struct CotesView: View {
 struct ChargementPronos: View {
     var body: some View {
         ProgressView()
-            .tint(.primaire)
+            .tint(.encrePrimaire)
             .frame(maxWidth: .infinity, minHeight: 120)
             .accessibilityLabel(t("cotes.a11y.chargement"))
     }
@@ -696,7 +696,7 @@ struct CarteCote: View {
                         Text(t("points.unite"))
                             .font(.custom("HelveticaNeue-Medium", size: 11))
                     }
-                    .foregroundColor(.primaire)
+                    .foregroundColor(.encrePrimaire)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 }
@@ -751,7 +751,7 @@ struct EtoileJaune: View {
     var body: some View {
         ZStack {
             ForEach(0..<Self.directions.count, id: \.self) { i in
-                etoile(.texte)
+                etoile(.encreSurClair)
                     .offset(x: Self.directions[i].width * epaisseur,
                             y: Self.directions[i].height * epaisseur)
             }
@@ -827,11 +827,11 @@ struct EtoileParisBonus: View {
                 .scaleEffect(echelle(visible: !actif))
 
             Circle()
-                .fill(inverse ? Color.texte : Color.accent)
+                .fill(inverse ? Color.encreSurClair : Color.accent)
                 .overlay {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(inverse ? .accent : .texte)
+                        .foregroundColor(inverse ? .accent : .encreSurClair)
                 }
                 .opacity(actif ? 1 : 0)
                 .scaleEffect(echelle(visible: actif))
@@ -894,7 +894,7 @@ private struct ChipPariBonus: View {
                 Text(formaterPoints(favori.points))
                     .font(.custom("HelveticaNeue-Medium", size: 12))
             }
-            .foregroundColor(.texte)              // 7,86:1 sur l'ambre
+            .foregroundColor(.encreSurClair)      // 7,86:1 sur l'ambre
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(Color.accent)
@@ -930,14 +930,13 @@ private struct ChipPariBonus: View {
 /// > **Deux écarts au design system, tous deux explicitement demandés.** Les bordures fines
 /// > sont proscrites (`Formes.swift`) : celle-ci fait un vrai travail — sur un ambre très
 /// > pâle posé sur du beige, c'est le trait qui dit où commence l'encadré. Et `#FFF3DC` est
-/// > une teinte nouvelle : elle est écrite en valeur littérale **ici** plutôt qu'ajoutée à
-/// > la palette, parce qu'elle ne peint que cet encadré et rien d'autre — un jeton
-/// > inviterait à la réutiliser ailleurs.
+/// > une teinte nouvelle, qui ne peint que cet encadré : ``Color/fondModeEmploi``, déclarée
+/// > dans `Couleurs.swift` depuis qu'elle a une variante sombre.
 ///
 /// Contraste mesuré : `#543925` sur `#FFF3DC` vaut **9,60:1**.
 private struct ModeEmploi: View {
 
-    private let fond = Color(hexadecimal: 0xFFF3DC)
+    private let fond = Color.fondModeEmploi
 
     private var etapes: [String] {
         [t("cotes.etape1"), t("cotes.etape2"), t("cotes.etape3")]
@@ -950,7 +949,7 @@ private struct ModeEmploi: View {
                     // Encre foncée sur l'ambre : 7,86:1. Le blanc y tomberait à 2,2:1.
                     Text("\(rang + 1)")
                         .font(.custom("HelveticaNeue-Medium", size: 11))
-                        .foregroundColor(.texte)
+                        .foregroundColor(.encreSurClair)
                         .frame(width: 20, height: 20)
                         .background(Color.accent)
                         .clipShape(Circle())
@@ -1007,7 +1006,7 @@ struct PastillePrevisualisation: View {
                 .font(.label)
                 .tracking(Tracking.label)
                 .textCase(.uppercase)
-                .foregroundColor(.primaire)       // 10,88:1 sur le blanc
+                .foregroundColor(.encrePrimaire)       // 10,88:1 sur le blanc
         }
         .padding(.leading, 12)
         .padding(.trailing, 14)

@@ -6,8 +6,9 @@ import SwiftUI
 /// son libellé appartiennent à Apple (Human Interface Guidelines), et la revue App Store
 /// les vérifie.
 ///
-/// **Style noir** : les deux écrans qui le montent ont un fond clair (`fondPrincipal`), et
-/// c'est le style qu'Apple prescrit sur un fond clair. Même hauteur (56 pt) et même rayon
+/// **Noir sur fond clair, blanc sur fond sombre** — ce qu'Apple prescrit pour chacun
+/// (`fondPrincipal` beige, ou `#1C1C1E` en mode sombre, où un bouton noir disparaîtrait).
+/// Le bouton natif ne relit pas son style quand l'apparence change : l'`id` le reconstruit. Même hauteur (56 pt) et même rayon
 /// que le bouton Google voisin, passé par l'écran — les deux ne divergent pas.
 ///
 /// Son libellé suit la langue du **système**, pas celle du ``SelecteurLangue`` : le
@@ -15,6 +16,7 @@ import SwiftUI
 struct BoutonApple: View {
 
     @ObservedObject var viewModel: AuthViewModel
+    @Environment(\.colorScheme) private var schema
     /// Le rayon du bouton Google posé à côté.
     let rayon: CGFloat
 
@@ -24,7 +26,8 @@ struct BoutonApple: View {
         } onCompletion: { resultat in
             Task { await viewModel.connexionApple(resultat) }
         }
-        .signInWithAppleButtonStyle(.black)
+        .signInWithAppleButtonStyle(schema == .dark ? .white : .black)
+        .id(schema)
         .frame(height: 56)
         .clipShape(RoundedRectangle(cornerRadius: rayon, style: .continuous))
         .disabled(viewModel.estEnChargement)

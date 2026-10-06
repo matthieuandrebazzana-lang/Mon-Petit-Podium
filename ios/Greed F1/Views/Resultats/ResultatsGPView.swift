@@ -214,7 +214,7 @@ struct SectionMesResultats: View {
             Text(total.map(\.enPoints) ?? "—")
                 .font(.scoreLg)
                 .tracking(Tracking.scoreLg)
-                .foregroundColor(.white)            // 10,88:1 sur le bordeaux
+                .foregroundColor(.encreSurAplat)            // 10,88:1 sur le bordeaux
 
             Spacer().frame(height: 4)
 
@@ -367,7 +367,7 @@ struct PastillePoints: View {
     }
 
     private var encre: Color {
-        pointsGagnes == nil ? .secondaire : .white
+        pointsGagnes == nil ? .secondaire : .encreSurAplat
     }
 }
 
@@ -398,11 +398,11 @@ struct Verdict: View {
                 if pointsGagnes > 0 {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.vertSauge)    // 4,01:1 sur le vert à 15 %
+                        .foregroundColor(.encreSucces)    // 4,01:1 sur le vert à 15 %
                 } else {
                     Text("×")
                         .font(.custom("HelveticaNeue-Medium", size: 13))
-                        .foregroundColor(.primaire)     // 8,94:1 sur le bordeaux à 10 %
+                        .foregroundColor(.encrePrimaire)     // 8,94:1 sur le bordeaux à 10 %
                 }
             } else {
                 Image(systemName: "clock")
@@ -466,7 +466,7 @@ private struct LigneClassementGP: View {
                 .tracking(-0.40)
                 // Les trois premières places en bordeaux : il n'en faut pas plus pour
                 // trouver le podium d'un coup d'œil dans une colonne de vingt-deux lignes.
-                .foregroundColor(estSurLePodium ? .primaire : .texte)
+                .foregroundColor(estSurLePodium ? .encrePrimaire : .texte)
                 .frame(width: 24)
                 .lineLimit(1)
 

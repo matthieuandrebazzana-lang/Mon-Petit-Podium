@@ -38,7 +38,9 @@ enum Rayon {
 /// l'autre, jamais les deux.
 ///
 /// **La teinte est le marron `secondaire` en très faible opacité, jamais un noir** : une
-/// ombre noire sur le beige tire vers le gris et salit la couleur.
+/// ombre noire sur le beige tire vers le gris et salit la couleur. **En sombre, si** : la
+/// teinte est ``Color/encreOmbre``, noire sur `#1C1C1E` — le `secondaire` sombre (`#EBEBF0`)
+/// y ferait un halo clair. La profondeur s'y lit d'abord à l'écart fond / surface.
 ///
 /// Les valeurs sont transposées de `frontend/src/index.css`, où **le rayon SwiftUI vaut la
 /// moitié du flou CSS** (`shadowRadius = blur / 2`).
@@ -51,20 +53,20 @@ extension View {
 
     /// `shadow-carte` — cartes blanches.
     func ombreCarte() -> some View {
-        self.shadow(color: Color.secondaire.opacity(0.04), radius: 1, y: 1)
-            .shadow(color: Color.secondaire.opacity(0.06), radius: 6, y: 4)
+        self.shadow(color: Color.encreOmbre.opacity(0.04), radius: 1, y: 1)
+            .shadow(color: Color.encreOmbre.opacity(0.06), radius: 6, y: 4)
     }
 
     /// `shadow-bloc` — blocs principaux au rayon 24.
     func ombreBloc() -> some View {
-        self.shadow(color: Color.secondaire.opacity(0.05), radius: 2, y: 2)
-            .shadow(color: Color.secondaire.opacity(0.09), radius: 14, y: 10)
+        self.shadow(color: Color.encreOmbre.opacity(0.05), radius: 2, y: 2)
+            .shadow(color: Color.encreOmbre.opacity(0.09), radius: 14, y: 10)
     }
 
     /// `shadow-flottant` — barres de navigation et d'action collées : l'ombre **remonte**,
     /// elle ne descend pas. Une seule couche.
     func ombreFlottant() -> some View {
-        self.shadow(color: Color.secondaire.opacity(0.10), radius: 12, y: -1)
+        self.shadow(color: Color.encreOmbre.opacity(0.10), radius: 12, y: -1)
     }
 
     /// `shadow-aplat` — **pour les aplats de couleur seulement**.
@@ -80,8 +82,8 @@ extension View {
     ///   surfaces **immobiles pendant qu'une voisine bouge** : chaque image recalcule toutes
     ///   les ombres de l'écran, y compris celles qui ne changent pas.
     func ombreAplat(intensite: Double = 1, allegee: Bool = false) -> some View {
-        self.shadow(color: Color.secondaire.opacity(0.10 * intensite), radius: 3, y: 2)
-            .shadow(color: Color.secondaire.opacity(allegee ? 0 : 0.16 * intensite),
+        self.shadow(color: Color.encreOmbre.opacity(0.10 * intensite), radius: 3, y: 2)
+            .shadow(color: Color.encreOmbre.opacity(allegee ? 0 : 0.16 * intensite),
                     radius: allegee ? 0 : 17, y: allegee ? 0 : 14)
     }
 }

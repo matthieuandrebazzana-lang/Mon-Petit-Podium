@@ -61,7 +61,7 @@ struct SelecteurLangue: View {
                 Text(langue.code)
                     .font(.segment)
                     .tracking(Tracking.segment)
-                    .foregroundColor(actif ? .white : .encreSegmentInactif)
+                    .foregroundColor(actif ? .encreSurAplat : .encreSegmentInactif)
             }
             .frame(width: 80, height: 40)
             .background {

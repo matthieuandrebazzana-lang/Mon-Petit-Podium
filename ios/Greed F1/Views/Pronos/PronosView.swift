@@ -205,7 +205,7 @@ struct PronosView: View {
                 HStack(spacing: 0) {
                     Text("\(retenus.count)")
                         .font(.custom("HelveticaNeue-Medium", size: 12))
-                        .foregroundColor(.primaire)
+                        .foregroundColor(.encrePrimaire)
                         .contentTransition(.numericText())
                     Text(t("pronos.surMax", CotesView.bonusMaximum))
                         .font(.custom("HelveticaNeue", size: 12))
@@ -300,7 +300,7 @@ struct PronosView: View {
                         Text(t("points.unite"))
                             .font(.custom("HelveticaNeue-Medium", size: 14))
                     }
-                    .foregroundColor(.primaire)       // 10,88:1 sur le beige
+                    .foregroundColor(.encrePrimaire)       // 10,88:1 sur le beige
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 }
@@ -314,11 +314,11 @@ struct PronosView: View {
                     Text(t("accueil.validerPronos"))
                         .opacity(envoi ? 0 : 1)
                     if envoi {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(.encreSurAplat)
                     }
                 }
                 .font(.custom("HelveticaNeue-Medium", size: 16))
-                .foregroundColor(.white)          // 10,88:1 sur #800111
+                .foregroundColor(.encreSurAplat)          // 10,88:1 sur #800111
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background {
@@ -517,7 +517,7 @@ enum EmplacementProno: String, CaseIterable, Identifiable {
                     Text(choisi?.pilote ?? t("pronos.nonSelectionne"))
                         .font(.custom(choisi == nil ? "HelveticaNeue" : "HelveticaNeue-Medium",
                                       size: 15))
-                        .foregroundColor(choisi == nil ? marche.encreDouce : .white)
+                        .foregroundColor(choisi == nil ? marche.encreDouce : .encreSurAplat)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -525,7 +525,7 @@ enum EmplacementProno: String, CaseIterable, Identifiable {
                     if let choisi {
                         Text(formaterPoints(choisi.points))
                             .font(.custom("HelveticaNeue", size: 13))
-                            .foregroundColor(.white)
+                            .foregroundColor(.encreSurAplat)
                             .lineLimit(1)
                     }
 
@@ -538,7 +538,7 @@ enum EmplacementProno: String, CaseIterable, Identifiable {
                 .frame(minHeight: 44)               // plancher tactile iOS
                 // Surface posée *à l'intérieur* d'un bloc : rayon `champ`, donc **aucune
                 // ombre** (§4.7).
-                .background(Color.white.opacity(choisi == nil ? 0.15 : 0.22))
+                .background(Color.encreSurAplat.opacity(choisi == nil ? 0.15 : 0.22))
                 .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
             }
             .buttonStyle(StyleAppui(.grandeSurface))
@@ -566,7 +566,7 @@ private struct BlocObligatoire<Contenu: View>: View {
                     .font(.custom("HelveticaNeue-Medium", size: 12))
                     .tracking(0.5)
                     .textCase(.uppercase)
-                    .foregroundColor(.white)      // 10,88:1 · 11,04:1
+                    .foregroundColor(.encreSurAplat)      // 10,88:1 · 11,04:1
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -577,10 +577,10 @@ private struct BlocObligatoire<Contenu: View>: View {
                 // bleu, qui est le plus clair des deux et donc celui qui contraint.
                 Text(t("pronos.obligatoire"))
                     .font(.labelSm)
-                    .foregroundColor(.white)
+                    .foregroundColor(.encreSurAplat)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.18))
+                    .background(Color.encreSurAplat.opacity(0.18))
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
 
@@ -617,7 +617,7 @@ private struct TuileEcheance: View {
             Text(valeur)
                 .font(.custom("HelveticaNeue-Medium", size: 40))
                 .tracking(-1.00)                  // −0,025em × 40
-                .foregroundColor(.white)          // 17,4:1 sur #1A1A1A
+                .foregroundColor(.encreSurAplat)          // 17,4:1 sur #1A1A1A
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
@@ -633,7 +633,11 @@ private struct TuileEcheance: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .background(Color.texte)
+        // L'aplat **fixe** `#1A1A1A`, pas ``Color/texte`` qui passe au blanc en sombre ; le
+        // filet le détache du fond sombre, dont il est trop proche (1,02:1).
+        .background(Color.encreSurClair)
+        .overlay(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous)
+            .strokeBorder(Color.filetAplat, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
     }
 }
@@ -771,7 +775,7 @@ private struct CarteParisBonus: View {
 
                     Text(nom)
                         .font(.custom("HelveticaNeue-Medium", size: 14))
-                        .foregroundColor(.texte)      // 7,86:1 sur l'ambre, 15,37:1 sur le blanc
+                        .foregroundColor(actif ? .encreSurClair : .texte)  // 7,86:1 sur l'ambre, 15,37:1 sur le blanc
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                 }
@@ -780,10 +784,10 @@ private struct CarteParisBonus: View {
                 // Noir à 15 % sur l'ambre (6,4:1), beige sur le blanc.
                 Text(formaterPoints(favori.points))
                     .font(.custom("HelveticaNeue-Medium", size: 12))
-                    .foregroundColor(.texte)
+                    .foregroundColor(actif ? .encreSurClair : .texte)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .background(actif ? Color.black.opacity(0.15) : Color.fondPrincipal)
+                    .background(actif ? Color.voile.opacity(0.15) : Color.fondPrincipal)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .lineLimit(1)
 
@@ -853,7 +857,7 @@ private struct FeuilleChoixPilote: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(t("commun.fermer")) { fermer() }
-                        .foregroundColor(.primaire)
+                        .foregroundColor(.encrePrimaire)
                 }
             }
         }
@@ -889,12 +893,12 @@ private struct FeuilleChoixPilote: View {
 
                 Text(formaterPoints(cote.points))
                     .font(.custom("HelveticaNeue-Medium", size: 13))
-                    .foregroundColor(.primaire)   // 10,88:1 sur le blanc
+                    .foregroundColor(.encrePrimaire)   // 10,88:1 sur le blanc
                     .lineLimit(1)
 
                 Image(systemName: actif ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 18))
-                    .foregroundColor(actif ? .primaire : .secondaire.opacity(0.35))
+                    .foregroundColor(actif ? .encrePrimaire : .secondaire.opacity(0.35))
             }
             .padding(.horizontal, 14)
             .frame(minHeight: 52)

@@ -274,7 +274,7 @@ struct RejoindreChampionnatView: View {
     /// d'autre sur cet écran ne peut le dire.
     private var anneauFocus: some View {
         RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous)
-            .strokeBorder(Color.primaire, lineWidth: 2)
+            .strokeBorder(Color.encrePrimaire, lineWidth: 2)
             .matchedGeometryEffect(id: indexActif, in: espaceAnneau, isSource: false)
             .accessibilityHidden(true)
     }
@@ -405,7 +405,7 @@ struct RejoindreChampionnatView: View {
                 // Le libellé reste en place, invisible, sous le spinner : le bouton ne
                 // change pas de taille, et le texte revient à l'identique en cas d'échec.
                 Text(t("rejoindre.bouton")).opacity(envoi ? 0 : 1)
-                if envoi { ProgressView().tint(.white) }
+                if envoi { ProgressView().tint(.encreSurAplat) }
             }
             .habillageBoutonPrincipal(actif: codeComplet)
         }
