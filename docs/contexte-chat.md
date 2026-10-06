@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.2
 Version backend actuelle : 0.84.0
-Version iOS actuelle : 0.49.2
+Version iOS actuelle : 0.49.3
 
 ## STACK TECHNIQUE
 
@@ -64,7 +64,9 @@ Landing page publique sur greed-f1.com
 Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 
-## CE QUI EST FAIT — VERSION iOS (0.49.2)
+## CE QUI EST FAIT — VERSION iOS (0.49.3)
+
+Drapeau de Singapour (0.49.3) : `flag-singapour` n'est plus deux bandes rouge / blanc mais le vrai drapeau — croissant et cinq étoiles blancs sur la moitié rouge, tracés de `country-flag-icons/3x2/SG.svg`, rouge `#EF3340` (celui de `TeintesDrapeaux`). Corrigé côté iOS seulement : `DRAPEAUX.singapour` (web) reste en bandes, et rejouer `extraire-gp.mjs` écraserait le fichier — à corriger côté web pour réaligner (`ios/CLAUDE.md` §6).
 
 Bouton du widget « Prochain GP » de l'accueil (0.49.2) : `pronosValides` n'est plus mocké. `ProchainGrandPrix.aDesPronostics` lit en direct (RLS) s'il existe au moins un pronostic du joueur pour ce GP, relu au retour du parcours de pronostics. Ouvert + pronos → « Voir mes pronos » ; ouvert sans → « Faire mes pronos » (cotes, puis saisie) ; fermé + pronos → « Voir mes pronos » (récap) ; fermé sans → rien ; existence inconnue (chargement / échec) → aucun bouton, widget toujours tappable.
 

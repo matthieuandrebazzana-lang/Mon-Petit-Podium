@@ -323,13 +323,20 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 > `scripts/extraire-gp.mjs` lit les trois tables de `frontend/src/composants/`
 > (`DRAPEAUX`, `DRAPEAUX_SVG`, `TRACES`) et en écrit les fichiers de `Ressources/flags/`
 > et `Ressources/traces/`, plus la table des teintes de `DrapeauxGP.swift`. Un cadrage ou
-> un chemin recopié à la main divergerait de la source au premier ajustement. **Cinq
-> drapeaux sont des bandes** (Pays-Bas, Italie, Espagne, Azerbaïdjan, Singapour) : c'est
-> ce que la planche `assets/flags.svg` ne dessine pas, et ce que le web rend en dégradé.
+> un chemin recopié à la main divergerait de la source au premier ajustement. **Quatre
+> drapeaux sont des bandes** (Pays-Bas, Italie, Espagne, Azerbaïdjan) : c'est ce que la
+> planche `assets/flags.svg` ne dessine pas, et ce que le web rend en dégradé.
 > Ajouter un Grand Prix = l'ajouter **côté web**, puis rejouer le script.
 >
+> **Exception : `flag-singapour` (iOS 0.49.3).** Le web le décrit encore en deux bandes,
+> sans croissant ni étoiles. Le fichier iOS est le vrai drapeau, tracés de
+> `country-flag-icons/3x2/SG.svg` (la bibliothèque des drapeaux pilotes), rouge ramené
+> à `#EF3340` pour rester celui de la table des teintes. **Rejouer `extraire-gp.mjs`
+> l'écrase** : le restaurer depuis git tant que `DRAPEAUX.singapour` n'est pas corrigé
+> côté web.
+>
 > **Les deux familles de drapeaux ne se confondent pas.** `flag-<slug>` peint un pays
-> **hôte** — il habille une carte de Grand Prix, et cinq d'entre eux sont des bandes que
+> **hôte** — il habille une carte de Grand Prix, et quatre d'entre eux sont des bandes que
 > le web rend en dégradé. `drapeau-<code>` peint la **nationalité d'un pilote**, en fond
 > d'une ligne de classement, et il en faut **seize** : la grille 2026 compte l'Australie,
 > la Nouvelle-Zélande, le Brésil, le Mexique, le Canada, la Thaïlande et l'Argentine, sept
