@@ -360,6 +360,7 @@ final class AuthViewModel: ObservableObject {
     /// Efface tout ce qui appartient au compte (§2.6) : deux personnes qui se relaient
     /// sur le même téléphone ne voient jamais les données de l'autre.
     private func oublierCompte() {
+        CacheService.partage.vider()
         profil = nil
         estAdmin = false
         modeAdminActif = false

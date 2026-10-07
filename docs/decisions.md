@@ -978,3 +978,42 @@ du code qui documente les contrastes. *`.preferredColorScheme` seul* : retour à
 drapeau comprises* : la pastille « Terminé » serait devenue un vert sauge à 2,87:1 sur
 `#2C2C2E` ; ce qui est posé sur une image fixe garde les valeurs claires (`…Fixe`).
 
+## 27. Cache mémoire *stale-while-revalidate* sur iOS (révise §7.6 de `swift-app.md`)
+
+**Décision.** L'app iOS (`0.51.0`) adopte le modèle du web : un écran affiche **aussitôt**
+ce qu'il savait, puis relit en arrière-plan si la valeur a dépassé sa durée de validité.
+Un seul propriétaire, `Services/CacheService.swift` (`@MainActor`, singleton) :
+`charger(clé, durée, forcer, afficher, lire)`. Validité : **60 s** pour les championnats,
+le classement et les statistiques ; **5 min** pour le calendrier et le prochain GP.
+
+- **Clé = compte + route**, et `vider()` à la déconnexion comme à la suppression du
+  compte : deux personnes sur un même téléphone ne voient jamais les données de l'autre
+  (`architecture.md` §9).
+- **Invalidation à l'écriture, à deux étages.** `charger(forcer: true)` — déjà appelé après
+  chaque création, adhésion, départ, photo — périme sa clé. Et toute écriture réussie
+  d'`APIClient` périme **tout** : une voiture repeinte change le classement, un pronostic
+  envoyé n'a pas de `charger(forcer:)` qui lui corresponde. Périmer n'est pas effacer : la
+  valeur reste affichée pendant la relecture, sans spinner.
+- **Mémoire seulement.** Rien sur disque : le hors ligne (§7.2) reste hors périmètre.
+
+**Livré avec** (même version, mêmes raisons de performance) : `GET /calendrier` (backend
+`0.85.0`, une requête au lieu d'un appel `cotes_du_grand_prix` par GP), un appel par GP
+dans « Mes Grands Prix » (`/resultats?championnat_id=`), `ImageCachee` (`NSCache` par
+URL) à la place d'`AsyncImage`, la vue Piste construite au premier tap, et le keep-alive
+Railway (`/ping` + service cron `keepalive/`, `architecture.md` §9).
+
+**Raison.** Sans cache, chaque changement d'onglet rappelait sa route : sur un Railway
+lent ou endormi, l'écran attendait ce qu'il venait d'afficher. La décision « pas de cache »
+datait de l'étape 1, quand la liste déjà en mémoire de l'instance suffisait ; elle ne
+couvre pas un écran **recréé** (détail d'un championnat, profil), qui repartait d'un
+spinner à chaque ouverture.
+
+**Écarté.** *`URLCache` / en-têtes HTTP* : le backend ne pose pas de `Cache-Control`, et
+le cache HTTP ne sait pas servir une valeur périmée **puis** la remplacer. *Cache sur
+disque* : c'est le chantier du hors ligne, avec ses questions d'invalidation entre deux
+lancements. *Invalider seulement la clé écrite* : il faudrait que chaque écriture sache
+quelles lectures elle touche — exactement le savoir qui diverge au premier ajout.
+*Garder la piste montée invisible dès l'ouverture* (choix précédent, contre la saccade de
+la première bascule) : on paie désormais la construction au premier tap plutôt qu'à
+chaque ouverture du détail, pour un écran que la plupart ouvrent pour le classement.
+

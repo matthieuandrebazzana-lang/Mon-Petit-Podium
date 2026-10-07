@@ -10,7 +10,9 @@ import SwiftUI
 ///
 /// **Données** : ``GrandsPrixJoues`` restreint à ce seul GP, **résultats disponibles ou
 /// non** — l'accueil dit la course terminée avant que le scraper n'ait jugé, et ses paris
-/// s'affichent alors en attente.
+/// s'affichent alors en attente. **Un seul appel** (`/resultats?championnat_id=`) : le
+/// `gpId` est connu, aucun calendrier n'est relu, et le championnat vient de
+/// ``MesChampionnats`` par l'environnement.
 ///
 /// **Rien joué, ou aucun championnat** (la route des paris en demande un) : le classement
 /// officiel, comme avant (``ResultatsGPView``).
@@ -21,6 +23,7 @@ struct MesResultatsGPView: View {
     let date: String
 
     @StateObject private var donnees: GrandsPrixJoues
+    @Environment(\.championnatParDefaut) private var championnatParDefaut
 
     init(grandPrix: GrandPrixPronos, date: String) {
         self.grandPrix = grandPrix
@@ -47,7 +50,7 @@ struct MesResultatsGPView: View {
                 attente
             }
         }
-        .task { await donnees.charger() }
+        .task { await donnees.charger(championnatConnu: championnatParDefaut) }
     }
 
     private func detail(_ gp: GrandsPrixJoues.GrandPrixJoue) -> some View {
@@ -74,7 +77,7 @@ struct MesResultatsGPView: View {
             Group {
                 if case .echec(let erreur) = donnees.etat {
                     EchecChargement(erreur: erreur) {
-                        Task { await donnees.charger() }
+                        Task { await donnees.charger(championnatConnu: championnatParDefaut) }
                     }
                 } else {
                     ChargementPronos()

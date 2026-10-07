@@ -2208,9 +2208,30 @@ course, circuits, palmarès), la liste des 12 GP, `NationalitesPilotes`, `Drapea
 **Tranché avant l'étape 1 :**
 
 - **« 12 Grands Prix restants » reste une constante fixe** — pas de comptage en base.
-- **Pas de cache de session** : chaque écran recharge ses données à chaque ouverture. La
-  liste déjà affichée reste visible pendant le rechargement ; le spinner ne sert qu'au
-  premier chargement et après un échec (`MesChampionnats`).
+- ~~**Pas de cache de session**~~ — **révisé en iOS `0.51.0`** (`docs/decisions.md` §27) :
+  **cache mémoire *stale-while-revalidate***, le modèle du web (`lib/useDonnees.js`).
+  `Services/CacheService.swift`, singleton, une clé par route préfixée par l'identifiant
+  du compte, vidé à la déconnexion. Validité : **60 s** pour `championnats/moi`,
+  `championnats/{id}/classement` et `profils/{id}/stats` ; **5 min** pour `calendrier` et
+  le prochain GP de l'accueil. Une valeur connue s'affiche **aussitôt** ; périmée, elle
+  reste affichée pendant la relecture. **Invalidation** : `charger(forcer: true)` périme
+  sa clé, et toute écriture réussie d'`APIClient` (`POST`/`PATCH`/`DELETE`) périme tout —
+  périmer n'efface pas, la valeur reste affichable jusqu'à la relecture. Branché sur
+  `MesChampionnats` (accueil, onglet Championnats), `ProchainGrandPrix` (accueil),
+  `ClassementChampionnat` (détail), `StatistiquesProfil` (profil), `CalendrierSaison`.
+  Le spinner ne sert toujours qu'au premier chargement et après un échec.
+- **Calendrier : `GET /calendrier`** (backend `0.85.0`) et non plus `/scraper/cotes` —
+  `a_des_cotes` au lieu des marchés complets, une requête. Les cotes détaillées ne se
+  lisent qu'à l'ouverture d'un GP (`DonneesPronostics`).
+- **« Mes / Ses Grands Prix » : un appel par GP** — `GET /grands-prix/{gp}/resultats?
+  championnat_id=` sert podium **et** paris des membres. Le championnat vient de
+  `MesChampionnats` (`EnvironmentValues.championnatParDefaut`), `/championnats/moi` n'est
+  rappelée qu'en repli. « Mes résultats » (un seul GP) ne lit plus aucun calendrier.
+- **Photos : `ImageCachee`** (`Views/Composants/ImageCachee.swift`) remplace `AsyncImage` —
+  `NSCache` partagé indexé par URL (l'URL `?v=` change à chaque dépôt), décodage hors du
+  fil principal, téléchargements en vol mutualisés. Plus de clignotement d'initiale.
+- **Vue Piste du détail** : construite au **premier** tap sur « Piste » (`pisteVue`), puis
+  gardée montée — les bascules suivantes ne changent que l'opacité.
 - **Le hors ligne (§7.2) est hors périmètre** de ce chantier : il viendra après.
 
 **Étape 1, mise en œuvre.** `Services/MesChampionnats.swift` est le propriétaire unique :

@@ -4,9 +4,10 @@ import Foundation
 /// comme celui d'un autre membre : **la même route pour les deux**, et c'est ce qui permet
 /// de comparer les deux grilles.
 ///
-/// Possédée par l'écran (`@StateObject`). **Pas de cache de session** (`docs/swift-app.md`
-/// §7.6) : chaque apparition rappelle la route, la grille déjà affichée reste en place
-/// pendant ce rechargement, et le spinner ne sert qu'au premier chargement et après un échec.
+/// Possédée par l'écran (`@StateObject`). **Cache *stale-while-revalidate*, 60 s**
+/// (``CacheService``, `docs/swift-app.md` §7.6) : la grille connue s'affiche aussitôt, et
+/// n'est relue que si elle a plus d'une minute. Le spinner ne sert qu'au premier
+/// chargement et après un échec.
 @MainActor
 final class StatistiquesProfil: ObservableObject {
 
@@ -29,7 +30,7 @@ final class StatistiquesProfil: ObservableObject {
 
     /// `profilId` nul : le compte n'a pas pu être lu, il n'y a personne à interroger.
     /// C'est un échec rejouable, pas un chargement sans fin.
-    func charger(profilId: UUID?) async {
+    func charger(profilId: UUID?, forcer: Bool = false) async {
         guard let profilId else {
             if stats == nil { etat = .echec(.reseau) }
             return
@@ -42,8 +43,12 @@ final class StatistiquesProfil: ObservableObject {
         do {
             // L'UUID en minuscules : la forme que sert le backend, et celle de ses journaux.
             let chemin = "profils/\(profilId.uuidString.lowercased())/stats"
-            let lues: StatsProfil = try await APIClient.partage.requete(chemin)
-            etat = .pret(lues)
+            try await CacheService.partage.charger(
+                chemin, duree: CacheService.Duree.court, forcer: forcer,
+                afficher: { (lues: StatsProfil) in
+                    if etat != .pret(lues) { etat = .pret(lues) }
+                },
+                lire: { try await APIClient.partage.requete(chemin) })
         } catch is CancellationError {
             // Écran quitté pendant l'appel : rien à signaler.
         } catch let erreur as ErreurAPI {

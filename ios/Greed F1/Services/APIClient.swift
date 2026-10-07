@@ -97,8 +97,12 @@ final class APIClient {
         var tentative = 0
         while true {
             do {
-                return try await une(chemin, methode: methode, corps: corps,
-                                     parametres: parametres)
+                let donnees = try await une(chemin, methode: methode, corps: corps,
+                                            parametres: parametres)
+                // Une écriture réussie périme tout le cache : ce qu'elle change ne se
+                // limite pas à sa route (``CacheService``).
+                if methode != .get { await CacheService.partage.toutPerimer() }
+                return donnees
             } catch ErreurAPI.reseau where tentative < attentes.count {
                 try? await Task.sleep(for: attentes[tentative])
                 tentative += 1

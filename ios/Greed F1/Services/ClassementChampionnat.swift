@@ -7,9 +7,9 @@ import Foundation
 /// > se croiser avec un Grand Prix noté entre les deux — une voiture qui ne dit plus le
 /// > score de sa ligne.
 ///
-/// **Pas de cache de session** (`docs/swift-app.md` §7.6) : chaque apparition de l'écran
-/// rappelle la route, et le classement déjà affiché reste en place pendant ce
-/// rechargement. Le spinner ne sert qu'au premier chargement et après un échec.
+/// **Cache *stale-while-revalidate*, 60 s** (``CacheService``, `docs/swift-app.md` §7.6) :
+/// rouvrir le championnat affiche aussitôt le classement connu, relu en arrière-plan s'il
+/// a plus d'une minute. Le spinner ne sert qu'au premier chargement et après un échec.
 @MainActor
 final class ClassementChampionnat: ObservableObject {
 
@@ -31,7 +31,8 @@ final class ClassementChampionnat: ObservableObject {
         self.championnatId = championnatId
     }
 
-    func charger() async {
+    /// - Parameter forcer: rappelle la route même si le cache est frais.
+    func charger(forcer: Bool = false) async {
         guard !enCours else { return }
         enCours = true
         defer { enCours = false }
@@ -40,8 +41,12 @@ final class ClassementChampionnat: ObservableObject {
         do {
             // L'UUID en minuscules : la forme que sert le backend, et celle de ses journaux.
             let chemin = "championnats/\(championnatId.uuidString.lowercased())/classement"
-            let membres: [Membre] = try await APIClient.partage.requete(chemin)
-            etat = .pret(membres)
+            try await CacheService.partage.charger(
+                chemin, duree: CacheService.Duree.court, forcer: forcer,
+                afficher: { (membres: [Membre]) in
+                    if etat != .pret(membres) { etat = .pret(membres) }
+                },
+                lire: { try await APIClient.partage.requete(chemin) })
         } catch is CancellationError {
             // Écran quitté pendant l'appel : rien à signaler.
         } catch let erreur as ErreurAPI {

@@ -46,12 +46,14 @@ struct HistoriqueGPView: View {
     @Namespace private var espaceHeros
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
+    @Environment(\.championnatParDefaut) private var championnatParDefaut
 
     private let margeLaterale: CGFloat = 16
 
     /// - Parameters:
     ///   - profilId: le membre ; `nil` = le compte connecté.
-    ///   - championnatId: un championnat partagé ; `nil` = le premier des miens.
+    ///   - championnatId: un championnat partagé ; `nil` = le premier des miens
+    ///     (``EnvironmentValues/championnatParDefaut``).
     init(titre: String? = nil, profilId: UUID? = nil,
          championnatId: UUID? = nil, rang: Int? = nil, voiture: VoitureMembre? = nil) {
         self.titreRecu = titre
@@ -129,7 +131,7 @@ struct HistoriqueGPView: View {
             }
         }
         .toolbar(gpOuvert == nil ? .visible : .hidden, for: .tabBar)
-        .task { await donnees.charger() }
+        .task { await donnees.charger(championnatConnu: championnatParDefaut) }
     }
 
     // MARK: - Le héros
@@ -174,7 +176,7 @@ struct HistoriqueGPView: View {
 
         case .echec(let erreur):
             EchecChargement(erreur: erreur) {
-                Task { await donnees.charger() }
+                Task { await donnees.charger(championnatConnu: championnatParDefaut) }
             }
             .padding(.horizontal, margeLaterale)
 

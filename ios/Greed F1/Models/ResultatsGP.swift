@@ -1,10 +1,11 @@
 import Foundation
 
 /// Les résultats d'un Grand Prix, tels que les sert `GET /grands-prix/{id}/resultats`
-/// (`ResultatsServis`, `docs/swift-app.md` §3.6) — appelée **sans** `championnat_id`.
+/// (`ResultatsServis`, `docs/swift-app.md` §3.6) — avec ou sans `championnat_id`.
 ///
-/// Seuls les champs que l'écran lit sont décodés : `grand_prix` redit ce que le calendrier
-/// a déjà transmis, et `membres` vaut `nil` sans `championnat_id`.
+/// Seuls les champs lus sont décodés. `membres` vaut `nil` sans `championnat_id` : avec,
+/// ce sont les paris de chaque membre — ce que ``GrandsPrixJoues`` lisait par une seconde
+/// route (`…/pronostics/championnat/{id}`), qui sert la même fonction SQL.
 ///
 /// > **Ni pole ni meilleur tour** : le backend ne les sert pas. Ils ne sont pas inventés.
 struct ResultatsGP: Decodable, Equatable {
@@ -15,25 +16,42 @@ struct ResultatsGP: Decodable, Equatable {
     let classement: [LigneResultat]
     /// `grand_prix.statut_resultats` vaut `provisoire` — ``StatutResultats``.
     let provisoire: Bool
+    /// `grand_prix.nom` et `grand_prix.date_course` — de quoi nommer le GP sans relire un
+    /// calendrier. `nil` si le résumé est illisible.
+    let nomGrandPrix: String?
+    let dateCourse: Date?
+    /// Les paris de chaque membre — **`nil` = pas demandé** (sans `championnat_id`), jamais
+    /// « championnat vide ».
+    let membres: [MembrePronostics]?
 
     enum CodingKeys: String, CodingKey {
-        case disponible, classement
+        case disponible, classement, membres
         case recupereLe = "recupere_le"
         case grandPrix = "grand_prix"
     }
 
     private struct Resume: Decodable {
+        let nom: String?
+        let dateCourse: Date?
         let statutResultats: String?
-        enum CodingKeys: String, CodingKey { case statutResultats = "statut_resultats" }
+        enum CodingKeys: String, CodingKey {
+            case nom
+            case dateCourse = "date_course"
+            case statutResultats = "statut_resultats"
+        }
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         disponible = try c.decode(Bool.self, forKey: .disponible)
         recupereLe = try c.decodeIfPresent(Date.self, forKey: .recupereLe)
-        classement = try c.decode([LigneResultat].self, forKey: .classement)
-        let resume = try? c.decodeIfPresent(Resume.self, forKey: .grandPrix)
+        // Défaut `[]` du modèle Pydantic : `disponible: false` peut venir sans classement.
+        classement = try c.decodeIfPresent([LigneResultat].self, forKey: .classement) ?? []
+        let resume = (try? c.decodeIfPresent(Resume.self, forKey: .grandPrix)) ?? nil
         provisoire = StatutResultats.estProvisoire(resume?.statutResultats)
+        nomGrandPrix = resume?.nom
+        dateCourse = resume?.dateCourse
+        membres = try c.decodeIfPresent([MembrePronostics].self, forKey: .membres)
     }
 }
 

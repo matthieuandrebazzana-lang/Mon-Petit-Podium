@@ -24,7 +24,7 @@ struct PastilleProfil: View {
     var body: some View {
         Group {
             if let photo {
-                AsyncImage(url: photo) { image in
+                ImageCachee(url: photo) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     initiale

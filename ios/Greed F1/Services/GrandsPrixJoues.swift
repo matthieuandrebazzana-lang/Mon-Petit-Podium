@@ -7,14 +7,19 @@ import Foundation
 ///
 /// | Ce qui est lu | Par où |
 /// |---|---|
-/// | Les Grands Prix de la saison | `GET /championnats/{id}/calendrier` |
-/// | Ses paris sur **un** GP terminé | `GET /grands-prix/{gp}/pronostics/championnat/{id}`, filtré sur son `profil_id` |
-/// | Le podium réel | `GET /grands-prix/{gp}/resultats` |
+/// | Les Grands Prix de la saison | `GET /championnats/{id}/calendrier` — **pas** pour un seul GP |
+/// | Ses paris **et** le podium d'un GP | `GET /grands-prix/{gp}/resultats?championnat_id=`, paris filtrés sur son `profil_id` |
+///
+/// **Un appel par GP, pas deux** : la route des résultats sert, avec `championnat_id`, les
+/// paris de chaque membre (la même fonction SQL que `…/pronostics/championnat/{id}`).
+/// **Un seul GP** (« Mes résultats » de l'accueil) : ni calendrier ni liste des
+/// championnats — le résumé `grand_prix` de la réponse le nomme.
 ///
 /// **Un pronostic n'appartient pas à un championnat** (`pronostics_du_championnat` lit
 /// `pronostics` par `profil_id` et `gp_id` seuls) : n'importe quel championnat partagé
 /// avec le membre donne donc les mêmes paris. Depuis son propre profil, c'est le premier
-/// de `GET /championnats/moi`.
+/// de ``MesChampionnats``, transmis par l'appelant — `GET /championnats/moi` n'est rappelée
+/// qu'en dernier recours, si la liste n'était pas encore lue.
 ///
 /// **Les points sont des entiers, jamais une cote** (`CLAUDE.md` §3.1).
 @MainActor
@@ -77,7 +82,9 @@ final class GrandsPrixJoues: ObservableObject {
         self.gpId = gpId
     }
 
-    func charger() async {
+    /// - Parameter championnatConnu: le premier de ``MesChampionnats`` (``MesChampionnats/premierId``),
+    ///   quand l'appelant n'a pas fixé de championnat — évite de rappeler `/championnats/moi`.
+    func charger(championnatConnu: UUID? = nil) async {
         guard !enCours else { return }
         enCours = true
         defer { enCours = false }
@@ -90,7 +97,7 @@ final class GrandsPrixJoues: ObservableObject {
             } else {
                 membre = try await SupabaseManager.partage.client.auth.session.user.id
             }
-            guard let championnat = try await championnatALire() else {
+            guard let championnat = try await championnatALire(connu: championnatConnu) else {
                 etat = .sansChampionnat
                 return
             }
@@ -106,23 +113,30 @@ final class GrandsPrixJoues: ObservableObject {
         }
     }
 
-    private func championnatALire() async throws -> UUID? {
+    private func championnatALire(connu: UUID?) async throws -> UUID? {
         if let championnatId { return championnatId }
+        if let connu { return connu }
         let miens: [Championnat] = try await APIClient.partage.requete("championnats/moi")
         return miens.first?.id
     }
 
     private func lire(membre: UUID, championnat: UUID) async throws -> [GrandPrixJoue] {
         let idChampionnat = championnat.uuidString.lowercased()
+        // Un seul GP : son identifiant suffit, le calendrier du championnat n'apprendrait rien.
+        if let gpId {
+            let gp = try await Self.lireGrandPrix(id: gpId, nom: nil, dateCourse: nil,
+                                                  membre: membre, championnat: idChampionnat)
+            return gp.map { [$0] } ?? []
+        }
         let saison: [GrandPrixDuChampionnat] =
             try await APIClient.partage.requete("championnats/\(idChampionnat)/calendrier")
-        let termines = gpId.map { id in saison.filter { $0.id == id } }
-            ?? saison.filter(\.resultatsDisponibles)
+        let termines = saison.filter(\.resultatsDisponibles)
 
         let joues = try await withThrowingTaskGroup(of: (Int, GrandPrixJoue?).self) { groupe in
             for (rang, gp) in termines.enumerated() {
                 groupe.addTask {
-                    (rang, try await Self.lireGrandPrix(gp, membre: membre, championnat: idChampionnat))
+                    (rang, try await Self.lireGrandPrix(id: gp.id, nom: gp.nom, dateCourse: gp.dateCourse,
+                                                        membre: membre, championnat: idChampionnat))
                 }
             }
             var lus: [(Int, GrandPrixJoue)] = []
@@ -135,22 +149,23 @@ final class GrandsPrixJoues: ObservableObject {
         return joues.sorted { $0.0 < $1.0 }.map(\.1)
     }
 
-    /// Un GP : ses paris et, **en parallèle**, le podium. `nil` s'il n'a pas joué.
-    private nonisolated static func lireGrandPrix(_ gp: GrandPrixDuChampionnat, membre: UUID,
+    /// Un GP : ses paris et le podium, **en un appel**. `nil` s'il n'a pas joué.
+    ///
+    /// `nom` et `dateCourse` nuls : ceux du résumé `grand_prix` de la réponse.
+    private nonisolated static func lireGrandPrix(id: UUID, nom: String?, dateCourse: Date?,
+                                                  membre: UUID,
                                                   championnat: String) async throws -> GrandPrixJoue? {
-        let idGp = gp.id.uuidString.lowercased()
-        async let membres: [MembrePronostics] =
-            APIClient.partage.requete("grands-prix/\(idGp)/pronostics/championnat/\(championnat)")
-        // Un podium illisible ne masque pas les paris : la section « Résultat réel » saute.
-        async let resultats: ResultatsGP? = try? APIClient.partage.requete("grands-prix/\(idGp)/resultats")
+        let resultats: ResultatsGP = try await APIClient.partage.requete(
+            "grands-prix/\(id.uuidString.lowercased())/resultats",
+            parametres: [URLQueryItem(name: "championnat_id", value: championnat)])
 
-        guard let ligne = try await membres.first(where: { $0.profilId == membre }),
+        guard let ligne = resultats.membres?.first(where: { $0.profilId == membre }),
               ligne.aJoue else { return nil }
 
-        let classement = await resultats?.classement ?? []
-        let podium = (1...3).compactMap { place in classement.first { $0.position == place } }
-        return GrandPrixJoue(gpId: gp.id, nom: gp.nom, dateCourse: gp.dateCourse,
+        let podium = (1...3).compactMap { place in resultats.classement.first { $0.position == place } }
+        return GrandPrixJoue(gpId: id, nom: nom ?? resultats.nomGrandPrix ?? "",
+                             dateCourse: dateCourse ?? resultats.dateCourse,
                              totalPoints: ligne.totalPoints, pronostics: ligne.paris,
-                             podium: podium, provisoire: gp.provisoire)
+                             podium: podium, provisoire: resultats.provisoire)
     }
 }

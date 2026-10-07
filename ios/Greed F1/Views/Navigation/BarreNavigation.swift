@@ -55,6 +55,8 @@ struct BarreNavigation: View {
         .environment(\.monProfil, viewModel.profil)
         // La prévisualisation admin, pour les surfaces qui portent un bouton de pronostics.
         .environment(\.modePrevisualisation, viewModel.modePrevisualisation)
+        // Le championnat connu, pour « Mes Grands Prix » et « Mes résultats » (``GrandsPrixJoues``).
+        .environment(\.championnatParDefaut, mesChampionnats.premierId)
     }
 
     // MARK: - Apparence

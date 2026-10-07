@@ -109,10 +109,9 @@ struct VuePisteView: View {
     /// navigation reste la sienne : ni bandeau, ni chrome masqué. Faux, c'est l'écran plein.
     var integree: Bool = false
 
-    /// Vrai quand l'entrée des voitures peut partir. **Intégrée, la piste est montée dès
-    /// l'arrivée sur l'écran, invisible** (``ChampionnatDetailView`` garde ses deux vues
-    /// construites) : partie au montage, l'entrée se jouerait derrière le classement. Elle
-    /// attend donc le premier affichage, et ne se rejoue plus ensuite.
+    /// Vrai quand l'entrée des voitures peut partir. ``ChampionnatDetailView`` ne construit
+    /// plus la piste intégrée qu'au premier tap sur « Piste » : elle y arrive donc à `true`
+    /// et l'entrée part au montage. Le drapeau reste pour qui monterait la piste invisible.
     var lancerEntree: Bool = true
 
     /// Vrai une fois la piste montée. C'est lui qui lance l'entrée des voitures.

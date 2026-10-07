@@ -8,7 +8,7 @@ import SwiftUI
 /// en a finalement fait.
 ///
 /// > **Un seul appel pour les deux segments.** ``ClassementChampionnat`` lit
-/// > `GET /championnats/{id}/classement` à chaque apparition ; le classement et la piste
+/// > `GET /championnats/{id}/classement` (cache de 60 s, ``CacheService``) ; le classement et la piste
 /// > reçoivent **le même tableau**, et basculer de l'un à l'autre ne rappelle rien.
 ///
 /// **Les points sont des entiers, jamais une cote** (`CLAUDE.md` §3.1) : « 168 pts », et
@@ -77,8 +77,10 @@ struct ChampionnatDetailView: View {
 
     @State private var vue: Vue = .classement
 
-    /// Vrai dès le premier passage sur « Piste », et pour toujours : c'est lui qui lance
-    /// l'entrée des voitures, **une fois**. La piste est construite avant, invisible.
+    /// Vrai dès le premier passage sur « Piste », et pour toujours. **La piste n'est
+    /// construite qu'à ce moment-là** — sol, `Canvas`, photos des cockpits : qui ne regarde
+    /// que le classement ne la paie pas. Une fois construite, elle reste montée, et les
+    /// bascules suivantes ne font que changer son opacité (`visible(_:)`).
     @State private var pisteVue = false
 
     var body: some View {
@@ -93,13 +95,17 @@ struct ChampionnatDetailView: View {
             // ci-dessous qui les cache là où il se pose, exactement comme l'aplat du
             // bandeau les cache sur l'écran plein.
             //
-            // **Toujours monté**, en fondu comme le contenu : le recréer à chaque bascule
+            // **Monté au premier tap sur « Piste », puis toujours** (``pisteVue``), en fondu
+            // comme le contenu : le recréer à chaque bascule
             // redessinait la planche plein écran dans la transaction de la pastille. Masqué
             // à 0,001 et non à 0, pour la même raison que les contenus (`visible(_:)`).
-            SolPiste()
-                .ignoresSafeArea()
-                .opacity(vue == .piste ? 1 : 0.001)
-                .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
+            if pisteVue {
+                SolPiste()
+                    .ignoresSafeArea()
+                    .opacity(vue == .piste ? 1 : 0.001)
+                    .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
+                    .transition(.opacity)
+            }
 
             // **L'en-tête et le sélecteur ne défilent pas**, le contenu dessous oui. La
             // piste redevient un segment de cet écran : elle s'affiche **en place**, sous
@@ -129,6 +135,11 @@ struct ChampionnatDetailView: View {
                 // > ses cockpits et rejouait l'entrée des voitures dans la même image que le
                 // > départ de la pastille, qui saccadait. Le classement garde en prime sa
                 // > position de défilement.
+                //
+                // > **La piste n'est construite qu'au premier tap** (``pisteVue``), puis
+                // > reste montée : l'écran s'ouvre sans payer une vue qu'on ne regarde
+                // > peut-être pas. Le premier passage coûte sa construction, les suivants
+                // > ne basculent que l'opacité.
                 ZStack {
                     switch classement.etat {
                     case .chargement:
@@ -147,10 +158,13 @@ struct ChampionnatDetailView: View {
                         let membres = servis.map { $0.avecVoiture(de: monProfil) }
                         contenuClassement(membres)
                             .visible(vue == .classement)
-                        PisteIntegree(championnat: championnat, membres: membres,
-                                      lancerEntree: pisteVue)
-                            .equatable()
-                            .visible(vue == .piste)
+                        // Construite au premier tap sur « Piste », gardée ensuite.
+                        if pisteVue {
+                            PisteIntegree(championnat: championnat, membres: membres)
+                                .equatable()
+                                .visible(vue == .piste)
+                                .transition(.opacity)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -158,10 +172,12 @@ struct ChampionnatDetailView: View {
             }
         }
         .onChange(of: vue) { _, nouvelle in
-            if nouvelle == .piste { pisteVue = true }
+            if nouvelle == .piste && !pisteVue {
+                withAnimation(Mouvement.entree(Mouvement.passageEcran)) { pisteVue = true }
+            }
         }
-        // À chaque apparition, retour du profil d'un membre compris : pas de cache de
-        // session (`docs/swift-app.md` §7.6). Le classement affiché reste en place.
+        // À chaque apparition, retour du profil d'un membre compris — servi par le cache
+        // *stale-while-revalidate* (``CacheService``, 60 s, `docs/swift-app.md` §7.6).
         .task { await classement.charger() }
         // Le nom du championnat est déjà dans le contenu, à 28 pt : le répéter dans la
         // barre ferait doublon. Elle ne garde donc que le chevron de retour natif, qui
@@ -653,7 +669,7 @@ private struct PhotoChampionnat: View {
         GeometryReader { cadre in
             Group {
                 if let photo {
-                    AsyncImage(url: photo) { image in
+                    ImageCachee(url: photo) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         initiale(cote: cadre.size.width)
@@ -704,11 +720,9 @@ private struct PisteIntegree: View, Equatable {
 
     let championnat: Championnat
     let membres: [Membre]
-    let lancerEntree: Bool
 
     var body: some View {
-        VuePisteView(championnat: championnat, membres: membres,
-                     integree: true, lancerEntree: lancerEntree)
+        VuePisteView(championnat: championnat, membres: membres, integree: true)
     }
 }
 

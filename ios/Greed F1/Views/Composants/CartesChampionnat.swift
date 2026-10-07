@@ -102,7 +102,7 @@ struct CarteChampionnat: View {
                 // 56 pt calé sur la ligne de base d'un nom de 20 paraîtrait tomber. Absente,
                 // elle ne réserve pas sa place — aucune gouttière ne subsiste.
                 if let photo = championnat.photoUrl {
-                    AsyncImage(url: photo) { image in
+                    ImageCachee(url: photo) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Color.encreSurAplat.opacity(0.15)

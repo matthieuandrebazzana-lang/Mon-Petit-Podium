@@ -1,19 +1,20 @@
 import Foundation
 
-/// Ce que la base sait des Grands Prix de la saison, servi par `GET /scraper/cotes`
-/// (§3.4) — de quoi croiser la liste statique de ``CalendrierView``.
+/// Ce que la base sait des Grands Prix de la saison, servi par `GET /calendrier` (§3.4) —
+/// de quoi croiser la liste statique de ``CalendrierView``.
 ///
 /// > **La liste ne dépend pas de cet appel.** Les douze cartes viennent de
 /// > ``GrandPrixSaison/saison2026`` et s'affichent quoi qu'il arrive : l'échec fait perdre
 /// > les états et les identifiants, jamais le calendrier (`docs/swift-app.md` §7.6).
 ///
-/// Il n'y a **pas de route `GET /gp`** : `/scraper/cotes` est publique, rend tous les
-/// Grands Prix en base avec `id`, `statut`, les deux heures et leurs marchés — c'est la
-/// lecture que fait déjà le calendrier de la version web (`chargerCotesEnBase`).
+/// **`/calendrier` et non plus `/scraper/cotes`** (backend `0.85.0`) : le calendrier ne lit
+/// que `id`, le statut, les deux heures et l'**existence** de cotes (`a_des_cotes`) — une
+/// requête, là où `/scraper/cotes` relisait toutes les cotes de chaque GP. Les cotes
+/// détaillées ne se chargent qu'à l'ouverture d'un GP (``DonneesPronostics``).
 ///
-/// **Pas de cache de session** : chaque apparition de l'onglet rappelle la route. Les états
-/// déjà affichés restent en place pendant le rechargement — le spinner ne sert qu'au
-/// premier chargement et après un échec.
+/// **Cache *stale-while-revalidate*, 5 min** (``CacheService``) : revenir sur l'onglet
+/// affiche aussitôt les états connus, relus en arrière-plan s'ils ont plus de cinq minutes.
+/// Le spinner ne sert qu'au premier chargement et après un échec.
 @MainActor
 final class CalendrierSaison: ObservableObject {
 
@@ -35,15 +36,19 @@ final class CalendrierSaison: ObservableObject {
         return nil
     }
 
-    func charger() async {
+    func charger(forcer: Bool = false) async {
         guard !enCours else { return }
         enCours = true
         defer { enCours = false }
 
         if case .pret = etat {} else { etat = .chargement }
         do {
-            let liste: [GrandPrixEnBase] = try await APIClient.partage.requete("scraper/cotes")
-            etat = .pret(liste)
+            try await CacheService.partage.charger(
+                "calendrier", duree: CacheService.Duree.calendrier, forcer: forcer,
+                afficher: { (liste: [GrandPrixEnBase]) in
+                    if etat != .pret(liste) { etat = .pret(liste) }
+                },
+                lire: { try await APIClient.partage.requete("calendrier") })
         } catch is CancellationError {
             // Onglet quitté pendant l'appel : la prochaine apparition le relance.
         } catch let erreur as ErreurAPI {

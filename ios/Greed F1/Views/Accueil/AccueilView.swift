@@ -24,7 +24,7 @@ struct AccueilView: View {
     /// deux écrans ne s'aligneraient pas au passage de l'un à l'autre.
     private let margeLaterale: CGFloat = 16
 
-    /// Possédé par l'écran, relu à chaque apparition — pas de cache de session (§7.6).
+    /// Possédé par l'écran, servi par le cache *stale-while-revalidate* (``CacheService``, 5 min, §7.6).
     @StateObject private var prochainGP = ProchainGrandPrix()
 
     /// Grands Prix restants — lus sur la liste de la saison, voir ``GPRestants``.
@@ -90,7 +90,7 @@ struct AccueilView: View {
             .toolbar(.hidden, for: .navigationBar)
             .etapesPronos(libelleRetour: t("onglet.accueil"),
                           avancer: { cheminPronos.append($0) }) { cheminPronos.removeAll() }
-            // Rechargée à chaque apparition, pas de cache de session (§7.6).
+            // Servie par le cache *stale-while-revalidate* (``CacheService``, 60 s, §7.6).
             .task { await mesChampionnats.charger() }
             .task { await prochainGP.charger() }
             // Retour du parcours de pronostics : une grille vient peut-être d'être envoyée.
@@ -235,7 +235,7 @@ struct AccueilView: View {
 /// La pastille du compte : sa photo de profil, ou son initiale sur la teinte de la marque.
 ///
 /// **Même diamètre dans les deux cas** — seul le contenu change, jamais la composition de
-/// la barre. La photo est chargée par `AsyncImage` : tant qu'elle n'est pas là, c'est
+/// la barre. La photo est chargée par ``ImageCachee`` : tant qu'elle n'est pas là, c'est
 /// l'initiale qui tient la place, et non un disque vide.
 private struct Avatar: View {
 
@@ -247,7 +247,7 @@ private struct Avatar: View {
     var body: some View {
         Group {
             if let photo {
-                AsyncImage(url: photo) { image in
+                ImageCachee(url: photo) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     initiale

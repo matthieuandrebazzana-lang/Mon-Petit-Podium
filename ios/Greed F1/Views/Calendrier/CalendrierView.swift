@@ -7,7 +7,7 @@ import SwiftUI
 /// `screen-09-calendrier-milieu.PNG` et `screen-10-calendrier-bas.PNG`.
 ///
 /// > **La liste est statique, les états sont réels.** ``GrandPrixSaison/saison2026`` porte
-/// > les douze cartes ; ``CalendrierSaison`` (`GET /scraper/cotes`) leur ajoute ce que
+/// > les douze cartes ; ``CalendrierSaison`` (`GET /calendrier`) leur ajoute ce que
 /// > seule la base sait — **l'identifiant, le statut et l'existence de cotes**. Le
 /// > rapprochement se fait par ``SlugCircuit``, jamais par le nom brut. L'échec de
 /// > l'appel fait perdre les états, jamais la liste (`docs/swift-app.md` §7.6).
@@ -37,7 +37,7 @@ struct CalendrierView: View {
 
     // MARK: - Données
 
-    /// Possédé par l'écran et rappelé à chaque apparition — pas de cache de session (§7.6).
+    /// Possédé par l'écran, servi par le cache *stale-while-revalidate* (``CacheService``, 5 min, §7.6).
     @StateObject private var calendrier = CalendrierSaison()
 
     /// Les douze cartes, croisées avec ce que la base sait — ou avec rien, tant qu'elle n'a

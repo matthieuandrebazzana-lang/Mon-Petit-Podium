@@ -484,7 +484,7 @@ struct VueVoiture: View {
                     .font(.custom("HelveticaNeue-Medium", size: diametre * 0.44))
                     .foregroundColor(.encreSurAplat)
                 if let photo {
-                    AsyncImage(url: photo) { image in
+                    ImageCachee(url: photo) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Color.clear

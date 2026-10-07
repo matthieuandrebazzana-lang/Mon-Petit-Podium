@@ -38,7 +38,15 @@ bundle** — elle ne quitte jamais Railway.
 
 > **Cold start Railway.** Le plan gratuit met le service en veille. `502`/`503`/`504` sont
 > des **erreurs réseau**, pas des pannes : message « Connexion au serveur en cours… », et
-> réessayer marche. Voir `docs/swift-app.md` §7.
+> réessayer marche. Voir `docs/swift-app.md` §7. Un service cron (`keepalive/`) appelle
+> `/ping` toutes les 5 min (`docs/architecture.md` §9).
+
+> **Cache *stale-while-revalidate*** (`docs/decisions.md` §27). Une lecture d'écran passe
+> par `CacheService.partage.charger(clé, durée:, forcer:, afficher:, lire:)` — jamais un
+> second cache maison. 60 s (`CacheService.Duree.court`) pour ce qui bouge à chaque GP noté,
+> 5 min (`.calendrier`) pour le reste. Après une écriture, `charger(forcer: true)` ; les
+> écritures d'`APIClient` périment déjà tout. Une photo distante passe par `ImageCachee`,
+> **jamais** `AsyncImage`.
 
 ## 3. Règles de développement
 
@@ -226,13 +234,14 @@ ios/
     ├── Services/
     │   ├── SupabaseManager.swift  chemin direct, sous RLS
     │   ├── APIClient.swift        chemin Railway : Bearer, décodage, réessais, réveil
-    │   ├── MesChampionnats.swift  `GET /championnats/moi` — propriétaire unique, accueil + onglet
+    │   ├── MesChampionnats.swift  `GET /championnats/moi` — propriétaire unique, accueil + onglet ; `premierId` → `EnvironmentValues.championnatParDefaut`
     │   ├── ClassementChampionnat.swift  `GET /championnats/{id}/classement` — un appel, deux segments
     │   ├── StatistiquesProfil.swift  `GET /profils/{id}/stats` — le sien comme celui d'un membre
-    │   ├── CalendrierSaison.swift  `GET /scraper/cotes` — états et `gp_id` du calendrier
+    │   ├── CacheService.swift     cache mémoire stale-while-revalidate — clé compte + route, 60 s / 5 min, vidé à la déconnexion
+    │   ├── CalendrierSaison.swift  `GET /calendrier` — états, `gp_id` et `a_des_cotes` du calendrier
     │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil, lecture directe `grands_prix` + existence d'un pronostic du joueur (`pronostics`, RLS)
     │   ├── ResultatsGrandPrix.swift  `GET /grands-prix/{id}/resultats` — 404 / `disponible: false` ⇒ indisponible
-    │   ├── GrandsPrixJoues.swift  « Ses / Mes Grands Prix » : calendrier du championnat, puis paris (filtrés sur le membre) + résultats de chaque GP terminé
+    │   ├── GrandsPrixJoues.swift  « Ses / Mes Grands Prix » : calendrier du championnat, puis `GET /grands-prix/{gp}/resultats?championnat_id=` par GP terminé (podium + paris, filtrés sur le membre) ; un seul GP = un seul appel, sans calendrier
     │   ├── ResultatsParGrandPrix.swift  `GET /championnats/{id}/calendrier` puis `GET /grands-prix/{gp}/pronostics/championnat/{id}`, un GP à la fois
     │   ├── DonneesPronostics.swift  cotes + favoris (+ mes pronos en direct), bascule de favori, `POST …/pronostics`
     │   ├── Administration.swift   `POST /admin/action` — scraper sans figeage, jamais le secret
@@ -256,11 +265,12 @@ ios/
     │   │   ├── ErreurEnLigne.swift      refus d'une écriture, sous le bouton — jamais d'alerte
     │   │   ├── SelecteurSegmente.swift  sélecteur segmenté pleine largeur (une seule pastille `primaire`, ressort `Mouvement.glissement`, fond neutre + damier) — Classement / Piste
     │   │   ├── MentionProvisoire.swift  `StatutResultats` (provisoire, non évaluable) + la mention « Provisoire », PARTAGÉS
+    │   │   ├── ImageCachee.swift        `AsyncImage` avec `NSCache` partagé par URL (`CacheImages`) — avatars, photos de championnat, cockpits
     │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
-    │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste (`SelecteurSegmente`), menu « ⋯ » (code, photo si créateur, quitter), photo 100 pt réduite jusqu'à 72 pt pour un nom long, à équidistance du titre et du menu (`DispositionEntete`) — sans photo, rien : texte + ⋯ ; les deux contenus restent montés, seule l'opacité bascule (0,001, pas 0) ; damier en filigrane sur le sélecteur et la carte « Résultats par Grand Prix » — réels
+    │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste (`SelecteurSegmente`), menu « ⋯ » (code, photo si créateur, quitter), photo 100 pt réduite jusqu'à 72 pt pour un nom long, à équidistance du titre et du menu (`DispositionEntete`) — sans photo, rien : texte + ⋯ ; la piste n'est construite qu'au premier tap sur « Piste » (`pisteVue`), puis les deux contenus restent montés, seule l'opacité bascule (0,001, pas 0) ; damier en filigrane sur le sélecteur et la carte « Résultats par Grand Prix » — réels
     │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — reçoit le classement
     │   │   ├── ResultatsParGPView.swift     résultats par GP : sélecteur des GP terminés, paris de chacun en accordéon
     │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée

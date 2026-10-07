@@ -38,22 +38,31 @@ final class ProchainGrandPrix: ObservableObject {
 
     private var enCours = false
 
-    func charger() async {
+    /// Le GP passe par le cache *stale-while-revalidate* (``CacheService``, 5 min, comme le
+    /// calendrier) ; l'existence d'un pronostic, non — elle change au retour du parcours de
+    /// pronostics, et sa lecture est une requête d'une ligne.
+    func charger(forcer: Bool = false) async {
         guard !enCours else { return }
         enCours = true
         defer { enCours = false }
 
         if case .pret = etat {} else { etat = .chargement }
         do {
-            let reponse = try await SupabaseManager.partage.client
-                .from("grands_prix")
-                .select("id,nom,date_course,date_qualifications,statut,statut_resultats")
-                .or("statut.in.(a_venir,cotes_figees),date_course.gte.\(Self.debutDuJour())")
-                .order("date_course", ascending: true, nullsFirst: false)
-                .limit(1)
-                .execute()
-            let lus = try JSONDecoder.api.decode([GrandPrixEnBase].self, from: reponse.data)
-            etat = .pret(lus.first)
+            try await CacheService.partage.charger(
+                "prochain-gp", duree: CacheService.Duree.calendrier, forcer: forcer,
+                afficher: { (gp: GrandPrixEnBase?) in
+                    if etat != .pret(gp) { etat = .pret(gp) }
+                },
+                lire: {
+                    let reponse = try await SupabaseManager.partage.client
+                        .from("grands_prix")
+                        .select("id,nom,date_course,date_qualifications,statut,statut_resultats")
+                        .or("statut.in.(a_venir,cotes_figees),date_course.gte.\(Self.debutDuJour())")
+                        .order("date_course", ascending: true, nullsFirst: false)
+                        .limit(1)
+                        .execute()
+                    return try JSONDecoder.api.decode([GrandPrixEnBase].self, from: reponse.data).first
+                })
             await relirePronostics()
         } catch is CancellationError {
             // Écran quitté pendant l'appel : la prochaine apparition le relance.

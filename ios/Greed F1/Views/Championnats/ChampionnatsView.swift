@@ -75,7 +75,7 @@ struct ChampionnatsView: View {
             .toolbar(.hidden, for: .navigationBar)
             .etapesPronos(libelleRetour: t("retour.championnat"),
                           avancer: { cheminPronos.append($0) }) { cheminPronos.removeAll() }
-            // Rechargée à chaque apparition, pas de cache de session (§7.6).
+            // Servie par le cache *stale-while-revalidate* (``CacheService``, 60 s, §7.6).
             .task { await mesChampionnats.charger() }
         }
     }

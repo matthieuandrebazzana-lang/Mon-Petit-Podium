@@ -1,6 +1,6 @@
 import Foundation
 
-/// Un Grand Prix tel que la base le connaît — servi par `GET /scraper/cotes` (§3.4) ou lu
+/// Un Grand Prix tel que la base le connaît — servi par `GET /calendrier` (§3.4) ou lu
 /// directement dans `public.grands_prix` sous RLS.
 ///
 /// **La base ne sait que ce que le scraper a rencontré** : l'identifiant, le statut, les
@@ -17,7 +17,8 @@ struct GrandPrixEnBase: Decodable, Identifiable, Equatable, Hashable {
     let dateQualifications: Date?
     /// `a_venir`, `cotes_figees` ou `termine` — la contrainte `check` de la table.
     let statut: String
-    /// Au moins un marché servi. Toujours faux sur une lecture directe, qui ne les demande pas.
+    /// Au moins une cote en base — `a_des_cotes` de `GET /calendrier`, ou des marchés servis
+    /// par `GET /scraper/cotes`. Toujours faux sur une lecture directe, qui ne les demande pas.
     let cotesDisponibles: Bool
     /// `provisoire`, `definitif` ou `nil` (pas de résultats) — ``StatutResultats``. Nul sur
     /// une lecture qui ne le demande pas.
@@ -25,6 +26,7 @@ struct GrandPrixEnBase: Decodable, Identifiable, Equatable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case id, nom, statut, marches
+        case aDesCotes = "a_des_cotes"
         case dateCourse = "date_course"
         case statutResultats = "statut_resultats"
         case dateQualifications = "date_qualifications"
@@ -43,8 +45,12 @@ struct GrandPrixEnBase: Decodable, Identifiable, Equatable, Hashable {
         statutResultats = try? c.decodeIfPresent(String.self, forKey: .statutResultats)
         // `try?` : un marché mal formé fait perdre l'information « cotes présentes », jamais
         // le Grand Prix, et encore moins la liste.
-        let marches = (try? c.decodeIfPresent([Marche].self, forKey: .marches)) ?? nil
-        cotesDisponibles = !(marches ?? []).isEmpty
+        if let aDesCotes = try? c.decodeIfPresent(Bool.self, forKey: .aDesCotes) {
+            cotesDisponibles = aDesCotes
+        } else {
+            let marches = (try? c.decodeIfPresent([Marche].self, forKey: .marches)) ?? nil
+            cotesDisponibles = !(marches ?? []).isEmpty
+        }
     }
 
     var slug: String { SlugCircuit.de(nom, dateCourse: dateCourse) }

@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 /// Les championnats du compte connecté, servis par `GET /championnats/moi` (§3.3).
 ///
@@ -7,10 +7,10 @@ import Foundation
 /// > appels écrits séparément auraient fini par ne plus dire la même chose — un
 /// > championnat rejoint visible ici et pas là.
 ///
-/// **Pas de cache de session** (`docs/swift-app.md` §7.6) : chaque apparition d'un des
-/// deux écrans rappelle la route. La liste déjà affichée reste en place pendant ce
-/// rechargement — le spinner ne sert qu'au premier chargement et après un échec, sans
-/// quoi chaque changement d'onglet ferait clignoter l'écran.
+/// **Cache *stale-while-revalidate*, 60 s** (``CacheService``, `docs/swift-app.md` §7.6) :
+/// une apparition dans la minute ne rappelle pas la route ; au-delà, la liste connue reste
+/// affichée pendant le rechargement. Le spinner ne sert qu'au premier chargement et après
+/// un échec, sans quoi chaque changement d'onglet ferait clignoter l'écran.
 @MainActor
 final class MesChampionnats: ObservableObject {
 
@@ -29,7 +29,15 @@ final class MesChampionnats: ObservableObject {
     /// l'écriture, elle est donc redemandée une fois l'appel fini.
     private var aRelancer = false
 
-    /// - Parameter forcer: `true` après une écriture (création, adhésion). Sans lui, un
+    /// Le premier championnat de la liste, `nil` tant qu'elle n'est pas lue — celui dont
+    /// « Mes Grands Prix » lit les paris (``GrandsPrixJoues``), sans rappeler la route.
+    var premierId: UUID? {
+        if case .pret(let liste) = etat { return liste.first?.id }
+        return nil
+    }
+
+    /// - Parameter forcer: `true` après une écriture (création, adhésion) — périme le cache.
+    ///   Sans lui, un
     ///   chargement déjà en vol — lancé **avant** l'écriture — absorberait la demande, et
     ///   le championnat obtenu manquerait à la liste jusqu'au prochain changement d'onglet.
     func charger(forcer: Bool = false) async {
@@ -40,17 +48,23 @@ final class MesChampionnats: ObservableObject {
         enCours = true
         defer { enCours = false }
 
+        var forcerLecture = forcer
         repeat {
             aRelancer = false
-            await lire()
+            await lire(forcer: forcerLecture)
+            forcerLecture = true
         } while aRelancer
     }
 
-    private func lire() async {
+    private func lire(forcer: Bool) async {
         if case .pret = etat {} else { etat = .chargement }
         do {
-            let liste: [Championnat] = try await APIClient.partage.requete("championnats/moi")
-            etat = .pret(liste)
+            try await CacheService.partage.charger(
+                "championnats/moi", duree: CacheService.Duree.court, forcer: forcer,
+                afficher: { (liste: [Championnat]) in
+                    if etat != .pret(liste) { etat = .pret(liste) }
+                },
+                lire: { try await APIClient.partage.requete("championnats/moi") })
         } catch is CancellationError {
             // Écran quitté pendant l'appel : rien à signaler. Un premier chargement
             // interrompu garde son spinner, et la prochaine apparition le relance.
@@ -59,5 +73,19 @@ final class MesChampionnats: ObservableObject {
         } catch {
             etat = .echec(.serveur(statut: nil, message: nil))
         }
+    }
+}
+
+private struct CleChampionnatParDefaut: EnvironmentKey {
+    static let defaultValue: UUID? = nil
+}
+
+extension EnvironmentValues {
+    /// ``MesChampionnats/premierId``, posé par ``BarreNavigation`` : le championnat dont
+    /// « Mes Grands Prix » et « Mes résultats » lisent les paris, sans rappeler
+    /// `GET /championnats/moi`.
+    var championnatParDefaut: UUID? {
+        get { self[CleChampionnatParDefaut.self] }
+        set { self[CleChampionnatParDefaut.self] = newValue }
     }
 }

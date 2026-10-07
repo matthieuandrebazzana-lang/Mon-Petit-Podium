@@ -12,8 +12,8 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
-Version backend actuelle : 0.84.0
-Version iOS actuelle : 0.50.1
+Version backend actuelle : 0.85.0
+Version iOS actuelle : 0.51.0
 
 ## STACK TECHNIQUE
 
@@ -65,7 +65,9 @@ Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
-## CE QUI EST FAIT — VERSION iOS (0.50.1)
+## CE QUI EST FAIT — VERSION iOS (0.51.0)
+
+Performances (iOS 0.51.0, backend 0.85.0 — `docs/decisions.md` §27) : **cache mémoire *stale-while-revalidate*** (`Services/CacheService.swift`, clé compte + route, 60 s championnats / classement / stats, 5 min calendrier / prochain GP, vidé à la déconnexion ; `charger(forcer: true)` périme sa clé, toute écriture réussie d'`APIClient` périme tout) — branché sur `MesChampionnats`, `ProchainGrandPrix`, `ClassementChampionnat`, `StatistiquesProfil`, `CalendrierSaison` ; révise « pas de cache de session » (`swift-app.md` §7.6). **`GET /calendrier`** (backend, publique, une requête PostgREST avec `cotes(count)` embarqué : `id`, `nom`, deux heures, `statut`, `a_des_cotes`, saison en cours ou `?saison=`, GP sans date gardés ; 7 tests) remplace `/scraper/cotes` dans `CalendrierSaison`. **« Mes Grands Prix »** : un appel par GP (`/resultats?championnat_id=` sert podium + paris), championnat transmis par `EnvironmentValues.championnatParDefaut` (= `MesChampionnats.premierId`) au lieu de rappeler `/championnats/moi` ; « Mes résultats » ne relit plus aucun calendrier. **Vue Piste** construite au premier tap (`pisteVue`), gardée ensuite. **`ImageCachee`** (`NSCache` par URL, décodage hors fil principal) remplace les 5 `AsyncImage`. **Keep-alive Railway** : `GET /ping` + service cron `keepalive/` (curl toutes les 5 min) — **à créer à la main dans Railway** (`architecture.md` §9). Compilé, tests backend verts (225) ; non vérifié au simulateur (session requise).
 
 Engrenage et filets du récap (0.50.1) : l'engrenage de `ProfilView` n'est plus le `gearshape` du système mais l'asset `icon-reglages` (24 × 24, trait 1,5, *template*, source `Ressources/icon-reglages.svg` — le SVG fourni sans son `clip-path` orphelin, tracés identiques), affiché à 26 pt en `encrePrimaire`. `ajouter-assets.sh` pose le rendu *template* sur `icon-*` comme sur les tracés. `RecapView` : chaque `CarteRecap` est teintée sur toute sa surface — la couleur de sa catégorie à 18 % sur `surface` (`Color.opaciteTeinteCarte`) : `teinteVainqueur` (`#800111` / sombre `#FF6961`), `teintePodium` (`#2C4A6E` / `#7A9CC6`), `teinteBonus` (ocre `#8A6516` / `#D4A84B`) pour **tous** les bonus. En sombre la teinte s'éclaircit : les aplats foncés à 18 % ne se distinguaient pas de la surface (1,07:1). Libellés et unité passent à `encreSurTeinte` (`#4D4D4D` / `#C7C7CC`) : le `grisSecondaire` tombait à 3,44:1. Mesuré damier compris : `texte` ≥ 11,23:1 (clair) / 9,60:1 (sombre), `encreSurTeinte` ≥ 5,46:1 / 5,70:1. `MarcheCote.aplats(de:)` (`CotesView.swift`) reste le seul calcul du rang des teintes de la pile. Compilé ; non vérifié au simulateur (session requise).
 
@@ -116,7 +118,7 @@ Pile de marchés sur « Fais tes paris » (0.47.4, mergé sur `main` depuis `fea
 Registre d'évaluateurs par slug exact (18 marchés couverts)
 Statut : en_attente / non_evaluable / gagne / perdu
 Pipeline provisoire (à l'arrivée) → définitif (J+1)
-218 tests backend (dont 26 notifications push)
+225 tests backend (dont 26 notifications push, 7 calendrier)
 Identifiants canoniques des issues au figeage
 Alertes admin (libellés non reconnus, échecs OpenF1)
 
@@ -140,6 +142,8 @@ Fonctionnalités prévues :
 Notifications push : code fait (iOS 0.49.0, backend 0.84.0) — reste le test sur iPhone réel, puis `APNS_ENV=production` au passage TestFlight
 Notifications push : `42501 permission denied` sur `push_tokens` / `notifications_envoyees` — appliquer la migration 31 (`grant … to service_role`, `bugs-connus.md` §39)
 f1-ml : modèle de prédiction ML à intégrer
+Keep-alive Railway : créer le service cron `keepalive/` dans le tableau de bord (Root Directory `keepalive`, config `keepalive/railway.json`), puis vérifier `ping 200` toutes les 5 min dans ses journaux
+Cotes lisibles sans session en production (constaté le 2026-10-07 : la clé anonyme lit `public.cotes`) — la restriction de la migration 21 n'est plus en place (« 3 après 21 », `database.md`) : rejouer la 21
 
 Bugs connus :
 
