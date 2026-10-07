@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     admin,
+    calendrier,
     championnats,
     health,
     profils,
@@ -33,3 +34,6 @@ api_router.include_router(resultats.router)
 api_router.include_router(admin.router)
 # Notifications push (version backend `0.84.0`) : jetons APNs et test.
 api_router.include_router(push.router)
+# Calendrier léger (version backend `0.85.0`) : `GET /calendrier`, les GP de la
+# saison sans leurs cotes — ce que `/scraper/cotes` servait au prix de toutes.
+api_router.include_router(calendrier.router)

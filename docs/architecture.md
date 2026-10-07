@@ -285,6 +285,35 @@ Le plan gratuit met le service en veille. Deux conséquences assumées :
 > relaient sur le même téléphone ne doivent jamais voir les données de l'autre, fût-ce
 > une fraction de seconde.
 
+L'app iOS applique le même modèle, en mémoire (`CacheService`, `docs/decisions.md` §27).
+
+### Garder le service éveillé (backend `0.85.0`)
+
+**Un job interne ne peut pas réveiller un service endormi** : son processus est arrêté.
+Le cron de Railway n'est pas interne non plus — c'est un **service à part**, lancé à
+l'heure dite, qui doit se terminer. D'où :
+
+- **`GET /ping`** (et `HEAD`) : répond `pong` en texte, sans lire les réglages ni la base.
+  `/health` reste le diagnostic ; `/ping` est la cible des horloges.
+- **`keepalive/`** : un second service Railway (`Dockerfile` sur `curlimages/curl`,
+  `railway.json` avec `cronSchedule: "*/5 * * * *"` — **5 min est le minimum de Railway**).
+  Il appelle `/ping` puis s'arrête.
+
+> **À créer une fois, à la main, dans le tableau de bord Railway** — aucun fichier du dépôt
+> ne crée un service : *New → GitHub Repo* (ce dépôt), *Settings → Root Directory* =
+> `keepalive`, *Config file path* = `keepalive/railway.json`. Vérifier dans ses journaux
+> une ligne `ping 200 en …s` toutes les cinq minutes.
+
+> **GitHub Actions écarté** : le dépôt est privé, chaque exécution est facturée une minute
+> au moins, et un ping toutes les 5 min en consomme ~8 600 par mois pour 2 000 gratuites.
+> Un moniteur externe gratuit (UptimeRobot, intervalle 5 min, `HEAD /ping`) est le repli
+> si le service cron ne convient pas.
+
+> **Vérifier d'abord si la veille est active** : *Settings → Serverless* du service
+> backend. Railway endort un service resté **dix minutes sans trafic sortant** ; or
+> `jobs/resultats.py` interroge Supabase toutes les cinq minutes. Si les lenteurs
+> persistent avec le ping en place, la cause est ailleurs (région, cold start de Supabase).
+
 ---
 
 ## 10. Routage frontend
@@ -347,6 +376,8 @@ l'appelant, **verbe explicite** pour ce qui n'est pas un CRUD (`/rejoindre`, `/q
 | Route | Auth | Comportement |
 |---|---|---|
 | `GET /health` | — | version, environnement |
+| `GET /ping` | — | `pong` en texte, `HEAD` accepté — cible du keep-alive (§9) |
+| `GET /calendrier` | **publique** | `?saison=` (année en cours par défaut). `id`, `nom`, deux heures, `statut`, **`a_des_cotes`** — **une requête** (`cotes(count)` embarqué), aucune cote détaillée. Les GP sans `date_course` sont gardés |
 | `POST /championnats` | jeton | `201`. Code tiré de `secrets`, 5 tentatives sur collision (`23505`), puis échec franc |
 | `GET /championnats/moi` | jeton | + effectif, **prochain GP** (une seule lecture pour toute la liste), **position** (rang, points, points du leader), plafonnée à **`LIMITE_CLASSEMENTS = 12`** |
 | `POST /championnats/rejoindre` | jeton | code normalisé. `404` inconnu, `409` déjà membre — **par la clé primaire**, pas par une lecture préalable |
@@ -358,7 +389,7 @@ l'appelant, **verbe explicite** pour ce qui n'est pas un CRUD (`/rejoindre`, `/q
 | `GET /profils/{id}/stats` | jeton + **championnat partagé** | `403` — **rendu AVANT de lire le profil visé** |
 | `PATCH /profils/moi` | jeton | partiel, photo comprise. **Aucun identifiant dans le chemin** |
 | `GET /grands-prix/{id}/cotes` | **publique** | groupées par marché |
-| `GET /scraper/cotes` | **publique** | toutes les cotes en base |
+| `GET /scraper/cotes` | **publique** | toutes les cotes en base — un appel SQL par GP ; le calendrier iOS lit `/calendrier` |
 | `POST /grands-prix/{id}/favoris` | jeton | bascule → `{favori: bool}` |
 | `GET /grands-prix/{id}/favoris` | jeton | enrichis, dans l'ordre d'épinglage |
 | `POST /grands-prix/{id}/pronostics` | jeton | remplace le jeu complet. **`423`** si fermé |
