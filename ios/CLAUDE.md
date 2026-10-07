@@ -50,6 +50,19 @@ bundle** — elle ne quitte jamais Railway.
 
 ## 3. Règles de développement
 
+**Un premier chargement se dessine en silhouette, jamais en spinner** (`SkeletonView`,
+`Views/Composants/`). Quatre variantes (`ligneCourte`, `ligneLongue`, `blocCarre`,
+`blocRectangulaire`), tailles remplaçables ; aplat `secondaire` 15 %, bande 30 % calée sur
+l'écran (`Mouvement.balayageSquelette`, 1,4 s, linéaire), absente sous mouvement réduit.
+Elle ne s'affiche **qu'en `.chargement`** — le cache sert déjà ce qu'il connaît — et cède
+au contenu par `fonduChargement(_:)`, **posé sur un `ZStack` autour du `switch`** : la
+silhouette sort en fondu, chaque élément du contenu entre par `arriveeEnCascade(rang:)`
+(fondu + 12 pt vers le haut, 300 ms, 50 ms d'écart sur 5 éléments au plus ; fondu seul
+sous mouvement réduit), sa branche en `.transition(.contenuArrive)`. Chaque écran
+esquisse sa propre structure (widget 360 pt, pile, liste, classement, carrousel, six
+cartes GP au calendrier) ; les stats, que leurs valeurs inconnues. Les spinners restent
+sur les actions ponctuelles (envoi, sauvegarde).
+
 **Les assets SVG viennent de `Greed F1/Ressources/`** — jamais redessinés en SwiftUI. Un
 tracé recomposé à la main diverge du logo au premier ajustement. `ios/scripts/ajouter-assets.sh`
 les installe dans `Assets.xcassets` avec « Preserve Vector Data », puis on écrit `Image("nom")`.
@@ -265,6 +278,7 @@ ios/
     │   │   ├── ErreurEnLigne.swift      refus d'une écriture, sous le bouton — jamais d'alerte
     │   │   ├── SelecteurSegmente.swift  sélecteur segmenté pleine largeur (une seule pastille `primaire`, ressort `Mouvement.glissement`, fond neutre + damier) — Classement / Piste
     │   │   ├── MentionProvisoire.swift  `StatutResultats` (provisoire, non évaluable) + la mention « Provisoire », PARTAGÉS
+    │   │   ├── SkeletonView.swift       silhouette de premier chargement (4 variantes, balayage calé sur l'écran) + `fonduChargement(_:)`, PARTAGÉS
     │   │   ├── ImageCachee.swift        `AsyncImage` avec `NSCache` partagé par URL (`CacheImages`) — avatars, photos de championnat, cockpits
     │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes

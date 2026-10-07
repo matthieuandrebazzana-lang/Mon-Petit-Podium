@@ -303,13 +303,25 @@ struct ProfilView: View {
 
             Spacer().frame(height: 8)
 
-            VueVoiture(livree: livree,
-                       numero: numero,
-                       nom: pseudoAffiche,
-                       photo: viewModel.photoProfil,
-                       teintePilote: .primaire)
-                .frame(height: 150)
-                .frame(maxWidth: .infinity)
+            // **Esquissée tant que le profil n'est pas lu** : la livrée par défaut, peinte
+            // en attendant, se lirait comme celle du membre puis changerait sous ses yeux.
+            ZStack {
+                if viewModel.profil == nil {
+                    SkeletonView(.blocRectangulaire, largeur: 150, hauteur: 150)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(t("profil.a11y.chargementLivree"))
+                } else {
+                    VueVoiture(livree: livree,
+                               numero: numero,
+                               nom: pseudoAffiche,
+                               photo: viewModel.photoProfil,
+                               teintePilote: .primaire)
+                    .arriveeEnCascade()
+                }
+            }
+            .frame(height: 150)
+            .frame(maxWidth: .infinity)
+            .fonduChargement(viewModel.profil == nil)
 
             Spacer().frame(height: 12)
 

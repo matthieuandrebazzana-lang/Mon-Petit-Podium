@@ -117,13 +117,14 @@ struct ChampionnatsView: View {
     private var liste: some View {
         EtatMesChampionnats(mesChampionnats: mesChampionnats) { championnats in
             VStack(spacing: 10) {
-                ForEach(tries(championnats)) { championnat in
+                ForEach(Array(tries(championnats).enumerated()), id: \.element.id) { rang, championnat in
                     NavigationLink {
                         ChampionnatDetailView(championnat: championnat, mesChampionnats: mesChampionnats)
                     } label: {
                         CarteChampionnat(championnat: championnat)
                     }
                     .buttonStyle(StyleAppui(.grandeSurface))
+                    .arriveeEnCascade(rang: rang)
                 }
             }
         }

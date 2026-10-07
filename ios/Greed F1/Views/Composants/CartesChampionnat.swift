@@ -326,33 +326,74 @@ struct ActionsChampionnat: View {
 // MARK: - Chargement et échec de la liste
 
 /// Ce que l'accueil et l'onglet **Championnats** montrent à la place de leurs cartes tant
-/// que ``MesChampionnats`` n'a pas de liste : un spinner, ou le message de l'échec.
+/// que ``MesChampionnats`` n'a pas de liste : une silhouette (``SkeletonView``), ou le
+/// message de l'échec. La liste arrivée remplace la silhouette : ses cartes entrent par
+/// ``View/arriveeEnCascade(rang:)``, que chaque écran pose sur les siennes.
 ///
 /// **Le même bloc dans les deux écrans**, pour la même raison que ``CarteChampionnat`` :
-/// deux états d'erreur écrits séparément n'auraient pas proposé le même geste.
-///
-/// Le spinner occupe **la hauteur d'une carte** : la liste qui arrive prend sa place sans
-/// pousser les cartes d'action de plusieurs centaines de points.
+/// deux états d'erreur écrits séparément n'auraient pas proposé le même geste. Seule la
+/// silhouette diffère : une **pile** sur l'accueil, une **liste** dans l'onglet — chacune
+/// imite ce qui va arriver.
 struct EtatMesChampionnats<Contenu: View>: View {
 
+    /// La silhouette du premier chargement.
+    enum Silhouette {
+        /// Trois cartes de 120 pt, l'une sous l'autre — l'onglet Championnats.
+        case liste
+        /// Une carte et deux bandes au-dessus — ``PileChampionnats`` de l'accueil.
+        case pile
+    }
+
     @ObservedObject var mesChampionnats: MesChampionnats
+    var silhouette: Silhouette = .liste
     @ViewBuilder let contenu: ([Championnat]) -> Contenu
 
-    var body: some View {
-        switch mesChampionnats.etat {
-        case .chargement:
-            ProgressView()
-                .tint(.secondaire)
-                .frame(maxWidth: .infinity, minHeight: 120)
-                .accessibilityLabel(t("championnat.chargement"))
+    private var enChargement: Bool {
+        if case .chargement = mesChampionnats.etat { return true }
+        return false
+    }
 
-        case .echec(let erreur):
-            EchecChargement(erreur: erreur) {
-                Task { await mesChampionnats.charger() }
+    var body: some View {
+        // Un conteneur autour du `switch` : c'est lui qui porte le passage au contenu.
+        ZStack(alignment: .top) {
+            switch mesChampionnats.etat {
+            case .chargement:
+                squelette
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(t("championnat.chargement"))
+
+            case .echec(let erreur):
+                EchecChargement(erreur: erreur) {
+                    Task { await mesChampionnats.charger() }
+                }
+
+            case .pret(let liste):
+                contenu(liste)
+                    .transition(.contenuArrive)
+            }
+        }
+        .fonduChargement(enChargement)
+    }
+
+    @ViewBuilder private var squelette: some View {
+        switch silhouette {
+        case .liste:
+            VStack(spacing: 10) {
+                ForEach(0..<3, id: \.self) { _ in
+                    SkeletonView(.blocRectangulaire)
+                }
             }
 
-        case .pret(let liste):
-            contenu(liste)
+        case .pile:
+            // Les bandes dépassent au-dessus de la carte, plus étroites vers le fond —
+            // la perspective de la pile, grossièrement.
+            VStack(spacing: 4) {
+                SkeletonView(.blocRectangulaire, hauteur: 10, rayon: 5)
+                    .padding(.horizontal, 20)
+                SkeletonView(.blocRectangulaire, hauteur: 10, rayon: 5)
+                    .padding(.horizontal, 10)
+                SkeletonView(.blocRectangulaire)
+            }
         }
     }
 }

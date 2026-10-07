@@ -154,22 +154,43 @@ struct AccueilView: View {
 
     /// Le widget, sa silhouette pendant le premier chargement, ou l'échec rejouable. **Aucun
     /// Grand Prix à venir ⇒ rien du tout**, espacement compris : un bloc vide promettrait
-    /// une course que la base ne connaît pas.
-    @ViewBuilder private var blocGrandPrix: some View {
+    /// une course que la base ne connaît pas. Le widget arrivé remplace la silhouette
+    /// (``View/fonduChargement(_:)``) en remontant (``View/arriveeEnCascade(rang:)``).
+    ///
+    /// Chaque branche porte sa cale dans sa propre pile : superposées dans le `ZStack`, deux
+    /// vues sœurs se chevaucheraient.
+    private var blocGrandPrix: some View {
+        ZStack(alignment: .top) { contenuGrandPrix }
+            .fonduChargement(gpEnChargement)
+    }
+
+    private var gpEnChargement: Bool {
+        if case .chargement = prochainGP.etat { return true }
+        return false
+    }
+
+    @ViewBuilder private var contenuGrandPrix: some View {
         switch prochainGP.etat {
         case .chargement:
-            SilhouetteWidget()
-            Spacer().frame(height: 24)
+            VStack(spacing: 0) {
+                SqueletteWidget()
+                Spacer().frame(height: 24)
+            }
 
         case .echec(let erreur):
-            EchecChargement(erreur: erreur) {
-                Task { await prochainGP.charger() }
+            VStack(spacing: 0) {
+                EchecChargement(erreur: erreur) {
+                    Task { await prochainGP.charger() }
+                }
+                Spacer().frame(height: 24)
             }
-            Spacer().frame(height: 24)
 
         case .pret(let gp?):
-            WidgetGrandPrix(grandPrix: gp, aDesPronostics: prochainGP.aDesPronostics)
-            Spacer().frame(height: 24)   // changement de sujet : 24 pt (§4.6)
+            VStack(spacing: 0) {
+                WidgetGrandPrix(grandPrix: gp, aDesPronostics: prochainGP.aDesPronostics)
+                Spacer().frame(height: 24)   // changement de sujet : 24 pt (§4.6)
+            }
+            .arriveeEnCascade(rang: 0)
 
         case .pret(nil):
             Spacer().frame(height: 12)
@@ -195,7 +216,7 @@ struct AccueilView: View {
     /// championnat ⇒ rien**, comme la liste qu'il remplace : les deux cartes d'action,
     /// juste en dessous, sont l'état vide.
     private var listeChampionnats: some View {
-        EtatMesChampionnats(mesChampionnats: mesChampionnats) { championnats in
+        EtatMesChampionnats(mesChampionnats: mesChampionnats, silhouette: .pile) { championnats in
             if !championnats.isEmpty {
                 PileChampionnats(
                     championnats: championnats,
@@ -203,6 +224,8 @@ struct AccueilView: View {
                     idUtilisateur: viewModel.profil?.id,
                     apercu: $apercuPile
                 )
+                // Rang 1 : sous le widget, quand les deux arrivent ensemble.
+                .arriveeEnCascade(rang: 1)
             }
         }
     }
@@ -693,10 +716,27 @@ private extension View {
 
 // MARK: - Silhouette
 
-/// Le widget pendant son premier chargement. **Il garde l'aplat rouge et la hauteur du
-/// vrai** : c'est le seul aplat de couleur de l'accueil, et le voir passer au gris puis
-/// revenir au rouge ferait clignoter l'écran d'entrée — la hauteur tenue évite que la
-/// liste des championnats ne saute de 360 pt à l'arrivée des données.
+/// Le widget pendant son premier chargement : un bloc ``SkeletonView`` à **la hauteur et
+/// au rayon du vrai** (360 pt, `Rayon.bloc`), sans quoi la pile des championnats sauterait
+/// de 360 pt à l'arrivée des données. Le titre et la date du Grand Prix y sont esquissés
+/// en bas à gauche, là où le widget les pose.
+private struct SqueletteWidget: View {
+    var body: some View {
+        SkeletonView(.blocRectangulaire, hauteur: 360, rayon: Rayon.bloc)
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 10) {
+                    SkeletonView(.ligneCourte, largeur: 180, hauteur: 20)
+                    SkeletonView(.ligneCourte, largeur: 120)
+                }
+                .padding(20)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(t("accueil.a11y.chargementGP"))
+    }
+}
+
+/// L'ancienne silhouette — l'aplat rouge et un spinner. **Non montée** depuis les
+/// silhouettes grises (``SqueletteWidget``), gardée en place (`CLAUDE.md` §6).
 private struct SilhouetteWidget: View {
     var body: some View {
         ZStack {

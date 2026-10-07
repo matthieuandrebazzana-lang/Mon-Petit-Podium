@@ -65,6 +65,12 @@ struct CalendrierView: View {
     /// arracherait l'écran des mains de quelqu'un en train de lire une carte plus bas.
     @State private var defilementFait = false
 
+    /// Premier chargement : la liste est esquissée (``SqueletteCalendrier``).
+    private var enChargement: Bool {
+        if case .chargement = calendrier.etat { return true }
+        return false
+    }
+
     var body: some View {
         // **Une pile par onglet, et non une pile autour de la barre** — c'est le choix déjà
         // fait par l'accueil et par la liste des championnats : sans elle, le retour depuis
@@ -81,8 +87,7 @@ struct CalendrierView: View {
                             entete
 
                             Spacer().frame(height: 16)
-                            etatChargement
-                            liste
+                            contenu
                         }
                         .padding(.horizontal, margeLaterale)
                         .padding(.top, 8)
@@ -132,28 +137,39 @@ struct CalendrierView: View {
 
     // MARK: - Chargement et échec
 
-    /// **Au-dessus de la liste, jamais à sa place** : les cartes sont statiques et
-    /// restent lisibles pendant l'attente comme après un échec — seuls leurs états
-    /// manquent. Le spinner ne vient qu'au premier chargement ; un rechargement garde les
-    /// états déjà affichés, sans quoi chaque retour sur l'onglet ferait sauter la liste.
-    @ViewBuilder private var etatChargement: some View {
-        switch calendrier.etat {
-        case .chargement:
-            ProgressView()
-                .tint(.secondaire)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .padding(.bottom, espacement)
-                .accessibilityLabel(t("calendrier.a11y.chargement"))
+    /// **Au premier chargement, la liste entière est esquissée**, comme sur les autres
+    /// écrans : six cartes grises (``SqueletteCalendrier``), puis le vrai calendrier, ses
+    /// cartes en cascade — `fonduChargement(_:)` posé ici, sur le conteneur du `switch`. Le cache
+    /// (5 min) sert la liste aussitôt aux visites suivantes, et un rechargement garde les
+    /// états déjà affichés : la silhouette ne se voit qu'une fois.
+    ///
+    /// **Après un échec, la liste revient sans ses états**, l'erreur posée au-dessus : les
+    /// cartes sont statiques, l'échec fait perdre les états, jamais la liste
+    /// (`docs/swift-app.md` §7.6).
+    private var contenu: some View {
+        ZStack(alignment: .top) {
+            switch calendrier.etat {
+            case .chargement:
+                SqueletteCalendrier(espacement: espacement)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(t("calendrier.a11y.chargement"))
 
-        case .echec(let erreur):
-            EchecChargement(erreur: erreur) {
-                Task { await calendrier.charger() }
+            case .echec(let erreur):
+                VStack(spacing: 0) {
+                    EchecChargement(erreur: erreur) {
+                        Task { await calendrier.charger() }
+                    }
+                    .padding(.bottom, espacement)
+                    liste
+                }
+                .transition(.contenuArrive)
+
+            case .pret:
+                liste
+                    .transition(.contenuArrive)
             }
-            .padding(.bottom, espacement)
-
-        case .pret:
-            EmptyView()
         }
+        .fonduChargement(enChargement)
     }
 
     // MARK: - La liste
@@ -187,8 +203,18 @@ struct CalendrierView: View {
                     CarteGrandPrixSaison(grandPrix: gp)
                 }
                 .buttonStyle(StyleAppui(.grandeSurface))
+                .arriveeEnCascade(rang: max(0, rang - rangProchain))
             }
         }
+    }
+
+    /// **La cascade part du prochain Grand Prix**, pas du haut de la saison : l'écran
+    /// s'ouvre sur lui (``ouvrirSurLeProchainGp(_:)``), et compter depuis la première carte
+    /// ferait partir d'un bloc, avec la cinquième, toutes celles qu'on voit. Les cartes
+    /// au-dessus, hors champ, entrent avec lui.
+    private var rangProchain: Int {
+        guard let prochain else { return 0 }
+        return grandsPrix.firstIndex { $0.slug == prochain.slug } ?? 0
     }
 
     /// L'identifiant de la **cale** qui précède une carte, et non celui de la carte.
@@ -539,6 +565,48 @@ private struct CarteGrandPrixSaison: View {
 private extension View {
     func ombreTexte() -> some View {
         self.shadow(color: .voile.opacity(0.45), radius: 1.5, y: 1)
+    }
+}
+
+// MARK: - La silhouette du calendrier
+
+/// Le calendrier pendant son premier chargement : six cartes de la hauteur des vraies
+/// (200 pt, `Rayon.bloc`), sur la surface neutre — **ni drapeau, ni texte** : un bloc pour
+/// le drapeau et son tracé, puis la rangée basse d'une carte, le quantième à gauche, le
+/// nom du Grand Prix et son circuit à droite. Six suffisent à remplir l'écran le plus haut.
+private struct SqueletteCalendrier: View {
+
+    let espacement: CGFloat
+
+    var body: some View {
+        VStack(spacing: espacement) {
+            ForEach(0..<6, id: \.self) { _ in carte }
+        }
+    }
+
+    private var carte: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SkeletonView(.blocRectangulaire, hauteur: 88, rayon: Rayon.champ)
+
+            Spacer(minLength: 16)
+
+            HStack(alignment: .bottom, spacing: 12) {
+                SkeletonView(.ligneCourte, largeur: 56, hauteur: 44, rayon: Rayon.champ)
+
+                Spacer(minLength: 0)
+
+                VStack(alignment: .trailing, spacing: 8) {
+                    SkeletonView(.ligneLongue, largeur: 150, hauteur: 14)
+                    SkeletonView(.ligneCourte, largeur: 90, hauteur: 10)
+                }
+            }
+        }
+        .padding(20)
+        .frame(height: 200)
+        .frame(maxWidth: .infinity)
+        .background(Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
+        .ombreAplat()
     }
 }
 

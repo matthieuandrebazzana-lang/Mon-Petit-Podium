@@ -159,9 +159,13 @@ struct StatistiqueProfil: Identifiable, Equatable {
 /// La grille branchée sur ``StatistiquesProfil`` — **un seul bloc pour les deux profils** :
 /// chargement, échec et « Réessayer » s'y écrivent une fois.
 ///
-/// Pendant le premier chargement, la grille reste montée sous le spinner, avec ce qu'on
-/// sait déjà (`provisoires`) : la place ne bouge pas, et un membre ouvert depuis le
-/// classement garde le meilleur coup que le classement a servi.
+/// Pendant le premier chargement, la grille reste montée avec ce qu'on sait déjà
+/// (`provisoires`) : la place ne bouge pas, et un membre ouvert depuis le classement garde
+/// le meilleur coup que le classement a servi. **Seules les valeurs encore inconnues sont
+/// esquissées** (``SkeletonView``) — les libellés sont des textes de l'app, ils n'attendent
+/// rien. Les chiffres arrivés remplacent leur silhouette en cascade, tuile après tuile —
+/// **la grille, elle, ne bouge pas** : c'est la même vue d'un état à l'autre, sans quoi
+/// ses libellés se croiseraient avec leur double pendant le passage.
 struct BlocStatistiques: View {
 
     let etat: StatistiquesProfil.Etat
@@ -171,23 +175,34 @@ struct BlocStatistiques: View {
     let reessayer: () -> Void
 
     var body: some View {
-        switch etat {
-        case .chargement:
-            GrilleStatistiques(statistiques: provisoires)
-                .opacity(0.45)
-                .overlay {
-                    ProgressView()
-                        .tint(.encrePrimaire)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(t("profil.a11y.chargementStats"))
-
-        case .pret(let stats):
-            GrilleStatistiques(statistiques: stats.tuiles)
-
-        case .echec(let erreur):
-            EchecChargement(erreur: erreur, reessayer: reessayer)
+        ZStack(alignment: .top) {
+            if case .echec(let erreur) = etat {
+                EchecChargement(erreur: erreur, reessayer: reessayer)
+            } else {
+                GrilleStatistiques(statistiques: tuiles, squelette: enChargement)
+                    // En chargement, VoiceOver lit un seul « chargement » au lieu de
+                    // quatre tirets.
+                    .accessibilityHidden(enChargement)
+                    .overlay {
+                        if enChargement {
+                            Color.clear
+                                .accessibilityElement()
+                                .accessibilityLabel(t("profil.a11y.chargementStats"))
+                        }
+                    }
+            }
         }
+        .fonduChargement(enChargement)
+    }
+
+    private var tuiles: [StatistiqueProfil] {
+        if case .pret(let stats) = etat { return stats.tuiles }
+        return provisoires
+    }
+
+    private var enChargement: Bool {
+        if case .chargement = etat { return true }
+        return false
     }
 }
 
@@ -198,18 +213,30 @@ struct GrilleStatistiques: View {
 
     let statistiques: [StatistiqueProfil]
 
+    /// Premier chargement : une valeur encore inconnue (``StatistiqueProfil/absente``) est
+    /// esquissée à la place de son tiret, **à la taille du chiffre** — le texte reste posé,
+    /// invisible, pour tenir la hauteur de la tuile.
+    var squelette = false
+
     var body: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
                             GridItem(.flexible(), spacing: 12)],
                   spacing: 12) {
-            ForEach(statistiques) { statistique in
+            ForEach(Array(statistiques.enumerated()), id: \.element.id) { rang, statistique in
                 VStack(spacing: 4) {
-                    Text(statistique.valeur)
-                        .font(.score)
-                        .tracking(Tracking.score)
-                        .foregroundColor(.encrePrimaire)       // 12,60:1 sur le blanc
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
+                    let esquissee = squelette && statistique.valeur == StatistiqueProfil.absente
+                    // Deux branches, deux vues : le chiffre arrivé est une vue neuve, qui
+                    // fait son entrée (``View/arriveeEnCascade(rang:)``).
+                    ZStack {
+                        if esquissee {
+                            valeur(statistique)
+                                .opacity(0)
+                                .overlay { SkeletonView(.ligneCourte, largeur: 56, hauteur: 26) }
+                        } else {
+                            valeur(statistique)
+                                .arriveeEnCascade(rang: rang)
+                        }
+                    }
 
                     // **`grisSecondaire`, pas `texteDoux`** : sur le blanc, #999999 ne vaut
                     // que 2,85:1 — sous le plancher de 4,5:1. #6B6B6B y tient 5,33:1.
@@ -227,6 +254,15 @@ struct GrilleStatistiques: View {
                 .accessibilityElement(children: .combine)
             }
         }
+    }
+
+    private func valeur(_ statistique: StatistiqueProfil) -> some View {
+        Text(statistique.valeur)
+            .font(.score)
+            .tracking(Tracking.score)
+            .foregroundColor(.encrePrimaire)       // 12,60:1 sur le blanc
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
     }
 }
 

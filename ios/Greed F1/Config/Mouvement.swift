@@ -91,6 +91,34 @@ enum Mouvement {
     /// Passage d'écran.
     static let passageEcran: TimeInterval = 0.20
 
+    /// **Le vrai contenu qui remplace une silhouette de chargement**
+    /// (``View/fonduChargement(_:)``, ``View/arriveeEnCascade(rang:)``) : la silhouette sort
+    /// en fondu, le contenu entre en fondu et remonte de ``glissementArrivee``.
+    ///
+    /// > Plus long que ``passageEcran`` : ce n'est pas la réponse à un geste, c'est le
+    /// > contenu qu'on attendait — il s'installe, au plafond des 300 ms.
+    static let arriveeContenu: TimeInterval = 0.30
+
+    /// Le glissement de cette entrée, de bas en haut.
+    static let glissementArrivee: CGFloat = 12
+
+    /// **Décalage entre deux éléments du contenu arrivé** — plus serré que ``decalage`` :
+    /// une liste entière attend derrière, il faut qu'elle soit lue vite.
+    static let decalageArrivee: TimeInterval = 0.05
+
+    /// Nombre d'éléments qui se décalent ; au-delà, tous partent avec le dernier.
+    static let cascadeArrivee = 5
+
+    /// **Période du balayage d'une silhouette de chargement** (``SkeletonView``) — une
+    /// bande lumineuse qui traverse l'écran, linéairement, en boucle.
+    ///
+    /// > La seule valeur du vocabulaire au-delà de 300 ms, et ce n'est pas une
+    /// > contradiction : le plafond vaut pour une réponse à un geste, ceci est un mouvement
+    /// > **continu** qui dit « ça charge ». Assez vif pour ne pas traîner (un balayage
+    /// > lent fait paraître l'attente plus longue), loin de l'oscillation à 0,2 Hz que
+    /// > /apple-design §14 déconseille. Absent sous mouvement réduit.
+    static let balayageSquelette: TimeInterval = 1.4
+
     /// Accordéon — **l'ouverture est plus lente que la fermeture** (240 / 170 ms) : on
     /// regarde ce qui arrive, on ne regarde pas ce qui s'en va.
     static let accordeonOuverture: TimeInterval = 0.24

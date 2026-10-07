@@ -97,7 +97,8 @@ struct HistoriqueGPView: View {
                         .padding(.horizontal, margeLaterale)
 
                     Spacer().frame(height: 20)
-                    contenu
+                    ZStack(alignment: .top) { contenu }
+                        .fonduChargement(enChargement)
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 24)
@@ -169,9 +170,8 @@ struct HistoriqueGPView: View {
     @ViewBuilder private var contenu: some View {
         switch donnees.etat {
         case .chargement:
-            ProgressView()
-                .tint(.secondaire)
-                .frame(maxWidth: .infinity, minHeight: 160)
+            SqueletteHistorique(margeLaterale: margeLaterale)
+                .accessibilityElement(children: .ignore)
                 .accessibilityLabel(t("parGP.a11y.chargementGP"))
 
         case .echec(let erreur):
@@ -185,20 +185,30 @@ struct HistoriqueGPView: View {
                 .padding(.horizontal, margeLaterale)
 
         case .pret(let liste) where liste.isEmpty:
-            resumeSaison
-                .padding(.horizontal, margeLaterale)
-            Spacer().frame(height: 24)
-            EtatVideGrandsPrix(texte: t("historique.videAucunGP"))
-                .padding(.horizontal, margeLaterale)
+            VStack(spacing: 0) {
+                resumeSaison
+                    .padding(.horizontal, margeLaterale)
+                    .arriveeEnCascade(rang: 0)
+                Spacer().frame(height: 24)
+                EtatVideGrandsPrix(texte: t("historique.videAucunGP"))
+                    .padding(.horizontal, margeLaterale)
+                    .arriveeEnCascade(rang: 1)
+            }
+            .transition(.contenuArrive)
 
         case .pret:
-            resumeSaison
-                .padding(.horizontal, margeLaterale)
+            VStack(spacing: 0) {
+                resumeSaison
+                    .padding(.horizontal, margeLaterale)
+                    .arriveeEnCascade(rang: 0)
 
-            Spacer().frame(height: 8)
-            CarrouselGrandsPrix(grandsPrix: grandsPrix, actif: $actif, surDrapeau: surDrapeau,
-                                ouvert: gpOuvert, espace: espaceHeros, numero: numero(de:),
-                                ouvrir: ouvrir)
+                Spacer().frame(height: 8)
+                CarrouselGrandsPrix(grandsPrix: grandsPrix, actif: $actif, surDrapeau: surDrapeau,
+                                    ouvert: gpOuvert, espace: espaceHeros, numero: numero(de:),
+                                    ouvrir: ouvrir)
+                    .arriveeEnCascade(rang: 1)
+            }
+            .transition(.contenuArrive)
         }
     }
 
@@ -229,6 +239,11 @@ struct HistoriqueGPView: View {
     }
 
     private var joues: Int { grandsPrix.count }
+
+    private var enChargement: Bool {
+        if case .chargement = donnees.etat { return true }
+        return false
+    }
 
     /// `nil` tant qu'aucun pronostic n'est jugé.
     private var totalPoints: Int? {
@@ -1514,5 +1529,48 @@ struct TuilePodium: View {
 #Preview {
     NavigationStack {
         HistoriqueGPView()
+    }
+}
+
+// MARK: - La silhouette
+
+/// « Mes / Ses Grands Prix » pendant le premier chargement : le bandeau du résumé, puis le
+/// carrousel — **à sa géométrie** (``CarrouselGrandsPrix``) : carte centrale de la largeur
+/// moins 2 × 40 pt, haute de 60 % de la largeur, ses deux voisines réduites à 0,9 qui
+/// dépassent des bords, 20 pt de respiration au-dessus et au-dessous.
+private struct SqueletteHistorique: View {
+
+    let margeLaterale: CGFloat
+
+    @State private var largeur: CGFloat = 0
+
+    private var largeurCarte: CGFloat { max(largeur - 80, 0) }
+    private var hauteurCarte: CGFloat { (largeur * 0.6).rounded() }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            SkeletonView(.blocRectangulaire, hauteur: 112, rayon: Rayon.bloc)
+                .padding(.horizontal, margeLaterale)
+
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: largeur == 0 ? 0 : hauteurCarte + 40)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { largeur = $0 }
+                .overlay {
+                    if largeur > 0 {
+                        HStack(spacing: 12) {
+                            carte.scaleEffect(0.9)
+                            carte
+                            carte.scaleEffect(0.9)
+                        }
+                        .fixedSize()
+                    }
+                }
+        }
+    }
+
+    private var carte: some View {
+        SkeletonView(.blocRectangulaire, largeur: largeurCarte, hauteur: hauteurCarte,
+                     rayon: Rayon.carrousel)
     }
 }

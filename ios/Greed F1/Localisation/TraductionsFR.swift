@@ -478,6 +478,7 @@ enum TraductionsFR {
 
         // MARK: - Profil — Grands Prix joués
         "profil.a11y.chargementStats": "Chargement des statistiques",
+        "profil.a11y.chargementLivree": "Chargement de la livrée",
         "profil.gpJouesSaison.un": "%d GP joué cette saison",
         "profil.gpJouesSaison.plusieurs": "%d GP joués cette saison",
         "historique.gpJoues.un": "Saison 2026 · %d GP joué",

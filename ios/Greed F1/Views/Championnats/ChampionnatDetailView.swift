@@ -70,6 +70,11 @@ struct ChampionnatDetailView: View {
         return championnat.nombreMembres
     }
 
+    private var classementEnChargement: Bool {
+        if case .chargement = classement.etat { return true }
+        return false
+    }
+
     /// Les deux segments de l'écran.
     private enum Vue: Hashable {
         case classement, piste
@@ -143,9 +148,10 @@ struct ChampionnatDetailView: View {
                 ZStack {
                     switch classement.etat {
                     case .chargement:
-                        ProgressView()
-                            .tint(.secondaire)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        SqueletteClassement()
+                            .padding(.horizontal, margeLaterale)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .accessibilityElement(children: .ignore)
                             .accessibilityLabel(t("championnat.a11y.chargementClassement"))
 
                     case .echec(let erreur):
@@ -158,6 +164,7 @@ struct ChampionnatDetailView: View {
                         let membres = servis.map { $0.avecVoiture(de: monProfil) }
                         contenuClassement(membres)
                             .visible(vue == .classement)
+                            .transition(.contenuArrive)
                         // Construite au premier tap sur « Piste », gardée ensuite.
                         if pisteVue {
                             PisteIntegree(championnat: championnat, membres: membres)
@@ -169,6 +176,7 @@ struct ChampionnatDetailView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
+                .fonduChargement(classementEnChargement)
             }
         }
         .onChange(of: vue) { _, nouvelle in
@@ -512,9 +520,12 @@ struct ChampionnatDetailView: View {
                     }
                     .padding(.horizontal, 4)
                     .padding(.bottom, -4)
+                    .arriveeEnCascade(rang: 0)
                 }
                 listeClassement(membres)
+                // Après la dernière ligne — au cinquième rang au plus.
                 lienResultats
+                    .arriveeEnCascade(rang: membres.count)
             }
             .padding(.horizontal, margeLaterale)
             .padding(.bottom, 24)
@@ -621,7 +632,7 @@ struct ChampionnatDetailView: View {
     /// section — et l'espace qui les séparent.
     private func listeClassement(_ membres: [Membre]) -> some View {
         VStack(spacing: 4) {
-            ForEach(membres) { membre in
+            ForEach(Array(membres.enumerated()), id: \.element.id) { rang, membre in
                 // `NavigationLink` et non `Button` : c'est lui qui porte le glissement
                 // d'écran natif et le geste de retour par le bord, qu'un `Button` poussant
                 // un état ne donne pas.
@@ -631,6 +642,7 @@ struct ChampionnatDetailView: View {
                     LigneClassement(membre: membre, total: membres.count)
                 }
                 .buttonStyle(StyleAppui(.grandeSurface))
+                .arriveeEnCascade(rang: rang)
             }
         }
         .padding(12)
@@ -640,6 +652,44 @@ struct ChampionnatDetailView: View {
         .ombreBloc()
     }
 
+}
+
+// MARK: - La silhouette du classement
+
+/// Le classement pendant son premier chargement : le bloc blanc de ``listeClassement``
+/// (rembourrage 12, `Rayon.bloc`), cinq lignes esquissées — rang, avatar, nom et détail,
+/// score — puis la carte « Résultats par Grand Prix ».
+private struct SqueletteClassement: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 4) {
+                ForEach(0..<5, id: \.self) { _ in ligne }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity)
+            .background(Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: Rayon.bloc, style: .continuous))
+            .ombreBloc()
+
+            SkeletonView(.blocRectangulaire, hauteur: 72)
+        }
+    }
+
+    private var ligne: some View {
+        HStack(spacing: 12) {
+            SkeletonView(.blocCarre, largeur: 18, hauteur: 18, rayon: 9)
+            SkeletonView(.blocCarre, largeur: 36, hauteur: 36, rayon: 18)
+            VStack(alignment: .leading, spacing: 6) {
+                SkeletonView(.ligneLongue, hauteur: 12)
+                    .padding(.trailing, 40)
+                SkeletonView(.ligneCourte, largeur: 80, hauteur: 10)
+            }
+            SkeletonView(.ligneCourte, largeur: 40, hauteur: 16)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 4)
+        .frame(minHeight: 50)
+    }
 }
 
 // MARK: - Une ligne du classement
