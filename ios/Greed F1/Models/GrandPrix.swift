@@ -122,6 +122,19 @@ enum SlugCircuit {
 
     /// Les alias de `ALIAS`, dans le même ordre — le premier qui répond l'emporte.
     private static let alias: [(String, String)] = [
+        ("melbourne|albert.?park|australi", "australie"),
+        ("shanghai|chine|china", "chine"),
+        ("suzuka|japon|japan", "japon"),
+        // Avant `etats-unis` : « amerique » ou « usa » dans un libellé de Miami l'y enverrait.
+        ("miami", "miami"),
+        ("montreal|canad", "canada"),
+        ("monte.?carlo|monaco", "monaco"),
+        ("barcelon|catalun|catalogne|montmelo", "barcelone"),
+        ("spielberg|red.?bull.?ring|autriche|austria", "autriche"),
+        ("silverstone|bretagne|britain|british|royaume.?uni|angleterre", "grande-bretagne"),
+        // Pas « spa » seul : il est dans « espagne ».
+        ("francorchamps|belgi", "belgique"),
+        ("hungaroring|hongri|hungar", "hongrie"),
         ("zandvoort|hollande|neerland", "pays-bas"),
         ("monza", "italie"),
         ("madrid|madring", "espagne"),

@@ -2347,9 +2347,15 @@ au lancement ⇒ relu une fois, puis échec rejouable plutôt qu'un spinner sans
 `CalendrierView` et rappelé à chaque apparition. Les statuts en base sont `a_venir`,
 `cotes_figees` et `termine` (contrainte `check`) — **pas d'`en_cours`** ; les quatre états
 affichés en sont dérivés par `EtatGp.pour`, pendant d'`etatDuGpSaison` (absent de la base ⇒
-« À venir », `date_course` passée ⇒ « Fermé », cotes présentes ⇒ « Pronos ouverts »). Le
+« À venir », `date_course` passée ⇒ « Fermé », cotes présentes ⇒ « Pronos ouverts »).
+**Exception (iOS 0.51.1)** : absent de la base **et** jour de course écrit passé ⇒
+« Terminé » (`GrandPrixSaison.etat`, même règle que `GPRestants.estTermine`) — les onze GP
+courus avant l'ouverture de l'app (Australie → Hongrie) ne sont pas en base, et sans ce repli
+l'Australie passait pour le prochain GP. La liste compte **23 GP** (Bahreïn et l'Arabie
+saoudite d'avril annulés) ; les onze premiers n'ont ni drapeau, ni tracé, ni teintes, faute de
+source dans `assets/` : aplat de la marque, sans tracé. Le
 rapprochement se fait par `SlugCircuit` (`Models/GrandPrix.swift`), désormais **seul
-propriétaire** du slug — `ProchainGP.slug` y délègue. Les douze cartes s'affichent toujours :
+propriétaire** du slug — `ProchainGP.slug` y délègue. Les cartes s'affichent toujours :
 pendant le premier chargement un spinner au-dessus de la liste, après un échec
 `EchecChargement` au même endroit, et **aucune pastille tant que l'état est inconnu** — un
 « À venir » par défaut mentirait sur un GP ouvert. Le défilement vers le prochain GP attend

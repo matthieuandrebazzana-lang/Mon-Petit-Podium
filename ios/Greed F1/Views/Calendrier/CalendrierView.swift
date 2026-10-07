@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// Onglet **Calendrier** — les douze Grands Prix de la fin de saison 2026, du GP des
-/// Pays-Bas à Abu Dhabi.
+/// Onglet **Calendrier** — les vingt-trois Grands Prix de la saison 2026, de l'Australie
+/// à Abu Dhabi.
 ///
 /// Références visuelles : `Ressources/Screenshots/screen-08-calendrier-haut.PNG`,
 /// `screen-09-calendrier-milieu.PNG` et `screen-10-calendrier-bas.PNG`.
 ///
 /// > **La liste est statique, les états sont réels.** ``GrandPrixSaison/saison2026`` porte
-/// > les douze cartes ; ``CalendrierSaison`` (`GET /calendrier`) leur ajoute ce que
+/// > les vingt-trois cartes ; ``CalendrierSaison`` (`GET /calendrier`) leur ajoute ce que
 /// > seule la base sait — **l'identifiant, le statut et l'existence de cotes**. Le
 /// > rapprochement se fait par ``SlugCircuit``, jamais par le nom brut. L'échec de
 /// > l'appel fait perdre les états, jamais la liste (`docs/swift-app.md` §7.6).
@@ -16,7 +16,7 @@ import SwiftUI
 ///
 /// `public.grands_prix` ne contient que ce que le scraper a rencontré, et Unibet n'expose
 /// jamais que le Grand Prix suivant : un calendrier lu en base afficherait **une** course
-/// au milieu d'une saison qui en compte douze. Le calendrier de la Formule 1 est une
+/// au milieu d'une saison qui en compte vingt-trois. Le calendrier de la Formule 1 est une
 /// donnée publique et stable — elle n'a pas à être découverte chez un bookmaker. C'est le
 /// raisonnement de la version web, et il vaut ici à l'identique.
 ///
@@ -40,7 +40,7 @@ struct CalendrierView: View {
     /// Possédé par l'écran, servi par le cache *stale-while-revalidate* (``CacheService``, 5 min, §7.6).
     @StateObject private var calendrier = CalendrierSaison()
 
-    /// Les douze cartes, croisées avec ce que la base sait — ou avec rien, tant qu'elle n'a
+    /// Les cartes de la saison, croisées avec ce que la base sait — ou avec rien, tant qu'elle n'a
     /// pas répondu : leurs états sont alors **inconnus**, pas « à venir ».
     private var grandsPrix: [GrandPrixSaison] {
         GrandPrixSaison.saison2026(croiseeAvec: calendrier.enBase)
@@ -132,7 +132,7 @@ struct CalendrierView: View {
 
     // MARK: - Chargement et échec
 
-    /// **Au-dessus de la liste, jamais à sa place** : les douze cartes sont statiques et
+    /// **Au-dessus de la liste, jamais à sa place** : les cartes sont statiques et
     /// restent lisibles pendant l'attente comme après un échec — seuls leurs états
     /// manquent. Le spinner ne vient qu'au premier chargement ; un rechargement garde les
     /// états déjà affichés, sans quoi chaque retour sur l'onglet ferait sauter la liste.
@@ -175,7 +175,8 @@ struct CalendrierView: View {
                 //
                 // **L'identifiant réel du Grand Prix voyage avec la carte** — c'est lui que
                 // les résultats et les pronostics demanderont (étapes 6 et 7). Un « Terminé »
-                // vient forcément de la base : il a donc toujours le sien.
+                // couru avant l'ouverture de l'app peut ne pas l'avoir : ses résultats
+                // s'affichent alors « non disponibles », jamais ceux d'un autre.
                 NavigationLink {
                     if gp.etat == .termine {
                         ResultatsGPView(nom: gp.nom, date: gp.dateAffichee, gpId: gp.gpId)
@@ -254,7 +255,7 @@ private struct CarteGrandPrixSaison: View {
     private let hauteurCarte: CGFloat = 200
 
     /// Hauteur de la bande d'action. Elle est **retranchée** de la carte plutôt qu'ajoutée
-    /// dessous : les douze cartes gardent la même hauteur qu'elles portent un bouton ou
+    /// dessous : les cartes gardent la même hauteur qu'elles portent un bouton ou
     /// non, ce que les trois captures montrent au pixel près.
     ///
     /// 46 pt : au-dessus du plancher tactile de 44 pt, et il ne bouge pas quand la carte
@@ -373,7 +374,16 @@ private struct CarteGrandPrixSaison: View {
     /// Le trait est à 60 % de blanc : une fois le voile et l'assombrissement posés dessous,
     /// il y tient **2,70:1** sur les drapeaux clairs — c'est un élément décoratif, pas un
     /// porteur de sens, et le nom du Grand Prix dit déjà de quel circuit il s'agit.
-    private var trace: some View {
+    ///
+    /// Un circuit sans asset — les onze du début de saison — n'en pose aucun, plutôt qu'une
+    /// image vide qui avertirait la console à chaque affichage.
+    @ViewBuilder private var trace: some View {
+        if UIImage(named: "trace-\(grandPrix.slug)") != nil {
+            traceDessine
+        }
+    }
+
+    private var traceDessine: some View {
         Image("trace-\(grandPrix.slug)")
             .renderingMode(.template)
             .resizable()
@@ -633,7 +643,16 @@ struct GrandPrixSaison {
     var gpId: UUID? { enBase?.id }
 
     /// L'état de la carte, `nil` s'il est inconnu.
-    var etat: EtatGp? { etatConnu ? EtatGp.pour(enBase) : nil }
+    ///
+    /// **Absent de la base et jour de course passé ⇒ « Terminé »**, d'après la date écrite
+    /// (``GPRestants/estTermine(_:le:)``, la même règle que le décompte). Sans ce repli, les
+    /// Grands Prix courus avant l'ouverture de l'app — que le scraper n'a jamais rencontrés —
+    /// seraient « À venir », et le premier d'entre eux, l'Australie, passerait pour le prochain.
+    var etat: EtatGp? {
+        guard etatConnu else { return nil }
+        if enBase == nil, GPRestants.estTermine(self) { return .termine }
+        return EtatGp.pour(enBase)
+    }
 
     /// Pays, nom et circuit **dans la langue de l'interface**, relus à chaque affichage —
     /// clés `gp.<slug>.*` de `Localisation/`. Rien n'est stocké : un texte stocké ne suivrait
@@ -716,8 +735,17 @@ struct GrandPrixSaison {
         }
     }
 
-    /// Les douze Grands Prix, dans l'ordre de la saison — transcription de `GP_2026`
-    /// (`frontend/src/lib/calendrier2026.js`).
+    /// Les Grands Prix de la saison, dans l'ordre — les douze de la fin de saison sont la
+    /// transcription de `GP_2026` (`frontend/src/lib/calendrier2026.js`) ; les onze qui
+    /// précèdent viennent d'OpenF1 (`/sessions?year=2026&session_name=Race`).
+    ///
+    /// **Vingt-trois, pas vingt-quatre** : Bahreïn (12 avril) et l'Arabie saoudite (19 avril)
+    /// ont été annulés — OpenF1 n'en publie aucun résultat. Le « GP Bahreïn » du 4 octobre,
+    /// couru à Sepang, est la carte `malaisie`.
+    ///
+    /// Les onze premiers n'ont **ni drapeau, ni tracé, ni teintes** : aucune source n'existe
+    /// dans `assets/`, et rien ne se redessine à la main (`ios/CLAUDE.md` §3). La carte se
+    /// rabat sur l'aplat de la marque, sans tracé — voir ``CarteGrandPrixSaison``.
     ///
     /// `slug` est la clé de **trois** tables à la fois — l'asset `flag-<slug>`, l'asset
     /// `trace-<slug>` et la table des teintes de ``TeintesDrapeaux`` — et celle du
@@ -726,6 +754,17 @@ struct GrandPrixSaison {
     /// Pays, nom et circuit ne sont pas écrits ici : ce sont les clés `gp.<slug>.*` des
     /// deux dictionnaires de `Localisation/`.
     static let saison2026: [GrandPrixSaison] = [
+        .init(slug: "australie", jour: "8", mois: "MARS", date: "8 mars 2026"),
+        .init(slug: "chine", jour: "15", mois: "MARS", date: "15 mars 2026"),
+        .init(slug: "japon", jour: "29", mois: "MARS", date: "29 mars 2026"),
+        .init(slug: "miami", jour: "3", mois: "MAI", date: "3 mai 2026"),
+        .init(slug: "canada", jour: "24", mois: "MAI", date: "24 mai 2026"),
+        .init(slug: "monaco", jour: "7", mois: "JUIN", date: "7 juin 2026"),
+        .init(slug: "barcelone", jour: "14", mois: "JUIN", date: "14 juin 2026"),
+        .init(slug: "autriche", jour: "28", mois: "JUIN", date: "28 juin 2026"),
+        .init(slug: "grande-bretagne", jour: "5", mois: "JUIL", date: "5 juillet 2026"),
+        .init(slug: "belgique", jour: "19", mois: "JUIL", date: "19 juillet 2026"),
+        .init(slug: "hongrie", jour: "26", mois: "JUIL", date: "26 juillet 2026"),
         .init(slug: "pays-bas", jour: "23", mois: "AOÛT", date: "23 août 2026"),
         .init(slug: "italie", jour: "6", mois: "SEPT", date: "6 septembre 2026"),
         .init(slug: "espagne", jour: "13", mois: "SEPT", date: "13 septembre 2026"),

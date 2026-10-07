@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
 Version backend actuelle : 0.85.0
-Version iOS actuelle : 0.51.0
+Version iOS actuelle : 0.51.1
 
 ## STACK TECHNIQUE
 
@@ -65,7 +65,9 @@ Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
-## CE QUI EST FAIT — VERSION iOS (0.51.0)
+## CE QUI EST FAIT — VERSION iOS (0.51.1)
+
+Calendrier complet de la saison 2026 (0.51.1) : l'onglet Calendrier ne montrait que les 12 GP à partir des Pays-Bas. **Cause** : pas un filtre — `GET /calendrier` ne borne que l'année ; c'est la liste statique `GrandPrixSaison.saison2026` (`CalendrierView.swift`) qui ne portait que la fin de saison (l'app a ouvert en août), et la base ne contient elle aussi que ces 12 GP. Ajout des **11 GP courus avant** (Australie, Chine, Japon, Miami, Canada, Monaco, Barcelone, Autriche, Grande-Bretagne, Belgique, Hongrie — dates relevées sur OpenF1) : **23 GP, pas 24** — Bahreïn (12 avril) et Arabie saoudite (19 avril) annulés, aucun résultat OpenF1 ; le « GP Bahreïn » du 4 octobre est la carte `malaisie`. Clés `gp.<slug>.*` FR/EN, alias `SlugCircuit` (Miami avant `etats-unis`, Belgique sur `francorchamps|belgi` car « spa » est dans « espagne »). `GrandPrixSaison.etat` : absent de la base + jour de course passé ⇒ « Terminé » (sans quoi l'Australie devenait le prochain GP et cassait le défilement automatique). Les 11 nouvelles cartes n'ont **ni drapeau, ni tracé, ni teintes** (aucune source dans `assets/`) : aplat de la marque, tracé non posé (`UIImage(named:)` testé). Leurs résultats s'affichent « non disponibles » tant qu'elles ne sont pas en base. Compilé ; non vérifié au simulateur (session requise).
 
 Performances (iOS 0.51.0, backend 0.85.0 — `docs/decisions.md` §27) : **cache mémoire *stale-while-revalidate*** (`Services/CacheService.swift`, clé compte + route, 60 s championnats / classement / stats, 5 min calendrier / prochain GP, vidé à la déconnexion ; `charger(forcer: true)` périme sa clé, toute écriture réussie d'`APIClient` périme tout) — branché sur `MesChampionnats`, `ProchainGrandPrix`, `ClassementChampionnat`, `StatistiquesProfil`, `CalendrierSaison` ; révise « pas de cache de session » (`swift-app.md` §7.6). **`GET /calendrier`** (backend, publique, une requête PostgREST avec `cotes(count)` embarqué : `id`, `nom`, deux heures, `statut`, `a_des_cotes`, saison en cours ou `?saison=`, GP sans date gardés ; 7 tests) remplace `/scraper/cotes` dans `CalendrierSaison`. **« Mes Grands Prix »** : un appel par GP (`/resultats?championnat_id=` sert podium + paris), championnat transmis par `EnvironmentValues.championnatParDefaut` (= `MesChampionnats.premierId`) au lieu de rappeler `/championnats/moi` ; « Mes résultats » ne relit plus aucun calendrier. **Vue Piste** construite au premier tap (`pisteVue`), gardée ensuite. **`ImageCachee`** (`NSCache` par URL, décodage hors fil principal) remplace les 5 `AsyncImage`. **Keep-alive Railway** : `GET /ping` + service `keepalive/` — d'abord un cron (affiché « Completed »), remplacé par un processus permanent qui boucle sur `/health` toutes les 5 min (`restartPolicyType: ALWAYS`, `architecture.md` §9). Compilé, tests backend verts (225) ; non vérifié au simulateur (session requise).
 
@@ -144,6 +146,9 @@ Notifications push : `42501 permission denied` sur `push_tokens` / `notification
 f1-ml : modèle de prédiction ML à intégrer
 Keep-alive Railway : vérifier que le service `keepalive` est « Online » et journalise `ping 200` toutes les 5 min (si Railway garde l'ancien planning cron du tableau de bord, le vider dans Settings → Cron Schedule)
 Cotes lisibles sans session en production (constaté le 2026-10-07 : la clé anonyme lit `public.cotes`) — la restriction de la migration 21 n'est plus en place (« 3 après 21 », `database.md`) : rejouer la 21
+
+Calendrier iOS : SQL d'insertion des 11 GP de début de saison fourni en session (non appliqué) — puis `POST /jobs/resultats/{gp_id}` par GP pour en récupérer les résultats
+Calendrier iOS : drapeaux, tracés et teintes des 11 GP de début de saison à fournir (SVG source dans `assets/`, puis `extraire-gp.mjs` + `ajouter-assets.sh`)
 
 Bugs connus :
 
