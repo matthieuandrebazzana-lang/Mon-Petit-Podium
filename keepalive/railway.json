@@ -5,7 +5,6 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "cronSchedule": "*/5 * * * *",
-    "restartPolicyType": "NEVER"
+    "restartPolicyType": "ALWAYS"
   }
 }

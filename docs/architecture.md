@@ -290,19 +290,24 @@ L'app iOS applique le même modèle, en mémoire (`CacheService`, `docs/decision
 ### Garder le service éveillé (backend `0.85.0`)
 
 **Un job interne ne peut pas réveiller un service endormi** : son processus est arrêté.
-Le cron de Railway n'est pas interne non plus — c'est un **service à part**, lancé à
-l'heure dite, qui doit se terminer. D'où :
+D'où un **second service Railway**, `keepalive/` :
 
 - **`GET /ping`** (et `HEAD`) : répond `pong` en texte, sans lire les réglages ni la base.
-  `/health` reste le diagnostic ; `/ping` est la cible des horloges.
-- **`keepalive/`** : un second service Railway (`Dockerfile` sur `curlimages/curl`,
-  `railway.json` avec `cronSchedule: "*/5 * * * *"` — **5 min est le minimum de Railway**).
-  Il appelle `/ping` puis s'arrête.
+- **`keepalive/`** : `Dockerfile` sur `curlimages/curl`, **processus permanent** — une
+  boucle `while true` qui appelle `/health` toutes les 5 min (`INTERVALLE=300`, `CIBLE`
+  surchargeables par variable d'environnement). Un échec de `curl` est journalisé, jamais
+  fatal. `railway.json` : `restartPolicyType: ALWAYS`, **pas** de `cronSchedule`.
 
-> **À créer une fois, à la main, dans le tableau de bord Railway** — aucun fichier du dépôt
-> ne crée un service : *New → GitHub Repo* (ce dépôt), *Settings → Root Directory* =
-> `keepalive`, *Config file path* = `keepalive/railway.json`. Vérifier dans ses journaux
-> une ligne `ping 200 en …s` toutes les cinq minutes.
+> **Première version (backend `0.85.0`) : un service cron** qui faisait un `curl` puis
+> s'arrêtait. Railway l'affichait « Completed » entre deux exécutions — c'est l'état normal
+> d'un cron, mais illisible au tableau de bord. Remplacé par la boucle, qui reste
+> « Online ». Ne pas remettre de `cronSchedule` : Railway saute une exécution tant que la
+> précédente tourne, et la boucle ne finit jamais.
+
+> **À créer une fois, à la main, dans le tableau de bord Railway** : *New → GitHub Repo*
+> (ce dépôt), *Settings → Root Directory* = `keepalive`, *Config file path* =
+> `keepalive/railway.json`. Vérifier dans ses journaux une ligne `ping 200 en …s` toutes
+> les cinq minutes.
 
 > **GitHub Actions écarté** : le dépôt est privé, chaque exécution est facturée une minute
 > au moins, et un ping toutes les 5 min en consomme ~8 600 par mois pour 2 000 gratuites.

@@ -1000,7 +1000,7 @@ le classement et les statistiques ; **5 min** pour le calendrier et le prochain 
 `0.85.0`, une requête au lieu d'un appel `cotes_du_grand_prix` par GP), un appel par GP
 dans « Mes Grands Prix » (`/resultats?championnat_id=`), `ImageCachee` (`NSCache` par
 URL) à la place d'`AsyncImage`, la vue Piste construite au premier tap, et le keep-alive
-Railway (`/ping` + service cron `keepalive/`, `architecture.md` §9).
+Railway (`/ping` + service `keepalive/`, une boucle permanente sur `/health`, `architecture.md` §9).
 
 **Raison.** Sans cache, chaque changement d'onglet rappelait sa route : sur un Railway
 lent ou endormi, l'écran attendait ce qu'il venait d'afficher. La décision « pas de cache »
