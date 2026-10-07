@@ -155,7 +155,8 @@ struct AccueilView: View {
     /// Le widget, sa silhouette pendant le premier chargement, ou l'échec rejouable. **Aucun
     /// Grand Prix à venir ⇒ rien du tout**, espacement compris : un bloc vide promettrait
     /// une course que la base ne connaît pas. Le widget arrivé remplace la silhouette
-    /// (``View/fonduChargement(_:)``) en remontant (``View/arriveeEnCascade(rang:)``).
+    /// (``View/fonduChargement(_:)``) en grandissant de 95 % à 100 %
+    /// (``View/apparitionWidget()``).
     ///
     /// Chaque branche porte sa cale dans sa propre pile : superposées dans le `ZStack`, deux
     /// vues sœurs se chevaucheraient.
@@ -188,9 +189,9 @@ struct AccueilView: View {
         case .pret(let gp?):
             VStack(spacing: 0) {
                 WidgetGrandPrix(grandPrix: gp, aDesPronostics: prochainGP.aDesPronostics)
+                    .apparitionWidget()
                 Spacer().frame(height: 24)   // changement de sujet : 24 pt (§4.6)
             }
-            .arriveeEnCascade(rang: 0)
 
         case .pret(nil):
             Spacer().frame(height: 12)
@@ -224,8 +225,7 @@ struct AccueilView: View {
                     idUtilisateur: viewModel.profil?.id,
                     apercu: $apercuPile
                 )
-                // Rang 1 : sous le widget, quand les deux arrivent ensemble.
-                .arriveeEnCascade(rang: 1)
+                // L'entrée est celle de la pile, carte par carte (``PileChampionnats``).
             }
         }
     }

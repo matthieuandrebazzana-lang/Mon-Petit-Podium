@@ -449,7 +449,7 @@ struct CreerChampionnatView: View {
                 Text(t("championnat.voir"))
                     .habillageBoutonPrincipal(actif: true)
             }
-            .buttonStyle(StyleAppui(.bouton))
+            .boutonPressable()
             .shadow(color: Color.secondaire.opacity(0.16), radius: 17, y: 14)
         } else {
             boutonEnvoi
@@ -466,7 +466,7 @@ struct CreerChampionnatView: View {
             }
             .habillageBoutonPrincipal(actif: nomValide)
         }
-        .buttonStyle(StyleAppui(.bouton))
+        .boutonPressable()
         .disabled(!nomValide || envoi)
         .accessibilityLabel(envoi ? t("creer.a11y.enCours") : t("creer.bouton"))
         // **Le seul changement d'état que l'écran produit de lui-même.** Il s'anime parce

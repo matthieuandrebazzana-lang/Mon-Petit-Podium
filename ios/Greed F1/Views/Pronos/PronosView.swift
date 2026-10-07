@@ -37,6 +37,19 @@ struct PronosView: View {
 
     @State private var envoi = false
 
+    /// Validations acceptées — le déclencheur de l'éclat et des confettis du bouton
+    /// (``View/eclatPop(_:couleur:diametre:)``, ``View/confettiDiscret(_:)``).
+    @State private var celebrations = 0
+    /// Vrai pendant la courte pause qui laisse jouer l'éclat avant le récapitulatif
+    /// (``Mouvement/pauseCelebration``) : la grille est écrite, le bouton reste éteint.
+    @State private var celebration = false
+
+    /// Choix faits **au doigt**, par emplacement et par bonus — les déclencheurs de la
+    /// pulsation (``View/pulseSelection(_:forme:)``). Pas l'état du choix lui-même : le
+    /// préremplissage le change aussi, et une pulsation au chargement mentirait.
+    @State private var pulsesEmplacement: [EmplacementProno: Int] = [:]
+    @State private var pulsesBonus: [String: Int] = [:]
+
     /// Ce qui manque, ou le refus du serveur — **au-dessus du bouton**, jamais une alerte.
     @State private var erreurEnvoi: ErreurAPI?
 
@@ -99,6 +112,7 @@ struct PronosView: View {
                 favoris: Set((donnees.donnees?.favoris ?? []).map { ClePilote.de($0.pilote) })
             ) { cote in
                 choix[emplacement] = cote
+                pulsesEmplacement[emplacement, default: 0] += 1
                 erreurEnvoi = nil
                 feuille = nil
             }
@@ -179,7 +193,8 @@ struct PronosView: View {
     /// **Les deux emplacements du podium ne sont pas numérotés** : ils valent les 2e et 3e
     /// places sans ordre entre eux (§6.3).
     private func emplacement(_ slot: EmplacementProno) -> some View {
-        EmplacementProno.Champ(marche: slot.marche, choisi: choix[slot]) {
+        EmplacementProno.Champ(marche: slot.marche, choisi: choix[slot],
+                               pulse: pulsesEmplacement[slot, default: 0]) {
             feuille = slot
         }
     }
@@ -231,7 +246,8 @@ struct PronosView: View {
                         CarteParisBonus(
                             favori: favori,
                             actif: actif,
-                            sature: !actif && retenus.count >= CotesView.bonusMaximum
+                            sature: !actif && retenus.count >= CotesView.bonusMaximum,
+                            pulse: pulsesBonus[favori.idOutcomeUnibet, default: 0]
                         ) {
                             basculerBonus(favori.idOutcomeUnibet, favoris: favoris)
                         }
@@ -329,8 +345,12 @@ struct PronosView: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
             }
-            .buttonStyle(StyleAppui(.bouton))
-            .disabled(envoi)
+            .boutonPressable()
+            // La grille acceptée : un éclat blanc sur le bouton, des confettis qui en
+            // montent. Rien sous mouvement réduit (``EffetsPow``).
+            .eclatPop(celebrations, couleur: .encreSurAplat, diametre: 52)
+            .confettiDiscret(celebrations)
+            .disabled(envoi || celebration)
             .accessibilityLabel(envoi ? t("pronos.a11y.enregistrement") : t("accueil.validerPronos"))
         }
         .animation(mouvementReduit ? .none : Mouvement.entree(0.18), value: total)
@@ -368,6 +388,7 @@ struct PronosView: View {
                 bonus.remove(at: rang)
             } else if bonusRetenus(favoris).count < CotesView.bonusMaximum {
                 bonus.append(id)
+                pulsesBonus[id, default: 0] += 1
             }
         }
     }
@@ -448,17 +469,28 @@ struct PronosView: View {
 
         let retenus = bonusRetenus(favorisTries(lu))
         envoi = true
-        defer { envoi = false }
         do {
             try await donnees.enregistrer(CorpsPronostics(
                 vainqueur: vainqueur.id,
                 podium: .init(pilote_1: podium1.id, pilote_2: podium2.id),
                 bonus: retenus))
+            envoi = false
         } catch is CancellationError {
+            envoi = false
             return
         } catch {
+            envoi = false
             erreurEnvoi = (error as? ErreurAPI) ?? .serveur(statut: nil, message: nil)
             return
+        }
+
+        // **L'éclat a sa pause, courte, et seulement s'il joue** : sous mouvement réduit
+        // rien n'est montré, donc rien n'attend.
+        if !mouvementReduit {
+            celebration = true
+            celebrations += 1
+            try? await Task.sleep(for: .seconds(Mouvement.pauseCelebration))
+            celebration = false
         }
 
         // Le récapitulatif montre **exactement ce qui vient d'être accepté** : le serveur a
@@ -509,6 +541,8 @@ enum EmplacementProno: String, CaseIterable, Identifiable {
 
         let marche: MarcheCote
         let choisi: Cote?
+        /// Incrémenté à chaque choix fait au doigt — voir ``View/pulseSelection(_:forme:)``.
+        var pulse: Int = 0
         let onOuvrir: () -> Void
 
         var body: some View {
@@ -542,6 +576,7 @@ enum EmplacementProno: String, CaseIterable, Identifiable {
                 .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
             }
             .buttonStyle(StyleAppui(.grandeSurface))
+            .pulseSelection(pulse, forme: RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
             .accessibilityLabel(marche.libelle)
             .accessibilityValue(choisi.map { "\($0.pilote), " + tp("classement.a11y.points", $0.points) } ?? t("pronos.nonSelectionne"))
             .accessibilityHint(t("pronos.a11y.choisirPilote"))
@@ -756,6 +791,8 @@ private struct CarteParisBonus: View {
     let actif: Bool
     /// Trois bonus déjà retenus : celui-ci ne peut plus entrer.
     let sature: Bool
+    /// Incrémenté quand ce bonus est retenu au doigt — voir ``View/pulseSelection(_:forme:)``.
+    let pulse: Int
     let onBasculer: () -> Void
 
     private var nom: String { favori.pilote ?? favori.idOutcomeUnibet }
@@ -811,6 +848,7 @@ private struct CarteParisBonus: View {
             .opacity(sature ? 0.5 : 1)
         }
         .buttonStyle(StyleAppui(.grandeSurface))
+        .pulseSelection(pulse, forme: RoundedRectangle(cornerRadius: Rayon.carteSm, style: .continuous))
         .disabled(sature)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(marche), \(nom), \(formaterPoints(favori.points))")

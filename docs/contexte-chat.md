@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
 Version backend actuelle : 0.85.0
-Version iOS actuelle : 0.52.0
+Version iOS actuelle : 0.53.0
 
 ## STACK TECHNIQUE
 
@@ -23,7 +23,7 @@ Base de données : Supabase/PostgreSQL (projet ID: ycsxcythvtcruiomrgvv)
 Auth : Supabase Auth — email/password + Google OAuth actif + Sign in with Apple (iOS natif, 0.48.0)
 Emails : Resend via SMTP Supabase, domaine greed-f1.com vérifié
 App iOS : Swift 5.0, SwiftUI, iOS 17.0+, Xcode 26.6, simulateur iPhone 17 Pro iOS 26.5
-Bundle ID : com.bazzana.greedf1, SDK Supabase Swift 2.55.2
+Bundle ID : com.bazzana.greedf1, SDK Supabase Swift 2.55.2, Pow (EmergeTools) 1.0.6
 Repo GitHub : monorepo (frontend/ + backend/ + ios/ + docs/)
 
 ## MÉTHODE DE TRAVAIL
@@ -65,7 +65,9 @@ Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
-## CE QUI EST FAIT — VERSION iOS (0.52.0)
+## CE QUI EST FAIT — VERSION iOS (0.53.0)
+
+Micro-animations (0.53.0) : paquet SPM **Pow 1.0.6** (EmergeTools, open source ; « 0.4.4 » n'existe pas — tags `v0.x` jusqu'à 0.3.1 binaires, puis `1.0.x` sans `v`). **Un seul fichier l'importe** : `Views/Composants/EffetsPow.swift` — `eclatPop(_:couleur:diametre:)` (`movingParts.pop` posé sur un calque vide, car la transition fait entrer son contenu depuis `scale(0)`), `confettiDiscret(_:)` (`spray`, `primaire` + `encrePrimaire` ; Pow n'a pas de « confetti »), `pulseSelection(_:forme:)` (`pulse` en trait `primaire`) ; Pow ne lit pas `reduceMotion`, les trois s'y éteignent. Déclencheurs = compteurs incrémentés dans l'action du geste, jamais au chargement. **Boutons principaux** : `boutonPressable()` (`Mouvement.swift`) = `StyleAppui(.principal)` 0,96 + `Mouvement.relachement` — « Valider mes pronos », envoi et « Voir » de Créer / Rejoindre (pas les cartes d'action de l'accueil, qui restent à 0,985). **Validation** : éclat blanc + confettis, récap poussé après `Mouvement.pauseCelebration` (450 ms, 0 sous mouvement réduit). **Étoile favori** (`CotesView`, ajout seulement) : haptique `.light` + `keyframeAnimator` 1 → 1,3 → 1 + éclat ambre. **Pulse** : champ d'un emplacement choisi dans la feuille, carte de bonus retenue (`PronosView`) — invisible sur le bloc vainqueur, rouge sur rouge. **Classement** : `arriveeEnCascade(rang:decalage:plafond:)`, 40 ms sur 10 lignes. **Widget accueil** : `apparitionWidget()` (0,95 → 1 + fondu, `spring(0.5, 0.8)`). **Pile** : cartes du bas (dessus) vers le haut, 50 ms, +12 pt, une bascule pour tout le paquet. **Voitures** : entrée existante (fondu + montée, 60 ms) gardée ; fondu échelonné sous mouvement réduit au lieu de rien. Toutes les entrées ne jouent qu'après une silhouette (`arriveeApresSquelette`, rendu interne). Compilé, lancé au simulateur ; écrans connectés non vérifiés (session requise).
 
 Silhouettes de chargement (0.52.0) : `Views/Composants/SkeletonView.swift` — un composant, quatre variantes (`ligneCourte` 96 × 12, `ligneLongue`, `blocCarre` 56, `blocRectangulaire` 120), tailles et rayon remplaçables ; aplat `secondaire` à 15 %, bande à 30 % qui balaie l'écran de gauche à droite en 1,4 s linéaire (`Mouvement.balayageSquelette`, `TimelineView`), **calée sur l'écran** : toutes les silhouettes s'allument d'un seul passage ; aucune bande sous mouvement réduit. Jetons seulement, donc sombre automatique. `fonduChargement(_:)` (sur un `ZStack` autour du `switch`) fait sortir la silhouette en fondu 300 ms ; le contenu entre par `arriveeEnCascade(rang:)` — fondu + glissement de 12 pt vers le haut, 300 ms courbe d'entrée, 50 ms d'écart par élément sur 5 au plus (`Mouvement.arriveeContenu`, `glissementArrivee`, `decalageArrivee`, `cascadeArrivee`), fondu seul sous mouvement réduit ; jamais rejoué sur un contenu servi par le cache. Au calendrier, la cascade part du prochain GP ; aux stats, la grille reste en place et seuls les chiffres entrent. Affichée **uniquement en `.chargement`** (premier appel : le cache sert sinon aussitôt). Accueil : bloc 360 pt (`SqueletteWidget` — l'aplat rouge + spinner `SilhouetteWidget` reste en place, non monté) + pile (une carte, deux bandes) ; Championnats : trois cartes ; détail : bloc blanc à cinq lignes + carte « Résultats par GP » ; Calendrier : six cartes grises de 200 pt sur la surface (`SqueletteCalendrier` — bloc drapeau/tracé, quantième, nom, circuit ; ni drapeau ni texte), puis la liste en cascade ; après un échec, la liste revient sans états ; Profil : valeurs inconnues des tuiles de stats (`GrilleStatistiques(squelette:)`, aussi sur le profil d'un membre) + voiture tant que le profil n'est pas lu (clé `profil.a11y.chargementLivree`) ; « Mes Grands Prix » : bandeau + carrousel à sa géométrie. Spinners d'action inchangés. Compilé ; composant vérifié au simulateur, clair et sombre (banc temporaire) ; écrans connectés non vérifiés (session requise).
 
