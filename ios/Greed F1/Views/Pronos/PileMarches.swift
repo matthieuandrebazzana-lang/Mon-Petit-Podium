@@ -78,17 +78,9 @@ struct PileMarches: View {
 
     // MARK: - Les teintes
 
-    /// L'aplat de chaque carte : le sien pour un obligatoire, sinon la teinte bonus de son
-    /// **rang parmi les marchés bonus** — le premier bonus prend toujours la première
-    /// teinte, quel que soit le nombre d'obligatoires au-dessus.
-    private var aplats: [Color] {
-        var rangBonus = 0
-        return marches.map { marche in
-            if let obligatoire = MarcheCote(rawValue: marche.marche) { return obligatoire.aplat }
-            defer { rangBonus += 1 }
-            return MarcheCote.aplatBonus(rang: rangBonus)
-        }
-    }
+    /// L'aplat de chaque carte — ``MarcheCote/aplats(de:)``, le calcul que partagent les
+    /// filets du récapitulatif.
+    private var aplats: [Color] { MarcheCote.aplats(de: marches) }
 
     // MARK: - La disposition
 

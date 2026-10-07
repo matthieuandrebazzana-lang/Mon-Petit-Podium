@@ -200,6 +200,34 @@ extension Color {
     ]
 }
 
+// MARK: - Teintes des cartes du récapitulatif
+
+/// Le fond d'une carte du récapitulatif : **la couleur de sa catégorie**, posée à
+/// ``opaciteTeinteCarte`` sur ``surface``. Trois teintes seulement — tous les bonus
+/// partagent l'ocre.
+///
+/// > **En sombre, la teinte s'éclaircit.** Les aplats foncés à 18 % sur `#2C2C2E` ne se
+/// > distinguaient plus de la surface (bleu ardoise : 1,07:1). Les variantes claires
+/// > tiennent **1,30 à 1,41:1** face à la surface — visibles, jamais saturées.
+///
+/// Mesuré damier compris (6 %) : ``texte`` ≥ **11,23:1** en clair, ≥ **9,60:1** en sombre ;
+/// ``encreSurTeinte`` ≥ **5,46:1** et ≥ **5,70:1**. Le ``grisSecondaire`` n'y tenait que
+/// 3,44:1 en clair — c'est ce qui oblige ``encreSurTeinte`` à exister.
+extension Color {
+
+    static let opaciteTeinteCarte: Double = 0.18
+
+    /// Clair `#800111` (``primaire``), sombre `#FF6961` (``encrePrimaire``).
+    static let teinteVainqueur = Color.encrePrimaire
+    /// Clair `#2C4A6E` (``bleuArdoise``), sombre `#7A9CC6`.
+    static let teintePodium = Color(clair: 0x2C4A6E, sombre: 0x7A9CC6)
+    /// Clair `#8A6516` (``ocre``), sombre `#D4A84B`.
+    static let teinteBonus = Color(clair: 0x8A6516, sombre: 0xD4A84B)
+
+    /// Encre de second rang sur une carte teintée — clair `#4D4D4D`, sombre `#C7C7CC`.
+    static let encreSurTeinte = Color(clair: 0x4D4D4D, sombre: 0xC7C7CC)
+}
+
 extension Color {
     /// `Color(hexadecimal: 0x800111)` — une seule façon d'écrire un code hexadécimal.
     init(hexadecimal valeur: UInt32) {

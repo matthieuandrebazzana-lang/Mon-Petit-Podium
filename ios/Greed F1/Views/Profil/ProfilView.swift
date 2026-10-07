@@ -820,13 +820,18 @@ struct ProfilView: View {
     /// L'engrenage qui pousse ``ReglagesView`` — en haut à droite, à hauteur du titre.
     /// Zone tactile de 44 × 44 pt ; le symbole est ramené au bord de la marge par un
     /// retrait négatif, pour s'aligner sur le bord droit des blocs.
+    ///
+    /// L'asset `icon-reglages` (24 × 24, *template*) et non le `gearshape` du système : son
+    /// trait de 1,5 suit celui des icônes du projet. L'encre est ``Color/encrePrimaire`` —
+    /// un trait rouge, donc jamais l'aplat `primaire`, qui tombe à 2,26:1 en sombre.
     private var boutonReglages: some View {
         NavigationLink {
             ReglagesView(viewModel: viewModel)
         } label: {
-            Image(systemName: "gearshape")
-                .font(.system(size: 22, weight: .regular))
-                .foregroundColor(.secondaire)     // 9,32:1 sur le beige · sombre 14,32:1
+            Image("icon-reglages")
+                .resizable()
+                .frame(width: 26, height: 26)
+                .foregroundColor(.encrePrimaire)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }

@@ -13,8 +13,9 @@
 # Chaque SVG devient un imageset universel avec « Preserve Vector Data » activé :
 # sans ce réglage, iOS pixellise le tracé dès qu'il est agrandi.
 #
-# **Les tracés de circuits reçoivent en plus le rendu `template`**, et eux seuls : ce sont
-# des traits monochromes, qui doivent prendre l'encre de l'écran qui les monte. Un drapeau
+# **Les tracés de circuits et les icônes `icon-*` reçoivent en plus le rendu `template`**,
+# et eux seuls : ce sont des traits monochromes, qui doivent prendre l'encre de l'écran qui
+# les monte. Un drapeau
 # traité de même perdrait ses couleurs — il ne serait plus qu'une silhouette teintée.
 # Le dossier « Greed F1/ » est un groupe synchronisé (Xcode 16+) : les fichiers écrits
 # ici entrent dans la cible sans toucher au .pbxproj.
@@ -60,10 +61,10 @@ for chemin in "${svgs[@]}"; do
     mkdir -p "$imageset"
     cp "$chemin" "$imageset/$nom.svg"
 
-    # Un tracé de circuit se teinte ; un drapeau garde ses couleurs.
+    # Un tracé de circuit ou une icône se teinte ; un drapeau garde ses couleurs.
     rendu=""
     case "$chemin" in
-        */traces/*) rendu=',
+        */traces/*|*/icon-*) rendu=',
     "template-rendering-intent" : "template"' ;;
     esac
 

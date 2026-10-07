@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
 Version backend actuelle : 0.84.0
-Version iOS actuelle : 0.50.0
+Version iOS actuelle : 0.50.1
 
 ## STACK TECHNIQUE
 
@@ -65,7 +65,9 @@ Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
-## CE QUI EST FAIT — VERSION iOS (0.50.0)
+## CE QUI EST FAIT — VERSION iOS (0.50.1)
+
+Engrenage et filets du récap (0.50.1) : l'engrenage de `ProfilView` n'est plus le `gearshape` du système mais l'asset `icon-reglages` (24 × 24, trait 1,5, *template*, source `Ressources/icon-reglages.svg` — le SVG fourni sans son `clip-path` orphelin, tracés identiques), affiché à 26 pt en `encrePrimaire`. `ajouter-assets.sh` pose le rendu *template* sur `icon-*` comme sur les tracés. `RecapView` : chaque `CarteRecap` est teintée sur toute sa surface — la couleur de sa catégorie à 18 % sur `surface` (`Color.opaciteTeinteCarte`) : `teinteVainqueur` (`#800111` / sombre `#FF6961`), `teintePodium` (`#2C4A6E` / `#7A9CC6`), `teinteBonus` (ocre `#8A6516` / `#D4A84B`) pour **tous** les bonus. En sombre la teinte s'éclaircit : les aplats foncés à 18 % ne se distinguaient pas de la surface (1,07:1). Libellés et unité passent à `encreSurTeinte` (`#4D4D4D` / `#C7C7CC`) : le `grisSecondaire` tombait à 3,44:1. Mesuré damier compris : `texte` ≥ 11,23:1 (clair) / 9,60:1 (sombre), `encreSurTeinte` ≥ 5,46:1 / 5,70:1. `MarcheCote.aplats(de:)` (`CotesView.swift`) reste le seul calcul du rang des teintes de la pile. Compilé ; non vérifié au simulateur (session requise).
 
 Pile de l'accueil en perspective (0.50.0) : `PileChampionnats` réduit chaque carte de 3 % par cran vers le fond (1 · 0,97 · 0,94…, plafond 0,85 à cinq crans), largeur, hauteur, bande visible et texte, centrée depuis le haut (`scaleEffect`, enum `Perspective` — remplace le retrait fixe de 4 pt par côté). Bande nue 52 pt pour que la plus petite garde 44 pt tactiles (50,4 · 48,9 · 47,3 · 45,8 · 44,2). L'aperçu reprend l'échelle 1 ; jupe et descente suivent la bande réduite. Vérifié au simulateur avec 6 championnats (banc temporaire), clair et sombre ; non vérifiés : aperçu, swipe, iPhone réel.
 

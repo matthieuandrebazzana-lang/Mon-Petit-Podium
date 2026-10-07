@@ -18,7 +18,6 @@ struct LigneRecap: Identifiable, Hashable {
     let pilote: String
     /// `nil` quand la cote a disparu depuis l'épinglage — « Cote retirée », jamais `0`.
     let points: Int?
-
     init(genre: Genre, libelle: String, pilote: String, points: Int?) {
         self.genre = genre
         self.libelleRecu = libelle
@@ -46,6 +45,17 @@ struct LigneRecap: Identifiable, Hashable {
         case .vainqueur: return MarcheCote.vainqueur.aplat
         case .podium:    return MarcheCote.podium.aplat
         case .bonus:     return .accent
+        }
+    }
+
+    /// La teinte de fond de la carte — **la couleur de la catégorie**, posée à
+    /// ``Color/opaciteTeinteCarte`` sur la surface : rouge pour le vainqueur, bleu ardoise
+    /// pour le podium, ocre pour **tous** les bonus.
+    var teinte: Color {
+        switch genre {
+        case .vainqueur: return .teinteVainqueur
+        case .podium:    return .teintePodium
+        case .bonus:     return .teinteBonus
         }
     }
 
@@ -111,7 +121,8 @@ extension GrilleEnregistree {
                   obligatoires: [ligne(.vainqueur, vainqueur.idOutcomeUnibet),
                                  ligne(.podium, podium.0),
                                  ligne(.podium, podium.1)],
-                  bonus: OrdreMarches.trier(favoris, slug: \.marche).map(LigneRecap.bonus))
+                  bonus: OrdreMarches.trier(favoris, slug: \.marche)
+                    .map(LigneRecap.bonus))
     }
 }
 
@@ -418,7 +429,9 @@ struct RecapView: View {
 /// Un pronostic du récapitulatif, **dans la forme de ``CarteVerdict``**, sans pastille : le
 /// marché en petit, le choix en grand, les points à droite — sur le blanc damé. Le marché
 /// est déjà écrit en toutes lettres, une icône ne faisait que le répéter.
-/// Rien n'est encore jugé : ni teinte, ni liseré, ni verdict.
+/// Rien n'est encore jugé : pas de verdict. **Le fond de toute la carte** dit la catégorie
+/// (``LigneRecap/teinte`` à 18 % sur la surface) ; les encres de second rang passent alors
+/// à ``Color/encreSurTeinte`` — le gris des labels n'y tient que 3,4:1 en clair.
 ///
 /// Une cote retirée depuis l'épinglage : un tiret et « Cote retirée », jamais `0`.
 private struct CarteRecap: View {
@@ -432,7 +445,7 @@ private struct CarteRecap: View {
                     .font(.labelSm)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)
-                    .foregroundColor(.grisSecondaire)     // ≥ 4,51:1 sur le blanc damé
+                    .foregroundColor(.encreSurTeinte)     // ≥ 5,46:1 sur les trois teintes
                     .lineLimit(2)
                 Text(ligne.pilote)
                     .font(.custom("HelveticaNeue-Medium", size: 17))
@@ -452,13 +465,13 @@ private struct CarteRecap: View {
                     if ligne.points != nil {
                         Text(t("points.unite"))
                             .font(.custom("HelveticaNeue", size: 12))
-                            .foregroundColor(.grisSecondaire)
+                            .foregroundColor(.encreSurTeinte)
                     }
                 }
                 if ligne.points == nil {
                     Text(t("points.coteRetiree"))
                         .font(.custom("HelveticaNeue", size: 11))
-                        .foregroundColor(.grisSecondaire)
+                        .foregroundColor(.encreSurTeinte)
                 }
             }
             .fixedSize()
@@ -468,6 +481,7 @@ private struct CarteRecap: View {
         .background {
             ZStack {
                 Color.surface
+                ligne.teinte.opacity(Color.opaciteTeinteCarte)
                 if Materiau.damierSurPronostics {
                     Damier(opacite: Materiau.damierPronostic)
                 }

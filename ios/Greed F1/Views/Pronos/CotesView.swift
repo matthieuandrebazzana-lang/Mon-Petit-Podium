@@ -124,6 +124,19 @@ enum MarcheCote: String, CaseIterable, Identifiable {
         Color.teintesMarcheBonus[rang % Color.teintesMarcheBonus.count]
     }
 
+    /// L'aplat de chaque marché d'une liste : le sien pour un obligatoire, sinon la teinte
+    /// bonus de son **rang parmi les marchés bonus** — le premier bonus prend toujours la
+    /// première teinte, quel que soit le nombre d'obligatoires au-dessus. **Seul calcul du
+    /// rang** : la pile de « Fais tes paris » le lit ici.
+    static func aplats(de marches: [MarcheCotes]) -> [Color] {
+        var rangBonus = 0
+        return marches.map { marche in
+            if let obligatoire = MarcheCote(rawValue: marche.marche) { return obligatoire.aplat }
+            defer { rangBonus += 1 }
+            return aplatBonus(rang: rangBonus)
+        }
+    }
+
     /// Le vainqueur et le podium **ne se jouent pas en pari bonus** : ils sont déjà les
     /// deux pronostics obligatoires. **Seule la liste des paris bonus de ``PronosView`` les
     /// écarte** : dans « Fais tes paris » ils s'épinglent comme les autres. Le slug réel est `vainqueur` / `podium` ; le préfixe

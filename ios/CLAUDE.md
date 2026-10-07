@@ -185,7 +185,7 @@ ios/
 ├── CLAUDE.md                    ce fichier
 ├── Greed F1.xcodeproj/
 ├── scripts/
-│   ├── ajouter-assets.sh        SVG de Ressources/ → Assets.xcassets, récursif, hors planches
+│   ├── ajouter-assets.sh        SVG de Ressources/ → Assets.xcassets, récursif, hors planches ; tracés et `icon-*` en template
 │   ├── decouper-icones.sh       planches → icônes individuelles, d'après le manifeste
 │   ├── icones.txt               manifeste des découpes : planche, nom, fenêtre, hauteur
 │   ├── extraire-gp.mjs          drapeaux + tracés + table des teintes, DEPUIS LA VERSION WEB
@@ -278,9 +278,9 @@ ios/
     │   │   ├── CotesView.swift      « Fais tes paris » : favoris, mode d'emploi, étoile = favori serveur sur tous les marchés (`EtoileParisBonus`, grise d'origine), `EtoileFavori` indicative jaune cernée (`EtoileJaune`, feuille de choix de `PronosView` seulement), `MarcheCote.exclueDesBonus` (vainqueur / podium hors de la liste bonus de `PronosView`, seul endroit), `EtapePronos` ; l'accordéon d'avant reste en place, non monté
     │   │   ├── PileMarches.swift    marchés en pile de cartes repliables (mécanique de `PileChampionnats`) : toutes fermées à l'arrivée, tap sur l'en-tête = ouvrir / fermer sur place, plusieurs ouvertes à la fois, aucun swipe ; bonus teintés dans l'ordre (`Color.teintesMarcheBonus`) ; décalage en `padding` (grille paresseuse), hauteur dépliée calculée depuis `CarteCote.hauteur`
     │   │   ├── PronosView.swift     saisie préremplie, bonus parmi les favoris, `POST` + `423`
-    │   │   └── RecapView.swift      récapitulatif, après le `200` ou d'entrée (grille relue) : fond `FondDrapeauFlou`, en-tête blanc (nom, date · départ, total disponible en grand), bandeau vert + `BlocEcheance` sur le flou, une `CarteRecap` par pronostic (forme de `CarteVerdict` sans pastille d’icône, damier 6 %) ; `EnteteDrapeau` et `RangeeRecap` non montés
+    │   │   └── RecapView.swift      récapitulatif, après le `200` ou d'entrée (grille relue) : fond `FondDrapeauFlou`, en-tête blanc (nom, date · départ, total disponible en grand), bandeau vert + `BlocEcheance` sur le flou, une `CarteRecap` par pronostic (forme de `CarteVerdict` sans pastille d’icône, damier 6 %, fond teinté à 18 % à la couleur de la catégorie — `teinteVainqueur`, `teintePodium`, `teinteBonus` (ocre, tous les bonus) ; seconde encre `encreSurTeinte`) ; `EnteteDrapeau` et `RangeeRecap` non montés
     │   └── Profil/
-    │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`), engrenage → Réglages
+    │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`), engrenage `icon-reglages` → Réglages
     │       ├── ReglagesView.swift       apparence, langue, notifications (Réglages d'iOS), déconnexion, suppression du compte, version
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
     │       ├── HistoriqueGPView.swift   « Ses / Mes Grands Prix » : résumé saison en deux moitiés (total, réussis / tentés, rang à gauche ; voiture du membre à droite, reçue de l’appelant), carrousel de cartes GP (drapeau net + tracé ; drapeau clair : haut nu, voile sous le texte), fond = drapeau actif étiré et flouté, en fondu, tap → la carte se déploie en détail plein écran (`matchedGeometryEffect`) ; `ContenuDetailGrandPrix` et `CarteVerdict` (carte teintée + damier, verdict en pastille pleine) y sont PARTAGÉS avec `MesResultatsGPView` — données réelles (`GrandsPrixJoues`)
@@ -328,6 +328,7 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 | `icone-rejoindre` | Deux casques — carte « Rejoindre un championnat », 40 × 40 pt, *template* |
 | `icone-etoile` | Étoile — bouton « pari bonus » de `CotesView`, 22 × 22 pt, *template* |
 | `icone-drapeau-damier` | Drapeau à damier — cellule « Mes / Ses Grands Prix » du profil, 24,22 × 22 pt, *template* |
+| `icon-reglages` | Engrenage — bouton Réglages de `ProfilView`, 24 × 24 pt, trait 1,5, *template* (encre `encrePrimaire`). Source : `Ressources/icon-reglages.svg` |
 | `icone-google` | Logo Google — bouton « Continuer avec Google », 24 × 24 pt. **Pas de rendu *template*** : ses quatre couleurs sont la marque, comme un drapeau. Source : `Ressources/icone-google.svg`, les mêmes tracés que `IconeGoogle` (`frontend/src/composants/Icones.jsx`) |
 | `texture-hexa` | Damier en filigrane des cartes — monté par ``Damier``, jamais en direct |
 | `flag-<slug>` | Les 12 drapeaux des pays hôtes. **Pas de rendu *template*** : ils gardent leurs couleurs |
