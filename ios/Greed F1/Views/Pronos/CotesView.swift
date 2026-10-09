@@ -868,8 +868,8 @@ struct EtoileParisBonus: View {
                 .scaleEffect(echelle(visible: actif))
         }
         .frame(width: cote, height: cote)
-        .keyframeAnimator(initialValue: CGFloat(1), trigger: celebrations) { contenu, echelle in
-            contenu.scaleEffect(mouvementReduit ? 1 : echelle)
+        .keyframeAnimator(initialValue: CGFloat(1), trigger: celebrations) { [reduit = mouvementReduit] contenu, echelle in
+            contenu.scaleEffect(reduit ? 1 : echelle)
         } keyframes: { _ in
             // Montée sur la courbe de sortie, retour sur le ressort du relâchement : un
             // geste a précédé, le léger dépassement y est à sa place.

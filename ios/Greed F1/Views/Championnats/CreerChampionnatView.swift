@@ -268,7 +268,7 @@ struct CreerChampionnatView: View {
         .buttonStyle(StyleAppui(.grandeSurface))
         .accessibilityLabel(vignette == nil ? t("creer.ajouterPhoto") : t("creer.changerPhoto"))
         .accessibilityHint(t("creer.a11y.photoAide"))
-        .onChange(of: choixPhoto) { _ in chargerPhoto() }
+        .onChange(of: choixPhoto) { _, _ in chargerPhoto() }
     }
 
     /// Le carré : l'icône d'appareil photo, remplacée par l'image dès qu'elle est décodée.

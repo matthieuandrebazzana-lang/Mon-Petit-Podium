@@ -456,10 +456,10 @@ private struct CarrouselGrandsPrix: View {
                         .frame(width: largeurCarte, height: hauteurCarte)
                         .matchedGeometryEffect(id: IdHeros.carte(gp.id), in: espace, isSource: true)
                         .opacity(ouvert == gp.id ? 0 : 1)
-                        .scrollTransition(.interactive, axis: .horizontal) { carte, phase in
+                        .scrollTransition(.interactive, axis: .horizontal) { [reduit = mouvementReduit] carte, phase in
                             let ecart = min(abs(phase.value), 1)
                             return carte
-                                .scaleEffect(mouvementReduit ? 1 : 1 - 0.1 * ecart)
+                                .scaleEffect(reduit ? 1 : 1 - 0.1 * ecart)
                                 .opacity(1 - 0.1 * ecart)
                         }
                     }

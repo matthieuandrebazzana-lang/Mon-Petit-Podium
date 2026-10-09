@@ -196,9 +196,11 @@ struct ProfilView: View {
     /// **Le sélecteur enveloppe le disque ET l'appareil photo** : les deux ouvrent la
     /// photothèque, l'icône n'étant que l'indication de ce que fait le disque.
     private var avatar: some View {
-        PhotosPicker(selection: $choixPhoto, matching: .images, photoLibrary: .shared()) {
+        // Lue ici, sur l'acteur principal : l'étiquette du sélecteur ne l'est pas.
+        let photo = viewModel.photoProfil
+        return PhotosPicker(selection: $choixPhoto, matching: .images, photoLibrary: .shared()) {
             ZStack(alignment: .bottomTrailing) {
-                PastilleProfil(pseudo: pseudoAffiche, photo: viewModel.photoProfil)
+                PastilleProfil(pseudo: pseudoAffiche, photo: photo)
                     .overlay {
                         if envoiPhoto {
                             // Un matériau plutôt qu'un voile coloré : l'écran ne déclare

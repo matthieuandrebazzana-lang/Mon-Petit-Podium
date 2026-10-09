@@ -617,7 +617,6 @@ extension PronosticJoueMock {
         PronosticJoueMock(marche: "Top 10", choix: "P.Gasly", points: 18, pointsGagnes: nil)
     ]
 }
-#endif
 
 #Preview("Classement") {
     NavigationStack {
@@ -636,3 +635,4 @@ extension PronosticJoueMock {
     ScrollView { SectionMesResultats(pronostics: PronosticJoueMock.apercu).padding(16) }
         .background(Color.fondPrincipal)
 }
+#endif

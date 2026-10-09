@@ -352,7 +352,7 @@ Tous en « Preserve Vector Data », appelés par `Image("nom")`.
 | Asset | Usage |
 |---|---|
 | `AccentColor` | Couleur d'accent du système |
-| `AppIcon` | Icône de l'app — le carré G de `assets/logo-05.svg`, dégradé bord à bord, coins carrés (iOS applique son masque), rendu depuis `assets/AppIcon-1024.png` (14 tailles iPhone, PNG — pas vectoriel) |
+| `AppIcon` | Icône de l'app — le carré G de `assets/logo-05.svg`, dégradé bord à bord, coins carrés (iOS applique son masque), rendu depuis `assets/AppIcon-1024.png` (8 tailles iPhone 20 à 60 pt + 1024 `ios-marketing`, format classique `iphone` — le format « All Sizes » `universal` n’est pas reconnu par actool en `iphoneos` ; PNG — pas vectoriel) |
 | `logo-05` | Logo complet — icône carrée + bandeau, viewBox « 0 0 894.21 520.39 » |
 | `logo-bandeau` | Bandeau seul, en-tête de `LandingView` |
 | `icone-accueil` | Garage — onglet **Accueil**, 25,67 × 28 pt, *template* |
