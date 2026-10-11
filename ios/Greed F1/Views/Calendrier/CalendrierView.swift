@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Onglet **Calendrier** — les vingt-trois Grands Prix de la saison 2026, de l'Australie
-/// à Abu Dhabi.
+/// Onglet **Calendrier** — les Grands Prix de la saison 2026, des Pays-Bas à Abu Dhabi.
+/// Les onze du début de saison sont temporairement masqués
+/// (``GrandPrixSaison/masquesDuCalendrier``).
 ///
 /// Références visuelles : `Ressources/Screenshots/screen-08-calendrier-haut.PNG`,
 /// `screen-09-calendrier-milieu.PNG` et `screen-10-calendrier-bas.PNG`.
@@ -42,8 +43,13 @@ struct CalendrierView: View {
 
     /// Les cartes de la saison, croisées avec ce que la base sait — ou avec rien, tant qu'elle n'a
     /// pas répondu : leurs états sont alors **inconnus**, pas « à venir ».
+    ///
+    /// **Les onze Grands Prix du début de saison sont masqués** — voir
+    /// ``GrandPrixSaison/masquesDuCalendrier``. Le filtre est posé ici, à l'affichage, et
+    /// nulle part ailleurs : le prochain Grand Prix et le défilement se lisent sur cette liste.
     private var grandsPrix: [GrandPrixSaison] {
         GrandPrixSaison.saison2026(croiseeAvec: calendrier.enBase)
+            .filter { !GrandPrixSaison.masquesDuCalendrier.contains($0.slug) }
     }
 
     /// **Le décompte se lit sur les cartes**, il ne vient pas d'ailleurs. `nil` tant que les
@@ -802,6 +808,19 @@ struct GrandPrixSaison {
             return croise
         }
     }
+
+    /// **TEMPORAIRE — les onze Grands Prix du début de saison, masqués du calendrier** tant
+    /// que leurs drapeaux et leurs tracés SVG manquent : sans eux, leurs cartes ne montraient
+    /// qu'un aplat rouge. Le calendrier repart donc des Pays-Bas, comme avant leur ajout.
+    ///
+    /// **Leurs données restent dans ``saison2026``** : le rattachement par ``SlugCircuit``,
+    /// les noms traduits, le calendrier du profil et l'accueil continuent de les connaître.
+    /// Seul l'onglet Calendrier les filtre. **Pour les réactiver** : ajouter leurs assets
+    /// `flag-<slug>` / `trace-<slug>` et leurs teintes, puis vider cet ensemble.
+    static let masquesDuCalendrier: Set<String> = [
+        "australie", "chine", "japon", "miami", "canada", "monaco",
+        "barcelone", "autriche", "grande-bretagne", "belgique", "hongrie"
+    ]
 
     /// Les Grands Prix de la saison, dans l'ordre — les douze de la fin de saison sont la
     /// transcription de `GP_2026` (`frontend/src/lib/calendrier2026.js`) ; les onze qui

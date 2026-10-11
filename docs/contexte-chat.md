@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
 Version backend actuelle : 0.85.0
-Version iOS actuelle : 0.53.6
+Version iOS actuelle : 0.53.7
 
 ## STACK TECHNIQUE
 
@@ -66,6 +66,8 @@ Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugD
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
 ## CE QUI EST FAIT — VERSION iOS (0.53.4)
+
+11 GP de début de saison masqués du calendrier (0.53.7) : Australie, Chine, Japon, Miami, Canada, Monaco, Barcelone, Autriche, Grande-Bretagne, Belgique, Hongrie n'avaient ni drapeau ni tracé et s'affichaient sur un aplat rouge. Leurs données restent dans `GrandPrixSaison.saison2026` (rattachement `SlugCircuit`, noms, profil, accueil) ; seul l'onglet Calendrier les filtre via `GrandPrixSaison.masquesDuCalendrier` (`CalendrierView.swift`). Le calendrier repart des Pays-Bas ; prochain GP et défilement automatique se calculent sur la liste filtrée. Base non touchée. **À réactiver** dès que les SVG de drapeaux et de tracés seront là : vider l'ensemble.
 
 Voies côte à côte sur la vue Piste (0.53.6) : dans `DispositionPiste.abscisse` (`VuePisteView.swift`), les voies d'un groupe ne s'étalent plus d'un kerb à l'autre — elles sont espacées d'un **pas constant** (largeur de voiture + 4 pt) et le bloc est **centré sur l'axe** ; ordre gauche/droite de l'éventail inchangé, voiture seule sur l'axe. La largeur entre kerbs n'est plus qu'une **limite** : la dichotomie 40–64 pt retient la plus grande taille où le groupe le plus large tient à 8 pt de chaque kerb (contrôle `deborde` inchangé). Seul le repli au plancher (rien de propre à 40 pt) resserre le pas pour rester entre les kerbs (`serre`). Décalage vertical ≤ 12 pt, écart 4 pt, cache : inchangés. Vérifié en exécutant le code réel de `DispositionPiste` sur Team Bazzana (370 · 357 · 126 · 102 · 77 · 26 · 24 · 0 · 0), piste 366 × 548 pt : **55 pt**, Nicolas et Matthieu côte à côte de part et d'autre de l'axe (±29,5 pt, 4 pt entre eux), groupe du bas à 6 voies sur 350 pt, à 8 pt exactement de chaque kerb ; aucun chevauchement. Pas de capture : le simulateur était déconnecté.
 
@@ -160,7 +162,7 @@ Keep-alive Railway : vérifier que le service `keepalive` est « Online » et jo
 Cotes lisibles sans session en production (constaté le 2026-10-07 : la clé anonyme lit `public.cotes`) — la restriction de la migration 21 n'est plus en place (« 3 après 21 », `database.md`) : rejouer la 21
 
 Calendrier iOS : SQL d'insertion des 11 GP de début de saison fourni en session (non appliqué) — puis `POST /jobs/resultats/{gp_id}` par GP pour en récupérer les résultats
-Calendrier iOS : drapeaux, tracés et teintes des 11 GP de début de saison à fournir (SVG source dans `assets/`, puis `extraire-gp.mjs` + `ajouter-assets.sh`)
+Calendrier iOS : drapeaux, tracés et teintes des 11 GP de début de saison à fournir (SVG source dans `assets/`, puis `extraire-gp.mjs` + `ajouter-assets.sh`) — **ces 11 GP sont masqués du calendrier depuis 0.53.7** : une fois les assets ajoutés, vider `GrandPrixSaison.masquesDuCalendrier` pour les réactiver
 
 Bugs connus :
 

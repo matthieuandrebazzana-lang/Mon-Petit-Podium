@@ -163,6 +163,11 @@ garde celle qui a des cotes. **Le nom de la base ne s'affiche jamais** : tout é
 statique), le nom Unibet n'étant qu'un repli hors saison — sinon l'accueil disait « GP
 Bahrein » quand le calendrier disait « GP Malaisie ».
 
+**Onze Grands Prix masqués du calendrier — à réactiver.** Australie → Hongrie n'ont encore ni
+drapeau ni tracé : `GrandPrixSaison.masquesDuCalendrier` (`CalendrierView.swift`) les retire
+de l'onglet Calendrier seul, leurs données restent dans `saison2026`. Une fois leurs SVG
+extraits dans les assets, vider cet ensemble.
+
 **Le sélecteur de langue est un seul composant** (`SelecteurLangue`) : ses états actif /
 inactif s'y règlent, jamais sur l'écran qui le monte. **Les deux options restent en couleur
 pleine** — drapeaux entiers, libellé inactif en `encreSegmentInactif` (`secondaire` plein) :
