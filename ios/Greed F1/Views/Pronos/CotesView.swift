@@ -645,11 +645,6 @@ struct CarteCote: View {
     /// `nil` : marché exclu des bonus, la carte ne s'épingle pas.
     let onBasculer: (() -> Void)?
 
-    /// Favoris **ajoutés au doigt** sur cette carte — le déclencheur du rebond et de
-    /// l'éclat de l'étoile (``EtoileParisBonus/celebrations``). Un retrait ne compte pas,
-    /// un rechargement non plus.
-    @State private var ajouts = 0
-
     /// La hauteur des cartes, écrite une fois : liseré 3, rembourrage 8 + 8, nom 17,
     /// interligne 1, points 19. **``PileMarches`` en calcule la hauteur de ses grilles.**
     static let hauteur: CGFloat = 56
@@ -666,15 +661,7 @@ struct CarteCote: View {
 
     var body: some View {
         if let onBasculer {
-            Button {
-                // L'ajout se célèbre au moment du geste, sur la même image que l'haptique :
-                // l'étoile ne rebondit jamais sur un rechargement.
-                if !retenu {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    ajouts += 1
-                }
-                onBasculer()
-            } label: { carte }
+            Button(action: onBasculer) { carte }
                 .buttonStyle(StyleAppui(.grandeSurface))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(libelleAccessible)
@@ -729,7 +716,7 @@ struct CarteCote: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 if onBasculer != nil {
-                    EtoileParisBonus(actif: retenu, celebrations: ajouts)
+                    EtoileParisBonus(actif: retenu)
                 }
             }
             .padding(.horizontal, 10)
@@ -841,11 +828,6 @@ struct EtoileParisBonus: View {
     var inverse = false
     /// L'étoile jaune d'``EtoileJaune`` au lieu du gris — ``PronosView`` seulement.
     var jaune = false
-    /// Favoris ajoutés au doigt — ``CotesView`` seulement. Chaque incrément fait rebondir
-    /// la cellule (1 → 1,3 → 1, ``Mouvement/echelleRebondEtoile``) et y pose l'éclat de
-    /// `movingParts.pop`, en ambre. **Rien sous mouvement réduit** : l'échange étoile →
-    /// coche, en fondu, dit déjà l'ajout.
-    var celebrations = 0
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
@@ -868,15 +850,6 @@ struct EtoileParisBonus: View {
                 .scaleEffect(echelle(visible: actif))
         }
         .frame(width: cote, height: cote)
-        .keyframeAnimator(initialValue: CGFloat(1), trigger: celebrations) { [reduit = mouvementReduit] contenu, echelle in
-            contenu.scaleEffect(reduit ? 1 : echelle)
-        } keyframes: { _ in
-            // Montée sur la courbe de sortie, retour sur le ressort du relâchement : un
-            // geste a précédé, le léger dépassement y est à sa place.
-            CubicKeyframe(Mouvement.echelleRebondEtoile, duration: Mouvement.monteeRebondEtoile)
-            SpringKeyframe(1, duration: 0.4, spring: Spring(response: 0.3, dampingRatio: 0.6))
-        }
-        .eclatPop(celebrations, couleur: .accent, diametre: cote)
         // **Échange d'icône, pas d'apparition.** Les deux signes vivent dans la même
         // cellule et se croisent en opacité : le couple est ainsi interruptible — un
         // double appui rapide repart de la valeur à l'écran au lieu de redémarrer à zéro.

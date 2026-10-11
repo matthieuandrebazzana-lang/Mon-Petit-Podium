@@ -345,11 +345,11 @@ struct VuePisteView: View {
         .offset(x: largeur / 2 + placement.decalage - largeurVoiture / 2,
                 y: placement.centre - hauteurVoiture / 2)
         // L'entrée, et elle seule : `offset` s'ajoute au précédent, il ne le remplace pas.
-        // **Mouvement réduit : le fondu seul**, toujours échelonné de 60 ms — un fondu ne
-        // déplace rien, et le décalage garde la lecture voiture par voiture.
-        .offset(y: enPiste || mouvementReduit ? 0 : depart)
+        .offset(y: enPiste ? 0 : depart)
         .opacity(enPiste ? 1 : 0)
-        .animation(Mouvement.entree(0.28).delay(Double(rang) * Mouvement.decalage),
+        .animation(mouvementReduit
+                   ? nil
+                   : Mouvement.entree(0.28).delay(Double(rang) * Mouvement.decalage),
                    value: enPiste)
     }
 

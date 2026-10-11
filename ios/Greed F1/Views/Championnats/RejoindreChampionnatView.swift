@@ -392,7 +392,7 @@ struct RejoindreChampionnatView: View {
                 Text(t("championnat.voir"))
                     .habillageBoutonPrincipal(actif: true)
             }
-            .boutonPressable()
+            .buttonStyle(StyleAppui(.bouton))
             .shadow(color: Color.secondaire.opacity(0.16), radius: 17, y: 14)
         } else {
             boutonEnvoi
@@ -409,7 +409,7 @@ struct RejoindreChampionnatView: View {
             }
             .habillageBoutonPrincipal(actif: codeComplet)
         }
-        .boutonPressable()
+        .buttonStyle(StyleAppui(.bouton))
         .disabled(!codeComplet || envoi)
         .accessibilityLabel(envoi ? t("rejoindre.a11y.enCours") : t("rejoindre.bouton"))
         // Couleur et opacité seulement, jamais une géométrie : rien ne bouge sous le doigt,

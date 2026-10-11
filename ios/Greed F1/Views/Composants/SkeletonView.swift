@@ -164,24 +164,8 @@ extension View {
     ///
     /// Sans silhouette montrée avant lui (``View/fonduChargement(_:)``), l'élément est là
     /// d'emblée.
-    ///
-    /// `decalage` et `plafond` remplacent l'écart et le nombre d'éléments décalés pour une
-    /// série plus longue — le classement d'un championnat (``Mouvement/decalageClassement``,
-    /// ``Mouvement/cascadeClassement``).
-    func arriveeEnCascade(rang: Int = 0,
-                          decalage: TimeInterval = Mouvement.decalageArrivee,
-                          plafond: Int = Mouvement.cascadeArrivee) -> some View {
-        modifier(ArriveeEnCascade(rang: rang, decalage: decalage, plafond: plafond))
-    }
-}
-
-extension View {
-    /// **L'entrée du widget du Grand Prix de l'accueil** à la place de sa silhouette :
-    /// `scale(0.95)` + fondu vers 1, sur ``Mouvement/apparitionWidget``. Même règle que
-    /// ``View/arriveeEnCascade(rang:decalage:plafond:)`` : seulement après une silhouette,
-    /// une seule fois. **Mouvement réduit** : le fondu seul, sur la courbe d'entrée.
-    func apparitionWidget() -> some View {
-        modifier(ApparitionWidget())
+    func arriveeEnCascade(rang: Int = 0) -> some View {
+        modifier(ArriveeEnCascade(rang: rang))
     }
 }
 
@@ -196,10 +180,8 @@ private struct ArriveeApresSquelette: EnvironmentKey {
     static let defaultValue = false
 }
 
-extension EnvironmentValues {
-    /// Vrai dans un conteneur qui a montré une silhouette (``FonduChargement``). Lu par les
-    /// entrées d'ici, et par celles qu'un composant orchestre lui-même — la pile des
-    /// championnats (``PileChampionnats``), qui échelonne ses cartes par profondeur.
+private extension EnvironmentValues {
+    /// Vrai dans un conteneur qui a montré une silhouette (``FonduChargement``).
     var arriveeApresSquelette: Bool {
         get { self[ArriveeApresSquelette.self] }
         set { self[ArriveeApresSquelette.self] = newValue }
@@ -228,8 +210,6 @@ private struct FonduChargement: ViewModifier {
 private struct ArriveeEnCascade: ViewModifier {
 
     let rang: Int
-    let decalage: TimeInterval
-    let plafond: Int
 
     @Environment(\.arriveeApresSquelette) private var apresSquelette
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
@@ -252,36 +232,8 @@ private struct ArriveeEnCascade: ViewModifier {
                 }
                 let retard = mouvementReduit
                     ? 0
-                    : Double(min(rang, plafond - 1)) * decalage
+                    : Double(min(rang, Mouvement.cascadeArrivee - 1)) * Mouvement.decalageArrivee
                 withAnimation(Mouvement.entree(Mouvement.arriveeContenu).delay(retard)) {
-                    arrive = true
-                }
-            }
-    }
-}
-
-private struct ApparitionWidget: ViewModifier {
-
-    @Environment(\.arriveeApresSquelette) private var apresSquelette
-    @Environment(\.accessibilityReduceMotion) private var mouvementReduit
-
-    @State private var arrive = false
-
-    private var masque: Bool { apresSquelette && !arrive }
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(masque ? 0 : 1)
-            .scaleEffect(masque && !mouvementReduit ? Mouvement.echelleApparition : 1)
-            .transition(.contenuArrive)
-            .onAppear {
-                guard apresSquelette, !arrive else {
-                    arrive = true
-                    return
-                }
-                withAnimation(mouvementReduit
-                              ? Mouvement.entree(Mouvement.arriveeContenu)
-                              : Mouvement.apparitionWidget) {
                     arrive = true
                 }
             }

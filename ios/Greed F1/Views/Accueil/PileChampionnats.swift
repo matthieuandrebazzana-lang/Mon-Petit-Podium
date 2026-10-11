@@ -50,13 +50,6 @@ struct PileChampionnats: View {
     @Binding var apercu: UUID?
 
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
-    @Environment(\.arriveeApresSquelette) private var apresSquelette
-
-    /// **L'entrée du paquet, au premier chargement de l'accueil** — une seule bascule pour
-    /// toutes les cartes, chacune la suit avec son retard (``entree(profondeur:)``). Portée
-    /// ici et non par carte : sous mouvement réduit le paquet est recréé à chaque
-    /// réordonnancement (`.id`), et une entrée tenue par chaque carte s'y rejouerait.
-    @State private var paquetArrive = false
 
     /// L'ordre mémorisé, de la carte du dessus à celle du fond — **par identifiant** : la
     /// liste est relue à chaque apparition de l'accueil, et le paquet ne doit pas se
@@ -114,7 +107,6 @@ struct PileChampionnats: View {
             ChampionnatDetailView(championnat: championnat, mesChampionnats: mesChampionnats)
         }
         .onAppear(perform: rapprocherEtMemoriser)
-        .onAppear(perform: arriver)
         .onChange(of: championnats.map(\.id)) { rapprocherEtMemoriser() }
         .onChange(of: idUtilisateur) { _, id in
             self.ordre = OrdrePile.lire(pour: id)
@@ -175,7 +167,6 @@ struct PileChampionnats: View {
                         }
                     }
                 )
-                .modifier(entree(profondeur: profondeur))
                 .zIndex(plan(profondeur: profondeur, id: championnat.id))
             }
         }
@@ -213,33 +204,6 @@ struct PileChampionnats: View {
         if enVol.contains(id) { return 2 * n + 1 + (n - p) }
         if profondeur == 0 { return 2 * n }
         return n - p
-    }
-
-    // MARK: - Entrée
-
-    /// Le paquet ne se masque **qu'après une silhouette**, comme tout contenu arrivé
-    /// (``View/arriveeEnCascade(rang:decalage:plafond:)``) : servi par le cache, il est là
-    /// d'emblée.
-    private var paquetMasque: Bool { apresSquelette && !paquetArrive }
-
-    private func arriver() {
-        guard !paquetArrive else { return }
-        // Pas d'animation ici : chaque carte porte la sienne, avec son retard.
-        paquetArrive = true
-    }
-
-    /// **Du bas vers le haut** : la carte du dessus — le bas du paquet à l'écran — part la
-    /// première, puis chaque bande au-dessus d'elle, ``Mouvement/decalageArrivee`` (50 ms)
-    /// plus tard ; toutes remontent de ``Mouvement/glissementArrivee`` en fondu. Le premier
-    /// cran laisse passer le widget du Grand Prix, juste au-dessus.
-    ///
-    /// **Mouvement réduit** : le fondu seul, tout le paquet ensemble.
-    private func entree(profondeur: Int) -> EntreePile {
-        EntreePile(masque: paquetMasque,
-                   glissement: mouvementReduit ? 0 : Mouvement.glissementArrivee,
-                   animation: Mouvement.entree(Mouvement.arriveeContenu)
-                       .delay(mouvementReduit ? 0 : Double(profondeur + 1) * Mouvement.decalageArrivee),
-                   declencheur: paquetArrive)
     }
 
     // MARK: - Tap et aperçu
@@ -656,21 +620,5 @@ private struct FaceDessous: View {
             return tp("championnat.classementIndisponible", membres)
         }
         return t("championnat.classementRang", ordinal(rang), membres)
-    }
-}
-
-/// L'entrée d'une carte du paquet — voir ``PileChampionnats/entree(profondeur:)``. Le
-/// décalage s'ajoute à ceux de la carte, il ne les remplace pas.
-private struct EntreePile: ViewModifier {
-    let masque: Bool
-    let glissement: CGFloat
-    let animation: Animation
-    let declencheur: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(masque ? 0 : 1)
-            .offset(y: masque ? glissement : 0)
-            .animation(animation, value: declencheur)
     }
 }

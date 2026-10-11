@@ -523,11 +523,9 @@ struct ChampionnatDetailView: View {
                     .arriveeEnCascade(rang: 0)
                 }
                 listeClassement(membres)
-                // Après la dernière ligne — au dixième rang au plus.
+                // Après la dernière ligne — au cinquième rang au plus.
                 lienResultats
-                    .arriveeEnCascade(rang: membres.count,
-                                      decalage: Mouvement.decalageClassement,
-                                      plafond: Mouvement.cascadeClassement)
+                    .arriveeEnCascade(rang: membres.count)
             }
             .padding(.horizontal, margeLaterale)
             .padding(.bottom, 24)
@@ -644,11 +642,7 @@ struct ChampionnatDetailView: View {
                     LigneClassement(membre: membre, total: membres.count)
                 }
                 .buttonStyle(StyleAppui(.grandeSurface))
-                // 40 ms de ligne à ligne, sur dix lignes : un classement est plus long
-                // que les séries ordinaires (``Mouvement/decalageClassement``).
-                .arriveeEnCascade(rang: rang,
-                                  decalage: Mouvement.decalageClassement,
-                                  plafond: Mouvement.cascadeClassement)
+                .arriveeEnCascade(rang: rang)
             }
         }
         .padding(12)

@@ -123,45 +123,6 @@ enum Mouvement {
     /// regarde ce qui arrive, on ne regarde pas ce qui s'en va.
     static let accordeonOuverture: TimeInterval = 0.24
     static let accordeonFermeture: TimeInterval = 0.17
-
-    // MARK: Micro-animations (0.53.0)
-
-    /// **Décalage entre deux lignes du classement d'un championnat** — 40 ms, plus serré
-    /// que ``decalageArrivee`` : un classement compte jusqu'à vingt lignes, et la dernière
-    /// doit être partie avant que l'œil ait fini de lire la première. Sur
-    /// ``cascadeClassement`` lignes au plus, comme ``cascadeArrivee``.
-    static let decalageClassement: TimeInterval = 0.04
-    static let cascadeClassement = 10
-
-    /// **Apparition du widget du Grand Prix de l'accueil** — `scale(0.95)` + fondu vers 1,
-    /// sur un ressort légèrement sous-amorti.
-    ///
-    /// > **Écart assumé à la règle de ``relachement``** (pas de ressort sans geste) : la
-    /// > demande l'impose, et l'amplitude le rend inoffensif — 0,8 d'amortissement sur 5 %
-    /// > d'échelle dépasse de moins d'un point sur une carte de 343 pt. Sous mouvement
-    /// > réduit : le fondu seul.
-    static let apparitionWidget = Animation.spring(response: 0.5, dampingFraction: 0.8)
-    static let echelleApparition: CGFloat = 0.95
-
-    /// **Durée de `movingParts.pop`** — fixée par Pow (1,2 s, linéaire), recopiée ici
-    /// pour que l'animation qui l'insère dure autant que lui.
-    ///
-    /// > Au-delà du plafond de 300 ms, et ce n'est pas une contradiction : l'éclat est un
-    /// > décor posé **par-dessus** une interface qui a déjà répondu, il ne retarde rien.
-    static let dureeEclat: TimeInterval = 1.2
-
-    /// **Le temps laissé à l'éclat de la validation avant le récapitulatif** — 450 ms :
-    /// l'anneau et la gerbe sont lancés et lisibles, le passage d'écran part pendant la
-    /// retombée. Le bouton reste éteint pendant ce temps (les pronostics sont déjà écrits),
-    /// le retour arrière reste libre. **Zéro sous mouvement réduit** : rien ne joue, rien
-    /// n'attend.
-    static let pauseCelebration: TimeInterval = 0.45
-
-    /// **Rebond de l'étoile de favori** — 1 → 1,3 → 1 : 120 ms de montée sur la courbe de
-    /// sortie, puis le ressort de ``relachement`` qui la ramène. Le geste a précédé :
-    /// le ressort est à sa place.
-    static let echelleRebondEtoile: CGFloat = 1.3
-    static let monteeRebondEtoile: TimeInterval = 0.12
 }
 
 // MARK: - Retour d'appui
@@ -183,17 +144,12 @@ struct StyleAppui: ButtonStyle {
     enum Amplitude {
         /// Boutons — `0.97`.
         case bouton
-        /// Les trois boutons principaux du parcours — « Valider mes pronos », « Créer »,
-        /// « Rejoindre » — `0.96` : la compression la plus franche, réservée à l'action qui
-        /// conclut un écran. Posée par ``View/boutonPressable()``.
-        case principal
         /// Cartes et blocs pleine largeur — `0.985`.
         case grandeSurface
 
         var echelle: CGFloat {
             switch self {
             case .bouton: return 0.97
-            case .principal: return 0.96
             case .grandeSurface: return 0.985
             }
         }
@@ -233,29 +189,5 @@ struct StyleAppui: ButtonStyle {
             }
             return configuration.isPressed ? Mouvement.enfoncement : Mouvement.relachement
         }
-    }
-}
-
-// MARK: - Bouton pressable
-
-/// **Le retour d'appui des boutons principaux** — « Valider mes pronos », « Créer un
-/// championnat », « Rejoindre ».
-///
-/// Un `ViewModifier` ne voit pas l'état d'appui d'un `Button` : seul un `ButtonStyle` le
-/// reçoit. `BoutonPressable` pose donc ``StyleAppui`` à l'amplitude ``StyleAppui/Amplitude/principal``
-/// — `scale(0.96)`, enfoncement en ``Mouvement/enfoncement``, relâchement sur
-/// ``Mouvement/relachement`` (`spring(response: 0.3, dampingFraction: 0.6)`) — et reste ainsi
-/// le **seul propriétaire** du mouvement d'un appui. Mouvement réduit : l'opacité seule,
-/// comme tout ``StyleAppui``.
-struct BoutonPressable: ViewModifier {
-    func body(content: Content) -> some View {
-        content.buttonStyle(StyleAppui(.principal))
-    }
-}
-
-extension View {
-    /// Voir ``BoutonPressable``. Se pose sur le `Button`, à la place de `.buttonStyle(_:)`.
-    func boutonPressable() -> some View {
-        modifier(BoutonPressable())
     }
 }

@@ -14,7 +14,6 @@
 | Interface | SwiftUI |
 | Cible de déploiement | **iOS 17.0** (`IPHONEOS_DEPLOYMENT_TARGET`) |
 | SDK | [`supabase-swift`](https://github.com/supabase/supabase-swift) **2.55.2**, épinglé — produits `Supabase` et `Auth` |
-| Animations | [`Pow`](https://github.com/EmergeTools/Pow) **1.0.6** (jusqu'à la majeure suivante) — importé **uniquement** par `EffetsPow.swift` |
 | Xcode | **26.6** (`objectVersion = 77`) |
 | Bundle identifier | **`com.bazzana.greedf1`** |
 | Familles d'appareils | iPhone seulement · portrait seulement |
@@ -63,15 +62,6 @@ sous mouvement réduit), sa branche en `.transition(.contenuArrive)`. Chaque éc
 esquisse sa propre structure (widget 360 pt, pile, liste, classement, carrousel, six
 cartes GP au calendrier) ; les stats, que leurs valeurs inconnues. Les spinners restent
 sur les actions ponctuelles (envoi, sauvegarde).
-
-**Pow ne s'importe que dans `Views/Composants/EffetsPow.swift`.** Pow ne lit pas
-`accessibilityReduceMotion` : ses effets passent par les trois enveloppes de ce fichier
-(`eclatPop`, `confettiDiscret`, `pulseSelection`), qui s'éteignent sous mouvement réduit.
-Leur déclencheur est un compteur incrémenté **dans l'action d'un geste** — jamais un état
-que le chargement change (préremplissage, rechargement) : ni effet ni haptique au
-chargement. `movingParts.pop` fait entrer son contenu depuis `scale(0)` : il se pose sur un
-calque vide, jamais sur la vue elle-même. Les boutons principaux (« Valider mes pronos »,
-Créer, Rejoindre) prennent `boutonPressable()`, et non `StyleAppui(.bouton)`.
 
 **Les assets SVG viennent de `Greed F1/Ressources/`** — jamais redessinés en SwiftUI. Un
 tracé recomposé à la main diverge du logo au premier ajustement. `ios/scripts/ajouter-assets.sh`
@@ -241,7 +231,7 @@ ios/
     │   ├── ThemeManager.swift       apparence Auto / Clair / Sombre — seul propriétaire, `overrideUserInterfaceStyle`
     │   ├── Formes.swift             rayons + les quatre ombres
     │   ├── Materiaux.swift          damier et lumière spéculaire (les deux calques décoratifs), teintes et damier des cartes de pronostic, `damierFiligrane` (5 %)
-    │   ├── Mouvement.swift          courbes, durées, StyleAppui (retour d'appui), `boutonPressable()`
+    │   ├── Mouvement.swift          courbes, durées, StyleAppui (retour d'appui)
     │   └── LandingView.swift        écran d'accueil (non connecté)
     ├── Models/
     │   ├── DecodageJSON.swift   `JSONDecoder.api` — le décodeur unique, dates ISO 8601
@@ -288,8 +278,7 @@ ios/
     │   │   ├── ErreurEnLigne.swift      refus d'une écriture, sous le bouton — jamais d'alerte
     │   │   ├── SelecteurSegmente.swift  sélecteur segmenté pleine largeur (une seule pastille `primaire`, ressort `Mouvement.glissement`, fond neutre + damier) — Classement / Piste
     │   │   ├── MentionProvisoire.swift  `StatutResultats` (provisoire, non évaluable) + la mention « Provisoire », PARTAGÉS
-    │   │   ├── SkeletonView.swift       silhouette de premier chargement (4 variantes, balayage calé sur l'écran) + `fonduChargement(_:)`, `arriveeEnCascade(rang:decalage:plafond:)`, `apparitionWidget()`, PARTAGÉS
-    │   │   ├── EffetsPow.swift          SEUL import de Pow : éclat (`movingParts.pop`), confettis (`spray`), pulsation — éteints sous mouvement réduit
+    │   │   ├── SkeletonView.swift       silhouette de premier chargement (4 variantes, balayage calé sur l'écran) + `fonduChargement(_:)`, PARTAGÉS
     │   │   ├── ImageCachee.swift        `AsyncImage` avec `NSCache` partagé par URL (`CacheImages`) — avatars, photos de championnat, cockpits
     │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
     │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes

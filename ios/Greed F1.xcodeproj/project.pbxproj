@@ -13,7 +13,6 @@
 		088E00D1305F9199000E15DF /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00D2305F9199000E15E0 /* OnboardingView.swift */; };
 		A1000000000000000000022 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000021 /* Supabase */; };
 		A1000000000000000000024 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000023 /* Auth */; };
-		A1000000000000000000062 /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000061 /* Pow */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -55,7 +54,6 @@
 			files = (
 				A1000000000000000000022 /* Supabase in Frameworks */,
 				A1000000000000000000024 /* Auth in Frameworks */,
-				A1000000000000000000062 /* Pow in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -105,7 +103,6 @@
 			packageProductDependencies = (
 				A1000000000000000000021 /* Supabase */,
 				A1000000000000000000023 /* Auth */,
-				A1000000000000000000061 /* Pow */,
 			);
 			productName = "Greed F1";
 			productReference = A1000000000000000000001 /* Greed F1.app */;
@@ -138,7 +135,6 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				A1000000000000000000050 /* XCRemoteSwiftPackageReference "supabase-swift" */,
-				A1000000000000000000060 /* XCRemoteSwiftPackageReference "Pow" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A1000000000000000000026 /* Products */;
@@ -229,7 +225,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.53.1;
+				MARKETING_VERSION = 0.53.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -258,7 +254,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.53.1;
+				MARKETING_VERSION = 0.53.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -298,14 +294,6 @@
 				minimumVersion = 2.55.2;
 			};
 		};
-		A1000000000000000000060 /* XCRemoteSwiftPackageReference "Pow" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/EmergeTools/Pow";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.6;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -318,11 +306,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A1000000000000000000050 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Auth;
-		};
-		A1000000000000000000061 /* Pow */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A1000000000000000000060 /* XCRemoteSwiftPackageReference "Pow" */;
-			productName = Pow;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
