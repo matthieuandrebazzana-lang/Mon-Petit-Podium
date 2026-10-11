@@ -381,33 +381,37 @@ struct VuePisteView: View {
 ///
 /// Deux passes, et l'ordre compte :
 ///
-/// - **Passe 1**, ``hauteurs(pour:dans:gabarit:)`` : le score donne la hauteur, et elle seule.
-/// - **Passe 2**, le reste : deux voitures qui se rencontrent sont écartées
-///   **latéralement**. **Aucune hauteur ne bouge en passe 2** — l'écarter de l'axe ne la
-///   déplace pas verticalement. Sa hauteur dit ses points, et elle seule.
+/// - **Passe 1**, ``hauteurs(pour:dans:gabarit:)`` : le score donne la hauteur.
+/// - **Passe 2**, ``ranger(_:points:seuil:plafond:)`` : deux voitures qui se rencontrent
+///   sont d'abord **décalées en vertical** de quelques points, puis, si ça ne suffit pas,
+///   **écartées latéralement** sur une voie de plus.
 ///
-/// > ### La taille se déduit des chevauchements réels (`ios 0.53.4`)
+/// > ### La plus grande taille qui tient (`ios 0.53.5`)
 /// >
-/// > Toutes les voitures partagent **une seule taille**, mais elle n'est plus fixe. La
-/// > disposition est d'abord calculée à **52 pt** ; si deux boîtes englobantes (dessin +
-/// > score) se croisent, ou si une voiture passe à moins de ``bordMinimal`` d'un kerb, la
-/// > taille de **toutes** baisse de 5 % et la disposition est refaite — jusqu'à ce qu'il
-/// > n'y ait plus aucun recouvrement, ou jusqu'au plancher de ``largeurMinimale``. Jusqu'ici
-/// > la taille ne bougeait jamais et c'est le pas des voies qui se resserrait : au-delà de
-/// > cinq voies les dessins se recouvraient, et l'éventail sortait d'une demi-voiture
-/// > au-delà du kerb gauche — jusqu'au bord de l'écran.
+/// > Toutes les voitures partagent **une seule taille**, cherchée par **dichotomie** entre
+/// > ``largeurMinimale`` et ``largeurMaximale`` : à chaque taille essayée, la disposition
+/// > est refaite en entier — hauteurs, décalages, nombre de voies — et contrôlée sur les
+/// > boîtes réelles. On garde la plus grande sans chevauchement ni contact avec un kerb.
+/// > Jusqu'en `0.53.4`, la taille partait de 52 pt et baissait de 5 % par palier, et les
+/// > voies se serraient autour de l'axe : Team Bazzana finissait à ~44 pt, la moitié de
+/// > la largeur de la piste vide.
+/// >
+/// > **Les voies d'un groupe s'étalent toujours d'un kerb à l'autre**, quel que soit leur
+/// > nombre — plus de bloc centré. Une voiture seule à sa hauteur reste sur l'axe.
 /// >
 /// > La taille reste **uniforme** : deux voitures voisines à deux tailles différentes
 /// > laisseraient croire que la taille veut dire quelque chose.
 enum DispositionPiste {
 
-    /// La voiture à sa taille par défaut, et le plancher en deçà duquel elle cesse de se
-    /// lire — le numéro et le pseudo peints sur le dessin deviennent illisibles.
-    static let largeurDefaut: CGFloat = 52
+    /// Les bornes de la recherche. En deçà du plancher la voiture cesse de se lire — le
+    /// numéro et le pseudo peints sur le dessin deviennent illisibles.
+    static let largeurMaximale: CGFloat = 64
     static let largeurMinimale: CGFloat = 40
 
-    /// Le palier de réduction : 5 % de la taille par défaut à chaque tour.
-    static let palier: CGFloat = 0.05
+    /// Ce qu'une voiture peut descendre sous la hauteur que lui donnent ses points pour
+    /// éviter d'ouvrir une voie. **Quelques points, pas plus** : au-delà, la hauteur ne dit
+    /// plus le score. L'ordre du classement, lui, ne s'inverse jamais.
+    static let decalageVerticalMax: CGFloat = 12
 
     /// Ce qui doit rester entre une voiture et le kerb, de chaque côté.
     static let bordMinimal: CGFloat = 8
@@ -420,10 +424,6 @@ enum DispositionPiste {
     /// Le corps du score posé sous une voiture. Fixe, lui : c'est un chiffre à lire, pas un
     /// dessin, et 14 pt reste la valeur que la version web donne à une voiture pleine.
     static let tailleScore: CGFloat = 14
-
-    /// Gouttière entre deux voitures voisines d'un même groupe. Elle **s'ajoute** à la
-    /// boîte du dessin et ne l'entame jamais : c'est elle qui fixe le pas des voies.
-    static let gouttiere: CGFloat = 12
 
     /// Marges au-dessus de la première voiture et au-dessous de la dernière. La zone de jeu
     /// s'étend de l'une à l'autre : l'échelle occupe donc toujours la piste entière.
@@ -446,7 +446,7 @@ enum DispositionPiste {
         /// poserait sur le museau de la voiture du dessous.
         var seuil: CGFloat { hauteur + hauteurLegende }
 
-        static let defaut = Gabarit(largeur: largeurDefaut)
+        static let defaut = Gabarit(largeur: largeurMaximale)
     }
 
     /// Où se pose une voiture. **Rien sur sa taille** : elle est dans ``Disposition``,
@@ -498,11 +498,10 @@ enum DispositionPiste {
     ///   pose à mi-hauteur, et la passe 2 en fait une grille de départ sur plusieurs voies.
     ///
     /// Les hauteurs sortent d'ici **exactes** : deux scores identiques rendent exactement la
-    /// même valeur, et c'est ce qui garantit que deux ex æquo forment toujours un groupe.
+    /// même valeur, et c'est ce qui garantit que deux ex æquo restent à la même hauteur.
     static func hauteurs(pour points: [Int], dans hauteur: CGFloat,
                          gabarit: Gabarit) -> [CGFloat] {
-        let haut = margeHaute + gabarit.hauteur / 2
-        let bas = max(haut, hauteur - margeBasse - hauteurLegende - gabarit.hauteur / 2)
+        let (haut, bas) = bornes(dans: hauteur, gabarit: gabarit)
 
         guard let maximum = points.max(), let minimum = points.min() else { return [] }
         if points.count == 1 { return [haut] }
@@ -514,92 +513,107 @@ enum DispositionPiste {
         }
     }
 
-    // MARK: Passe 2a — le regroupement
-
-    /// Deux voitures se chevauchent quand l'écart de leurs hauteurs est plus petit que
-    /// l'empreinte d'une voiture. **Le regroupement se propage en cascade** : si A chevauche
-    /// B et B chevauche C, les trois n'en font qu'un, *même si A et C ne se touchent pas*.
-    ///
-    /// Un groupe dit **qui se résout ensemble, jamais combien de voies** : c'est
-    /// ``voies(de:seuil:)`` qui compte les abscisses.
-    static func groupes(de hauteurs: [CGFloat], seuil: CGFloat) -> [[Int]] {
-        var groupes: [[Int]] = []
-
-        for (index, centre) in hauteurs.enumerated() {
-            if let precedent = groupes.last?.last, centre - hauteurs[precedent] < seuil {
-                groupes[groupes.count - 1].append(index)
-            } else {
-                groupes.append([index])
-            }
-        }
-        return groupes
+    /// Les centres extrêmes d'une voiture : sous la marge haute, au-dessus du score du bas.
+    static func bornes(dans hauteur: CGFloat, gabarit: Gabarit) -> (haut: CGFloat, bas: CGFloat) {
+        let haut = margeHaute + gabarit.hauteur / 2
+        return (haut, max(haut, hauteur - margeBasse - hauteurLegende - gabarit.hauteur / 2))
     }
 
-    // MARK: Passe 2b — les voies d'un groupe
+    // MARK: Passe 2 — décalage vertical, puis voies
 
-    /// L'indice de la voie de chaque voiture du groupe. Deux voitures d'une même voie sont
-    /// écartées d'au moins une empreinte. **C'est ici que l'escalier diagonal se défait**
-    /// (`docs/bugs-connus.md` §33) : le placement au premier libre ouvre exactement autant
-    /// de voies que de voitures qui se chevauchent à un même endroit.
-    static func voies(de hauteurs: [CGFloat], seuil: CGFloat) -> [Int] {
+    /// Ce que rend la passe 2 : la hauteur retenue de chaque voiture, sa voie dans son
+    /// groupe, et les groupes — des indices consécutifs qui se résolvent ensemble.
+    struct Rangement {
+        var centres: [CGFloat]
+        var voies: [Int]
+        var groupes: [[Int]]
+    }
+
+    /// **Le décalage vertical passe avant la voie.** Les voitures sont balayées de haut en
+    /// bas ; chacune cherche, parmi les voies déjà ouvertes de son groupe, celle qui lui
+    /// demande **le plus petit** décalage vers le bas, sans dépasser
+    /// ``decalageVerticalMax``. Aucune ne convient : elle ouvre une voie, à sa hauteur.
+    ///
+    /// Trois garde-fous tiennent la lecture du classement :
+    ///
+    /// - une voiture ne remonte jamais au-dessus de la précédente — l'ordre ne s'inverse pas ;
+    /// - deux **ex æquo** restent à la même hauteur, au point près ;
+    /// - personne ne descend sous `plafond`, le centre le plus bas de la piste.
+    ///
+    /// Un groupe se ferme dès qu'une voiture trouve **toutes** les voies libres : c'est le
+    /// placement au premier libre, qui ouvre exactement autant de voies que de voitures qui
+    /// se chevauchent à un même endroit (`docs/bugs-connus.md` §33).
+    static func ranger(_ centres: [CGFloat], points: [Int], seuil: CGFloat,
+                       plafond: CGFloat) -> Rangement {
+        var rangement = Rangement(centres: centres, voies: [], groupes: [])
+        // Le centre de la dernière voiture de chaque voie du groupe en cours.
         var dernieres: [CGFloat] = []
 
-        return hauteurs.map { centre in
-            if let voie = dernieres.firstIndex(where: { centre - $0 >= seuil }) {
-                dernieres[voie] = centre
-                return voie
+        for index in centres.indices {
+            let voulu = centres[index]
+            let precedent = index > 0 ? rangement.centres[index - 1] : -.infinity
+            let exAequo = index > 0 && points[index] == points[index - 1]
+            let plancher = max(voulu, precedent)
+
+            if dernieres.allSatisfy({ plancher - $0 >= seuil }) {
+                rangement.centres[index] = plancher
+                rangement.voies.append(0)
+                rangement.groupes.append([index])
+                dernieres = [plancher]
+                continue
             }
-            dernieres.append(centre)
-            return dernieres.count - 1
+
+            var choix: (voie: Int, centre: CGFloat)?
+            for (voie, derniere) in dernieres.enumerated() {
+                let centre = max(plancher, derniere + seuil)
+                guard centre - voulu <= decalageVerticalMax + 0.01,
+                      centre <= plafond + 0.01,
+                      !exAequo || centre == precedent else { continue }
+                if centre < choix?.centre ?? .infinity { choix = (voie, centre) }
+            }
+
+            if let choix {
+                rangement.centres[index] = choix.centre
+                rangement.voies.append(choix.voie)
+                dernieres[choix.voie] = choix.centre
+            } else {
+                rangement.centres[index] = plancher
+                rangement.voies.append(dernieres.count)
+                dernieres.append(plancher)
+            }
+            rangement.groupes[rangement.groupes.count - 1].append(index)
         }
+        return rangement
     }
 
     // MARK: Passe 2c — la répartition latérale
 
-    /// Le rang signé d'une voie dans l'éventail : `0` est l'axe, les impaires partent à
-    /// gauche, les paires à droite.
+    /// Le rang signé d'une voie dans l'éventail : `0` est la meilleure voiture du groupe,
+    /// les impaires partent à gauche, les paires à droite.
     ///
     /// ```
     ///   voie      3       1      0      2       4
     ///   rang     −2      −1      0     +1      +2
     /// ```
     ///
-    /// La meilleure voiture du groupe ouvre toujours la voie `0` et tient l'axe ; deux
-    /// voitures consécutives ne partent jamais du même côté (`docs/bugs-connus.md` §33).
+    /// Deux voitures consécutives ne partent jamais du même côté (`docs/bugs-connus.md` §33).
     static func rangEventail(_ voie: Int) -> CGFloat {
         let sens: CGFloat = voie % 2 == 0 ? 1 : -1
         return sens * (CGFloat(voie) / 2).rounded(.up)
     }
 
-    /// L'abscisse d'une voie, depuis le milieu de la piste. Le pas vaut une voiture plus une
-    /// gouttière tant que la piste le permet — un petit groupe se serre autour de l'axe — et
-    /// se resserre ensuite **juste assez pour que la voie extrême garde ``bordMinimal``
-    /// avec le kerb**. Le resserrement peut faire se recouvrir deux voies : c'est alors la
-    /// boucle de ``disposition(_:hauteur:largeur:)`` qui réduit la taille.
+    /// L'abscisse d'une voie, depuis le milieu de la piste. **Les voies s'étalent sur toute
+    /// la largeur**, également, dans l'ordre de l'éventail : la plus à gauche et la plus à
+    /// droite à ``bordMinimal`` de leur kerb. Une seule voie tient l'axe.
     static func abscisse(voies nombre: Int, largeur: CGFloat,
                          gabarit: Gabarit) -> (Int) -> CGFloat {
-        // La gauche est servie la première : c'est elle qui fixe l'encombrement.
-        let rangMaximal = nombre / 2
-        guard rangMaximal > 0 else { return { _ in 0 } }
-
-        let demiPiste = largeur / 2 - bordMinimal - gabarit.largeur / 2
-        let pas = max(0, min(gabarit.largeur + gouttiere, demiPiste / CGFloat(rangMaximal)))
-        return { voie in rangEventail(voie) * pas }
-    }
-
-    /// **La dispersion de secours**, au plancher seulement. L'éventail centré sur l'axe
-    /// perd une cellule à droite quand le nombre de voies est pair ; ici l'ordre des voies
-    /// est le même — rangs de l'éventail, de gauche à droite — mais elles se répartissent
-    /// **également sur toute la largeur** utile. Le pas gagné vaut `n / (n − 1)`.
-    static func abscisseDispersee(voies nombre: Int, largeur: CGFloat,
-                                  gabarit: Gabarit) -> (Int) -> CGFloat {
         guard nombre > 1 else { return { _ in 0 } }
 
         let utile = max(0, largeur - 2 * bordMinimal - gabarit.largeur)
-        let pas = min(gabarit.largeur + gouttiere, utile / CGFloat(nombre - 1))
-        // Les rangs vont de `−⌊n/2⌋` à `⌈n/2⌉ − 1` : leur milieu est l'axe des abscisses.
-        let milieu = (CGFloat(-(nombre / 2)) + CGFloat((nombre + 1) / 2 - 1)) / 2
-        return { voie in (rangEventail(voie) - milieu) * pas }
+        let pas = utile / CGFloat(nombre - 1)
+        // Les rangs vont de `−⌊n/2⌋` à `⌈n/2⌉ − 1` : décalés de `⌊n/2⌋`, ils comptent les
+        // voies de gauche à droite.
+        return { voie in -utile / 2 + (rangEventail(voie) + CGFloat(nombre / 2)) * pas }
     }
 
     // MARK: Le contrôle — les chevauchements réels
@@ -638,67 +652,69 @@ enum DispositionPiste {
 
     // MARK: L'enchaînement
 
-    /// Les trois étapes à un gabarit donné. La hauteur recopiée est celle de la passe 1,
-    /// inchangée. `disperser` désigne les groupes — par l'indice de leur premier membre —
-    /// qui passent à la répartition de secours.
+    /// Les deux passes à un gabarit donné : la hauteur de la passe 1, décalée de quelques
+    /// points au plus par la passe 2, et la voie étalée sur la largeur.
     static func placements(_ membres: [Membre], hauteur: CGFloat, largeur: CGFloat,
-                           gabarit: Gabarit, disperser: Set<Int> = []) -> [Placement] {
+                           gabarit: Gabarit) -> [Placement] {
         guard !membres.isEmpty, hauteur > 0, largeur > 0 else { return [] }
 
-        let centres = hauteurs(pour: membres.map(\.totalPoints), dans: hauteur, gabarit: gabarit)
+        let points = membres.map(\.totalPoints)
+        let rangement = ranger(hauteurs(pour: points, dans: hauteur, gabarit: gabarit),
+                               points: points, seuil: gabarit.seuil,
+                               plafond: bornes(dans: hauteur, gabarit: gabarit).bas)
         var resultat: [Placement] = []
 
-        for groupe in groupes(de: centres, seuil: gabarit.seuil) {
+        for groupe in rangement.groupes {
             // **Le groupe compte ses voies, jamais ses membres.**
-            let voiesDuGroupe = voies(de: groupe.map { centres[$0] }, seuil: gabarit.seuil)
-            let nombre = (voiesDuGroupe.max() ?? 0) + 1
-            let abscisseDeVoie = disperser.contains(groupe[0])
-                ? abscisseDispersee(voies: nombre, largeur: largeur, gabarit: gabarit)
-                : abscisse(voies: nombre, largeur: largeur, gabarit: gabarit)
+            let nombre = (groupe.map { rangement.voies[$0] }.max() ?? 0) + 1
+            let abscisseDeVoie = abscisse(voies: nombre, largeur: largeur, gabarit: gabarit)
 
-            for (place, index) in groupe.enumerated() {
+            for index in groupe {
                 resultat.append(Placement(membre: membres[index],
-                                          centre: centres[index],
-                                          decalage: abscisseDeVoie(voiesDuGroupe[place])))
+                                          centre: rangement.centres[index],
+                                          decalage: abscisseDeVoie(rangement.voies[index])))
             }
         }
         return resultat
     }
 
-    /// **La disposition retenue** : la plus grande taille, par paliers de 5 % depuis
-    /// 52 pt, à laquelle aucune boîte n'en croise une autre et aucune voiture ne mord sur
-    /// la marge des kerbs.
+    /// Vrai quand aucune boîte n'en croise une autre et qu'aucune voiture ne mord sur la
+    /// marge des kerbs.
+    static func propre(_ placements: [Placement], largeur: CGFloat, gabarit: Gabarit) -> Bool {
+        enChevauchement(placements, gabarit: gabarit).isEmpty
+            && !deborde(placements, largeur: largeur, gabarit: gabarit)
+    }
+
+    /// **La disposition retenue** : la plus grande largeur entière entre ``largeurMinimale``
+    /// et ``largeurMaximale`` qui donne une disposition ``propre(_:largeur:gabarit:)``,
+    /// trouvée par dichotomie — cinq essais au plus, chacun une disposition complète.
     ///
-    /// Au plancher, si des voitures se croisent encore, **leurs groupes seuls** passent à la
-    /// répartition de secours (``abscisseDispersee(voies:largeur:gabarit:)``) : les autres
-    /// gardent leur éventail. Au-delà, il ne reste plus de largeur à donner.
+    /// Aucune ne l'est — neuf ex æquo, par exemple, ouvrent neuf voies qui ne tiennent pas
+    /// côte à côte : le plancher, voies étalées. Au-delà, il ne reste plus de largeur à donner.
     static func disposition(_ membres: [Membre],
                             hauteur: CGFloat, largeur: CGFloat) -> Disposition {
         guard !membres.isEmpty, hauteur > 0, largeur > 0 else { return .vide }
 
-        var facteur: CGFloat = 1
-        while true {
-            let gabarit = Gabarit(largeur: max(largeurMinimale, (largeurDefaut * facteur).rounded()))
-            let essai = placements(membres, hauteur: hauteur, largeur: largeur, gabarit: gabarit)
-            let propre = enChevauchement(essai, gabarit: gabarit).isEmpty
-                && !deborde(essai, largeur: largeur, gabarit: gabarit)
-
-            if propre { return Disposition(gabarit: gabarit, placements: essai) }
-
-            if gabarit.largeur <= largeurMinimale {
-                // Les groupes concernés, désignés par leur premier membre.
-                let touchees = enChevauchement(essai, gabarit: gabarit)
-                let centres = essai.map(\.centre)
-                let concernes = Set(groupes(de: centres, seuil: gabarit.seuil)
-                    .filter { $0.contains(where: touchees.contains) }
-                    .map { $0[0] })
-                return Disposition(gabarit: gabarit,
-                                   placements: placements(membres, hauteur: hauteur,
-                                                          largeur: largeur, gabarit: gabarit,
-                                                          disperser: concernes))
-            }
-            facteur -= palier
+        func essai(_ taille: Int) -> Disposition {
+            let gabarit = Gabarit(largeur: CGFloat(taille))
+            return Disposition(gabarit: gabarit,
+                               placements: placements(membres, hauteur: hauteur,
+                                                      largeur: largeur, gabarit: gabarit))
         }
+
+        var bas = Int(largeurMinimale), haut = Int(largeurMaximale)
+        var retenue: Disposition?
+        while bas <= haut {
+            let milieu = (bas + haut) / 2
+            let candidate = essai(milieu)
+            if propre(candidate.placements, largeur: largeur, gabarit: candidate.gabarit) {
+                retenue = candidate
+                bas = milieu + 1
+            } else {
+                haut = milieu - 1
+            }
+        }
+        return retenue ?? essai(Int(largeurMinimale))
     }
 
     /// **Le mémo de la disposition** : elle ne se recalcule que si le classement ou la taille
