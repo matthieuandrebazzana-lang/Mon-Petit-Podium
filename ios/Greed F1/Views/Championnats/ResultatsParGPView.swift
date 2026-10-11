@@ -12,9 +12,15 @@ import SwiftUI
 /// - **Un membre sans pronostic n'est pas dépliable** : un chevron qui ouvrirait sur rien
 ///   serait une promesse fausse. « Rien joué » se dit sur la ligne.
 ///
-/// > **Le changement de Grand Prix ne fait aucun fondu.** La liste est remplacée par une
-/// > donnée qui arrive du réseau : il n'y a pas d'« avant » à faire tenir. Seule la
-/// > pastille glisse — elle, c'est le doigt qui l'a déplacée.
+/// **Fond** : le drapeau du Grand Prix regardé, flouté et voilé (``FondDrapeauFlou``) — le
+/// fond de ``RecapView`` et du détail du carrousel du profil. L'en-tête s'y écrit en blanc ;
+/// tant qu'aucun drapeau n'est posé (chargement, GP hors table), le beige reprend et
+/// l'encre avec lui.
+///
+/// > **La liste ne fait aucun fondu au changement de Grand Prix.** Elle est remplacée par
+/// > une donnée qui arrive du réseau : il n'y a pas d'« avant » à faire tenir. Le drapeau,
+/// > lui, passe en fondu — c'est une couleur qui change, pas un objet qui bouge. La
+/// > pastille glisse : c'est le doigt qui l'a déplacée.
 struct ResultatsParGPView: View {
 
     let championnat: Championnat
@@ -50,6 +56,16 @@ struct ResultatsParGPView: View {
         return membres.filter(\.aJoue).count
     }
 
+    /// Le drapeau du fond — `nil` hors table des teintes : ``FondDrapeauFlou`` pose alors le
+    /// beige seul. Même règle que ``RecapView``.
+    private var slugFond: String? {
+        guard let slug = gpRegarde?.slug, TeintesDrapeaux.table[slug] != nil else { return nil }
+        return slug
+    }
+
+    /// Un drapeau derrière l'en-tête : son encre passe au blanc.
+    private var surDrapeau: Bool { slugFond != nil }
+
     private var sousTitre: String {
         guard let gp = gpRegarde else { return t("commun.saison2026") }
         guard let joueurs else { return gp.nomAffiche }
@@ -59,8 +75,7 @@ struct ResultatsParGPView: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                Color.fondPrincipal
-                    .ignoresSafeArea()
+                FondDrapeauFlou(slug: slugFond)
 
                 ScrollView {
                     VStack(spacing: 16) {
@@ -97,35 +112,29 @@ struct ResultatsParGPView: View {
             Text(t("championnat.resultatsParGP"))
                 .font(.titre)
                 .tracking(Tracking.titre)
-                .foregroundColor(.encreSurAplat)                  // 10,88:1 sur `primaire`
+                // Blanc sur le drapeau voilé, `texte` sur le beige (15,37:1).
+                .foregroundColor(surDrapeau ? .encreSurAplat : .texte)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer().frame(height: 6)
 
-            // `encreSecondaire` (5,75:1) — le blanc à 60 % de la maquette tombe à 4,47:1.
+            // Blanc 70 % : le voile du fond est calculé pour qu'il tienne 4,5:1
+            // (``ApparenceDrapeau/voileEncreSecondaire(pour:)``). Sur le beige, 4,71:1.
             Text(sousTitre)
                 .font(.custom("HelveticaNeue", size: 15))
-                .foregroundColor(.encreSecondaire)
+                .foregroundColor(surDrapeau ? .encreSecondaire : .grisSecondaire)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, margeLaterale)
         .padding(.top, retrait + 4)
-        .padding(.bottom, 28)
-        .background {
-            ZStack {
-                Color.primaire
-                Damier(opacite: Materiau.damier)
-                LueurHaute()
-            }
-        }
-        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: Rayon.bloc,
-                                          bottomTrailingRadius: Rayon.bloc,
-                                          style: .continuous))
-        .ombreAplat()
+        .padding(.bottom, 12)
+        // L'encre suit le fond au même rythme que son fondu : jamais de blanc sur le beige
+        // le temps que le drapeau arrive.
+        .animation(Mouvement.deplacement(0.28), value: surDrapeau)
         .accessibilityElement(children: .contain)
     }
 
@@ -140,7 +149,7 @@ struct ResultatsParGPView: View {
                     .font(.custom("HelveticaNeue-Medium", size: 17))
                     .lineLimit(1)
             }
-            .foregroundColor(.encreSurAplat)
+            .foregroundColor(surDrapeau ? .encreSurAplat : .encrePrimaire)
             .frame(minWidth: 44, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -198,9 +207,14 @@ struct ResultatsParGPView: View {
 
     // MARK: - Le sélecteur
 
-    /// Une piste blanche, une pastille bordeaux **qui glisse** vers le Grand Prix choisi —
-    /// la pastille est la seule chose qui bouge, parce que c'est le doigt qui l'a déplacée.
+    /// Une piste, une pastille bordeaux **qui glisse** vers le Grand Prix choisi — la
+    /// pastille est la seule chose qui bouge, parce que c'est le doigt qui l'a déplacée.
     /// Le sélecteur ramène sous les yeux l'option choisie quand il déborde l'écran.
+    ///
+    /// **Sur le drapeau, la piste est un voile, pas une surface blanche** : une bande
+    /// blanche couperait l'écran en deux. Le voile ne fait qu'assombrir un fond déjà calculé
+    /// pour que le blanc à 70 % y tienne 4,5:1 — il ajoute du contraste, il n'en retire
+    /// jamais. Sur le beige, la piste blanche d'origine.
     private var selecteur: some View {
         ScrollViewReader { defilement in
             ScrollView(.horizontal, showsIndicators: false) {
@@ -211,7 +225,7 @@ struct ResultatsParGPView: View {
                     }
                 }
                 .padding(4)
-                .background(Color.surface)
+                .background(surDrapeau ? Color.voile.opacity(Materiau.voilePile) : Color.surface)
                 .clipShape(Capsule())
                 .padding(.horizontal, margeLaterale)
             }
@@ -238,8 +252,10 @@ struct ResultatsParGPView: View {
         } label: {
             Text(gp.libelleCourt)
                 .font(.custom(actif ? "HelveticaNeue-Medium" : "HelveticaNeue", size: 16))
-                // Actif : blanc sur `primaire`, 10,88:1. Inactif : 5,33:1 sur le blanc.
-                .foregroundColor(actif ? .encreSurAplat : .grisSecondaire)
+                // Actif : blanc sur `primaire`, 10,88:1. Inactif : blanc 70 % sur le drapeau
+                // voilé (≥ 4,5:1), `grisSecondaire` sur la piste blanche (5,33:1).
+                .foregroundColor(actif ? .encreSurAplat
+                                 : surDrapeau ? .encreSecondaire : .grisSecondaire)
                 .lineLimit(1)
                 .padding(.horizontal, 18)
                 .frame(minHeight: 44)

@@ -286,7 +286,7 @@ ios/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
     │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste (`SelecteurSegmente`), menu « ⋯ » (code, photo si créateur, quitter), photo 100 pt réduite jusqu'à 72 pt pour un nom long, à équidistance du titre et du menu (`DispositionEntete`) — sans photo, rien : texte + ⋯ ; la piste n'est construite qu'au premier tap sur « Piste » (`pisteVue`), puis les deux contenus restent montés, seule l'opacité bascule (0,001, pas 0) ; damier en filigrane sur le sélecteur et la carte « Résultats par Grand Prix » — réels
     │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — reçoit le classement
-    │   │   ├── ResultatsParGPView.swift     résultats par GP : sélecteur des GP terminés, paris de chacun en accordéon
+    │   │   ├── ResultatsParGPView.swift     résultats par GP : sélecteur des GP terminés, paris de chacun en accordéon ; fond `FondDrapeauFlou` du GP regardé (fondu au changement), en-tête blanc et piste du sélecteur voilée sur le drapeau, beige + encres sombres sans drapeau
     │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases → `POST /championnats/rejoindre`
     │   ├── Calendrier/
