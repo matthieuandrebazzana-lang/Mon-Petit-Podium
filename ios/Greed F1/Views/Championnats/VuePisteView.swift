@@ -117,6 +117,9 @@ struct VuePisteView: View {
     /// Vrai une fois la piste montée. C'est lui qui lance l'entrée des voitures.
     @State private var enPiste = false
 
+    /// La disposition, recalculée au seul changement du classement ou de la piste.
+    @State private var memo = DispositionPiste.Memo()
+
     @Environment(\.dismiss) private var fermer
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
@@ -288,17 +291,16 @@ struct VuePisteView: View {
     private var zoneDeJeu: some View {
         GeometryReader { geometrie in
             let taille = geometrie.size
-            let placements = DispositionPiste.placements(membres,
-                                                         hauteur: taille.height,
-                                                         largeur: taille.width)
+            let disposition = memo.disposition(membres, taille: taille)
 
             ZStack(alignment: .topLeading) {
                 // Sans lui, un `ZStack` d'enfants décalés se réduirait à leur boîte
                 // englobante et la mesure ne vaudrait plus rien.
                 Color.clear
 
-                ForEach(Array(placements.enumerated()), id: \.element.id) { rang, placement in
-                    voiture(placement, rang: rang, hauteur: taille.height, largeur: taille.width)
+                ForEach(Array(disposition.placements.enumerated()), id: \.element.id) { rang, placement in
+                    voiture(placement, gabarit: disposition.gabarit, rang: rang,
+                            hauteur: taille.height, largeur: taille.width)
                 }
 
                 if membres.isEmpty { etatVide }
@@ -318,9 +320,10 @@ struct VuePisteView: View {
     /// l'entrée, qui la fait monter du bas de la piste jusqu'à cette place. Les confondre
     /// ferait converger toutes les voitures vers zéro avant de sauter à leur position.
     private func voiture(_ placement: DispositionPiste.Placement,
+                         gabarit: DispositionPiste.Gabarit,
                          rang: Int, hauteur: CGFloat, largeur: CGFloat) -> some View {
-        let largeurVoiture = DispositionPiste.largeurVoiture
-        let hauteurVoiture = DispositionPiste.hauteurVoiture
+        let largeurVoiture = gabarit.largeur
+        let hauteurVoiture = gabarit.hauteur
 
         // Chaque voiture part du bas de la piste : la distance dépend de son point
         // d'arrivée, une valeur commune ferait démarrer le leader du milieu de l'écran.
@@ -378,28 +381,44 @@ struct VuePisteView: View {
 ///
 /// Deux passes, et l'ordre compte :
 ///
-/// - **Passe 1**, ``hauteurs(pour:dans:)`` : le score donne la hauteur, et elle seule.
+/// - **Passe 1**, ``hauteurs(pour:dans:gabarit:)`` : le score donne la hauteur, et elle seule.
 /// - **Passe 2**, le reste : deux voitures qui se rencontrent sont écartées
 ///   **latéralement**. **Aucune hauteur ne bouge en passe 2** — l'écarter de l'axe ne la
 ///   déplace pas verticalement. Sa hauteur dit ses points, et elle seule.
 ///
-/// > ### Toutes les voitures ont la même taille
+/// > ### La taille se déduit des chevauchements réels (`ios 0.53.4`)
 /// >
-/// > **52 × 106, sans exception** — ni le score, ni le rang, ni l'encombrement de son
-/// > groupe ne change la taille d'une voiture. Jusqu'à la version `0.16.0` un groupe large
-/// > rétrécissait les siennes pour tenir entre les kerbs : deux voitures voisines
-/// > sortaient alors à deux tailles différentes, et l'écran laissait croire que la taille
-/// > voulait dire quelque chose. C'est le **pas** de l'éventail qui se resserre désormais,
-/// > jamais le dessin.
+/// > Toutes les voitures partagent **une seule taille**, mais elle n'est plus fixe. La
+/// > disposition est d'abord calculée à **52 pt** ; si deux boîtes englobantes (dessin +
+/// > score) se croisent, ou si une voiture passe à moins de ``bordMinimal`` d'un kerb, la
+/// > taille de **toutes** baisse de 5 % et la disposition est refaite — jusqu'à ce qu'il
+/// > n'y ait plus aucun recouvrement, ou jusqu'au plancher de ``largeurMinimale``. Jusqu'ici
+/// > la taille ne bougeait jamais et c'est le pas des voies qui se resserrait : au-delà de
+/// > cinq voies les dessins se recouvraient, et l'éventail sortait d'une demi-voiture
+/// > au-delà du kerb gauche — jusqu'au bord de l'écran.
+/// >
+/// > La taille reste **uniforme** : deux voitures voisines à deux tailles différentes
+/// > laisseraient croire que la taille veut dire quelque chose.
 enum DispositionPiste {
 
-    /// La voiture, à la seule taille qu'elle ait. La hauteur **se déduit** du rapport du
-    /// dessin (141,12 × 288,09), partagé par les douze livrées.
-    static let largeurVoiture: CGFloat = 52
-    static let hauteurVoiture: CGFloat = (largeurVoiture * 288.09 / 141.12).rounded()
+    /// La voiture à sa taille par défaut, et le plancher en deçà duquel elle cesse de se
+    /// lire — le numéro et le pseudo peints sur le dessin deviennent illisibles.
+    static let largeurDefaut: CGFloat = 52
+    static let largeurMinimale: CGFloat = 40
 
-    /// Le corps du score posé sous une voiture. Fixe lui aussi — c'est `52 × 0,26` arrondi,
-    /// la valeur que la version web donne à une voiture pleine.
+    /// Le palier de réduction : 5 % de la taille par défaut à chaque tour.
+    static let palier: CGFloat = 0.05
+
+    /// Ce qui doit rester entre une voiture et le kerb, de chaque côté.
+    static let bordMinimal: CGFloat = 8
+
+    /// L'écart en deçà duquel deux voitures voisines **comptent comme chevauchées**. Mesuré
+    /// au simulateur : deux boîtes jointives, roue contre roue, se lisent déjà comme une
+    /// superposition — le contrôle exige donc ces quelques points de piste entre elles.
+    static let ecartMinimal: CGFloat = 4
+
+    /// Le corps du score posé sous une voiture. Fixe, lui : c'est un chiffre à lire, pas un
+    /// dessin, et 14 pt reste la valeur que la version web donne à une voiture pleine.
     static let tailleScore: CGFloat = 14
 
     /// Gouttière entre deux voitures voisines d'un même groupe. Elle **s'ajoute** à la
@@ -412,17 +431,26 @@ enum DispositionPiste {
     static let margeBasse: CGFloat = 16
 
     /// La place que prend le score sous une voiture. Elle entre dans l'empreinte verticale
-    /// de celle-ci — voir le seuil de ``groupes(de:)``.
+    /// de celle-ci — voir ``Gabarit/seuil``.
     static let hauteurLegende: CGFloat = 16
 
-    /// Deux voitures se rencontrent en deçà de cet écart de hauteurs. **La voiture ET sa
-    /// légende** : chacune porte son score sous elle, donc son empreinte à l'écran est
-    /// celle du dessin **plus** celle du chiffre. Au seuil du seul dessin, la légende du
-    /// groupe du dessus se poserait sur le museau de la voiture du dessous.
-    static let seuil: CGFloat = hauteurVoiture + hauteurLegende
+    /// La taille d'une voiture, **la même pour toutes** sur un écran donné. La hauteur
+    /// **se déduit** du rapport du dessin (141,12 × 288,09), partagé par les douze livrées.
+    struct Gabarit: Equatable {
+        let largeur: CGFloat
 
-    /// Où se pose une voiture. **Rien sur sa taille** : elles l'ont toutes la même, et un
-    /// champ par placement inviterait à en faire varier une.
+        var hauteur: CGFloat { (largeur * 288.09 / 141.12).rounded() }
+
+        /// Deux voitures se rencontrent en deçà de cet écart de hauteurs. **La voiture ET
+        /// sa légende** : au seuil du seul dessin, la légende du groupe du dessus se
+        /// poserait sur le museau de la voiture du dessous.
+        var seuil: CGFloat { hauteur + hauteurLegende }
+
+        static let defaut = Gabarit(largeur: largeurDefaut)
+    }
+
+    /// Où se pose une voiture. **Rien sur sa taille** : elle est dans ``Disposition``,
+    /// commune à toutes, et un champ par placement inviterait à en faire varier une.
     struct Placement: Identifiable {
         let membre: Membre
         /// Le centre vertical du **dessin**, en points depuis le haut de la piste.
@@ -431,6 +459,14 @@ enum DispositionPiste {
         let decalage: CGFloat
 
         var id: UUID { membre.id }
+    }
+
+    /// Le résultat complet : la taille retenue, et la place de chacune.
+    struct Disposition {
+        let gabarit: Gabarit
+        let placements: [Placement]
+
+        static let vide = Disposition(gabarit: .defaut, placements: [])
     }
 
     // MARK: Passe 1 — l'échelle verticale
@@ -445,9 +481,8 @@ enum DispositionPiste {
     /// **toujours** tout en bas, et chaque score intermédiaire proportionnellement entre
     /// les deux. Un score élevé donne un `y` petit : le haut de l'écran.
     ///
-    /// Les bornes `haut` et `bas` tombent autour de 10 % et 90 % de la piste, mais elles
-    /// sont **calculées**, pas choisies en pourcentage : c'est la place qu'il faut à une
-    /// voiture et à son score pour ne sortir ni en haut ni en bas.
+    /// Les bornes `haut` et `bas` sont **calculées**, pas choisies en pourcentage : c'est la
+    /// place qu'il faut à une voiture et à son score pour ne sortir ni en haut ni en bas.
     ///
     /// > ### Pourquoi plus « le bas de la piste vaut zéro »
     /// >
@@ -460,18 +495,14 @@ enum DispositionPiste {
     ///
     /// - **Un seul membre** : il mène, il se pose en haut.
     /// - **Tout le monde à égalité** — le cas d'avant le premier Grand Prix : la grille se
-    ///   pose à mi-hauteur. La coller en haut ou en bas dirait quelque chose de faux, et la
-    ///   passe 2 en fait une grille de départ sur plusieurs voies.
+    ///   pose à mi-hauteur, et la passe 2 en fait une grille de départ sur plusieurs voies.
     ///
-    /// Les hauteurs sortent d'ici **exactes**, sans correction d'écart : deux scores
-    /// identiques rendent exactement la même valeur, et c'est ce qui garantit que deux
-    /// ex æquo forment toujours un groupe à la passe 2.
-    ///
-    /// La légende compte dans la borne basse, sinon le score du dernier sortirait sous la
-    /// piste.
-    static func hauteurs(pour points: [Int], dans hauteur: CGFloat) -> [CGFloat] {
-        let haut = margeHaute + hauteurVoiture / 2
-        let bas = max(haut, hauteur - margeBasse - hauteurLegende - hauteurVoiture / 2)
+    /// Les hauteurs sortent d'ici **exactes** : deux scores identiques rendent exactement la
+    /// même valeur, et c'est ce qui garantit que deux ex æquo forment toujours un groupe.
+    static func hauteurs(pour points: [Int], dans hauteur: CGFloat,
+                         gabarit: Gabarit) -> [CGFloat] {
+        let haut = margeHaute + gabarit.hauteur / 2
+        let bas = max(haut, hauteur - margeBasse - hauteurLegende - gabarit.hauteur / 2)
 
         guard let maximum = points.max(), let minimum = points.min() else { return [] }
         if points.count == 1 { return [haut] }
@@ -488,15 +519,10 @@ enum DispositionPiste {
     /// Deux voitures se chevauchent quand l'écart de leurs hauteurs est plus petit que
     /// l'empreinte d'une voiture. **Le regroupement se propage en cascade** : si A chevauche
     /// B et B chevauche C, les trois n'en font qu'un, *même si A et C ne se touchent pas*.
-    /// C'est pour cela que la comparaison porte sur la voiture précédente, jamais sur la
-    /// première du groupe.
-    ///
-    /// **Rien ici ne regarde les scores.** Deux scores voisins mais distincts sont regroupés
-    /// si et seulement si leurs voitures se rencontrent à l'écran.
     ///
     /// Un groupe dit **qui se résout ensemble, jamais combien de voies** : c'est
-    /// ``voies(de:)`` qui compte les abscisses.
-    static func groupes(de hauteurs: [CGFloat]) -> [[Int]] {
+    /// ``voies(de:seuil:)`` qui compte les abscisses.
+    static func groupes(de hauteurs: [CGFloat], seuil: CGFloat) -> [[Int]] {
         var groupes: [[Int]] = []
 
         for (index, centre) in hauteurs.enumerated() {
@@ -511,21 +537,11 @@ enum DispositionPiste {
 
     // MARK: Passe 2b — les voies d'un groupe
 
-    /// Reçoit les hauteurs d'un groupe, dans l'ordre du classement, et rend pour chacune
-    /// l'indice de la voie où sa voiture se pose. Deux voitures d'une même voie sont
-    /// écartées d'au moins une empreinte : elles peuvent partager une abscisse sans se
-    /// toucher.
-    ///
-    /// **C'est ici que l'escalier diagonal se défait.** Un groupe de huit voitures que la
-    /// cascade a réunies n'a pas besoin de huit abscisses : si chacune ne chevauche que sa
-    /// voisine immédiate, **deux voies suffisent**.
-    ///
-    /// Le placement au premier libre est **optimal** ici : les hauteurs arrivant triées, le
-    /// nombre de voies ouvertes à un instant donné est exactement le nombre de voitures qui
-    /// se chevauchent à cet endroit.
-    static func voies(de hauteurs: [CGFloat]) -> [Int] {
-        // La hauteur de la dernière voiture posée sur chaque voie. Les hauteurs étant
-        // croissantes, c'est la seule dont l'écart puisse manquer.
+    /// L'indice de la voie de chaque voiture du groupe. Deux voitures d'une même voie sont
+    /// écartées d'au moins une empreinte. **C'est ici que l'escalier diagonal se défait**
+    /// (`docs/bugs-connus.md` §33) : le placement au premier libre ouvre exactement autant
+    /// de voies que de voitures qui se chevauchent à un même endroit.
+    static func voies(de hauteurs: [CGFloat], seuil: CGFloat) -> [Int] {
         var dernieres: [CGFloat] = []
 
         return hauteurs.map { centre in
@@ -540,71 +556,105 @@ enum DispositionPiste {
 
     // MARK: Passe 2c — la répartition latérale
 
-    /// L'abscisse d'une **voie**, comptée depuis le milieu de la piste. **Aucune hauteur
-    /// n'entre ici et aucune n'en sort, et aucune taille non plus.**
-    ///
-    /// ### L'éventail : la voie `0` est l'axe, les suivantes s'écartent par paires
+    /// Le rang signé d'une voie dans l'éventail : `0` est l'axe, les impaires partent à
+    /// gauche, les paires à droite.
     ///
     /// ```
     ///   voie      3       1      0      2       4
-    ///   x      −2 · pas  −pas    0    +pas   +2 · pas
+    ///   rang     −2      −1      0     +1      +2
     /// ```
     ///
-    /// ``voies(de:)`` ouvre les voies dans l'ordre d'arrivée et les membres arrivent triés
-    /// par points décroissants : **la meilleure voiture du groupe ouvre donc toujours la
-    /// voie `0`** et tient l'axe. L'écran dit alors quelque chose de vrai — qui mène le
-    /// groupe tient le milieu de la piste, ses poursuivants s'écartent autour de lui.
-    ///
-    /// Une numérotation d'un kerb à l'autre ferait descendre le cycle trois fois de suite
-    /// dans le même sens, soit un petit escalier redessiné à chaque tour. L'éventail le
-    /// fait tourner **milieu, gauche, droite, milieu…** : deux voitures consécutives ne
-    /// partent jamais du même côté de l'axe.
-    ///
-    /// ### Le pas
-    ///
-    /// Il vaut une voiture pleine plus une gouttière **tant que la piste le permet** : un
-    /// petit groupe se serre autour de l'axe plutôt que de s'étaler, la proximité étant ce
-    /// qui dit que ces voitures-là sont au coude à coude.
-    ///
-    /// Au-delà il se resserre jusqu'à ce que l'éventail tienne entre les kerbs. Celui-ci
-    /// occupe `rangMaximal` voies **de chaque côté** de l'axe, plus l'axe : toujours un
-    /// nombre **impair** de cellules. Le resserrement ne commence donc qu'à **six voies**
-    /// sur une piste de 354 pt (cinq voies : 5 × 64 = 320 ≤ 354) — six voitures qui se
-    /// chevauchent toutes, ce qu'un championnat de huit ne produit pas.
-    ///
-    /// > **Et la voiture, elle, ne rétrécit pas.** Passé six voies les dessins commencent à
-    /// > se recouvrir par les bords ; c'est assumé, parce que l'alternative — une taille
-    /// > qui dépend de l'encombrement — faisait cohabiter deux échelles sur le même écran.
-    static func abscisse(voies nombre: Int, largeur: CGFloat) -> (Int) -> CGFloat {
-        // Les voies impaires partent à gauche, les paires à droite : la gauche est servie
-        // la première, et c'est elle qui fixe l'encombrement de l'éventail.
-        let rangMaximal = nombre / 2
-        let pas = min(largeurVoiture + gouttiere, largeur / CGFloat(2 * rangMaximal + 1))
+    /// La meilleure voiture du groupe ouvre toujours la voie `0` et tient l'axe ; deux
+    /// voitures consécutives ne partent jamais du même côté (`docs/bugs-connus.md` §33).
+    static func rangEventail(_ voie: Int) -> CGFloat {
+        let sens: CGFloat = voie % 2 == 0 ? 1 : -1
+        return sens * (CGFloat(voie) / 2).rounded(.up)
+    }
 
-        return { voie in
-            let sens: CGFloat = voie % 2 == 0 ? 1 : -1
-            return sens * (CGFloat(voie) / 2).rounded(.up) * pas
+    /// L'abscisse d'une voie, depuis le milieu de la piste. Le pas vaut une voiture plus une
+    /// gouttière tant que la piste le permet — un petit groupe se serre autour de l'axe — et
+    /// se resserre ensuite **juste assez pour que la voie extrême garde ``bordMinimal``
+    /// avec le kerb**. Le resserrement peut faire se recouvrir deux voies : c'est alors la
+    /// boucle de ``disposition(_:hauteur:largeur:)`` qui réduit la taille.
+    static func abscisse(voies nombre: Int, largeur: CGFloat,
+                         gabarit: Gabarit) -> (Int) -> CGFloat {
+        // La gauche est servie la première : c'est elle qui fixe l'encombrement.
+        let rangMaximal = nombre / 2
+        guard rangMaximal > 0 else { return { _ in 0 } }
+
+        let demiPiste = largeur / 2 - bordMinimal - gabarit.largeur / 2
+        let pas = max(0, min(gabarit.largeur + gouttiere, demiPiste / CGFloat(rangMaximal)))
+        return { voie in rangEventail(voie) * pas }
+    }
+
+    /// **La dispersion de secours**, au plancher seulement. L'éventail centré sur l'axe
+    /// perd une cellule à droite quand le nombre de voies est pair ; ici l'ordre des voies
+    /// est le même — rangs de l'éventail, de gauche à droite — mais elles se répartissent
+    /// **également sur toute la largeur** utile. Le pas gagné vaut `n / (n − 1)`.
+    static func abscisseDispersee(voies nombre: Int, largeur: CGFloat,
+                                  gabarit: Gabarit) -> (Int) -> CGFloat {
+        guard nombre > 1 else { return { _ in 0 } }
+
+        let utile = max(0, largeur - 2 * bordMinimal - gabarit.largeur)
+        let pas = min(gabarit.largeur + gouttiere, utile / CGFloat(nombre - 1))
+        // Les rangs vont de `−⌊n/2⌋` à `⌈n/2⌉ − 1` : leur milieu est l'axe des abscisses.
+        let milieu = (CGFloat(-(nombre / 2)) + CGFloat((nombre + 1) / 2 - 1)) / 2
+        return { voie in (rangEventail(voie) - milieu) * pas }
+    }
+
+    // MARK: Le contrôle — les chevauchements réels
+
+    /// La boîte qu'occupe une voiture à l'écran : le dessin **et** le score posé dessous.
+    /// L'origine des abscisses est l'axe de la piste.
+    static func boite(_ placement: Placement, gabarit: Gabarit) -> CGRect {
+        CGRect(x: placement.decalage - gabarit.largeur / 2,
+               y: placement.centre - gabarit.hauteur / 2,
+               width: gabarit.largeur,
+               height: gabarit.hauteur + hauteurLegende)
+    }
+
+    /// Les indices des voitures dont la boîte en croise une autre. Chaque boîte est élargie
+    /// d'un demi ``ecartMinimal`` de chaque côté : deux voitures jointives se croisent.
+    static func enChevauchement(_ placements: [Placement], gabarit: Gabarit) -> Set<Int> {
+        let boites = placements.map { boite($0, gabarit: gabarit).insetBy(dx: -ecartMinimal / 2, dy: 0) }
+        var touchees: Set<Int> = []
+        for i in boites.indices {
+            for j in boites.indices where j > i {
+                let commun = boites[i].intersection(boites[j])
+                if !commun.isNull, commun.width > 0.5, commun.height > 0.5 {
+                    touchees.insert(i)
+                    touchees.insert(j)
+                }
+            }
         }
+        return touchees
+    }
+
+    /// Vrai quand une voiture passe à moins de ``bordMinimal`` d'un kerb.
+    static func deborde(_ placements: [Placement], largeur: CGFloat, gabarit: Gabarit) -> Bool {
+        let limite = largeur / 2 - bordMinimal + 0.5
+        return placements.contains { abs($0.decalage) + gabarit.largeur / 2 > limite }
     }
 
     // MARK: L'enchaînement
 
-    /// Elle enchaîne les trois étapes et **ne décide rien elle-même**. La hauteur qu'elle
-    /// recopie est celle de la passe 1, inchangée.
-    static func placements(_ membres: [Membre],
-                           hauteur: CGFloat, largeur: CGFloat) -> [Placement] {
+    /// Les trois étapes à un gabarit donné. La hauteur recopiée est celle de la passe 1,
+    /// inchangée. `disperser` désigne les groupes — par l'indice de leur premier membre —
+    /// qui passent à la répartition de secours.
+    static func placements(_ membres: [Membre], hauteur: CGFloat, largeur: CGFloat,
+                           gabarit: Gabarit, disperser: Set<Int> = []) -> [Placement] {
         guard !membres.isEmpty, hauteur > 0, largeur > 0 else { return [] }
 
-        let centres = hauteurs(pour: membres.map(\.totalPoints), dans: hauteur)
+        let centres = hauteurs(pour: membres.map(\.totalPoints), dans: hauteur, gabarit: gabarit)
         var resultat: [Placement] = []
 
-        for groupe in groupes(de: centres) {
-            // **Le groupe compte ses voies, jamais ses membres.** La cascade réunit des
-            // voitures qui ne se touchent pas deux à deux ; leur donner une abscisse
-            // chacune est ce qui dessinait l'escalier.
-            let voiesDuGroupe = voies(de: groupe.map { centres[$0] })
-            let abscisseDeVoie = abscisse(voies: (voiesDuGroupe.max() ?? 0) + 1,
-                                          largeur: largeur)
+        for groupe in groupes(de: centres, seuil: gabarit.seuil) {
+            // **Le groupe compte ses voies, jamais ses membres.**
+            let voiesDuGroupe = voies(de: groupe.map { centres[$0] }, seuil: gabarit.seuil)
+            let nombre = (voiesDuGroupe.max() ?? 0) + 1
+            let abscisseDeVoie = disperser.contains(groupe[0])
+                ? abscisseDispersee(voies: nombre, largeur: largeur, gabarit: gabarit)
+                : abscisse(voies: nombre, largeur: largeur, gabarit: gabarit)
 
             for (place, index) in groupe.enumerated() {
                 resultat.append(Placement(membre: membres[index],
@@ -613,6 +663,70 @@ enum DispositionPiste {
             }
         }
         return resultat
+    }
+
+    /// **La disposition retenue** : la plus grande taille, par paliers de 5 % depuis
+    /// 52 pt, à laquelle aucune boîte n'en croise une autre et aucune voiture ne mord sur
+    /// la marge des kerbs.
+    ///
+    /// Au plancher, si des voitures se croisent encore, **leurs groupes seuls** passent à la
+    /// répartition de secours (``abscisseDispersee(voies:largeur:gabarit:)``) : les autres
+    /// gardent leur éventail. Au-delà, il ne reste plus de largeur à donner.
+    static func disposition(_ membres: [Membre],
+                            hauteur: CGFloat, largeur: CGFloat) -> Disposition {
+        guard !membres.isEmpty, hauteur > 0, largeur > 0 else { return .vide }
+
+        var facteur: CGFloat = 1
+        while true {
+            let gabarit = Gabarit(largeur: max(largeurMinimale, (largeurDefaut * facteur).rounded()))
+            let essai = placements(membres, hauteur: hauteur, largeur: largeur, gabarit: gabarit)
+            let propre = enChevauchement(essai, gabarit: gabarit).isEmpty
+                && !deborde(essai, largeur: largeur, gabarit: gabarit)
+
+            if propre { return Disposition(gabarit: gabarit, placements: essai) }
+
+            if gabarit.largeur <= largeurMinimale {
+                // Les groupes concernés, désignés par leur premier membre.
+                let touchees = enChevauchement(essai, gabarit: gabarit)
+                let centres = essai.map(\.centre)
+                let concernes = Set(groupes(de: centres, seuil: gabarit.seuil)
+                    .filter { $0.contains(where: touchees.contains) }
+                    .map { $0[0] })
+                return Disposition(gabarit: gabarit,
+                                   placements: placements(membres, hauteur: hauteur,
+                                                          largeur: largeur, gabarit: gabarit,
+                                                          disperser: concernes))
+            }
+            facteur -= palier
+        }
+    }
+
+    /// **Le mémo de la disposition** : elle ne se recalcule que si le classement ou la taille
+    /// de la piste change, jamais à un simple rendu — une bascule de segment, une entrée de
+    /// voitures ou un changement d'apparence réévaluent la vue sans rien changer à ça.
+    ///
+    /// Une classe et non un `@State` de valeur : la lecture se fait **pendant** le `body`,
+    /// où écrire un état observé relancerait un rendu.
+    final class Memo {
+        private struct Cle: Equatable {
+            let ordre: [UUID]
+            let points: [Int]
+            let taille: CGSize
+        }
+
+        private var cle: Cle?
+        private var resultat: Disposition = .vide
+
+        func disposition(_ membres: [Membre], taille: CGSize) -> Disposition {
+            let nouvelle = Cle(ordre: membres.map(\.id), points: membres.map(\.totalPoints),
+                               taille: taille)
+            if nouvelle != cle {
+                cle = nouvelle
+                resultat = DispositionPiste.disposition(membres, hauteur: taille.height,
+                                                        largeur: taille.width)
+            }
+            return resultat
+        }
     }
 }
 

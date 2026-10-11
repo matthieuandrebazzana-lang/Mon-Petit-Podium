@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
 Version backend actuelle : 0.85.0
-Version iOS actuelle : 0.53.3
+Version iOS actuelle : 0.53.4
 
 ## STACK TECHNIQUE
 
@@ -65,7 +65,9 @@ Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
-## CE QUI EST FAIT — VERSION iOS (0.53.3)
+## CE QUI EST FAIT — VERSION iOS (0.53.4)
+
+Chevauchement des voitures sur la vue Piste (0.53.4) : `DispositionPiste` (`VuePisteView.swift`) ne fixe plus la taille à 52 pt. La disposition est calculée à 52 pt, puis contrôlée sur les **boîtes réelles** (dessin + score, écart minimal 4 pt entre voisines, 8 pt aux kerbs) ; tant qu'il y a un chevauchement ou un débordement, la taille de **toutes** les voitures baisse de 5 % et tout est recalculé (le seuil de regroupement suit la taille, donc le nombre de voies aussi), plancher 40 pt. Au plancher, les seuls groupes fautifs passent à une répartition égale sur toute la largeur (même ordre des voies). Cause d'origine : le pas de l'éventail se resserrait sous la largeur d'une voiture et la voie extrême sortait d'une demi-voiture au-delà du kerb. Disposition mémoïsée (`DispositionPiste.Memo`, clé ids + points + taille de piste) : plus recalculée à chaque rendu. Vérifié au simulateur (iPhone 17) sur Team Bazzana, 9 membres (370 · 357 · 126 · 102 · 77 · 26 · 24 · 0 · 0) : voitures à ~44 pt, aucune boîte jointive, aucune au contact des kerbs. Limite connue : 9 ex æquo (avant le 1er GP) ouvrent 9 voies, qui ne tiennent pas sans contact même à 40 pt.
 
 Fond drapeau sur « Résultats par Grand Prix » (0.53.3) : `ResultatsParGPView` (Championnat → Résultats par Grand Prix) quitte l'aplat rouge de l'en-tête pour `FondDrapeauFlou` (le fond de `RecapView` et du détail du carrousel), drapeau du GP sélectionné, en fondu au changement de GP. En-tête (retour, titre, « N joueurs · GP ») en blanc / blanc 70 % sur le drapeau ; piste du sélecteur en voile noir 18 % (`Materiau.voilePile`), options inactives en `encreSecondaire`. Sans drapeau (chargement, GP hors table) : beige, encres `texte` / `grisSecondaire` / `encrePrimaire`, piste blanche — l'encre bascule au rythme du fondu. Liste des membres inchangée.
 
