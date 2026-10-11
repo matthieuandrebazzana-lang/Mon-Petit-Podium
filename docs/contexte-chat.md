@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
 Version backend actuelle : 0.85.0
-Version iOS actuelle : 0.53.4
+Version iOS actuelle : 0.53.6
 
 ## STACK TECHNIQUE
 
@@ -66,6 +66,8 @@ Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugD
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
 ## CE QUI EST FAIT — VERSION iOS (0.53.4)
+
+Voies côte à côte sur la vue Piste (0.53.6) : dans `DispositionPiste.abscisse` (`VuePisteView.swift`), les voies d'un groupe ne s'étalent plus d'un kerb à l'autre — elles sont espacées d'un **pas constant** (largeur de voiture + 4 pt) et le bloc est **centré sur l'axe** ; ordre gauche/droite de l'éventail inchangé, voiture seule sur l'axe. La largeur entre kerbs n'est plus qu'une **limite** : la dichotomie 40–64 pt retient la plus grande taille où le groupe le plus large tient à 8 pt de chaque kerb (contrôle `deborde` inchangé). Seul le repli au plancher (rien de propre à 40 pt) resserre le pas pour rester entre les kerbs (`serre`). Décalage vertical ≤ 12 pt, écart 4 pt, cache : inchangés. Vérifié en exécutant le code réel de `DispositionPiste` sur Team Bazzana (370 · 357 · 126 · 102 · 77 · 26 · 24 · 0 · 0), piste 366 × 548 pt : **55 pt**, Nicolas et Matthieu côte à côte de part et d'autre de l'axe (±29,5 pt, 4 pt entre eux), groupe du bas à 6 voies sur 350 pt, à 8 pt exactement de chaque kerb ; aucun chevauchement. Pas de capture : le simulateur était déconnecté.
 
 Taille des voitures sur la vue Piste (0.53.5) : `DispositionPiste` (`VuePisteView.swift`) ne réduit plus par paliers de 5 % depuis 52 pt — la taille est la plus grande largeur entière entre 40 et 64 pt trouvée par **dichotomie**, chaque essai refaisant la disposition complète (hauteurs, décalages, voies) et la contrôlant sur les boîtes réelles (écart 4 pt, 8 pt aux kerbs). Passe 2 réécrite (`ranger`) : une voiture qui en rencontre une autre descend d'abord de **12 pt au plus** (`decalageVerticalMax`) pour reprendre une voie déjà ouverte — jamais au-dessus de la précédente, ex æquo à la même hauteur, jamais sous le bas de la piste — et n'ouvre une voie que si ça ne suffit pas (nombre de voies minimal à chaque taille). Les voies d'un groupe s'étalent **toujours d'un kerb à l'autre** (ordre de l'éventail, voie extrême à 8 pt du kerb) ; une voiture seule tient l'axe. Plus de bloc centré ni de dispersion de secours. Vérifié au simulateur (iPhone 17, piste intégrée 366 × 548 pt) sur Team Bazzana, 9 membres (370 · 357 · 126 · 102 · 77 · 26 · 24 · 0 · 0) : **55 pt** (contre ~44), **6 voies** dans le groupe du bas, 2 en haut (Nicolas et Matthieu aux deux kerbs), aucun chevauchement, aucun contact avec un kerb. La largeur est bornée par les 6 voies du bas (7 voitures sur ~130 pt de hauteur) : en passer à 5 demanderait un décalage vertical bien supérieur à 12 pt.
 

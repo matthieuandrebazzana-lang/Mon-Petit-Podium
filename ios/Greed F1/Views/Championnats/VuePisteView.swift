@@ -396,8 +396,12 @@ struct VuePisteView: View {
 /// > voies se serraient autour de l'axe : Team Bazzana finissait à ~44 pt, la moitié de
 /// > la largeur de la piste vide.
 /// >
-/// > **Les voies d'un groupe s'étalent toujours d'un kerb à l'autre**, quel que soit leur
-/// > nombre — plus de bloc centré. Une voiture seule à sa hauteur reste sur l'axe.
+/// > **Les voies d'un groupe sont côte à côte, centrées sur l'axe** (`ios 0.53.6`) : un pas
+/// > constant, largeur de voiture + ``ecartMinimal``. La largeur entre les kerbs n'est
+/// > qu'une limite — la taille retenue est la plus grande où le groupe le plus large tient
+/// > à ``bordMinimal`` de chaque kerb. De `0.53.5` jusque-là, les voies s'étalaient d'un
+/// > kerb à l'autre : le duo de tête de Team Bazzana finissait chacun contre son kerb.
+/// > Une voiture seule à sa hauteur reste sur l'axe.
 /// >
 /// > La taille reste **uniforme** : deux voitures voisines à deux tailles différentes
 /// > laisseraient croire que la taille veut dire quelque chose.
@@ -602,18 +606,25 @@ enum DispositionPiste {
         return sens * (CGFloat(voie) / 2).rounded(.up)
     }
 
-    /// L'abscisse d'une voie, depuis le milieu de la piste. **Les voies s'étalent sur toute
-    /// la largeur**, également, dans l'ordre de l'éventail : la plus à gauche et la plus à
-    /// droite à ``bordMinimal`` de leur kerb. Une seule voie tient l'axe.
-    static func abscisse(voies nombre: Int, largeur: CGFloat,
-                         gabarit: Gabarit) -> (Int) -> CGFloat {
+    /// L'abscisse d'une voie, depuis le milieu de la piste. **Les voies sont côte à côte**,
+    /// à un pas constant — largeur de voiture + ``ecartMinimal`` —, dans l'ordre de
+    /// l'éventail, et le bloc est **centré sur l'axe**. Une seule voie tient l'axe.
+    ///
+    /// La largeur ne fixe pas le pas : elle ne fait que le borner quand `serre` est vrai —
+    /// le repli du plancher, où même 40 pt ne tiennent pas entre les kerbs.
+    static func abscisse(voies nombre: Int, largeur: CGFloat, gabarit: Gabarit,
+                         serre: Bool = false) -> (Int) -> CGFloat {
         guard nombre > 1 else { return { _ in 0 } }
 
-        let utile = max(0, largeur - 2 * bordMinimal - gabarit.largeur)
-        let pas = utile / CGFloat(nombre - 1)
+        var pas = gabarit.largeur + ecartMinimal
+        if serre {
+            let utile = max(0, largeur - 2 * bordMinimal - gabarit.largeur)
+            pas = min(pas, utile / CGFloat(nombre - 1))
+        }
+        let etendue = pas * CGFloat(nombre - 1)
         // Les rangs vont de `−⌊n/2⌋` à `⌈n/2⌉ − 1` : décalés de `⌊n/2⌋`, ils comptent les
         // voies de gauche à droite.
-        return { voie in -utile / 2 + (rangEventail(voie) + CGFloat(nombre / 2)) * pas }
+        return { voie in -etendue / 2 + (rangEventail(voie) + CGFloat(nombre / 2)) * pas }
     }
 
     // MARK: Le contrôle — les chevauchements réels
@@ -653,9 +664,9 @@ enum DispositionPiste {
     // MARK: L'enchaînement
 
     /// Les deux passes à un gabarit donné : la hauteur de la passe 1, décalée de quelques
-    /// points au plus par la passe 2, et la voie étalée sur la largeur.
+    /// points au plus par la passe 2, et la voie côte à côte autour de l'axe.
     static func placements(_ membres: [Membre], hauteur: CGFloat, largeur: CGFloat,
-                           gabarit: Gabarit) -> [Placement] {
+                           gabarit: Gabarit, serre: Bool = false) -> [Placement] {
         guard !membres.isEmpty, hauteur > 0, largeur > 0 else { return [] }
 
         let points = membres.map(\.totalPoints)
@@ -667,7 +678,8 @@ enum DispositionPiste {
         for groupe in rangement.groupes {
             // **Le groupe compte ses voies, jamais ses membres.**
             let nombre = (groupe.map { rangement.voies[$0] }.max() ?? 0) + 1
-            let abscisseDeVoie = abscisse(voies: nombre, largeur: largeur, gabarit: gabarit)
+            let abscisseDeVoie = abscisse(voies: nombre, largeur: largeur, gabarit: gabarit,
+                                          serre: serre)
 
             for index in groupe {
                 resultat.append(Placement(membre: membres[index],
@@ -690,16 +702,18 @@ enum DispositionPiste {
     /// trouvée par dichotomie — cinq essais au plus, chacun une disposition complète.
     ///
     /// Aucune ne l'est — neuf ex æquo, par exemple, ouvrent neuf voies qui ne tiennent pas
-    /// côte à côte : le plancher, voies étalées. Au-delà, il ne reste plus de largeur à donner.
+    /// côte à côte : le plancher, pas resserré pour rester entre les kerbs. Au-delà, il ne
+    /// reste plus de largeur à donner.
     static func disposition(_ membres: [Membre],
                             hauteur: CGFloat, largeur: CGFloat) -> Disposition {
         guard !membres.isEmpty, hauteur > 0, largeur > 0 else { return .vide }
 
-        func essai(_ taille: Int) -> Disposition {
+        func essai(_ taille: Int, serre: Bool = false) -> Disposition {
             let gabarit = Gabarit(largeur: CGFloat(taille))
             return Disposition(gabarit: gabarit,
                                placements: placements(membres, hauteur: hauteur,
-                                                      largeur: largeur, gabarit: gabarit))
+                                                      largeur: largeur, gabarit: gabarit,
+                                                      serre: serre))
         }
 
         var bas = Int(largeurMinimale), haut = Int(largeurMaximale)
@@ -714,7 +728,7 @@ enum DispositionPiste {
                 haut = milieu - 1
             }
         }
-        return retenue ?? essai(Int(largeurMinimale))
+        return retenue ?? essai(Int(largeurMinimale), serre: true)
     }
 
     /// **Le mémo de la disposition** : elle ne se recalcule que si le classement ou la taille
