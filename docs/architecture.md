@@ -404,6 +404,9 @@ l'appelant, **verbe explicite** pour ce qui n'est pas un CRUD (`/rejoindre`, `/q
 | `POST /scraper/declencher` | `X-Admin-Secret` | **`202`, asynchrone**. `?figer=false`. Réservée au `curl` |
 | `POST /jobs/resultats/{id}` | `X-Admin-Secret` | **synchrone**, compte rendu complet. `425` si non publiés. Réservée au `curl` |
 | `POST /jobs/resultats/{id}/test` | `X-Admin-Secret` | **banc d'essai, n'écrit rien** |
+| `POST /push/token` · `DELETE /push/token` | jeton | jeton APNs de l'appareil et langue ; le filtre porte toujours sur `user_id` |
+| `POST /push/test` | jeton + `X-Admin-Secret` | notification de test aux appareils **de l'appelant**, dans la langue de chaque jeton |
+| `POST /push/test/tous` | `X-Admin-Secret` **seul** | notification de test à **tous** les jetons de `push_tokens` → `{jetons, envoyees, echecs, supprimes}`. Jetons refusés pour de bon supprimés. Réservée au `curl` |
 
 > **Trois routeurs se partagent le préfixe `/grands-prix/{id}`** — `scraper` porte
 > `/cotes`, `pronostics` porte `/favoris` et `/pronostics`, `resultats` porte

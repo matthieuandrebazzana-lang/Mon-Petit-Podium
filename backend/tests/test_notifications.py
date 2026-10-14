@@ -271,3 +271,51 @@ def test_retirer_ne_touche_que_ses_jetons(client, monkeypatch):
 
 def test_le_test_exige_le_secret(client):
     assert client.post("/push/test").status_code in (401, 503)
+
+
+# --------------------------------------------------------------------------- #
+#  POST /push/test/tous — secret seul, sans session
+# --------------------------------------------------------------------------- #
+
+SECRET = "s3cret"
+
+
+@pytest.fixture
+def tous(monkeypatch, base):
+    """Client sans session : la route ne doit dépendre que de `X-Admin-Secret`."""
+    from app.api import deps
+    from app.config import Settings
+
+    reglages = Settings(
+        admin_secret=SECRET, apns_key_id="K", apns_team_id="T", apns_key="P"
+    )
+    monkeypatch.setattr(deps, "get_settings", lambda: reglages)
+    monkeypatch.setattr(push, "get_settings", lambda: reglages)
+    monkeypatch.setattr(push, "selectionner", base.selectionner)
+    app.dependency_overrides.clear()
+    return TestClient(app)
+
+
+@pytest.mark.parametrize("entetes", [{}, {"X-Admin-Secret": "faux"}])
+def test_tous_exige_le_bon_secret(tous, base, entetes):
+    assert tous.post("/push/test/tous", headers=entetes).status_code == 401
+    assert base.envois == []
+
+
+def test_tous_envoie_a_chaque_jeton_dans_sa_langue(tous, base):
+    reponse = tous.post("/push/test/tous", headers={"X-Admin-Secret": SECRET})
+
+    assert reponse.status_code == 200
+    assert reponse.json() == {"jetons": 2, "envoyees": 2, "echecs": 0, "supprimes": 0}
+    assert sorted(base.envois) == [
+        ("aa" * 32, "🏎️ Test Greed F1 — les notifications fonctionnent !"),
+        ("bb" * 32, "🏎️ Greed F1 test — notifications are working!"),
+    ]
+
+
+def test_tous_supprime_les_jetons_invalides(tous, base):
+    base.morts = {"bb" * 32}
+    reponse = tous.post("/push/test/tous", headers={"X-Admin-Secret": SECRET})
+
+    assert reponse.json() == {"jetons": 2, "envoyees": 1, "echecs": 1, "supprimes": 1}
+    assert [j["token"] for j in base.jetons] == ["aa" * 32]

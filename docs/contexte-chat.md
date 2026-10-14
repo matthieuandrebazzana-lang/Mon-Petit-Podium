@@ -12,7 +12,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
-Version backend actuelle : 0.85.0
+Version backend actuelle : 0.85.1
 Version iOS actuelle : 0.54.0 (build 2)
 
 ## STACK TECHNIQUE
@@ -103,6 +103,8 @@ Icône de l'app (0.49.1) : le carré G de `assets/logo-05.svg` seul (rect arrond
 
 Notifications push (iOS 0.49.0, backend 0.84.0, migration 30, `docs/decisions.md` §25) : envoyées par Railway via APNs, jamais programmées localement. Job toutes les 5 min, fenêtre de 15 min après l'échéance : quali − 25 h (« ouvrent dans 24h »), quali − 1 h (« sont ouverts »), course − 1 h (« Dernière chance »), passage à `termine` (« résultats disponibles »). `notifications_envoyees` réservée avant l'envoi = jamais de doublon (amorcée pour les GP terminés). Texte dans la langue du jeton (`push_tokens.langue`). Jetons refusés par APNs (410, BadDeviceToken, DeviceTokenNotForTopic) supprimés. Routes : `POST /push/token` {token, langue}, `DELETE /push/token` {token?}, `POST /push/test` (jeton + `X-Admin-Secret`). iOS : `Services/NotificationsPush.swift` — permission demandée une fois connecté (BarreNavigation), jeton → `POST /push/token`, renvoyé au changement de langue, `DELETE` avant `signOut()` et avant la suppression de compte ; `DelegueApplication` (`@UIApplicationDelegateAdaptor`) reçoit le jeton ; bannière affichée app ouverte. Pas de toggle : Réglages iOS. Railway : `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY`, `APNS_BUNDLE_ID`, `APNS_ENV` (`sandbox` pour un build Xcode, **`production` pour TestFlight / App Store**). Dépendance `httpx[http2]` (APNs = HTTP/2 seulement). Compilé, 218 tests backend verts ; non testé de bout en bout : à valider sur iPhone réel avec `POST /push/test`.
 
+Test de livraison TestFlight (backend 0.85.1) : Railway est en `APNS_ENV=production`. `POST /push/test/tous`, fermée par `X-Admin-Secret` seul (sans session), envoie sur-le-champ une notification de test à **tous** les jetons de `push_tokens`, dans la langue de chaque jeton (« 🏎️ Test Greed F1 — les notifications fonctionnent ! » / « 🏎️ Greed F1 test — notifications are working! »), et répond `{jetons, envoyees, echecs, supprimes}`. Jetons refusés pour de bon par APNs supprimés, comme dans le job. `POST /push/test` suit désormais aussi la langue du jeton (texte unique dans `notifications.MESSAGES_TEST`).
+
 Sign in with Apple (0.48.0) : bouton natif noir (`BoutonApple`) sur Landing (en tête, avant Google) et Connexion (après le séparateur, avant Google). Feuille native → `supabase.auth.signInWithIdToken(provider: .apple)` avec nonce SHA-256, AUCUNE route Railway pour la connexion. Nom complet écrit dans les métadonnées du compte au premier login (`full_name`, `name`, `given_name`, `family_name`). Nouveau compte → pseudo `pilote-…` → OnboardingView (mécanisme Google inchangé). Suppression d'un compte Apple : réautorisation Apple (code frais) envoyée dans le corps de `DELETE /profils/moi`, le backend (0.83.0, `app/apple.py`) l'échange puis révoque le jeton — best-effort, journalisé, ne bloque jamais la suppression. Fermer la feuille annule la suppression.
 À CONFIGURER (sinon le flux ne marche pas) : Supabase → Auth → Providers → Apple activé, `com.bazzana.greedf1` dans les Client IDs ; Railway → `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (clé .p8 « Sign in with Apple », PEM, `\n` acceptés). Non testé de bout en bout : à valider sur iPhone réel.
 
@@ -136,7 +138,7 @@ Pile de marchés sur « Fais tes paris » (0.47.4, mergé sur `main` depuis `fea
 Registre d'évaluateurs par slug exact (18 marchés couverts)
 Statut : en_attente / non_evaluable / gagne / perdu
 Pipeline provisoire (à l'arrivée) → définitif (J+1)
-225 tests backend (dont 26 notifications push, 7 calendrier)
+229 tests backend (dont 30 notifications push, 7 calendrier)
 Identifiants canoniques des issues au figeage
 Alertes admin (libellés non reconnus, échecs OpenF1)
 
@@ -157,7 +159,7 @@ Test iPad (ouvrir chaque écran sur simulateur iPad)
 
 Fonctionnalités prévues :
 
-Notifications push : code fait (iOS 0.49.0, backend 0.84.0) — reste le test sur iPhone réel, puis `APNS_ENV=production` au passage TestFlight
+Notifications push : Railway en `APNS_ENV=production` — vérifier la réception chez les testeurs TestFlight avec `POST /push/test/tous` (backend 0.85.1)
 Notifications push : `42501 permission denied` sur `push_tokens` / `notifications_envoyees` — appliquer la migration 31 (`grant … to service_role`, `bugs-connus.md` §39)
 f1-ml : modèle de prédiction ML à intégrer
 Keep-alive Railway : vérifier que le service `keepalive` est « Online » et journalise `ping 200` toutes les 5 min (si Railway garde l'ancien planning cron du tableau de bord, le vider dans Settings → Cron Schedule)
@@ -180,6 +182,9 @@ curl -X POST "https://mon-petit-podium-production.up.railway.app/scraper/declenc
 
 Notification de test (tous les appareils du compte connecté) :
 curl -X POST "https://mon-petit-podium-production.up.railway.app/push/test" -H "X-Admin-Secret: monpetitpodium2026" -H "Authorization: Bearer <jeton d'accès Supabase>"
+
+Notification de test (tous les appareils de tous les comptes, sans session) :
+curl -X POST "https://mon-petit-podium-production.up.railway.app/push/test/tous" -H "X-Admin-Secret: <ADMIN_SECRET>"
 
 Recalcul définitif d'un GP :
 curl -X POST "https://mon-petit-podium-production.up.railway.app/jobs/resultats/{gp_id}/recalcul?relire=true" -H "X-Admin-Secret: monpetitpodium2026"

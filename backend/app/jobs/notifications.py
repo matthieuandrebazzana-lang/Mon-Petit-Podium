@@ -77,8 +77,15 @@ TEXTES = {
     },
 }
 
-# `POST /push/test` — le même texte quelle que soit la langue du jeton.
-MESSAGE_TEST = "🏎️ Test Greed F1 — les notifications fonctionnent !"
+# `POST /push/test` et `POST /push/test/tous`, dans la langue du jeton.
+MESSAGES_TEST = {
+    "fr": "🏎️ Test Greed F1 — les notifications fonctionnent !",
+    "en": "🏎️ Greed F1 test — notifications are working!",
+}
+
+
+def message_test(langue: str) -> str:
+    return MESSAGES_TEST.get(langue, MESSAGES_TEST["fr"])
 
 # Nom anglais d'un GP, par le slug de son nom en base. Le français est le nom de
 # la base lui-même. Un nom absent d'ici retombe sur « GP X » → « X GP ».

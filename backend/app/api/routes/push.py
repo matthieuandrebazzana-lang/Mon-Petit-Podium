@@ -1,6 +1,6 @@
 """Notifications push — enregistrement des jetons APNs (`decisions.md` §25).
 
-Trois routes :
+Quatre routes :
 
 - `POST /push/token` — l'app iOS enregistre le jeton de l'appareil et la langue
   de son interface. **Le jeton est la clé** : enregistré par un autre compte sur
@@ -10,9 +10,12 @@ Trois routes :
   jeton, retire celui-là ; sans, retire tous ceux de l'appelant. Le filtre porte
   toujours sur `user_id` : un compte ne supprime jamais le jeton d'un autre ;
 - `POST /push/test` — envoie sur-le-champ une notification de test à tous les
-  appareils de l'appelant. Fermée par le jeton **et** par `X-Admin-Secret`.
+  appareils de l'appelant. Fermée par le jeton **et** par `X-Admin-Secret` ;
+- `POST /push/test/tous` — la même, à **tous** les jetons de `push_tokens`.
+  Fermée par `X-Admin-Secret` seul, sans session : elle sert au `curl` qui
+  vérifie la livraison chez les testeurs TestFlight.
 
-Toutes ne travaillent qu'avec l'identifiant issu du jeton vérifié.
+Les trois premières ne travaillent qu'avec l'identifiant issu du jeton vérifié.
 """
 
 import re
@@ -61,6 +64,14 @@ class BilanTest(BaseModel):
     supprimes: int = 0
 
 
+def exiger_apns() -> None:
+    if not get_settings().apns_configure:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="APNs n'est pas configuré (APNS_KEY_ID, APNS_TEAM_ID, APNS_KEY).",
+        )
+
+
 @router.post("/token", status_code=status.HTTP_204_NO_CONTENT)
 @journaliser_echecs(DOMAINE, "Enregistrement des notifications")
 async def enregistrer_jeton(
@@ -103,13 +114,28 @@ async def tester(
     profil_id: str = Depends(utilisateur_courant),
 ) -> BilanTest:
     exiger_secret(x_admin_secret, DOMAINE)
-    if not get_settings().apns_configure:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="APNs n'est pas configuré (APNS_KEY_ID, APNS_TEAM_ID, APNS_KEY).",
-        )
+    exiger_apns()
     jetons = await selectionner(
         "push_tokens", {"select": "token,langue", "user_id": f"eq.{profil_id}"}
     )
-    bilan = await notifications.diffuser(jetons, lambda _langue: notifications.MESSAGE_TEST)
+    bilan = await notifications.diffuser(jetons, notifications.message_test)
     return BilanTest(appareils=len(jetons), **bilan)
+
+
+class BilanTestTous(BaseModel):
+    jetons: int = 0
+    envoyees: int = 0
+    echecs: int = 0
+    supprimes: int = 0
+
+
+@router.post("/test/tous", response_model=BilanTestTous)
+@journaliser_echecs(DOMAINE, "Notification de test à tous les appareils")
+async def tester_tous(
+    x_admin_secret: str | None = Header(default=None),
+) -> BilanTestTous:
+    exiger_secret(x_admin_secret, DOMAINE)
+    exiger_apns()
+    jetons = await selectionner("push_tokens", {"select": "token,langue"})
+    bilan = await notifications.diffuser(jetons, notifications.message_test)
+    return BilanTestTous(jetons=len(jetons), **bilan)
