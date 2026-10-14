@@ -410,19 +410,29 @@ l'appelant, **verbe explicite** pour ce qui n'est pas un CRUD (`/rejoindre`, `/q
 
 > **Aucun envoi APNs n'attend sans borne** (backend `0.85.2`). Les délais d'httpx
 > (`apns.DELAI`, 10 s pour connexion, lecture, écriture, pool) ne couvrent pas l'attente
-> d'un **flux HTTP/2 libre** dans httpcore — or APNs n'en autorise qu'un sur une connexion
-> neuve tant que le JWT n'est pas validé. Vingt envois parallèles y sont restés bloqués et
-> `POST /push/test/tous` ne répondait plus. D'où trois bornes, partagées par les routes de
-> test et le job : **chaque envoi** dans `asyncio.wait_for(apns.DELAI_ENVOI = 10 s)` ;
-> **chaque diffusion** (`notifications.diffuser`) coupée à son délai global — 20 s pour
-> les routes de test, 120 s pour le job — les envois en retard annulés et comptés en
-> échec avec leur motif ; lecture des jetons (5 s) et purge (3 s) bornées à part. Le
-> premier jeton part seul, les suivants en parallèle (`PARALLELISME = 20`). Un client
-> dont un envoi a expiré est **jeté** (`apns.abandonner_client`) : sa connexion resterait
-> coincée pour tous les appels suivants. `apns.verifier_configuration()` contrôle clés,
-> `APNS_ENV` (une valeur inconnue est une erreur, plus un repli sur `sandbox`), topic et
-> signature du JWT **avant** tout envoi : la route rend un `503` explicite, le job ne
-> réserve aucun événement.
+> d'un **flux HTTP/2 libre** dans httpcore. **Chaque essai** est donc enrobé dans
+> `asyncio.wait_for(apns.DELAI_ENVOI = 10 s)`, et un client dont un essai a expiré est
+> **jeté** (`apns.abandonner_client`) : sa connexion resterait coincée pour les appels
+> suivants. `apns.verifier_configuration()` contrôle clés, `APNS_ENV` (une valeur inconnue
+> est une erreur, plus un repli sur `sandbox`), topic et signature du JWT **avant** tout
+> envoi : la route rend un `503` explicite, le job ne réserve aucun événement.
+>
+> **Les envois partent en série** (backend `0.85.3`). En `0.85.2`, le premier jeton
+> partait seul puis les suivants en parallèle sur la même connexion : en production, le
+> premier passait et **tous les autres expiraient** sans réponse d'APNs. Désormais
+> `notifications.diffuser` envoie **un jeton à la fois**, sur la connexion ouverte par le
+> premier envoi. Un essai expiré est **rejoué une fois sur une connexion neuve**
+> (`apns.envoyer_avec_reprise`) avant d'être compté en échec. La diffusion a un **délai
+> global** : 25 s pour les routes de test (`push.DELAI_ROUTE_TEST`, compté dès l'entrée
+> dans la route, lecture des jetons comprise — 5 s au plus), 120 s pour le job
+> (`notifications.DELAI_DIFFUSION`). À l'échéance, l'envoi en cours est coupé (« Délai
+> global dépassé ») et les jetons restants sont comptés **« Non traité (délai
+> global) »**. La purge des jetons morts (3 s) est bornée à part. Chaque essai laisse une
+> ligne `[apns]` : jeton (8 derniers caractères), **tentative** (1 ou 2), **code** et
+> **motif** d'APNs, durée.
+>
+> *Si les échecs persistent en série* : piste suivante, un client httpx **par envoi**
+> (plus de connexion HTTP/2 partagée).
 
 > **Trois routeurs se partagent le préfixe `/grands-prix/{id}`** — `scraper` porte
 > `/cotes`, `pronostics` porte `/favoris` et `/pronostics`, `resultats` porte

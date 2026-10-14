@@ -16,8 +16,10 @@ Quatre routes :
   vérifie la livraison chez les testeurs TestFlight.
 
 Les deux routes de test **répondent toujours en moins de 30 s** (`0.85.2`) :
-lecture des jetons, diffusion et purge sont bornées chacune (`DELAI_*`), et un
-envoi qu'APNs laisse sans réponse revient comme un échec motivé dans `erreurs`.
+lecture des jetons et diffusion tiennent dans `DELAI_ROUTE_TEST` (25 s, compté
+dès l'entrée dans la route), la purge est bornée à part, et un envoi qu'APNs
+laisse sans réponse revient comme un échec motivé dans `erreurs`. Les jetons
+que le délai n'a pas laissé passer sont comptés « Non traité (délai global) ».
 
 Les trois premières ne travaillent qu'avec l'identifiant issu du jeton vérifié.
 """
@@ -45,10 +47,11 @@ DOMAINE = "push"
 
 logger = logging.getLogger("uvicorn.error")
 
-# Budget d'une route de test : 5 + 20 + 3 (purge, `notifications.DELAI_PURGE`)
-# = 28 s, sous les 30 s promis.
+# Budget d'une route de test : lecture des jetons (5 s au plus) et diffusion
+# dans 25 s, puis la purge (`notifications.DELAI_PURGE`, 3 s) = 28 s, sous les
+# 30 s promis.
 DELAI_LECTURE_JETONS = 5.0
-DELAI_DIFFUSION_TEST = 20.0
+DELAI_ROUTE_TEST = 25.0
 
 # Un jeton APNs est une suite hexadécimale (64 caractères aujourd'hui, Apple se
 # réserve d'allonger). Vérifié ici : il part tel quel dans l'URL d'APNs.
@@ -109,8 +112,10 @@ async def _jetons(filtre: dict[str, str]) -> list[dict]:
     return jetons
 
 
-async def _diffuser_test(jetons: list[dict]) -> dict:
-    return await notifications.diffuser(jetons, notifications.message_test, delai=DELAI_DIFFUSION_TEST)
+async def _diffuser_test(jetons: list[dict], debut: float) -> dict:
+    """Diffuse le message de test dans ce qui reste de `DELAI_ROUTE_TEST`."""
+    reste = max(DELAI_ROUTE_TEST - (time.monotonic() - debut), 0.0)
+    return await notifications.diffuser(jetons, notifications.message_test, delai=reste)
 
 
 @router.post("/token", status_code=status.HTTP_204_NO_CONTENT)
@@ -154,10 +159,11 @@ async def tester(
     x_admin_secret: str | None = Header(default=None),
     profil_id: str = Depends(utilisateur_courant),
 ) -> BilanTest:
+    debut = time.monotonic()
     exiger_secret(x_admin_secret, DOMAINE)
     exiger_apns()
     jetons = await _jetons({"user_id": f"eq.{profil_id}"})
-    bilan = await _diffuser_test(jetons)
+    bilan = await _diffuser_test(jetons, debut)
     return BilanTest(appareils=len(jetons), **bilan)
 
 
@@ -179,7 +185,7 @@ async def tester_tous(
     exiger_secret(x_admin_secret, DOMAINE)
     exiger_apns()
     jetons = await _jetons({})
-    bilan = await _diffuser_test(jetons)
+    bilan = await _diffuser_test(jetons, debut)
     duree = round(time.monotonic() - debut, 1)
     logger.info("[%s] Test à tous les appareils : %.1f s au total.", DOMAINE, duree)
     return BilanTestTous(jetons=len(jetons), duree=duree, **bilan)

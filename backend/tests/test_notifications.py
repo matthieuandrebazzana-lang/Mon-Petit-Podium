@@ -142,7 +142,7 @@ def base(monkeypatch):
         monkeypatch.setattr(job, nom, getattr(simulee, nom))
     simulee.envois = []
 
-    async def envoyer(token, corps, titre=None):
+    async def envoyer(token, corps, titre=None, tentative=1):
         simulee.envois.append((token, corps))
         if token in getattr(simulee, "morts", set()):
             return apns.Issue(token, envoyee=False, invalide=True, raison="410 Unregistered")
@@ -368,64 +368,130 @@ def test_tous_supprime_les_jetons_invalides(tous, base):
 # --------------------------------------------------------------------------- #
 
 
-class ClientMuet:
-    """Un client HTTP/2 qu'APNs laisse sans réponse, pour toujours."""
+class Reponse:
+    status_code = 200
 
-    def __init__(self, **options):
+    def json(self):
+        return {}
+
+
+class ClientAPNs:
+    """Un faux client HTTP/2. `muet` : APNs ne répond jamais, sinon `200`.
+
+    `en_vol` compte les envois simultanés de TOUS les clients ouverts.
+    """
+
+    en_vol = 0
+    pic = 0
+
+    def __init__(self, muet: bool):
+        self.muet = muet
         self.appels = 0
         self.ferme = False
 
     async def post(self, *args, **kwargs):
         self.appels += 1
-        await asyncio.Event().wait()
+        ClientAPNs.en_vol += 1
+        ClientAPNs.pic = max(ClientAPNs.pic, ClientAPNs.en_vol)
+        try:
+            if self.muet:
+                await asyncio.Event().wait()
+            await asyncio.sleep(0.01)
+            return Reponse()
+        finally:
+            ClientAPNs.en_vol -= 1
 
     async def aclose(self):
         self.ferme = True
 
 
 @pytest.fixture
-def muets(monkeypatch, tous):
-    """Chaque client qu'ouvre `apns` est muet ; la liste les garde dans l'ordre."""
-    clients: list[ClientMuet] = []
+def apns_simule(monkeypatch, tous):
+    """Remplace le client httpx d'`apns` par des `ClientAPNs`.
+
+    Rend `(clients, muets)` : les clients dans l'ordre d'ouverture, et pour
+    chacun s'il est muet — la dernière valeur vaut pour tous les suivants.
+    """
+    clients: list[ClientAPNs] = []
+    clients_muets = [True]
+    monkeypatch.setattr(ClientAPNs, "en_vol", 0)
+    monkeypatch.setattr(ClientAPNs, "pic", 0)
 
     def ouvrir(**options):
-        clients.append(ClientMuet(**options))
+        rang = min(len(clients), len(clients_muets) - 1)
+        clients.append(ClientAPNs(muet=clients_muets[rang]))
         return clients[-1]
 
     monkeypatch.setattr(apns, "envoyer", ENVOYER_REEL)
     monkeypatch.setattr(apns.httpx, "AsyncClient", ouvrir)
     monkeypatch.setattr(apns, "DELAI_ENVOI", 0.2)
-    return clients
+    return clients, clients_muets
 
 
-def test_apns_muet_la_route_repond_quand_meme(tous, base, muets):
+def _test_tous(tous):
+    return tous.post("/push/test/tous", headers={"X-Admin-Secret": SECRET})
+
+
+def test_les_envois_partent_en_serie_sur_une_seule_connexion(tous, base, apns_simule):
+    clients, muets = apns_simule
+    muets[:] = [False]
+    base.jetons = [{"token": c * 64, "langue": "fr"} for c in "abcde"]
+
+    corps = _sans_duree(_test_tous(tous))
+
+    assert corps == {"jetons": 5, "envoyees": 5, "echecs": 0, "supprimes": 0, "erreurs": []}
+    # Jamais deux envois à la fois, tous sur la connexion du premier.
+    assert ClientAPNs.pic == 1
+    assert [c.appels for c in clients] == [5]
+
+
+def test_un_envoi_expire_reussit_au_second_essai_sur_une_connexion_neuve(tous, base, apns_simule):
+    clients, muets = apns_simule
+    muets[:] = [True, False]
+
+    corps = _sans_duree(_test_tous(tous))
+
+    assert corps == {"jetons": 2, "envoyees": 2, "echecs": 0, "supprimes": 0, "erreurs": []}
+    # Le premier client, muet, est jeté ; le neuf sert la reprise puis le jeton suivant.
+    assert [c.appels for c in clients] == [1, 2]
+    assert clients[0].ferme and not clients[1].ferme
+
+
+def test_apns_muet_deux_essais_par_jeton_puis_echec(tous, base, apns_simule):
+    clients, _ = apns_simule
+
     debut = time.monotonic()
-    reponse = tous.post("/push/test/tous", headers={"X-Admin-Secret": SECRET})
-    duree = time.monotonic() - debut
-
-    assert reponse.status_code == 200
-    assert duree < 2
-    corps = _sans_duree(reponse)
-    assert corps["envoyees"] == 0 and corps["echecs"] == 2 and corps["supprimes"] == 0
-    assert {e["motif"] for e in corps["erreurs"]} == {"Délai dépassé (0.2 s)"}
-    # Le premier part seul et expire : son client est jeté, le second en ouvre
-    # un neuf, jeté à son tour.
-    assert [c.appels for c in muets] == [1, 1]
-    assert all(c.ferme for c in muets) and apns._client is None
-
-
-def test_le_delai_global_coupe_les_envois_en_cours(tous, base, muets, monkeypatch):
-    monkeypatch.setattr(apns, "DELAI_ENVOI", 60.0)
-    monkeypatch.setattr(push, "DELAI_DIFFUSION_TEST", 0.3)
-
-    debut = time.monotonic()
-    reponse = tous.post("/push/test/tous", headers={"X-Admin-Secret": SECRET})
+    reponse = _test_tous(tous)
 
     assert reponse.status_code == 200
     assert time.monotonic() - debut < 3
     corps = _sans_duree(reponse)
-    assert corps["echecs"] == 2
-    assert {e["motif"] for e in corps["erreurs"]} == {"Délai global dépassé (0.3 s)"}
+    assert corps["envoyees"] == 0 and corps["echecs"] == 2 and corps["supprimes"] == 0
+    assert {e["motif"] for e in corps["erreurs"]} == {"Délai dépassé (0.2 s)"}
+    # Chaque essai expiré jette son client : quatre connexions, une par essai.
+    assert [c.appels for c in clients] == [1, 1, 1, 1]
+    assert all(c.ferme for c in clients) and apns._client is None
+
+
+def test_apns_muet_la_route_repond_dans_le_delai_global(tous, base, apns_simule, monkeypatch):
+    monkeypatch.setattr(apns, "DELAI_ENVOI", 60.0)
+    monkeypatch.setattr(push, "DELAI_ROUTE_TEST", 0.3)
+    base.jetons.append({"token": "cc" * 32, "langue": "fr"})
+
+    debut = time.monotonic()
+    reponse = _test_tous(tous)
+
+    assert reponse.status_code == 200
+    assert time.monotonic() - debut < 3
+    corps = _sans_duree(reponse)
+    assert corps["jetons"] == 3 and corps["envoyees"] == 0 and corps["echecs"] == 3
+    # Le premier est coupé en vol, les deux autres n'ont jamais eu leur tour.
+    assert [e["motif"] for e in corps["erreurs"]] == [
+        "Délai global dépassé",
+        job.NON_TRAITE,
+        job.NON_TRAITE,
+    ]
+    assert apns._client is None
 
 
 @pytest.mark.parametrize(

@@ -106,12 +106,12 @@ NOMS_ANGLAIS = {
     "abu-dhabi": "Abu Dhabi GP",
 }
 
-# Envois APNs simultanés au plus.
-PARALLELISME = 20
-
 # Durée maximale d'une diffusion entière, chaque envoi étant lui-même borné à
-# `apns.DELAI_ENVOI`. La route de test la resserre pour répondre à temps.
+# `apns.DELAI_ENVOI` (deux fois, avec la reprise). Les routes de test ont la leur.
 DELAI_DIFFUSION = 120.0
+
+# Motif des jetons auxquels le délai global n'a pas laissé leur tour.
+NON_TRAITE = "Non traité (délai global)"
 
 # Purge des jetons morts : un appel Supabase, borné à part.
 DELAI_PURGE = 3.0
@@ -203,14 +203,16 @@ async def supprimer_jetons_invalides(issues: list[apns.Issue]) -> int:
     return len(invalides)
 
 
-def _issue_de(token: str, tache: asyncio.Task, delai: float) -> apns.Issue:
-    """Ce qu'a donné une tâche d'envoi — expirée si le délai global l'a coupée."""
-    if not tache.done() or tache.cancelled():
-        return apns.Issue(token, envoyee=False, expiree=True, raison=f"Délai global dépassé ({delai:g} s)")
-    erreur = tache.exception()
-    if erreur is not None:
+async def _envoyer_dans(token: str, corps: str, reste: float) -> apns.Issue:
+    """Un envoi avec sa reprise, coupé s'il dépasse ce qui reste du délai global."""
+    try:
+        return await asyncio.wait_for(apns.envoyer_avec_reprise(token, corps), reste)
+    except TimeoutError:
+        # Coupé en plein vol : sa connexion n'est plus sûre.
+        await apns.abandonner_client()
+        return apns.Issue(token, envoyee=False, expiree=True, raison="Délai global dépassé")
+    except Exception as erreur:  # noqa: BLE001 — un jeton ne doit pas arrêter les suivants
         return apns.Issue(token, envoyee=False, raison=f"{type(erreur).__name__}: {erreur}")
-    return tache.result()
 
 
 async def diffuser(jetons: list[dict], message_par_langue, delai: float = DELAI_DIFFUSION) -> dict:
@@ -218,40 +220,27 @@ async def diffuser(jetons: list[dict], message_par_langue, delai: float = DELAI_
 
     `message_par_langue` est une fonction `langue -> texte`. Rend le décompte
     (`envoyees`, `echecs`, `supprimes`) et, pour chaque échec, son motif
-    (`erreurs`). **Ne dure jamais plus de `delai`** (plus la purge) : un envoi
-    qui n'a pas abouti à l'échéance est annulé et compté comme un échec.
+    (`erreurs`). **Ne dure jamais plus de `delai`** (plus la purge).
 
-    Le premier jeton part seul : sur une connexion neuve, APNs n'ouvre ses
-    autres flux HTTP/2 qu'une fois le jeton JWT validé. Les suivants partent
-    ensuite en parallèle, `PARALLELISME` à la fois.
+    Les envois partent **un par un**, sur la connexion HTTP/2 ouverte par le
+    premier (`0.85.3`) : en parallèle, APNs laissait tous les flux sauf le
+    premier sans réponse. Un envoi expiré est rejoué une fois sur une connexion
+    neuve. À l'échéance, l'envoi en cours est coupé et les jetons restants sont
+    comptés `NON_TRAITE`.
     """
     debut = time.monotonic()
-    logger.info("[notifications] Diffusion à %d jeton(s), %g s au plus.", len(jetons), delai)
-    verrou = asyncio.Semaphore(PARALLELISME)
+    echeance = debut + delai
+    logger.info("[notifications] Diffusion à %d jeton(s), en série, %.1f s au plus.", len(jetons), delai)
 
-    async def un(ligne: dict) -> apns.Issue:
-        async with verrou:
-            return await apns.envoyer(str(ligne["token"]), message_par_langue(str(ligne.get("langue") or "fr")))
+    issues: list[apns.Issue] = []
+    for rang, ligne in enumerate(jetons):
+        reste = echeance - time.monotonic()
+        if reste <= 0:
+            issues += [apns.Issue(str(restant["token"]), envoyee=False, raison=NON_TRAITE) for restant in jetons[rang:]]
+            break
+        corps = message_par_langue(str(ligne.get("langue") or "fr"))
+        issues.append(await _envoyer_dans(str(ligne["token"]), corps, reste))
 
-    taches: list[asyncio.Task] = []
-    if jetons:
-        taches.append(asyncio.create_task(un(jetons[0])))
-        await asyncio.wait(taches, timeout=delai)
-        if _issue_de(str(jetons[0]["token"]), taches[0], delai).expiree:
-            await apns.abandonner_client()
-        taches += [asyncio.create_task(un(ligne)) for ligne in jetons[1:]]
-        reste = max(delai - (time.monotonic() - debut), 0)
-        _, en_retard = await asyncio.wait(taches, timeout=reste)
-        if en_retard:
-            for tache in en_retard:
-                tache.cancel()
-            # `asyncio.wait`, pas `gather` : une annulation qui traîne ne doit
-            # pas rallonger la réponse.
-            await asyncio.wait(en_retard, timeout=1)
-
-    issues = [_issue_de(str(ligne["token"]), tache, delai) for ligne, tache in zip(jetons, taches)]
-    if any(issue.expiree for issue in issues):
-        await apns.abandonner_client()
     for issue in issues:
         if not issue.envoyee:
             logger.warning("[notifications] Échec pour …%s : %s", issue.token[-8:], issue.raison)

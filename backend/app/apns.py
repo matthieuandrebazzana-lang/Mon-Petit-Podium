@@ -12,12 +12,17 @@ localement, elle se contente d'enregistrer son jeton d'appareil
 
 - **Rien n'attend sans borne** (`0.85.2`). Les délais d'httpx ne couvrent que
   la connexion, la lecture et l'écriture ; en HTTP/2, httpcore attend aussi un
-  flux libre (`_max_streams_semaphore`) **sans aucun délai**. APNs n'autorise
-  qu'un flux sur une connexion neuve tant que le jeton n'est pas validé : vingt
-  envois parallèles s'y sont bloqués, et `POST /push/test/tous` n'a plus
-  répondu. Chaque envoi est donc enrobé dans `asyncio.wait_for(DELAI_ENVOI)`,
-  et un client qui a laissé expirer un envoi est jeté (`abandonner_client`) :
-  sa connexion peut rester coincée pour tous les appels suivants.
+  flux libre (`_max_streams_semaphore`) **sans aucun délai**. Chaque envoi est
+  donc enrobé dans `asyncio.wait_for(DELAI_ENVOI)`, et un client qui a laissé
+  expirer un envoi est jeté (`abandonner_client`) : sa connexion peut rester
+  coincée pour tous les appels suivants.
+
+- **Un envoi à la fois, une reprise** (`0.85.3`). En production, le premier
+  envoi passait et les quatre suivants, partis en parallèle sur la même
+  connexion, n'obtenaient jamais de réponse. Les envois partent donc en série
+  (`notifications.diffuser`), sur la connexion ouverte par le premier ; un envoi
+  expiré est rejoué **une fois** sur une connexion neuve (`envoyer_avec_reprise`)
+  avant d'être compté en échec.
 
 Un jeton d'appareil refusé pour de bon (`410 Unregistered`, `BadDeviceToken`,
 `DeviceTokenNotForTopic`) est rendu à l'appelant comme **invalide**, qui le
@@ -72,7 +77,7 @@ class Issue:
     token: str
     envoyee: bool
     invalide: bool = False
-    # Délai dépassé : le client qui l'a laissé faire est à jeter.
+    # Délai dépassé : `envoyer` a jeté le client, l'envoi peut être rejoué.
     expiree: bool = False
     raison: str = ""
 
@@ -160,16 +165,38 @@ def charge_utile(corps: str, titre: str | None = None) -> dict:
     return {"aps": {"alert": alerte, "sound": "default"}}
 
 
+def _journaliser(court: str, tentative: int, code: object, motif: str, debut: float, niveau: int) -> None:
+    """Une ligne par essai : tentative, code et motif d'APNs, durée."""
+    logger.log(
+        niveau,
+        "[apns] Envoi à …%s, tentative %d : code %s, motif %s (%.1f s).",
+        court,
+        tentative,
+        code,
+        motif,
+        time.monotonic() - debut,
+    )
+
+
 def jeton_invalide(statut: int, raison: str) -> bool:
     """Vrai si APNs dit que ce jeton d'appareil ne servira plus jamais."""
     return statut == 410 or (statut == 400 and raison in RAISONS_JETON_INVALIDE)
 
 
-async def envoyer(token: str, corps: str, titre: str | None = None) -> Issue:
+async def envoyer_avec_reprise(token: str, corps: str, titre: str | None = None) -> Issue:
+    """`envoyer`, rejoué une fois sur une connexion neuve si le premier essai expire."""
+    issue = await envoyer(token, corps, titre, tentative=1)
+    if not issue.expiree:
+        return issue
+    return await envoyer(token, corps, titre, tentative=2)
+
+
+async def envoyer(token: str, corps: str, titre: str | None = None, tentative: int = 1) -> Issue:
     """Envoie une notification à un appareil, en `DELAI_ENVOI` au plus.
 
     Ne lève jamais pour une réponse d'APNs ni pour un délai dépassé : l'échec
-    revient dans l'`Issue`, avec son motif.
+    revient dans l'`Issue`, avec son motif. Un délai dépassé jette le client :
+    l'envoi suivant ouvre une connexion neuve.
     """
     global _jeton_fournisseur
     reglages = get_settings()
@@ -179,7 +206,7 @@ async def envoyer(token: str, corps: str, titre: str | None = None) -> Issue:
     base = passerelle()
     court = token[-8:]
     debut = time.monotonic()
-    logger.info("[apns] Envoi à …%s : début.", court)
+    logger.info("[apns] Envoi à …%s, tentative %d : début.", court, tentative)
     try:
         reponse = await asyncio.wait_for(
             _client_http2().post(
@@ -196,23 +223,23 @@ async def envoyer(token: str, corps: str, titre: str | None = None) -> Issue:
         )
     except TimeoutError:
         issue = Issue(token, envoyee=False, expiree=True, raison=f"Délai dépassé ({DELAI_ENVOI:g} s)")
-        logger.warning("[apns] Envoi à …%s : %s.", court, issue.raison)
+        _journaliser(court, tentative, "—", issue.raison, debut, logging.WARNING)
+        await abandonner_client()
         return issue
     except httpx.HTTPError as erreur:
         issue = Issue(token, envoyee=False, raison=f"{type(erreur).__name__}: {erreur}")
-        logger.warning("[apns] Envoi à …%s : %s (%.1f s).", court, issue.raison, time.monotonic() - debut)
+        _journaliser(court, tentative, "—", issue.raison, debut, logging.WARNING)
         return issue
 
-    duree = time.monotonic() - debut
     if reponse.status_code == 200:
-        logger.info("[apns] Envoi à …%s : 200 (%.1f s).", court, duree)
+        _journaliser(court, tentative, 200, "—", debut, logging.INFO)
         return Issue(token, envoyee=True)
 
     try:
         raison = str(reponse.json().get("reason") or "")
     except ValueError:
         raison = ""
-    logger.warning("[apns] Envoi à …%s : %s %s (%.1f s).", court, reponse.status_code, raison, duree)
+    _journaliser(court, tentative, reponse.status_code, raison or "—", debut, logging.WARNING)
     if raison in ("ExpiredProviderToken", "InvalidProviderToken"):
         # Le prochain envoi signera un jeton neuf.
         _jeton_fournisseur = None
