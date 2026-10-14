@@ -51,10 +51,12 @@ struct Membre: Codable, Identifiable, Equatable, Hashable {
         profilId = try c.decode(UUID.self, forKey: .profilId)
         pseudo = try c.decode(String.self, forKey: .pseudo)
         totalPoints = try c.decode(Int.self, forKey: .totalPoints)
-        pronosticsReussis = try c.decode(Int.self, forKey: .pronosticsReussis)
+        // Absents de `GET /widget/championnats/{id}/classement`, réduit à ce que dessine la
+        // piste : `0` réussi et le rang pour ordre d'adhésion, que le widget n'affiche pas.
+        pronosticsReussis = try c.decodeIfPresent(Int.self, forKey: .pronosticsReussis) ?? 0
         meilleureCote = try c.decodeIfPresent(Int.self, forKey: .meilleureCote)
         rang = try c.decode(Int.self, forKey: .rang)
-        ordreInscription = try c.decode(Int.self, forKey: .ordreInscription)
+        ordreInscription = try c.decodeIfPresent(Int.self, forKey: .ordreInscription) ?? rang
         couleur1 = try c.decodeIfPresent(String.self, forKey: .couleur1) ?? "#800111"
         couleur2 = try c.decodeIfPresent(String.self, forKey: .couleur2) ?? "#FFFFFF"
         couleurTexte = try c.decodeIfPresent(String.self, forKey: .couleurTexte)
@@ -94,4 +96,18 @@ extension Membre {
     /// La chaîne d'où se tire la teinte de l'avatar : l'UUID **en minuscules**, la forme
     /// que sert le backend — la même règle que ``Championnat/cleTeinte``.
     var cleTeinte: String { profilId.uuidString.lowercased() }
+
+    /// Ce que porte sa voiture. Un slug d'écurie inconnu retombe sur la livrée perso à
+    /// l'affichage (``Livree/ecurieChoisie``), ce n'est pas une panne.
+    var livree: Livree {
+        Livree(mode: livreeMode == .ecurie ? .ecurie : .perso,
+               ecurie: livreeEcurie,
+               coque: couleur1,
+               ailerons: couleur2,
+               couleurTexte: couleurTexte)
+    }
+
+    /// Le numéro peint sur le museau. **Pas de numéro choisi ⇒ le rang**, jamais `0`
+    /// (`docs/swift-app.md` §3.2).
+    var numeroAffiche: String { String(numero ?? rang) }
 }

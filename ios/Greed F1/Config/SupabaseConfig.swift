@@ -30,6 +30,14 @@ enum SupabaseConfig {
     /// Backend métier FastAPI, sur Railway.
     static let apiBaseURL: URL = url(pour: "API_BASE_URL")
 
+    /// Le préfixe d'équipe des groupes Keychain (`AppIdentifierPrefix`, posé par le build,
+    /// avec son point final). `nil` hors d'un build signé : on laisse alors iOS choisir.
+    static let prefixeTrousseau: String? = {
+        guard let valeur = Bundle.main.object(forInfoDictionaryKey: "AppIdentifierPrefix") as? String,
+              !valeur.isEmpty, !valeur.hasPrefix("$(") else { return nil }
+        return valeur
+    }()
+
     // MARK: - Lecture du bundle
 
     private static func chaine(pour cle: String) -> String {

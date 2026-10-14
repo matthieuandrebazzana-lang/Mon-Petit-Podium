@@ -1098,20 +1098,6 @@ extension Membre {
                       avatarUrl: profil.avatarUrl)
     }
 
-    /// Ce que porte sa voiture. Un slug d'écurie inconnu retombe sur la livrée perso à
-    /// l'affichage (``Livree/ecurieChoisie``), ce n'est pas une panne.
-    var livree: Livree {
-        Livree(mode: livreeMode == .ecurie ? .ecurie : .perso,
-               ecurie: livreeEcurie,
-               coque: couleur1,
-               ailerons: couleur2,
-               couleurTexte: couleurTexte)
-    }
-
-    /// Le numéro peint sur le museau. **Pas de numéro choisi ⇒ le rang**, jamais `0`
-    /// (`docs/swift-app.md` §3.2).
-    var numeroAffiche: String { String(numero ?? rang) }
-
     /// Le profil tel que ``ProfilMembreView`` l'attend, **de ce que le classement sait
     /// seul** — affiché sans attendre. Les statistiques qu'il ne sert pas s'affichent « – »
     /// sous le spinner : les calculer ici serait les inventer. `GET /profils/{id}/stats`

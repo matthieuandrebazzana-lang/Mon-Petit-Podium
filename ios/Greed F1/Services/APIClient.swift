@@ -61,10 +61,11 @@ final class APIClient {
         _ chemin: String,
         methode: Methode = .get,
         corps: (any Encodable)? = nil,
-        parametres: [URLQueryItem] = []
+        parametres: [URLQueryItem] = [],
+        perime: Bool = true
     ) async throws -> Reponse {
         let donnees = try await executer(chemin, methode: methode, corps: corps,
-                                         parametres: parametres)
+                                         parametres: parametres, perime: perime)
         do {
             return try JSONDecoder.api.decode(Reponse.self, from: donnees)
         } catch {
@@ -80,7 +81,8 @@ final class APIClient {
         methode: Methode,
         corps: (any Encodable)? = nil
     ) async throws {
-        _ = try await executer(chemin, methode: methode, corps: corps, parametres: [])
+        _ = try await executer(chemin, methode: methode, corps: corps, parametres: [],
+                               perime: true)
     }
 
     // MARK: - Transport
@@ -89,7 +91,8 @@ final class APIClient {
         _ chemin: String,
         methode: Methode,
         corps: (any Encodable)?,
-        parametres: [URLQueryItem]
+        parametres: [URLQueryItem],
+        perime: Bool
     ) async throws -> Data {
         // Seules les lectures sont rejouées d'office : rejouer une écriture dont on
         // ignore si la première a abouti n'est pas une décision de la couche réseau.
@@ -101,7 +104,8 @@ final class APIClient {
                                             parametres: parametres)
                 // Une écriture réussie périme tout le cache : ce qu'elle change ne se
                 // limite pas à sa route (``CacheService``).
-                if methode != .get { await CacheService.partage.toutPerimer() }
+                // `perime: false` pour un `POST` qui n'écrit rien (`/widget/token`).
+                if methode != .get && perime { await CacheService.partage.toutPerimer() }
                 return donnees
             } catch ErreurAPI.reseau where tentative < attentes.count {
                 try? await Task.sleep(for: attentes[tentative])

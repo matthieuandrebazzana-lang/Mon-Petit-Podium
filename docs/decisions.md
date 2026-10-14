@@ -1038,6 +1038,11 @@ que lui, et à **une seule route** : `GET /widget/championnats/{id}/classement`.
 - **Lecture seule, réduite à la piste** : rang, points, pseudo, avatar, livrée et couleurs.
   Ni réussites, ni meilleur coup, ni ordre d'adhésion.
 - **Sans secret, `503` explicite** — jamais une signature avec une chaîne vide.
+- **La session Supabase est épinglée au groupe Keychain de l'app** (`SupabaseManager`,
+  iOS `0.55.0`). Déclarer `keychain-access-groups` fait tomber tout élément écrit sans
+  groupe dans le premier groupe listé — le groupe partagé : sans ce stockage explicite, le
+  jeton de rafraîchissement serait devenu lisible par le widget, l'inverse exact de cette
+  décision. Le groupe de l'app est celui des sessions d'avant : personne n'est déconnecté.
 
 **Raison.** Les jetons de rafraîchissement Supabase sont **à usage unique**. Un widget qui
 rafraîchirait la session de son côté consommerait celui de l'app : au premier double

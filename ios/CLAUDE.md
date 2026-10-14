@@ -16,8 +16,9 @@
 | SDK | [`supabase-swift`](https://github.com/supabase/supabase-swift) **2.55.2**, épinglé — produits `Supabase` et `Auth` |
 | Xcode | **26.6** (`objectVersion = 77`) |
 | Bundle identifier | **`com.bazzana.greedf1`** |
-| Cibles | `Greed F1` (l'app) + **`GreedF1WidgetExtension`** (`com.bazzana.greedf1.GreedF1Widget`, widget « Prochain GP ») |
-| App Group | **`group.com.bazzana.greedf1`** — sur les deux cibles, seul propriétaire `Services/DonneesWidget.swift` |
+| Cibles | `Greed F1` (l'app) + **`GreedF1WidgetExtension`** (`com.bazzana.greedf1.GreedF1Widget`, widgets « Prochain GP » et « Classement ») |
+| App Group | **`group.com.bazzana.greedf1`** — sur les deux cibles, seul propriétaire `DonneesWidget` (`Services/DonneesWidget.swift` + `DonneesWidgetClassement.swift`) |
+| Keychain partagé | **`$(AppIdentifierPrefix)com.bazzana.greedf1.widget`** — le jeton widget seul (`Services/JetonWidget.swift`) ; la session Supabase reste dans le groupe de l'app |
 | Familles d'appareils | iPhone seulement · portrait seulement |
 | Simulateur cible | **iPhone 17 Pro, iOS 26.5** |
 
@@ -205,6 +206,23 @@ celle du téléphone. Tap → `greedf1://accueil` → onglet Accueil (`BarreNavi
 Il n'existe pas de moyen de poser un widget au simulateur en ligne de commande : pour
 voir son rendu, monter ses vues dans un harnais `DEBUG` temporaire de l'app.
 
+**Le widget « Classement » n'a jamais la session Supabase** (`docs/decisions.md` §28) — ses
+jetons de rafraîchissement sont à usage unique, un double rafraîchissement déconnecterait.
+L'app (`SynchroWidgetClassement`, app seule) demande à chaque ouverture un **jeton widget**
+(`POST /widget/token`, 30 jours, lecture seule) et le range dans le Keychain partagé
+(`JetonWidget`) ; le widget ne l'envoie qu'à `GET /widget/championnats/{id}/classement`.
+L'app écrit liste, premier plan de la pile (`OrdrePile.ecrire`) et profil dans l'App Group ;
+`oublierCompte()` efface jeton, données et avatars. **La session Supabase est épinglée au
+groupe Keychain de l'app** (`SupabaseManager.stockageSession`) : depuis `keychain-access-groups`,
+un élément écrit sans groupe tombe dans le **premier** groupe listé — le partagé. Ne jamais
+retirer ce stockage explicite. Piste : `DispositionPiste` (fichier propre, partagé) sur une
+piste virtuelle de 360 pt réduite à l'échelle, `VueVoiture(imagePhoto:)` avec l'avatar
+réduit de l'App Group (`AvatarsWidget`, le widget ne télécharge rien au rendu). Tap →
+`greedf1://championnat/<id>` → onglet Championnats, détail ouvert (`ChampionnatsView`).
+**Seule exception à `t()`** : les libellés de la configuration App Intents, extraits à la
+compilation et affichés par iOS dans la langue du téléphone, vivent dans
+`GreedF1Widget/Intentions.xcstrings` — rien d'autre n'y entre.
+
 ## 4. Règles de commit
 
 - **Incrémenter `MARKETING_VERSION`** dans `ios/Greed F1.xcodeproj/project.pbxproj` (deux
@@ -247,8 +265,13 @@ ios/
 │   ├── GreedF1Widget.swift          configuration : petit, moyen, écran verrouillé rectangulaire
 │   ├── FournisseurProchainGP.swift  App Group + `GET /calendrier`, `TimelineProchainGP` (calcul pur des entrées)
 │   ├── VuesProchainGP.swift         les trois formats, fond drapeau, décompte `Text(timerInterval:)`, état neutre
+│   ├── ClassementWidget.swift       widget « Classement » : petit + grand, `AppIntentConfiguration`
+│   ├── IntentionClassement.swift    championnat (`nil` = premier plan de la pile) + liste / piste au petit format
+│   ├── Intentions.xcstrings         libellés App Intents FR/EN — SEULE exception à `t()`
+│   ├── FournisseurClassement.swift  jeton widget → `GET /widget/…/classement`, App Group, `CadenceClassement`, `AvatarsWidget`
+│   ├── VuesClassement.swift         lignes, piste simplifiée (`PisteSimplifiee`), « Mis à jour à », état neutre
 │   └── Info.plist                   `API_BASE_URL` (Config.xcconfig, réglages du projet)
-├── GreedF1WidgetExtension.entitlements  App Group
+├── GreedF1WidgetExtension.entitlements  App Group + Keychain partagé
 ├── AuthViewModel.swift          ┐
 ├── ConnexionView.swift          ├ hors du groupe synchronisé, référencés un à un
 ├── InscriptionView.swift        ┘
@@ -298,6 +321,9 @@ ios/
     │   ├── Administration.swift   `POST /admin/action` — scraper sans figeage, jamais le secret
     │   ├── DepotPhoto.swift       photo réduite (800 px, JPEG 0,85) → Supabase Storage, rend l'URL `?v=`
     │   ├── DonneesWidget.swift    App Group du widget : GP à venir + langue, fusion par id, rechargement — PARTAGÉ avec le widget
+    │   ├── DonneesWidgetClassement.swift  App Group du widget « Classement » : championnats, premier plan, profil, relevés, avatars — PARTAGÉ
+    │   ├── JetonWidget.swift      jeton widget dans le Keychain partagé — PARTAGÉ
+    │   ├── SynchroWidgetClassement.swift  app seule : `POST /widget/token` à chaque ouverture, publication de la liste, effacement
     │   ├── NotificationsPush.swift  permission, jeton APNs → `POST`/`DELETE /push/token`, langue ; `DelegueApplication`
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
@@ -324,6 +350,7 @@ ios/
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
     │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste (`SelecteurSegmente`), menu « ⋯ » (code, photo si créateur, quitter), photo 100 pt réduite jusqu'à 72 pt pour un nom long, à équidistance du titre et du menu (`DispositionEntete`) — sans photo, rien : texte + ⋯ ; la piste n'est construite qu'au premier tap sur « Piste » (`pisteVue`), puis les deux contenus restent montés, seule l'opacité bascule (0,001, pas 0) ; damier en filigrane sur le sélecteur et la carte « Résultats par Grand Prix » — réels
+    │   │   ├── DispositionPiste.swift       le placement des voitures, sorti de `VuePisteView` — PARTAGÉ avec le widget
     │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — reçoit le classement ; taille UNIFORME, la plus grande par dichotomie entre 40 et 64 pt (disposition complète refaite à chaque essai ; boîtes dessin + score écartées de 4 pt, 8 pt aux kerbs) ; décalage vertical ≤ 12 pt avant d'ouvrir une voie (ordre conservé, ex æquo à la même hauteur), nombre de voies minimal, voies d'un groupe côte à côte à pas constant (largeur + 4 pt) et centrées sur l'axe, la largeur entre kerbs n'étant qu'une limite ; mémoïsée sur classement + taille (`DispositionPiste.Memo`)
     │   │   ├── ResultatsParGPView.swift     résultats par GP : sélecteur des GP terminés, paris de chacun en accordéon ; fond `FondDrapeauFlou` du GP regardé (fondu au changement), en-tête blanc et piste du sélecteur voilée sur le drapeau, beige + encres sombres sans drapeau
     │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée

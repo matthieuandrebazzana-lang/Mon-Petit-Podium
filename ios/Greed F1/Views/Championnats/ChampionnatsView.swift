@@ -20,6 +20,14 @@ struct ChampionnatsView: View {
 
     @ObservedObject var mesChampionnats: MesChampionnats
 
+    /// Le championnat qu'un tap sur le widget « Classement » demande d'ouvrir
+    /// (``DonneesWidget/urlChampionnat(_:)``, posé par ``BarreNavigation``). Ouvert dès que
+    /// la liste le connaît, puis remis à `nil`.
+    var championnatDemande: Binding<UUID?> = .constant(nil)
+
+    /// Le détail ouvert par le widget — les cartes, elles, poussent par `NavigationLink`.
+    @State private var championnatOuvert: Championnat?
+
     /// Grands Prix restants — lus sur la liste de la saison, voir ``GPRestants``.
     private var grandsPrixRestants: Int { GPRestants.compte }
 
@@ -77,7 +85,22 @@ struct ChampionnatsView: View {
                           avancer: { cheminPronos.append($0) }) { cheminPronos.removeAll() }
             // Servie par le cache *stale-while-revalidate* (``CacheService``, 60 s, §7.6).
             .task { await mesChampionnats.charger() }
+            .navigationDestination(item: $championnatOuvert) { championnat in
+                ChampionnatDetailView(championnat: championnat, mesChampionnats: mesChampionnats)
+            }
+            .onChange(of: championnatDemande.wrappedValue, initial: true) { ouvrirDemande() }
+            .onChange(of: mesChampionnats.etat) { ouvrirDemande() }
         }
+    }
+
+    /// Ouvre le championnat demandé par le widget, **une fois la liste connue**. Un
+    /// championnat quitté depuis n'ouvre rien : la liste reste affichée.
+    private func ouvrirDemande() {
+        guard let id = championnatDemande.wrappedValue,
+              case .pret(let liste) = mesChampionnats.etat else { return }
+        championnatDemande.wrappedValue = nil
+        cheminPronos.removeAll()
+        championnatOuvert = liste.first { $0.id == id }
     }
 
     // MARK: - En-tête

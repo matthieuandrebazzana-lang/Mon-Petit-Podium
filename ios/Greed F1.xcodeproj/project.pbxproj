@@ -69,6 +69,7 @@
 				Config/Couleurs.swift,
 				Config/Formes.swift,
 				Config/Materiaux.swift,
+				Config/Mouvement.swift,
 				Config/SupabaseConfig.swift,
 				Localisation/LanguageManager.swift,
 				Localisation/TraductionsEN.swift,
@@ -77,10 +78,21 @@
 				Models/GPRestants.swift,
 				Models/GrandPrix.swift,
 				Models/GrandPrixSaison.swift,
+				Models/Membre.swift,
+				Models/Profil.swift,
 				Resources/Assets.xcassets,
+				Resources/Vecteurs/VOITUREs_am.svg,
+				Resources/Vecteurs/voitures_ecuries.svg,
+				Resources/Vecteurs/voitures_perso.svg,
 				Services/DonneesWidget.swift,
+				Services/DonneesWidgetClassement.swift,
+				Services/JetonWidget.swift,
 				Views/Accueil/ApparenceDrapeau.swift,
 				Views/Accueil/DrapeauxGP.swift,
+				Views/Championnats/DispositionPiste.swift,
+				Views/Composants/ImageCachee.swift,
+				Views/Composants/PlancheSVG.swift,
+				Views/Composants/Voiture.swift,
 			);
 			target = 08242997307FC3A10088FC08 /* GreedF1WidgetExtension */;
 		};
@@ -461,7 +473,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.54.0;
+				MARKETING_VERSION = 0.55.0;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -480,7 +492,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.54.0;
+				MARKETING_VERSION = 0.55.0;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 5.0;

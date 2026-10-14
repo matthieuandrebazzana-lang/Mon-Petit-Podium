@@ -22,12 +22,26 @@ final class SupabaseManager {
     private init() {
         client = SupabaseClient(
             supabaseURL: SupabaseConfig.supabaseURL,
-            supabaseKey: SupabaseConfig.supabaseAnonKey
+            supabaseKey: SupabaseConfig.supabaseAnonKey,
+            options: SupabaseClientOptions(auth: .init(storage: Self.stockageSession))
         )
     }
 
     /// Jeton d'accès de la session courante, relu à chaque appel.
     /// `nil` quand personne n'est connecté — ce n'est pas une erreur.
+    /// **La session reste dans le groupe Keychain de l'app, jamais dans celui du widget.**
+    /// Depuis que l'app déclare `keychain-access-groups` (widget « Classement », iOS
+    /// `0.55.0`), un élément écrit sans groupe explicite tombe dans le **premier** groupe
+    /// listé — le groupe partagé. Le jeton de rafraîchissement y serait lisible par le
+    /// widget, ce que `docs/decisions.md` §28 exclut. Le groupe de l'app (préfixe + bundle
+    /// identifier) est aussi celui où les sessions d'avant `0.55.0` ont été rangées :
+    /// personne n'est déconnecté par la mise à jour.
+    private static var stockageSession: KeychainLocalStorage {
+        KeychainLocalStorage(accessGroup: SupabaseConfig.prefixeTrousseau.map {
+            $0 + (Bundle.main.bundleIdentifier ?? "com.bazzana.greedf1")
+        })
+    }
+
     func jetonAcces() async -> String? {
         try? await client.auth.session.accessToken
     }

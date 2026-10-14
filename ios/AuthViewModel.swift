@@ -361,6 +361,8 @@ final class AuthViewModel: ObservableObject {
     /// sur le même téléphone ne voient jamais les données de l'autre.
     private func oublierCompte() {
         CacheService.partage.vider()
+        // Le widget « Classement » perd son jeton et ses données avec le compte.
+        SynchroWidgetClassement.effacer()
         profil = nil
         estAdmin = false
         modeAdminActif = false

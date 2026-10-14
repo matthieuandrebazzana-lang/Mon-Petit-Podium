@@ -24,6 +24,11 @@ struct BarreNavigation: View {
     /// L'onglet affiché. **Explicite** pour que l'avatar de l'accueil puisse mener au profil.
     @State private var ongletActif: Onglet = .accueil
 
+    /// Le championnat qu'un tap sur le widget « Classement » demande d'ouvrir.
+    @State private var championnatDemande: UUID?
+
+    @Environment(\.scenePhase) private var phase
+
     /// Les quatre onglets, dans l'ordre de la barre.
     enum Onglet: Hashable {
         case accueil, championnats, calendrier, profil
@@ -36,7 +41,8 @@ struct BarreNavigation: View {
                 .tabItem { Label(t("onglet.accueil"), image: "icone-accueil") }
                 .tag(Onglet.accueil)
 
-            ChampionnatsView(mesChampionnats: mesChampionnats)
+            ChampionnatsView(mesChampionnats: mesChampionnats,
+                             championnatDemande: $championnatDemande)
                 .tabItem { Label(t("onglet.championnats"), image: "icone-championnats") }
                 .tag(Onglet.championnats)
 
@@ -61,6 +67,28 @@ struct BarreNavigation: View {
         // l'accueil, quel que soit l'onglet où l'app avait été laissée.
         .onOpenURL { url in
             if url == DonneesWidget.urlAccueil { ongletActif = .accueil }
+            // Un tap sur le widget « Classement » ouvre son championnat.
+            if let id = DonneesWidget.championnat(de: url) {
+                ongletActif = .championnats
+                championnatDemande = id
+            }
+        }
+        // Widget « Classement » (`docs/decisions.md` §28) : un jeton neuf à chaque
+        // ouverture, la liste et la carte du dessus de la pile à chaque lecture.
+        .task { await SynchroWidgetClassement.renouvelerJeton() }
+        .onChange(of: phase) { _, nouvelle in
+            if nouvelle == .active { Task { await SynchroWidgetClassement.renouvelerJeton() } }
+        }
+        .task { await mesChampionnats.charger() }
+        .onChange(of: mesChampionnats.etat) { _, etat in
+            if case .pret(let liste) = etat {
+                SynchroWidgetClassement.publier(liste, profilId: viewModel.profil?.id)
+            }
+        }
+        .onChange(of: viewModel.profil?.id) { _, id in
+            if case .pret(let liste) = mesChampionnats.etat {
+                SynchroWidgetClassement.publier(liste, profilId: id)
+            }
         }
     }
 

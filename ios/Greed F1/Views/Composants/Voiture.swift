@@ -366,6 +366,10 @@ struct VueVoiture: View {
     /// pas un cas dégradé mais l'état par défaut de tout compte.
     var photo: URL?
 
+    /// La photo **déjà chargée** — le widget « Classement », qui ne peut rien télécharger
+    /// pendant le rendu et lit les avatars réduits de l'App Group. Prime sur ``photo``.
+    var imagePhoto: UIImage?
+
     /// Allume le cockpit. Sans lui ni photo, le casque reste le noir de la planche : c'est
     /// ce que veut un aperçu sans membre derrière.
     var teintePilote: Color?
@@ -483,7 +487,9 @@ struct VueVoiture: View {
                     // initiale dans un rond est la même question.
                     .font(.custom("HelveticaNeue-Medium", size: diametre * 0.44))
                     .foregroundColor(.encreSurAplat)
-                if let photo {
+                if let imagePhoto {
+                    Image(uiImage: imagePhoto).resizable().scaledToFill()
+                } else if let photo {
                     ImageCachee(url: photo) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {

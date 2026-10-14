@@ -358,6 +358,8 @@ enum OrdrePile {
     static func ecrire(_ ordre: [UUID], pour utilisateur: UUID?) {
         guard let utilisateur else { return }
         UserDefaults.standard.set(ordre.map(\.uuidString), forKey: cle(utilisateur))
+        // La carte du dessus est le choix par défaut du widget « Classement ».
+        SynchroWidgetClassement.premierPlan(ordre.first)
     }
 
     /// Du plus grand effectif au plus petit ; à égalité, par nom.

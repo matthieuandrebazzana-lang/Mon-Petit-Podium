@@ -539,6 +539,11 @@ enum TraductionsFR {
         "widget.jours": "%dj",
         "widget.vide": "Ouvre l’app pour charger le prochain GP",
         "widget.a11y": "Prochain GP : %@, %@. %@.",
+        "widgetClassement.nom": "Classement",
+        "widgetClassement.description": "Le classement d’un de tes championnats, en liste ou sur la piste.",
+        "widgetClassement.vide": "Ouvre l’app pour charger ton classement",
+        "widgetClassement.misAJour": "Mis à jour à %@",
+        "widgetClassement.a11y.titre": "Classement du championnat %@. ",
 
         // FIN
     ]
