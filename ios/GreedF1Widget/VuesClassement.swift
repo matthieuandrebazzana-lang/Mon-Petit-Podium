@@ -1,11 +1,12 @@
 import SwiftUI
 import WidgetKit
 
-/// Le widget « Classement » dans ses deux formats.
+/// Le widget « Classement » dans ses trois formats.
 ///
-/// - **Petit** : le classement (les trois premiers, et l'utilisateur s'il n'y est pas) **ou**
-///   la piste, selon la configuration (``IntentionClassement``).
-/// - **Grand** : le classement à gauche, jusqu'à huit lignes ; la piste à droite.
+/// - **Petit** et **moyen** : le classement (les trois premiers, et l'utilisateur s'il n'y
+///   est pas) **ou** la piste, selon la configuration (``IntentionClassement``).
+/// - **Grand** : le classement à gauche, jusqu'à huit lignes, et la piste à droite — ou la
+///   piste seule, sur toute la largeur.
 ///
 /// **La piste est celle de l'app, simplifiée** : les voitures à leur place par
 /// ``DispositionPiste`` — le même calcul, jamais un second —, les mêmes livrées
@@ -25,11 +26,22 @@ struct VueClassement: View {
     var body: some View {
         Group {
             if let championnat = entree.championnat, let releve = entree.releve {
-                if format == .systemLarge {
+                switch (format, entree.affichage, entree.affichageGrand) {
+                case (.systemLarge, _, .pisteSeule):
+                    PisteTitree(entree: entree, championnat: championnat, membres: releve.membres,
+                                tailleTitre: 16, miseAJourEnTete: false)
+                case (.systemLarge, _, _):
                     GrandClassement(entree: entree, championnat: championnat, membres: releve.membres)
-                } else if entree.affichage == .piste {
-                    PetitePiste(entree: entree, championnat: championnat, membres: releve.membres)
-                } else {
+                case (.systemMedium, .piste, _):
+                    PisteTitree(entree: entree, championnat: championnat, membres: releve.membres,
+                                tailleTitre: 14, miseAJourEnTete: true,
+                                hauteurVirtuelle: PisteSimplifiee.hauteurVirtuelleMoyen)
+                case (.systemMedium, _, _):
+                    MoyenClassement(entree: entree, championnat: championnat, membres: releve.membres)
+                case (_, .piste, _):
+                    PisteTitree(entree: entree, championnat: championnat, membres: releve.membres,
+                                tailleTitre: 13, miseAJourEnTete: false)
+                default:
                     PetitClassement(entree: entree, championnat: championnat, membres: releve.membres)
                 }
             } else {
@@ -91,18 +103,72 @@ private struct PetitClassement: View {
     }
 }
 
-private struct PetitePiste: View {
+/// La piste sous le nom du championnat — le petit format, le moyen, et le grand en « Piste
+/// seule ». **Une seule vue** : seuls le corps du titre et la place de « Mis à jour à »
+/// changent, la piste se dispose seule dans ce qu'on lui laisse.
+private struct PisteTitree: View {
+
+    let entree: EntreeClassement
+    let championnat: DonneesWidget.ChampionnatWidget
+    let membres: [Membre]
+    let tailleTitre: CGFloat
+    /// Au moyen format, la hauteur est ce qui manque le plus : « Mis à jour à » remonte à
+    /// droite du titre, où la largeur ne sert à rien.
+    let miseAJourEnTete: Bool
+    var hauteurVirtuelle: CGFloat? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                NomChampionnat(nom: championnat.nom, taille: tailleTitre)
+                if miseAJourEnTete {
+                    Spacer(minLength: 0)
+                    MiseAJour(entree: entree)
+                }
+            }
+            PisteSimplifiee(membres: membres, avatars: entree.avatars, hauteurVirtuelle: hauteurVirtuelle)
+            if !miseAJourEnTete { MiseAJour(entree: entree) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(VueClassement.resume(championnat, membres))
+    }
+}
+
+// MARK: - Moyen format
+
+/// Le petit classement, en ligne pleine largeur : les trois premiers, et l'utilisateur en
+/// plus s'il n'y est pas. Quatre lignes dans 120 pt — elles se resserrent un peu sur les
+/// plus petits iPhone plutôt que de déborder.
+private struct MoyenClassement: View {
 
     let entree: EntreeClassement
     let championnat: DonneesWidget.ChampionnatWidget
     let membres: [Membre]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            NomChampionnat(nom: championnat.nom, taille: 13)
-            PisteSimplifiee(membres: membres, avatars: entree.avatars)
-            MiseAJour(entree: entree)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                NomChampionnat(nom: championnat.nom, taille: 14)
+                Spacer(minLength: 0)
+                MiseAJour(entree: entree)
+            }
+            .padding(.bottom, 6)
+
+            if membres.isEmpty {
+                AucunMembre()
+            } else {
+                VStack(spacing: 2) {
+                    ForEach(VueClassement.lignes(membres, tete: 3, moi: entree.profilId, enPlus: true)) { membre in
+                        LigneWidget(membre: membre, moi: membre.profilId == entree.profilId,
+                                    avatar: entree.avatars[membre.profilId], compacte: true,
+                                    souple: true)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(VueClassement.resume(championnat, membres))
     }
@@ -170,6 +236,8 @@ private struct LigneWidget: View {
     let moi: Bool
     let avatar: UIImage?
     let compacte: Bool
+    /// Vrai : la ligne cède jusqu'à 20 pt quand la hauteur manque (le moyen format).
+    var souple = false
 
     private var corps: CGFloat { compacte ? 12 : 14 }
 
@@ -199,7 +267,8 @@ private struct LigneWidget: View {
                 .fixedSize()
         }
         .padding(.horizontal, 4)
-        .frame(height: compacte ? 24 : 30)
+        .frame(minHeight: souple ? 20 : nil, maxHeight: souple ? 24 : nil)
+        .frame(height: souple ? nil : (compacte ? 24 : 30))
         .background {
             if moi {
                 RoundedRectangle(cornerRadius: Rayon.pastille, style: .continuous)
@@ -279,12 +348,18 @@ struct ClassementNeutre: View {
 
 // MARK: - La piste simplifiée
 
-/// Les voitures à leur place, **sans kerbs ni scores**, sur la surface du design system.
+/// Les voitures à leur place, **sans kerbs, scores, ligne médiane ni panneau** : posées
+/// directement sur le fond du widget, le même beige que le classement.
 ///
 /// **Le placement est celui de l'app, à l'échelle près.** ``DispositionPiste`` cherche une
 /// voiture de 40 à 64 pt sur une piste de la taille d'un écran : il travaille donc ici sur
-/// une piste **virtuelle** de 360 pt de large aux proportions du bloc, et le résultat est
-/// réduit d'autant. Mêmes voies, mêmes ex æquo, même ordre — seule l'échelle change.
+/// une piste **virtuelle** aux proportions du bloc, et le résultat est réduit d'autant.
+/// Mêmes voies, mêmes ex æquo, même ordre — seule l'échelle change.
+///
+/// La piste virtuelle fait 360 pt de large — la zone de jeu de l'app sur un iPhone —, **sauf
+/// au moyen format**, où elle ferait 125 pt de haut : moins qu'une voiture et sa marge,
+/// toutes se poseraient au même niveau. Là, c'est la **hauteur** qui est fixée
+/// (``hauteurVirtuelleMoyen``) et la largeur qui suit.
 struct PisteSimplifiee: View {
 
     let membres: [Membre]
@@ -293,29 +368,29 @@ struct PisteSimplifiee: View {
     /// La largeur de la piste virtuelle — celle de la zone de jeu de l'app sur un iPhone.
     static let largeurVirtuelle: CGFloat = 360
 
-    /// Ce qui reste de surface entre le bord du bloc et les voitures.
-    private static let marge: CGFloat = 6
+    /// `nil` : la piste virtuelle fait ``largeurVirtuelle`` de large. Sinon, elle fait
+    /// cette hauteur-là.
+    var hauteurVirtuelle: CGFloat? = nil
+
+    /// **Mesuré au harnais**, sur 9 membres de 168 à 12 points dans 332 × 116 pt : à 240 pt
+    /// de piste virtuelle, des voitures de 31 pt mais 27 pt d'écart vertical du premier au
+    /// dernier pour 63 pt de voiture — un seul éventail, la hauteur ne dit plus rien. À
+    /// 360 pt, des voitures de 21 pt (le grand format en a 20, le petit 18) et 57 pt
+    /// d'écart : deux niveaux lisibles. Au-delà, les voitures passent sous celles du petit.
+    static let hauteurVirtuelleMoyen: CGFloat = 360
 
     var body: some View {
         GeometryReader { bloc in
-            let zone = CGSize(width: max(1, bloc.size.width - 2 * Self.marge),
-                              height: max(1, bloc.size.height - 2 * Self.marge))
-            let echelle = zone.width / Self.largeurVirtuelle
+            let zone = CGSize(width: max(1, bloc.size.width), height: max(1, bloc.size.height))
+            let echelle = hauteurVirtuelle.map { zone.height / $0 }
+                ?? zone.width / Self.largeurVirtuelle
             let disposition = DispositionPiste.disposition(
-                membres, hauteur: zone.height / echelle, largeur: Self.largeurVirtuelle)
+                membres, hauteur: zone.height / echelle, largeur: zone.width / echelle)
             let largeurVoiture = disposition.gabarit.largeur * echelle
             let hauteurVoiture = disposition.gabarit.hauteur * echelle
 
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous)
-                    .fill(Color.surface)
-
-                // La ligne médiane de la planche, à son encre — le seul repère gardé.
-                Rectangle()
-                    .fill(Color.ligneMedianePiste)
-                    .frame(width: 2)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.vertical, Self.marge)
+                Color.clear
 
                 ForEach(disposition.placements) { placement in
                     VueVoiture(livree: placement.membre.livree,
@@ -324,8 +399,8 @@ struct PisteSimplifiee: View {
                                imagePhoto: avatars[placement.membre.profilId],
                                teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte))
                         .frame(width: largeurVoiture, height: hauteurVoiture)
-                        .offset(x: Self.marge + zone.width / 2 + placement.decalage * echelle - largeurVoiture / 2,
-                                y: Self.marge + placement.centre * echelle - hauteurVoiture / 2)
+                        .offset(x: zone.width / 2 + placement.decalage * echelle - largeurVoiture / 2,
+                                y: placement.centre * echelle - hauteurVoiture / 2)
                 }
             }
         }

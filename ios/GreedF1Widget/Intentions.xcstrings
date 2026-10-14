@@ -58,13 +58,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Petit format"
+            "value": "Affichage"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Small size"
+            "value": "Display"
           }
         }
       }
@@ -116,6 +116,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Track"
+          }
+        }
+      }
+    },
+    "intention.affichage.classementEtPiste": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Classement + piste"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standings + track"
+          }
+        }
+      }
+    },
+    "intention.affichage.pisteSeule": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piste seule"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Track only"
           }
         }
       }

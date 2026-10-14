@@ -216,7 +216,9 @@ L'app écrit liste, premier plan de la pile (`OrdrePile.ecrire`) et profil dans 
 groupe Keychain de l'app** (`SupabaseManager.stockageSession`) : depuis `keychain-access-groups`,
 un élément écrit sans groupe tombe dans le **premier** groupe listé — le partagé. Ne jamais
 retirer ce stockage explicite. Piste : `DispositionPiste` (fichier propre, partagé) sur une
-piste virtuelle de 360 pt réduite à l'échelle, `VueVoiture(imagePhoto:)` avec l'avatar
+piste virtuelle de 360 pt de large réduite à l'échelle — **au moyen format, 360 pt de haut**
+(`hauteurVirtuelleMoyen`, mesuré : à la largeur, toutes les voitures tombaient au même
+niveau) —, posée directement sur le fond du widget (ni panneau ni ligne médiane), `VueVoiture(imagePhoto:)` avec l'avatar
 réduit de l'App Group (`AvatarsWidget`, le widget ne télécharge rien au rendu). Tap →
 `greedf1://championnat/<id>` → onglet Championnats, détail ouvert (`ChampionnatsView`).
 **Seule exception à `t()`** : les libellés de la configuration App Intents, extraits à la
@@ -265,11 +267,11 @@ ios/
 │   ├── GreedF1Widget.swift          configuration : petit, moyen, écran verrouillé rectangulaire
 │   ├── FournisseurProchainGP.swift  App Group + `GET /calendrier`, `TimelineProchainGP` (calcul pur des entrées)
 │   ├── VuesProchainGP.swift         les trois formats, fond drapeau, décompte `Text(timerInterval:)`, état neutre
-│   ├── ClassementWidget.swift       widget « Classement » : petit + grand, `AppIntentConfiguration`
-│   ├── IntentionClassement.swift    championnat (`nil` = premier plan de la pile) + liste / piste au petit format
+│   ├── ClassementWidget.swift       widget « Classement » : petit + moyen + grand, `AppIntentConfiguration`
+│   ├── IntentionClassement.swift    championnat (`nil` = premier plan de la pile) + « Affichage » : liste / piste (petit, moyen), classement + piste / piste seule (grand) ; un seul visible par format (`parameterSummary`)
 │   ├── Intentions.xcstrings         libellés App Intents FR/EN — SEULE exception à `t()`
 │   ├── FournisseurClassement.swift  jeton widget → `GET /widget/…/classement`, App Group, `CadenceClassement`, `AvatarsWidget`
-│   ├── VuesClassement.swift         lignes, piste simplifiée (`PisteSimplifiee`), « Mis à jour à », état neutre
+│   ├── VuesClassement.swift         les trois formats, lignes, piste titrée (`PisteTitree`) et simplifiée (`PisteSimplifiee`), « Mis à jour à », état neutre
 │   └── Info.plist                   `API_BASE_URL` (Config.xcconfig, réglages du projet)
 ├── GreedF1WidgetExtension.entitlements  App Group + Keychain partagé
 ├── AuthViewModel.swift          ┐

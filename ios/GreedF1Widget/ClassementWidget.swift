@@ -1,8 +1,9 @@
 import WidgetKit
 import SwiftUI
 
-/// Le widget « Classement » — petit et grand formats de l'écran d'accueil. Configurable
-/// (``IntentionClassement``) : le championnat, et la liste ou la piste au petit format.
+/// Le widget « Classement » — petit, moyen et grand formats de l'écran d'accueil.
+/// Configurable (``IntentionClassement``) : le championnat, la liste ou la piste aux petit
+/// et moyen formats, les deux ou la piste seule au grand.
 /// Ses données viennent de l'App Group et de `GET /widget/championnats/{id}/classement`,
 /// avec le jeton widget — jamais la session (``FournisseurClassement``).
 struct ClassementWidget: Widget {
@@ -17,13 +18,21 @@ struct ClassementWidget: Widget {
         // Lus à l'installation, dans la langue de l'app connue à cet instant.
         .configurationDisplayName(t("widgetClassement.nom"))
         .description(t("widgetClassement.description"))
-        .supportedFamilies([.systemSmall, .systemLarge])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
+}
+
+#Preview(as: .systemMedium) {
+    ClassementWidget()
+} timeline: {
+    FournisseurClassement.exemple(.classement)
+    FournisseurClassement.exemple(.piste)
 }
 
 #Preview(as: .systemLarge) {
     ClassementWidget()
 } timeline: {
     FournisseurClassement.exemple(.classement)
+    FournisseurClassement.exemple(.classement, grand: .pisteSeule)
     EntreeClassement.neutre()
 }

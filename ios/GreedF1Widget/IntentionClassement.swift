@@ -1,8 +1,8 @@
 import AppIntents
 import WidgetKit
 
-/// La configuration du widget « Classement » : le championnat, et pour le petit format, la
-/// liste ou la piste.
+/// La configuration du widget « Classement » : le championnat, et son affichage — la liste
+/// ou la piste aux petit et moyen formats, les deux ou la piste seule au grand.
 ///
 /// > **Les libellés de cette configuration sont la seule exception à `t()`.** App Intents
 /// > extrait titres et libellés **à la compilation** (constantes obligatoires) et c'est iOS
@@ -23,13 +23,35 @@ struct IntentionClassement: WidgetConfigurationIntent {
                                               table: "Intentions"))
     var championnat: ChampionnatEntite?
 
-    @Parameter(title: LocalizedStringResource("intention.affichage", defaultValue: "Petit format",
+    /// Petit et moyen formats. Le nom de la propriété ne change pas : c'est la clé sous
+    /// laquelle iOS a rangé la configuration des widgets déjà posés.
+    @Parameter(title: LocalizedStringResource("intention.affichage", defaultValue: "Affichage",
                                               table: "Intentions"),
                default: .classement)
     var affichage: AffichagePetit
+
+    @Parameter(title: LocalizedStringResource("intention.affichage", defaultValue: "Affichage",
+                                              table: "Intentions"),
+               default: .classementEtPiste)
+    var affichageGrand: AffichageGrand
+
+    /// **Un seul réglage « Affichage » par format** : iOS ne montre que celui qui s'applique.
+    static var parameterSummary: some ParameterSummary {
+        When(widgetFamily: .equalTo, .systemLarge) {
+            Summary {
+                \.$championnat
+                \.$affichageGrand
+            }
+        } otherwise: {
+            Summary {
+                \.$championnat
+                \.$affichage
+            }
+        }
+    }
 }
 
-/// Ce que montre le petit format. Le grand montre les deux.
+/// Ce que montrent les petit et moyen formats.
 enum AffichagePetit: String, AppEnum {
     case classement, piste
 
@@ -41,6 +63,23 @@ enum AffichagePetit: String, AppEnum {
             "intention.affichage.classement", defaultValue: "Classement", table: "Intentions")),
         .piste: DisplayRepresentation(title: LocalizedStringResource(
             "intention.affichage.piste", defaultValue: "Piste", table: "Intentions"))
+    ]
+}
+
+/// Ce que montre le grand format : le classement et la piste côte à côte, ou la piste
+/// seule sur toute la largeur.
+enum AffichageGrand: String, AppEnum {
+    case classementEtPiste, pisteSeule
+
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: LocalizedStringResource(
+        "intention.typeAffichage", defaultValue: "Affichage", table: "Intentions"))
+
+    static var caseDisplayRepresentations: [AffichageGrand: DisplayRepresentation] = [
+        .classementEtPiste: DisplayRepresentation(title: LocalizedStringResource(
+            "intention.affichage.classementEtPiste", defaultValue: "Classement + piste",
+            table: "Intentions")),
+        .pisteSeule: DisplayRepresentation(title: LocalizedStringResource(
+            "intention.affichage.pisteSeule", defaultValue: "Piste seule", table: "Intentions"))
     ]
 }
 
