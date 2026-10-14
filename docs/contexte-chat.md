@@ -12,7 +12,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
-Version backend actuelle : 0.85.1
+Version backend actuelle : 0.85.2
 Version iOS actuelle : 0.54.0 (build 2)
 
 ## STACK TECHNIQUE
@@ -105,6 +105,8 @@ Notifications push (iOS 0.49.0, backend 0.84.0, migration 30, `docs/decisions.md
 
 Test de livraison TestFlight (backend 0.85.1) : Railway est en `APNS_ENV=production`. `POST /push/test/tous`, fermée par `X-Admin-Secret` seul (sans session), envoie sur-le-champ une notification de test à **tous** les jetons de `push_tokens`, dans la langue de chaque jeton (« 🏎️ Test Greed F1 — les notifications fonctionnent ! » / « 🏎️ Greed F1 test — notifications are working! »), et répond `{jetons, envoyees, echecs, supprimes}`. Jetons refusés pour de bon par APNs supprimés, comme dans le job. `POST /push/test` suit désormais aussi la langue du jeton (texte unique dans `notifications.MESSAGES_TEST`).
 
+Blocage de `POST /push/test/tous` (backend 0.85.2) : en production, `curl` attendait 60 s sans un octet. Cause : httpcore attend un flux HTTP/2 libre **sans délai** (les timeouts httpx ne le couvrent pas) ; APNs n'en ouvre qu'un sur une connexion neuve avant validation du JWT, et 20 envois parallèles s'y bloquaient — le client singleton restant ensuite coincé. Correctif (`docs/architecture.md`, sous le tableau des routes) : chaque envoi borné à 10 s (`asyncio.wait_for`), diffusion bornée globalement (20 s routes de test, 120 s job), premier jeton seul puis parallèle, client jeté après un envoi expiré, lecture des jetons 5 s, purge 3 s → la route répond toujours en moins de 30 s. Réponse enrichie : `erreurs` (`[{jeton: "…8 derniers", motif}]`) et `duree`. `apns.verifier_configuration()` (clés, `APNS_ENV` inconnu = erreur, topic, signature JWT) → `503` explicite ; le job vérifie avant de réserver. Logs `[apns]` / `[notifications]` / `[push]` : jetons trouvés, début et fin de chaque envoi (code, motif, durée), durée totale. 235 tests backend verts ; à revérifier en production avec le `curl` ci-dessous et les logs Railway.
+
 Sign in with Apple (0.48.0) : bouton natif noir (`BoutonApple`) sur Landing (en tête, avant Google) et Connexion (après le séparateur, avant Google). Feuille native → `supabase.auth.signInWithIdToken(provider: .apple)` avec nonce SHA-256, AUCUNE route Railway pour la connexion. Nom complet écrit dans les métadonnées du compte au premier login (`full_name`, `name`, `given_name`, `family_name`). Nouveau compte → pseudo `pilote-…` → OnboardingView (mécanisme Google inchangé). Suppression d'un compte Apple : réautorisation Apple (code frais) envoyée dans le corps de `DELETE /profils/moi`, le backend (0.83.0, `app/apple.py`) l'échange puis révoque le jeton — best-effort, journalisé, ne bloque jamais la suppression. Fermer la feuille annule la suppression.
 À CONFIGURER (sinon le flux ne marche pas) : Supabase → Auth → Providers → Apple activé, `com.bazzana.greedf1` dans les Client IDs ; Railway → `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (clé .p8 « Sign in with Apple », PEM, `\n` acceptés). Non testé de bout en bout : à valider sur iPhone réel.
 
@@ -138,7 +140,7 @@ Pile de marchés sur « Fais tes paris » (0.47.4, mergé sur `main` depuis `fea
 Registre d'évaluateurs par slug exact (18 marchés couverts)
 Statut : en_attente / non_evaluable / gagne / perdu
 Pipeline provisoire (à l'arrivée) → définitif (J+1)
-229 tests backend (dont 30 notifications push, 7 calendrier)
+235 tests backend (dont 36 notifications push, 7 calendrier)
 Identifiants canoniques des issues au figeage
 Alertes admin (libellés non reconnus, échecs OpenF1)
 
@@ -159,7 +161,7 @@ Test iPad (ouvrir chaque écran sur simulateur iPad)
 
 Fonctionnalités prévues :
 
-Notifications push : Railway en `APNS_ENV=production` — vérifier la réception chez les testeurs TestFlight avec `POST /push/test/tous` (backend 0.85.1)
+Notifications push : Railway en `APNS_ENV=production` — vérifier la réception chez les testeurs TestFlight avec `POST /push/test/tous` (backend 0.85.2 — la route ne bloque plus, lire `erreurs` si `echecs` > 0)
 Notifications push : `42501 permission denied` sur `push_tokens` / `notifications_envoyees` — appliquer la migration 31 (`grant … to service_role`, `bugs-connus.md` §39)
 f1-ml : modèle de prédiction ML à intégrer
 Keep-alive Railway : vérifier que le service `keepalive` est « Online » et journalise `ping 200` toutes les 5 min (si Railway garde l'ancien planning cron du tableau de bord, le vider dans Settings → Cron Schedule)

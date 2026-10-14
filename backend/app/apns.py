@@ -10,6 +10,15 @@ localement, elle se contente d'enregistrer son jeton d'appareil
   entre 20 et 60 minutes : plus souvent, il répond `TooManyProviderTokenUpdates`
   ; moins souvent, `ExpiredProviderToken`. Il est donc gardé 50 minutes.
 
+- **Rien n'attend sans borne** (`0.85.2`). Les délais d'httpx ne couvrent que
+  la connexion, la lecture et l'écriture ; en HTTP/2, httpcore attend aussi un
+  flux libre (`_max_streams_semaphore`) **sans aucun délai**. APNs n'autorise
+  qu'un flux sur une connexion neuve tant que le jeton n'est pas validé : vingt
+  envois parallèles s'y sont bloqués, et `POST /push/test/tous` n'a plus
+  répondu. Chaque envoi est donc enrobé dans `asyncio.wait_for(DELAI_ENVOI)`,
+  et un client qui a laissé expirer un envoi est jeté (`abandonner_client`) :
+  sa connexion peut rester coincée pour tous les appels suivants.
+
 Un jeton d'appareil refusé pour de bon (`410 Unregistered`, `BadDeviceToken`,
 `DeviceTokenNotForTopic`) est rendu à l'appelant comme **invalide**, qui le
 supprime de `push_tokens`. Toute autre erreur est passagère : le jeton reste.
@@ -17,6 +26,7 @@ supprime de `push_tokens`. Toute autre erreur est passagère : le jeton reste.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -34,7 +44,15 @@ PASSERELLES = {
     "production": "https://api.push.apple.com",
 }
 
-DELAI = httpx.Timeout(15.0, connect=10.0)
+# Connexion, lecture, écriture et attente du pool : 10 s chacune.
+DELAI = httpx.Timeout(10.0)
+
+# Durée totale d'un envoi, attente d'un flux HTTP/2 comprise — celle-là, httpx
+# ne la borne pas.
+DELAI_ENVOI = 10.0
+
+# Fermeture d'un client coincé : elle peut se bloquer comme lui.
+DELAI_FERMETURE = 2.0
 
 # Entre les 20 et 60 minutes qu'impose Apple.
 DUREE_JETON_FOURNISSEUR = 50 * 60
@@ -44,7 +62,7 @@ RAISONS_JETON_INVALIDE = frozenset({"BadDeviceToken", "DeviceTokenNotForTopic"})
 
 
 class ErreurAPNs(Exception):
-    """Configuration absente — message technique, jamais affiché."""
+    """Configuration absente ou inutilisable — message technique, sans secret."""
 
 
 @dataclass(frozen=True)
@@ -54,6 +72,8 @@ class Issue:
     token: str
     envoyee: bool
     invalide: bool = False
+    # Délai dépassé : le client qui l'a laissé faire est à jeter.
+    expiree: bool = False
     raison: str = ""
 
 
@@ -73,6 +93,46 @@ async def fermer_client() -> None:
     if _client is not None:
         await _client.aclose()
         _client = None
+
+
+async def abandonner_client() -> None:
+    """Jette le client après un envoi expiré : le suivant rouvrira une connexion."""
+    global _client
+    client, _client = _client, None
+    if client is None:
+        return
+    logger.warning("[apns] Client HTTP/2 abandonné après un envoi expiré.")
+    try:
+        await asyncio.wait_for(client.aclose(), DELAI_FERMETURE)
+    except Exception:  # noqa: BLE001 — l'ancien client ne doit rien bloquer
+        logger.warning("[apns] Fermeture de l'ancien client incomplète.")
+
+
+def passerelle() -> str:
+    """URL d'APNs selon `APNS_ENV` — une valeur inconnue est une erreur, pas `sandbox`."""
+    env = get_settings().apns_env.strip().lower()
+    if env not in PASSERELLES:
+        raise ErreurAPNs(f"APNS_ENV={env!r} inconnu : 'sandbox' ou 'production' attendu.")
+    return PASSERELLES[env]
+
+
+def verifier_configuration() -> None:
+    """Lève `ErreurAPNs` si un envoi ne peut pas partir : clés, passerelle, topic, JWT.
+
+    Appelé AVANT tout envoi, pour qu'une configuration cassée donne une erreur
+    explicite au lieu d'un envoi en échec par jeton.
+    """
+    reglages = get_settings()
+    if not reglages.apns_configure:
+        raise ErreurAPNs("APNs non configuré (APNS_KEY_ID, APNS_TEAM_ID, APNS_KEY, APNS_BUNDLE_ID).")
+    passerelle()
+    try:
+        _jeton()
+    except Exception as erreur:  # noqa: BLE001 — clé .p8 illisible, quelle qu'en soit la forme
+        # Le nom de l'exception seulement : son message pourrait citer la clé.
+        raise ErreurAPNs(
+            f"Jeton JWT APNs impossible à signer avec APNS_KEY ({type(erreur).__name__})."
+        ) from None
 
 
 def _jeton() -> str:
@@ -106,34 +166,53 @@ def jeton_invalide(statut: int, raison: str) -> bool:
 
 
 async def envoyer(token: str, corps: str, titre: str | None = None) -> Issue:
-    """Envoie une notification à un appareil. Ne lève jamais pour une réponse d'APNs."""
+    """Envoie une notification à un appareil, en `DELAI_ENVOI` au plus.
+
+    Ne lève jamais pour une réponse d'APNs ni pour un délai dépassé : l'échec
+    revient dans l'`Issue`, avec son motif.
+    """
     global _jeton_fournisseur
     reglages = get_settings()
     if not reglages.apns_configure:
         raise ErreurAPNs("APNs non configuré (APNS_KEY_ID, APNS_TEAM_ID, APNS_KEY).")
 
-    base = PASSERELLES.get(reglages.apns_env.strip().lower(), PASSERELLES["sandbox"])
+    base = passerelle()
+    court = token[-8:]
+    debut = time.monotonic()
+    logger.info("[apns] Envoi à …%s : début.", court)
     try:
-        reponse = await _client_http2().post(
-            f"{base}/3/device/{token}",
-            headers={
-                "authorization": f"bearer {_jeton()}",
-                "apns-topic": reglages.apns_bundle_id.strip(),
-                "apns-push-type": "alert",
-                "apns-priority": "10",
-            },
-            content=json.dumps(charge_utile(corps, titre), ensure_ascii=False).encode(),
+        reponse = await asyncio.wait_for(
+            _client_http2().post(
+                f"{base}/3/device/{token}",
+                headers={
+                    "authorization": f"bearer {_jeton()}",
+                    "apns-topic": reglages.apns_bundle_id.strip(),
+                    "apns-push-type": "alert",
+                    "apns-priority": "10",
+                },
+                content=json.dumps(charge_utile(corps, titre), ensure_ascii=False).encode(),
+            ),
+            DELAI_ENVOI,
         )
+    except TimeoutError:
+        issue = Issue(token, envoyee=False, expiree=True, raison=f"Délai dépassé ({DELAI_ENVOI:g} s)")
+        logger.warning("[apns] Envoi à …%s : %s.", court, issue.raison)
+        return issue
     except httpx.HTTPError as erreur:
-        return Issue(token, envoyee=False, raison=f"{type(erreur).__name__}: {erreur}")
+        issue = Issue(token, envoyee=False, raison=f"{type(erreur).__name__}: {erreur}")
+        logger.warning("[apns] Envoi à …%s : %s (%.1f s).", court, issue.raison, time.monotonic() - debut)
+        return issue
 
+    duree = time.monotonic() - debut
     if reponse.status_code == 200:
+        logger.info("[apns] Envoi à …%s : 200 (%.1f s).", court, duree)
         return Issue(token, envoyee=True)
 
     try:
         raison = str(reponse.json().get("reason") or "")
     except ValueError:
         raison = ""
+    logger.warning("[apns] Envoi à …%s : %s %s (%.1f s).", court, reponse.status_code, raison, duree)
     if raison in ("ExpiredProviderToken", "InvalidProviderToken"):
         # Le prochain envoi signera un jeton neuf.
         _jeton_fournisseur = None

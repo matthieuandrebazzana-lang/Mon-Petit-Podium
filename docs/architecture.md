@@ -406,7 +406,23 @@ l'appelant, **verbe explicite** pour ce qui n'est pas un CRUD (`/rejoindre`, `/q
 | `POST /jobs/resultats/{id}/test` | `X-Admin-Secret` | **banc d'essai, n'écrit rien** |
 | `POST /push/token` · `DELETE /push/token` | jeton | jeton APNs de l'appareil et langue ; le filtre porte toujours sur `user_id` |
 | `POST /push/test` | jeton + `X-Admin-Secret` | notification de test aux appareils **de l'appelant**, dans la langue de chaque jeton |
-| `POST /push/test/tous` | `X-Admin-Secret` **seul** | notification de test à **tous** les jetons de `push_tokens` → `{jetons, envoyees, echecs, supprimes}`. Jetons refusés pour de bon supprimés. Réservée au `curl` |
+| `POST /push/test/tous` | `X-Admin-Secret` **seul** | notification de test à **tous** les jetons de `push_tokens` → `{jetons, envoyees, echecs, supprimes, erreurs, duree}`. Jetons refusés pour de bon supprimés. **Répond en moins de 30 s**, APNs muet compris. Réservée au `curl` |
+
+> **Aucun envoi APNs n'attend sans borne** (backend `0.85.2`). Les délais d'httpx
+> (`apns.DELAI`, 10 s pour connexion, lecture, écriture, pool) ne couvrent pas l'attente
+> d'un **flux HTTP/2 libre** dans httpcore — or APNs n'en autorise qu'un sur une connexion
+> neuve tant que le JWT n'est pas validé. Vingt envois parallèles y sont restés bloqués et
+> `POST /push/test/tous` ne répondait plus. D'où trois bornes, partagées par les routes de
+> test et le job : **chaque envoi** dans `asyncio.wait_for(apns.DELAI_ENVOI = 10 s)` ;
+> **chaque diffusion** (`notifications.diffuser`) coupée à son délai global — 20 s pour
+> les routes de test, 120 s pour le job — les envois en retard annulés et comptés en
+> échec avec leur motif ; lecture des jetons (5 s) et purge (3 s) bornées à part. Le
+> premier jeton part seul, les suivants en parallèle (`PARALLELISME = 20`). Un client
+> dont un envoi a expiré est **jeté** (`apns.abandonner_client`) : sa connexion resterait
+> coincée pour tous les appels suivants. `apns.verifier_configuration()` contrôle clés,
+> `APNS_ENV` (une valeur inconnue est une erreur, plus un repli sur `sandbox`), topic et
+> signature du JWT **avant** tout envoi : la route rend un `503` explicite, le job ne
+> réserve aucun événement.
 
 > **Trois routeurs se partagent le préfixe `/grands-prix/{id}`** — `scraper` porte
 > `/cotes`, `pronostics` porte `/favoris` et `/pronostics`, `resultats` porte

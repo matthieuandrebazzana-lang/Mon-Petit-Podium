@@ -1,6 +1,7 @@
 """Notifications push : fenêtres de déclenchement, doublons, jetons invalides (§25)."""
 
 import asyncio
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -148,6 +149,8 @@ def base(monkeypatch):
         return apns.Issue(token, envoyee=True)
 
     monkeypatch.setattr(job.apns, "envoyer", envoyer)
+    # Sans clé APNs dans les tests : le job ne vérifie rien ici, `tous` rétablit.
+    monkeypatch.setattr(job.apns, "verifier_configuration", lambda: None)
     return simulee
 
 
@@ -280,6 +283,35 @@ def test_le_test_exige_le_secret(client):
 SECRET = "s3cret"
 
 
+def _cle_p8() -> str:
+    """Une vraie clé P-256 : la route signe le JWT avant d'envoyer quoi que ce soit."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    return (
+        ec.generate_private_key(ec.SECP256R1())
+        .private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+        .decode()
+    )
+
+
+CLE_P8 = _cle_p8()
+
+# `apns.envoyer` d'origine : la fixture `base` le remplace pour tout le module.
+ENVOYER_REEL = apns.envoyer
+VERIFIER_REEL = apns.verifier_configuration
+
+
+def _sans_duree(reponse) -> dict:
+    corps = reponse.json()
+    assert 0 <= corps.pop("duree") < 30
+    return corps
+
+
 @pytest.fixture
 def tous(monkeypatch, base):
     """Client sans session : la route ne doit dépendre que de `X-Admin-Secret`."""
@@ -287,10 +319,14 @@ def tous(monkeypatch, base):
     from app.config import Settings
 
     reglages = Settings(
-        admin_secret=SECRET, apns_key_id="K", apns_team_id="T", apns_key="P"
+        admin_secret=SECRET, apns_key_id="K", apns_team_id="T", apns_key=CLE_P8, apns_env="production"
     )
     monkeypatch.setattr(deps, "get_settings", lambda: reglages)
     monkeypatch.setattr(push, "get_settings", lambda: reglages)
+    monkeypatch.setattr(apns, "get_settings", lambda: reglages)
+    monkeypatch.setattr(apns, "_jeton_fournisseur", None)
+    monkeypatch.setattr(apns, "_client", None)
+    monkeypatch.setattr(apns, "verifier_configuration", VERIFIER_REEL)
     monkeypatch.setattr(push, "selectionner", base.selectionner)
     app.dependency_overrides.clear()
     return TestClient(app)
@@ -306,7 +342,7 @@ def test_tous_envoie_a_chaque_jeton_dans_sa_langue(tous, base):
     reponse = tous.post("/push/test/tous", headers={"X-Admin-Secret": SECRET})
 
     assert reponse.status_code == 200
-    assert reponse.json() == {"jetons": 2, "envoyees": 2, "echecs": 0, "supprimes": 0}
+    assert _sans_duree(reponse) == {"jetons": 2, "envoyees": 2, "echecs": 0, "supprimes": 0, "erreurs": []}
     assert sorted(base.envois) == [
         ("aa" * 32, "🏎️ Test Greed F1 — les notifications fonctionnent !"),
         ("bb" * 32, "🏎️ Greed F1 test — notifications are working!"),
@@ -317,5 +353,107 @@ def test_tous_supprime_les_jetons_invalides(tous, base):
     base.morts = {"bb" * 32}
     reponse = tous.post("/push/test/tous", headers={"X-Admin-Secret": SECRET})
 
-    assert reponse.json() == {"jetons": 2, "envoyees": 1, "echecs": 1, "supprimes": 1}
+    assert _sans_duree(reponse) == {
+        "jetons": 2,
+        "envoyees": 1,
+        "echecs": 1,
+        "supprimes": 1,
+        "erreurs": [{"jeton": "…bbbbbbbb", "motif": "410 Unregistered"}],
+    }
     assert [j["token"] for j in base.jetons] == ["aa" * 32]
+
+
+# --------------------------------------------------------------------------- #
+#  Délais — un APNs muet ne bloque jamais la route
+# --------------------------------------------------------------------------- #
+
+
+class ClientMuet:
+    """Un client HTTP/2 qu'APNs laisse sans réponse, pour toujours."""
+
+    def __init__(self, **options):
+        self.appels = 0
+        self.ferme = False
+
+    async def post(self, *args, **kwargs):
+        self.appels += 1
+        await asyncio.Event().wait()
+
+    async def aclose(self):
+        self.ferme = True
+
+
+@pytest.fixture
+def muets(monkeypatch, tous):
+    """Chaque client qu'ouvre `apns` est muet ; la liste les garde dans l'ordre."""
+    clients: list[ClientMuet] = []
+
+    def ouvrir(**options):
+        clients.append(ClientMuet(**options))
+        return clients[-1]
+
+    monkeypatch.setattr(apns, "envoyer", ENVOYER_REEL)
+    monkeypatch.setattr(apns.httpx, "AsyncClient", ouvrir)
+    monkeypatch.setattr(apns, "DELAI_ENVOI", 0.2)
+    return clients
+
+
+def test_apns_muet_la_route_repond_quand_meme(tous, base, muets):
+    debut = time.monotonic()
+    reponse = tous.post("/push/test/tous", headers={"X-Admin-Secret": SECRET})
+    duree = time.monotonic() - debut
+
+    assert reponse.status_code == 200
+    assert duree < 2
+    corps = _sans_duree(reponse)
+    assert corps["envoyees"] == 0 and corps["echecs"] == 2 and corps["supprimes"] == 0
+    assert {e["motif"] for e in corps["erreurs"]} == {"Délai dépassé (0.2 s)"}
+    # Le premier part seul et expire : son client est jeté, le second en ouvre
+    # un neuf, jeté à son tour.
+    assert [c.appels for c in muets] == [1, 1]
+    assert all(c.ferme for c in muets) and apns._client is None
+
+
+def test_le_delai_global_coupe_les_envois_en_cours(tous, base, muets, monkeypatch):
+    monkeypatch.setattr(apns, "DELAI_ENVOI", 60.0)
+    monkeypatch.setattr(push, "DELAI_DIFFUSION_TEST", 0.3)
+
+    debut = time.monotonic()
+    reponse = tous.post("/push/test/tous", headers={"X-Admin-Secret": SECRET})
+
+    assert reponse.status_code == 200
+    assert time.monotonic() - debut < 3
+    corps = _sans_duree(reponse)
+    assert corps["echecs"] == 2
+    assert {e["motif"] for e in corps["erreurs"]} == {"Délai global dépassé (0.3 s)"}
+
+
+@pytest.mark.parametrize(
+    "reglage, motif",
+    [
+        ({"apns_key": "pas une clé"}, "Jeton JWT APNs impossible à signer"),
+        ({"apns_env": "prod"}, "APNS_ENV='prod' inconnu"),
+        ({"apns_bundle_id": " "}, "APNs non configuré"),
+    ],
+)
+def test_configuration_cassee_erreur_explicite(tous, base, monkeypatch, reglage, motif):
+    reglages = apns.get_settings().model_copy(update=reglage)
+    monkeypatch.setattr(apns, "get_settings", lambda: reglages)
+
+    reponse = tous.post("/push/test/tous", headers={"X-Admin-Secret": SECRET})
+
+    assert reponse.status_code == 503
+    assert motif in reponse.json()["detail"]
+    assert "pas une clé" not in reponse.json()["detail"]
+    assert base.envois == []
+
+
+def test_le_job_ne_reserve_rien_si_apns_est_casse(base, monkeypatch):
+    def casse():
+        raise apns.ErreurAPNs("clé illisible")
+
+    monkeypatch.setattr(apns, "verifier_configuration", casse)
+    asyncio.run(job.surveiller(COURSE - timedelta(hours=1)))
+
+    assert base.envoyees == set()
+    assert base.envois == []
