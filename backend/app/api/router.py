@@ -10,6 +10,7 @@ from app.api.routes import (
     push,
     resultats,
     scraper,
+    widget,
 )
 
 # Routeur racine : chaque nouveau domaine ajoute ici son propre routeur.
@@ -37,3 +38,6 @@ api_router.include_router(push.router)
 # Calendrier léger (version backend `0.85.0`) : `GET /calendrier`, les GP de la
 # saison sans leurs cotes — ce que `/scraper/cotes` servait au prix de toutes.
 api_router.include_router(calendrier.router)
+# Widget iOS « Classement » (version backend `0.86.0`) : jeton dédié et
+# classement en lecture seule — le jeton widget n'ouvre aucune autre route.
+api_router.include_router(widget.router)

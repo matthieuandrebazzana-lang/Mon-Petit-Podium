@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Version de l'API, alignée sur celle du frontend.
 # À incrémenter à chaque commit qui modifie l'application.
-VERSION = "0.85.3"
+VERSION = "0.86.0"
 
 # Toujours autorisées : le serveur de dev Vite, pour ne jamais casser le local.
 ORIGINES_LOCALES = [
@@ -109,6 +109,13 @@ class Settings(BaseSettings):
     apns_key: str = ""
     apns_bundle_id: str = "com.bazzana.greedf1"
     apns_env: str = "sandbox"
+
+    # — Widget iOS « Classement » —
+    # Secret HMAC des jetons widget (`app/api/jeton_widget.py`, `decisions.md`
+    # §28). Vide par défaut : `/widget/*` répond alors `503`, jamais ouvert.
+    # Le changer invalide tous les jetons widget émis — l'app en redemande un à
+    # chaque ouverture.
+    widget_token_secret: str = ""
 
     @property
     def apns_configure(self) -> bool:

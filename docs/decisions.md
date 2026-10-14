@@ -1017,3 +1017,37 @@ quelles lectures elle touche — exactement le savoir qui diverge au premier ajo
 la première bascule) : on paie désormais la construction au premier tap plutôt qu'à
 chaque ouverture du détail, pour un écran que la plupart ouvrent pour le classement.
 
+---
+
+## 28. Le widget « Classement » a son propre jeton, il ne partage pas la session Supabase
+
+**Décision.** Le widget iOS « Classement » (iOS `0.55.0`, backend `0.86.0`) interroge
+l'API lui-même, mais **jamais avec la session Supabase**. À chaque ouverture, l'app échange
+sa session contre un **jeton widget** (`POST /widget/token`) : JWT HS256 signé par
+`WIDGET_TOKEN_SECRET`, identifiant du profil, **30 jours**, portée `widget:lecture`. Elle le
+range dans le **Keychain partagé** (`com.bazzana.greedf1.widget`). Le widget ne présente
+que lui, et à **une seule route** : `GET /widget/championnats/{id}/classement`.
+
+- **Aucune table.** Rien à purger ni à révoquer ligne à ligne : changer le secret les
+  invalide tous, et l'app en redemande un à la prochaine ouverture. La déconnexion et la
+  suppression du compte effacent le jeton de l'appareil.
+- **Refusé partout ailleurs, sans compter sur Supabase.** `utilisateur_courant` reconnaît
+  son audience (`greedf1-widget`) sans vérifier la signature et rend `401`. Un
+  `WIDGET_TOKEN_SECRET` recopié par erreur depuis le secret JWT du projet ne l'ouvrirait
+  donc pas sur les autres routes.
+- **Lecture seule, réduite à la piste** : rang, points, pseudo, avatar, livrée et couleurs.
+  Ni réussites, ni meilleur coup, ni ordre d'adhésion.
+- **Sans secret, `503` explicite** — jamais une signature avec une chaîne vide.
+
+**Raison.** Les jetons de rafraîchissement Supabase sont **à usage unique**. Un widget qui
+rafraîchirait la session de son côté consommerait celui de l'app : au premier double
+rafraîchissement, l'un des deux présente un jeton déjà utilisé et Supabase révoque la
+session — l'utilisateur est déconnecté sans rien avoir fait.
+
+**Écarté.** *Partager la session dans le Keychain* : le problème ci-dessus, et un widget
+qui pourrait écrire (pronostics, profil) avec la clé de l'utilisateur. *Le widget ne
+rafraîchit jamais, il lit le jeton d'accès de l'app* : il expire au bout d'une heure, le
+widget serait vide la plupart du temps. *L'app pousse le classement dans l'App Group, sans
+réseau côté widget* : le classement ne bougerait qu'à l'ouverture de l'app, alors que le
+widget est fait pour le dimanche soir. *Un jeton opaque stocké en base* : une table, une
+purge et une lecture par appel, pour une révocation fine dont personne n'a besoin.

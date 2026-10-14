@@ -145,6 +145,7 @@ par appel.
 | `SUPABASE_SERVICE_ROLE_KEY` | idem |
 | `ADMIN_SECRET` | les trois routes d'administration **en `curl`** refusent tout le monde (`503`). `POST /admin/action`, elle, n'en dépend pas |
 | `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | la suppression d'un compte Apple réussit, mais **le jeton Apple n'est pas révoqué** (journalisé) — règle App Store 5.1.1(v). `APPLE_CLIENT_ID` vaut `com.bazzana.greedf1` par défaut |
+| `WIDGET_TOKEN_SECRET` | `POST /widget/token` et `GET /widget/championnats/{id}/classement` répondent **`503`** explicite — le widget iOS « Classement » reste sur ses dernières données. La changer invalide tous les jetons widget (l'app en redemande un à chaque ouverture) |
 | `ENVIRONMENT` | vaut `development`, donc `/docs` reste public |
 | `FRONTEND_URL` | non bloquante — l'origine Vercel est la valeur par défaut |
 | `CORS_ORIGINS` | origines supplémentaires, séparées par des virgules |
@@ -407,6 +408,16 @@ l'appelant, **verbe explicite** pour ce qui n'est pas un CRUD (`/rejoindre`, `/q
 | `POST /push/token` · `DELETE /push/token` | jeton | jeton APNs de l'appareil et langue ; le filtre porte toujours sur `user_id` |
 | `POST /push/test` | jeton + `X-Admin-Secret` | notification de test aux appareils **de l'appelant**, dans la langue de chaque jeton |
 | `POST /push/test/tous` | `X-Admin-Secret` **seul** | notification de test à **tous** les jetons de `push_tokens` → `{jetons, envoyees, echecs, supprimes, erreurs, duree}`. Jetons refusés pour de bon supprimés. **Répond en moins de 30 s**, APNs muet compris. Réservée au `curl` |
+
+| `POST /widget/token` | jeton (session Supabase) | → `{jeton, profil_id, expire_le}` : **jeton widget** HS256 (`WIDGET_TOKEN_SECRET`), 30 jours, portée `widget:lecture`. Aucune table |
+| `GET /widget/championnats/{id}/classement` | **jeton widget seul** + **membre** | même fonction SQL que le classement, réduite à rang, points, pseudo, avatar, livrée et couleurs. `401` expiré / falsifié, `403` non membre, `503` sans secret |
+
+> **Le jeton widget n'ouvre que sa route** (backend `0.86.0`, `decisions.md` §28).
+> `utilisateur_courant` le reconnaît à son audience (`greedf1-widget`), **sans lire la
+> signature**, et le refuse en `401` « Ce jeton est réservé au widget » **avant**
+> d'interroger Supabase : son refus ne dépend d'aucun secret. À l'inverse, une session
+> Supabase n'ouvre pas `/widget/championnats` — seule `jeton_widget.verifier` y garde,
+> algorithme imposé (`HS256`), audience, expiration et portée exigées.
 
 > **Aucun envoi APNs n'attend sans borne** (backend `0.85.2`). Les délais d'httpx
 > (`apns.DELAI`, 10 s pour connexion, lecture, écriture, pool) ne couvrent pas l'attente

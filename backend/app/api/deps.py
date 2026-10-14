@@ -5,6 +5,7 @@ import secrets
 
 from fastapi import Depends, Header, HTTPException, status
 
+from app.api.jeton_widget import est_jeton_widget
 from app.config import get_settings
 from app.supabase_client import ErreurSupabase, identifiant_du_jeton, selectionner
 
@@ -49,6 +50,16 @@ async def utilisateur_courant(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentification requise.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Le jeton du widget ne vaut que pour `/widget/*` (`decisions.md` §28). Il
+    # est refusé ici sans attendre Supabase : son rejet ne doit dépendre d'aucun
+    # secret, pas même d'un `WIDGET_TOKEN_SECRET` recopié de celui du projet.
+    if est_jeton_widget(jeton.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Ce jeton est réservé au widget.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
