@@ -52,6 +52,9 @@ final class ProchainGrandPrix: ObservableObject {
                 "prochain-gp", duree: CacheService.Duree.calendrier, forcer: forcer,
                 afficher: { (gp: GrandPrixEnBase?) in
                     if etat != .pret(gp) { etat = .pret(gp) }
+                    // Le widget « Prochain GP » lit ce que l'accueil vient de lire
+                    // (``DonneesWidget``) — et ne se redessine que si cela a changé.
+                    if let gp { DonneesWidget.recharger(si: DonneesWidget.fusionner([gp])) }
                 },
                 lire: {
                     let reponse = try await SupabaseManager.partage.client

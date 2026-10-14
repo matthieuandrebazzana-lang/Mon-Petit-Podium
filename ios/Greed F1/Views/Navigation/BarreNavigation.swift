@@ -57,6 +57,11 @@ struct BarreNavigation: View {
         .environment(\.modePrevisualisation, viewModel.modePrevisualisation)
         // Le championnat connu, pour « Mes Grands Prix » et « Mes résultats » (``GrandsPrixJoues``).
         .environment(\.championnatParDefaut, mesChampionnats.premierId)
+        // Un tap sur le widget « Prochain GP » (``DonneesWidget/urlAccueil``) ramène à
+        // l'accueil, quel que soit l'onglet où l'app avait été laissée.
+        .onOpenURL { url in
+            if url == DonneesWidget.urlAccueil { ongletActif = .accueil }
+        }
     }
 
     // MARK: - Apparence

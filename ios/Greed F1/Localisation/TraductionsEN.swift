@@ -533,6 +533,13 @@ enum TraductionsEN {
         "commun.grandPrix": "Grand Prix",
         "detailGP.km": "%@ km",
 
+        // MARK: - Widget « Prochain GP »
+        "widget.nom": "Next GP",
+        "widget.description": "The next Grand Prix and the predictions countdown.",
+        "widget.jours": "%dd",
+        "widget.vide": "Open the app to load the next GP",
+        "widget.a11y": "Next GP: %@, %@. %@.",
+
         // FIN
     ]
 }

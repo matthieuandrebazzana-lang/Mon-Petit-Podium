@@ -702,18 +702,6 @@ private struct WidgetGrandPrix: View {
     private var encreDouceGrasse: Bool { apparence?.encreDouceGrasse ?? false }
 }
 
-/// L'ombre portée du texte posé sur un drapeau à plusieurs bandes. Un seul propriétaire :
-/// le nom du Grand Prix et sa date la reçoivent, et elles ne peuvent pas diverger.
-private extension View {
-    @ViewBuilder func ombrePortee(_ active: Bool) -> some View {
-        if active {
-            self.shadow(color: .voile.opacity(0.45), radius: 1.5, y: 1)
-        } else {
-            self
-        }
-    }
-}
-
 // MARK: - Silhouette
 
 /// Le widget pendant son premier chargement : un bloc ``SkeletonView`` à **la hauteur et

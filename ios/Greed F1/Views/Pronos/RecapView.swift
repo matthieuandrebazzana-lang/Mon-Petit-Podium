@@ -672,18 +672,6 @@ private struct EnteteDrapeau: View {
     private var encreDouceGrasse: Bool { apparence?.encreDouceGrasse ?? false }
 }
 
-/// L'ombre portée du texte posé sur un drapeau à plusieurs bandes — la même valeur qu'à
-/// l'accueil et au calendrier, pour que les trois écrans ne divergent pas.
-private extension View {
-    @ViewBuilder func ombrePortee(_ active: Bool) -> some View {
-        if active {
-            self.shadow(color: .voile.opacity(0.45), radius: 1.5, y: 1)
-        } else {
-            self
-        }
-    }
-}
-
 #Preview("Grille complète") {
     NavigationStack {
         RecapView(

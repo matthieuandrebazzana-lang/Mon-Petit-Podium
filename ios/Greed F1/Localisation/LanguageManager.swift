@@ -75,6 +75,13 @@ final class LanguageManager: ObservableObject {
         UserDefaults.standard.set(nouvelle.rawValue, forKey: Self.cleStockage)
     }
 
+    /// Langue imposée **sans être enregistrée** — le widget reçoit celle de l'app par
+    /// l'App Group (``DonneesWidget``) et n'a aucun choix à mémoriser.
+    func imposer(_ nouvelle: Langue) {
+        guard nouvelle != langue else { return }
+        langue = nouvelle
+    }
+
     var locale: Locale { langue.locale }
 
     private static var langueDuTelephone: Langue {

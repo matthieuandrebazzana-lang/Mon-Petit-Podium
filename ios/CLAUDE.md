@@ -16,6 +16,8 @@
 | SDK | [`supabase-swift`](https://github.com/supabase/supabase-swift) **2.55.2**, épinglé — produits `Supabase` et `Auth` |
 | Xcode | **26.6** (`objectVersion = 77`) |
 | Bundle identifier | **`com.bazzana.greedf1`** |
+| Cibles | `Greed F1` (l'app) + **`GreedF1WidgetExtension`** (`com.bazzana.greedf1.GreedF1Widget`, widget « Prochain GP ») |
+| App Group | **`group.com.bazzana.greedf1`** — sur les deux cibles, seul propriétaire `Services/DonneesWidget.swift` |
 | Familles d'appareils | iPhone seulement · portrait seulement |
 | Simulateur cible | **iPhone 17 Pro, iOS 26.5** |
 
@@ -164,7 +166,7 @@ statique), le nom Unibet n'étant qu'un repli hors saison — sinon l'accueil di
 Bahrein » quand le calendrier disait « GP Malaisie ».
 
 **Onze Grands Prix masqués du calendrier — à réactiver.** Australie → Hongrie n'ont encore ni
-drapeau ni tracé : `GrandPrixSaison.masquesDuCalendrier` (`CalendrierView.swift`) les retire
+drapeau ni tracé : `GrandPrixSaison.masquesDuCalendrier` (`Models/GrandPrixSaison.swift`) les retire
 de l'onglet Calendrier seul, leurs données restent dans `saison2026`. Une fois leurs SVG
 extraits dans les assets, vider cet ensemble.
 
@@ -186,12 +188,35 @@ d'interrupteur dans l'app (les Réglages d'iOS en tiennent lieu). L'entitlement
 `aps-environment` vaut `development` ; un build TestFlight / App Store signe en
 `production`, et Railway doit alors passer `APNS_ENV=production`.
 
+**Le widget « Prochain GP » (`GreedF1Widget/`) réutilise les fichiers de l'app, il ne les
+recopie pas.** Ils entrent dans sa cible par une **exception d'appartenance** du groupe
+synchronisé `Greed F1` (`Exceptions for "Greed F1" folder in "GreedF1WidgetExtension"
+target`, liste dans le `.pbxproj`) : couleurs, formes, matériaux, `SupabaseConfig`, langue
+et traductions, `GrandPrix`, `GrandPrixSaison`, `GPRestants`, `DecodageJSON`,
+`ApparenceDrapeau`, `DrapeauxGP`, `DonneesWidget` **et le catalogue `Assets.xcassets`
+entier** (drapeaux, tracés, logo — le widget n'a pas de catalogue à lui). Un fichier
+partagé ne doit donc rien appeler qui n'y soit pas — sinon la cible du widget ne compile
+plus. Format Xcode, conservé à l'ouverture : vérifier après coup qu'il est toujours là.
+Données : l'app écrit dans l'App Group le GP lu par l'accueil (`ProchainGrandPrix`) et sa
+langue active (`GreedF1App`), puis recharge le widget ; le widget relit `GET /calendrier`
+(publique, **jamais de session**) et passe d'état seul par sa timeline
+(`TimelineProchainGP`). Il suit la langue de l'app (`LanguageManager.imposer`), jamais
+celle du téléphone. Tap → `greedf1://accueil` → onglet Accueil (`BarreNavigation`).
+Il n'existe pas de moyen de poser un widget au simulateur en ligne de commande : pour
+voir son rendu, monter ses vues dans un harnais `DEBUG` temporaire de l'app.
+
 ## 4. Règles de commit
 
 - **Incrémenter `MARKETING_VERSION`** dans `ios/Greed F1.xcodeproj/project.pbxproj` (deux
   occurrences, Debug et Release). C'est `CFBundleShortVersionString`, et **la seule source**
   du numéro affiché : `LandingView` et `ReglagesView` le lisent via `Bundle.main.versionAffichee`, il ne se
   recopie nulle part.
+- **Une version commune à l'app et au widget.** `MARKETING_VERSION` et
+  `CURRENT_PROJECT_VERSION` (le build) sont posés **au niveau du projet**, pas des cibles :
+  les deux en héritent, et l'App Store refuse une extension dont les numéros diffèrent de
+  l'app. Ne **jamais** les saisir dans l'onglet *General* d'une cible — Xcode les y écrirait
+  au niveau de la cible et les désaligneraient. Contrôle : `grep MARKETING_VERSION` sur le
+  `.pbxproj` rend exactement deux lignes. Incrémenter le build à chaque envoi TestFlight.
 - **La version web (`frontend/package.json`, `CLAUDE.md` §8) ne bouge pas** sur un commit
   iOS — la faire bouger laisserait croire à un déploiement Vercel qui n'a pas eu lieu.
   Même logique que la version backend (règle commune : `CLAUDE.md` §7).
@@ -217,6 +242,13 @@ ios/
 │   ├── extraire-gp.mjs          drapeaux + tracés + table des teintes, DEPUIS LA VERSION WEB
 │   ├── extraire-fond-piste.sh   assets/vue_piste.svg → la planche du sol de la piste
 │   └── extraire-drapeaux-pilotes.sh  les 17 drapeaux de NATIONALITÉ, DEPUIS LA VERSION WEB
+├── GreedF1Widget/               cible GreedF1WidgetExtension (groupe synchronisé à part)
+│   ├── GreedF1WidgetBundle.swift    point d'entrée, impose la langue de l'app
+│   ├── GreedF1Widget.swift          configuration : petit, moyen, écran verrouillé rectangulaire
+│   ├── FournisseurProchainGP.swift  App Group + `GET /calendrier`, `TimelineProchainGP` (calcul pur des entrées)
+│   ├── VuesProchainGP.swift         les trois formats, fond drapeau, décompte `Text(timerInterval:)`, état neutre
+│   └── Info.plist                   `API_BASE_URL` (Config.xcconfig, réglages du projet)
+├── GreedF1WidgetExtension.entitlements  App Group
 ├── AuthViewModel.swift          ┐
 ├── ConnexionView.swift          ├ hors du groupe synchronisé, référencés un à un
 ├── InscriptionView.swift        ┘
@@ -244,6 +276,7 @@ ios/
     │   ├── StatsProfil.swift    stats d'un profil + `tuiles` — seul endroit qui les met en forme
     │   ├── Championnat.swift    `Championnat`, `ProchainGP`, `PositionMembre`
     │   ├── GrandPrix.swift      `GrandPrixEnBase`, `SlugCircuit`, `EcheancePronostics` — LE calcul d'échéance
+    │   ├── GrandPrixSaison.swift  `EtatGp` et `GrandPrixSaison` (liste statique, noms traduits) — sortis de `CalendrierView` pour le widget
     │   ├── GPRestants.swift     décompte des GP non terminés (statut, sinon date écrite) — accueil, championnats, calendrier
     │   ├── Membre.swift         une ligne de classement
     │   ├── ResultatsGP.swift    résultats d'une course : lignes, nom coupé, mention, livrée
@@ -264,6 +297,7 @@ ios/
     │   ├── DonneesPronostics.swift  cotes + favoris (+ mes pronos en direct), bascule de favori, `POST …/pronostics`
     │   ├── Administration.swift   `POST /admin/action` — scraper sans figeage, jamais le secret
     │   ├── DepotPhoto.swift       photo réduite (800 px, JPEG 0,85) → Supabase Storage, rend l'URL `?v=`
+    │   ├── DonneesWidget.swift    App Group du widget : GP à venir + langue, fusion par id, rechargement — PARTAGÉ avec le widget
     │   ├── NotificationsPush.swift  permission, jeton APNs → `POST`/`DELETE /push/token`, langue ; `DelegueApplication`
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
@@ -274,7 +308,7 @@ ios/
     │   ├── Accueil/
     │   │   ├── AccueilView.swift       championnats et GP suivant réels, pastille + bouton selon l’état et l’existence d’un pronostic (`ProchainGrandPrix.aDesPronostics`) : « Faire » si ouvert sans, « Voir » si ouvert ou fermé avec, rien sinon
     │   │   ├── PileChampionnats.swift  championnats en paquet de cartes : carte du dessus pleine (tap = ouvrir, swipe = réordonner), bandes réduites de 3 % par cran vers le fond (`Perspective`, plancher 44 pt) : tap = aperçu sur place, 2ᵉ tap = ouvrir ; ordre mémorisé par compte (`OrdrePile`)
-    │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS
+    │   │   ├── ApparenceDrapeau.swift  voile et encres d'un drapeau, CALCULÉS ; `ombrePortee` (texte sur drapeau à bandes)
     │   │   └── DrapeauxGP.swift        table des teintes — GÉNÉRÉE, ne pas éditer
     │   ├── Composants/
     │   │   ├── CartesChampionnat.swift  carte de championnat, cartes d'action, chargement/échec (`EchecChargement`), PARTAGÉS

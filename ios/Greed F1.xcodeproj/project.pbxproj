@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0824299B307FC3A10088FC08 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0824299A307FC3A10088FC08 /* WidgetKit.framework */; };
+		0824299D307FC3A10088FC08 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0824299C307FC3A10088FC08 /* SwiftUI.framework */; };
+		082429A8307FC3A30088FC08 /* GreedF1WidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 08242998307FC3A10088FC08 /* GreedF1WidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		088E00CB305F9171000E15DE /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00CA305F9170000E15DE /* AuthViewModel.swift */; };
 		088E00CD305F917E000E15DE /* ConnexionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00CC305F917E000E15DE /* ConnexionView.swift */; };
 		088E00CF305F918D000E15DE /* InscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E00CE305F918D000E15DE /* InscriptionView.swift */; };
@@ -15,7 +18,35 @@
 		A1000000000000000000024 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000023 /* Auth */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		082429A6307FC3A30088FC08 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1000000000000000000033 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 08242997307FC3A10088FC08;
+			remoteInfo = GreedF1WidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		082429A9307FC3A30088FC08 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				082429A8307FC3A30088FC08 /* GreedF1WidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		08242998307FC3A10088FC08 /* GreedF1WidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GreedF1WidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0824299A307FC3A10088FC08 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		0824299C307FC3A10088FC08 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		082429AE307FC5670088FC08 /* GreedF1WidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GreedF1WidgetExtension.entitlements; sourceTree = "<group>"; };
 		088E00CA305F9170000E15DE /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		088E00CC305F917E000E15DE /* ConnexionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnexionView.swift; sourceTree = "<group>"; };
 		088E00CE305F918D000E15DE /* InscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InscriptionView.swift; sourceTree = "<group>"; };
@@ -25,6 +56,34 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		082429AD307FC3A30088FC08 /* Exceptions for "GreedF1Widget" folder in "GreedF1WidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 08242997307FC3A10088FC08 /* GreedF1WidgetExtension */;
+		};
+		082429B0307FC9000088FC08 /* Exceptions for "Greed F1" folder in "GreedF1WidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Config/Couleurs.swift,
+				Config/Formes.swift,
+				Config/Materiaux.swift,
+				Config/SupabaseConfig.swift,
+				Localisation/LanguageManager.swift,
+				Localisation/TraductionsEN.swift,
+				Localisation/TraductionsFR.swift,
+				Models/DecodageJSON.swift,
+				Models/GPRestants.swift,
+				Models/GrandPrix.swift,
+				Models/GrandPrixSaison.swift,
+				Resources/Assets.xcassets,
+				Services/DonneesWidget.swift,
+				Views/Accueil/ApparenceDrapeau.swift,
+				Views/Accueil/DrapeauxGP.swift,
+			);
+			target = 08242997307FC3A10088FC08 /* GreedF1WidgetExtension */;
+		};
 		A1000000000000000000010 /* Exceptions for "Greed F1" folder in "Greed F1" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -37,10 +96,19 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		0824299E307FC3A10088FC08 /* GreedF1Widget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				082429AD307FC3A30088FC08 /* Exceptions for "GreedF1Widget" folder in "GreedF1WidgetExtension" target */,
+			);
+			path = GreedF1Widget;
+			sourceTree = "<group>";
+		};
 		A1000000000000000000011 /* Greed F1 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				A1000000000000000000010 /* Exceptions for "Greed F1" folder in "Greed F1" target */,
+				082429B0307FC9000088FC08 /* Exceptions for "Greed F1" folder in "GreedF1WidgetExtension" target */,
 			);
 			path = "Greed F1";
 			sourceTree = "<group>";
@@ -48,6 +116,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		08242995307FC3A10088FC08 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0824299D307FC3A10088FC08 /* SwiftUI.framework in Frameworks */,
+				0824299B307FC3A10088FC08 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A1000000000000000000020 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -60,11 +137,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		08242999307FC3A10088FC08 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				0824299A307FC3A10088FC08 /* WidgetKit.framework */,
+				0824299C307FC3A10088FC08 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		A1000000000000000000025 = {
 			isa = PBXGroup;
 			children = (
+				082429AE307FC5670088FC08 /* GreedF1WidgetExtension.entitlements */,
 				A1000000000000000000002 /* Config.xcconfig */,
 				A1000000000000000000011 /* Greed F1 */,
+				0824299E307FC3A10088FC08 /* GreedF1Widget */,
+				08242999307FC3A10088FC08 /* Frameworks */,
 				A1000000000000000000026 /* Products */,
 				088E00CA305F9170000E15DE /* AuthViewModel.swift */,
 				088E00CC305F917E000E15DE /* ConnexionView.swift */,
@@ -77,6 +166,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000001 /* Greed F1.app */,
+				08242998307FC3A10088FC08 /* GreedF1WidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -84,6 +174,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		08242997307FC3A10088FC08 /* GreedF1WidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 082429AC307FC3A30088FC08 /* Build configuration list for PBXNativeTarget "GreedF1WidgetExtension" */;
+			buildPhases = (
+				08242994307FC3A10088FC08 /* Sources */,
+				08242995307FC3A10088FC08 /* Frameworks */,
+				08242996307FC3A10088FC08 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0824299E307FC3A10088FC08 /* GreedF1Widget */,
+			);
+			name = GreedF1WidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = GreedF1WidgetExtension;
+			productReference = 08242998307FC3A10088FC08 /* GreedF1WidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		A1000000000000000000030 /* Greed F1 */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A1000000000000000000041 /* Build configuration list for PBXNativeTarget "Greed F1" */;
@@ -91,10 +203,12 @@
 				A1000000000000000000031 /* Sources */,
 				A1000000000000000000020 /* Frameworks */,
 				A1000000000000000000032 /* Resources */,
+				082429A9307FC3A30088FC08 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				082429A7307FC3A30088FC08 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A1000000000000000000011 /* Greed F1 */,
@@ -118,6 +232,9 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					08242997307FC3A10088FC08 = {
+						CreatedOnToolsVersion = 26.6;
+					};
 					A1000000000000000000030 = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -142,11 +259,19 @@
 			projectRoot = "";
 			targets = (
 				A1000000000000000000030 /* Greed F1 */,
+				08242997307FC3A10088FC08 /* GreedF1WidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		08242996307FC3A10088FC08 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A1000000000000000000032 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -157,6 +282,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		08242994307FC3A10088FC08 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A1000000000000000000031 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -170,16 +302,166 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		082429A7307FC3A30088FC08 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 08242997307FC3A10088FC08 /* GreedF1WidgetExtension */;
+			targetProxy = 082429A6307FC3A30088FC08 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		082429AA307FC3A30088FC08 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_ENTITLEMENTS = GreedF1WidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = K9Q9UYFG9V;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GreedF1Widget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Greed F1";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1.GreedF1Widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		082429AB307FC3A30088FC08 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_ENTITLEMENTS = GreedF1WidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = K9Q9UYFG9V;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GreedF1Widget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Greed F1";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1.GreedF1Widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 		A1000000000000000000042 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = A1000000000000000000002 /* Config.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_OBJC_WEAK = YES;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.54.0;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -194,9 +476,11 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_OBJC_WEAK = YES;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.54.0;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 5.0;
@@ -211,7 +495,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Greed F1/Greed F1.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = K9Q9UYFG9V;
 				ENABLE_PREVIEWS = YES;
@@ -225,7 +508,6 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.53.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -240,7 +522,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Greed F1/Greed F1.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = K9Q9UYFG9V;
 				ENABLE_PREVIEWS = YES;
@@ -254,7 +535,6 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.53.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bazzana.greedf1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -265,6 +545,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		082429AC307FC3A30088FC08 /* Build configuration list for PBXNativeTarget "GreedF1WidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				082429AA307FC3A30088FC08 /* Debug */,
+				082429AB307FC3A30088FC08 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		A1000000000000000000040 /* Build configuration list for PBXProject "Greed F1" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
