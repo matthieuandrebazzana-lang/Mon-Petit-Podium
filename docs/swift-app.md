@@ -2208,18 +2208,20 @@ course, circuits, palmarès), la liste des 12 GP, `NationalitesPilotes`, `Drapea
 **Tranché avant l'étape 1 :**
 
 - **« 12 Grands Prix restants » reste une constante fixe** — pas de comptage en base.
-- ~~**Pas de cache de session**~~ — **révisé en iOS `0.51.0`** (`docs/decisions.md` §27) :
-  **cache mémoire *stale-while-revalidate***, le modèle du web (`lib/useDonnees.js`).
+- ~~**Pas de cache de session**~~ — **révisé en iOS `0.51.0`** (`docs/decisions.md` §27),
+  puis **`0.56.0`** (§29) : **cache *stale-while-revalidate* persistant sur disque**.
   `Services/CacheService.swift`, singleton, une clé par route préfixée par l'identifiant
-  du compte, vidé à la déconnexion. Validité : **60 s** pour `championnats/moi`,
-  `championnats/{id}/classement` et `profils/{id}/stats` ; **5 min** pour `calendrier` et
-  le prochain GP de l'accueil. Une valeur connue s'affiche **aussitôt** ; périmée, elle
-  reste affichée pendant la relecture. **Invalidation** : `charger(forcer: true)` périme
-  sa clé, et toute écriture réussie d'`APIClient` (`POST`/`PATCH`/`DELETE`) périme tout —
-  périmer n'efface pas, la valeur reste affichable jusqu'à la relecture. Branché sur
-  `MesChampionnats` (accueil, onglet Championnats), `ProchainGrandPrix` (accueil),
-  `ClassementChampionnat` (détail), `StatistiquesProfil` (profil), `CalendrierSaison`.
-  Le spinner ne sert toujours qu'au premier chargement et après un échec.
+  du compte. **L'ancienne valeur s'affiche toujours**, aussitôt — y compris au lancement à
+  froid, relue de l'instantané disque (`SnapshotsDisque`, `Caches/Instantanes/<compte>/`) :
+  championnats, prochain GP, classement du premier plan, profil, ses stats, calendrier.
+  **Fraîcheur unique : 30 s** — au-delà, et toujours pour un instantané relu du disque, la
+  valeur est revalidée **en arrière-plan** ; une relecture en vol n'est jamais doublée, un
+  échec ne remplace jamais une valeur affichée. **Invalidation** : `charger(forcer: true)`
+  périme sa clé, et toute écriture réussie d'`APIClient` (`POST`/`PATCH`/`DELETE`) périme
+  tout — périmer n'efface pas. Mémoire et disque sont vidés à la déconnexion, à la
+  suppression du compte et sur `signedOut` ; jamais de jeton sur disque. Branché sur
+  `MesChampionnats`, `ProchainGrandPrix`, `ClassementChampionnat`, `StatistiquesProfil`,
+  `CalendrierSaison`. Un premier chargement sans rien en cache se dessine en silhouette.
 - **Calendrier : `GET /calendrier`** (backend `0.85.0`) et non plus `/scraper/cotes` —
   `a_des_cotes` au lieu des marchés complets, une requête. Les cotes détaillées ne se
   lisent qu'à l'ouverture d'un GP (`DonneesPronostics`).

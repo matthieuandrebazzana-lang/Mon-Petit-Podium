@@ -86,8 +86,9 @@ struct BarreNavigation: View {
                 championnatDemande = id
             }
         }
-        // Widget « Classement » (`docs/decisions.md` §28) : un jeton neuf à chaque
-        // ouverture, la liste et la carte du dessus de la pile à chaque lecture.
+        // Widget « Classement » (`docs/decisions.md` §28) : un jeton neuf par lancement
+        // (`renouvelerJeton` ignore le passage en actif qui suit, et ne redemande qu'après
+        // 24 h), la liste et la carte du dessus de la pile à chaque lecture.
         .task { await SynchroWidgetClassement.renouvelerJeton() }
         .onChange(of: phase) { _, nouvelle in
             if nouvelle == .active { Task { await SynchroWidgetClassement.renouvelerJeton() } }

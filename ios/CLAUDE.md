@@ -221,7 +221,7 @@ voir son rendu, monter ses vues dans un harnais `DEBUG` temporaire de l'app.
 
 **Le widget « Classement » n'a jamais la session Supabase** (`docs/decisions.md` §28) — ses
 jetons de rafraîchissement sont à usage unique, un double rafraîchissement déconnecterait.
-L'app (`SynchroWidgetClassement`, app seule) demande à chaque ouverture un **jeton widget**
+L'app (`SynchroWidgetClassement`, app seule) demande **une fois par lancement** (puis au retour au premier plan après 24 h) un **jeton widget**
 (`POST /widget/token`, 30 jours, lecture seule) et le range dans le Keychain partagé
 (`JetonWidget`) ; le widget ne l'envoie qu'à `GET /widget/championnats/{id}/classement`.
 L'app écrit liste, premier plan de la pile (`OrdrePile.ecrire`) et profil dans l'App Group ;
