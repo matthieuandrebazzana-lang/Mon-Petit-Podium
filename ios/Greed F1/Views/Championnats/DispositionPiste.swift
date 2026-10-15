@@ -65,6 +65,14 @@ enum DispositionPiste {
     /// de celle-ci — voir ``Gabarit/seuil``.
     static let hauteurLegende: CGFloat = 16
 
+    /// **La zone de jeu de la piste intégrée de l'app**, entre les kerbs, sous l'en-tête et
+    /// le sélecteur de ``ChampionnatDetailView`` — **mesurée** au simulateur, iPhone 17 Pro :
+    /// 365,71 × 548 pt sans photo de championnat (501 de haut avec la photo de 100 pt). Le
+    /// widget « Classement » dispose ses voitures sur cette piste-ci, puis réduit le tout :
+    /// une piste virtuelle d'autres proportions rendait d'autres voies et d'autres écarts
+    /// pour le même classement.
+    static let pisteApp = CGSize(width: 365.71, height: 548)
+
     /// La taille d'une voiture, **la même pour toutes** sur un écran donné. La hauteur
     /// **se déduit** du rapport du dessin (141,12 × 288,09), partagé par les douze livrées.
     struct Gabarit: Equatable {

@@ -215,10 +215,12 @@ L'app écrit liste, premier plan de la pile (`OrdrePile.ecrire`) et profil dans 
 `oublierCompte()` efface jeton, données et avatars. **La session Supabase est épinglée au
 groupe Keychain de l'app** (`SupabaseManager.stockageSession`) : depuis `keychain-access-groups`,
 un élément écrit sans groupe tombe dans le **premier** groupe listé — le partagé. Ne jamais
-retirer ce stockage explicite. Piste : `DispositionPiste` (fichier propre, partagé) sur une
-piste virtuelle de 360 pt de large réduite à l'échelle — **au moyen format, 360 pt de haut**
-(`hauteurVirtuelleMoyen`, mesuré : à la largeur, toutes les voitures tombaient au même
-niveau) —, posée directement sur le fond du widget (ni panneau ni ligne médiane), `VueVoiture(imagePhoto:)` avec l'avatar
+retirer ce stockage explicite. Lignes : petit = top 5 (+ l'utilisateur au-delà), moyen =
+top 10 sur deux colonnes de 5 (l'utilisateur remplace le 10e), grand = top 10 (+ l'utilisateur,
+11 lignes au plus), rangs réels, corps ≥ 12 pt (`GabaritLigne`). Piste : `DispositionPiste`
+(fichier propre, partagé) calculé **sur la piste de l'app** (`DispositionPiste.pisteApp`,
+365,71 × 548 pt mesurés) puis réduit **uniformément**, centré au rapport de la piste — jamais
+recalculé à la taille du widget —, posée directement sur le fond du widget (ni panneau ni ligne médiane), `VueVoiture(imagePhoto:)` avec l'avatar
 réduit de l'App Group (`AvatarsWidget`, le widget ne télécharge rien au rendu). Tap →
 `greedf1://championnat/<id>` → onglet Championnats, détail ouvert (`ChampionnatsView`).
 **Seule exception à `t()`** : les libellés de la configuration App Intents, extraits à la
