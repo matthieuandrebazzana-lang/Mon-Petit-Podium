@@ -290,6 +290,10 @@ struct ActionsChampionnat: View {
     /// la liste que l'accueil et l'onglet affichent.
     @ObservedObject var mesChampionnats: MesChampionnats
 
+    /// Ouvre le détail d'un championnat rejoint, **à la place** de l'écran de saisie :
+    /// chaque écran qui monte ce bloc le pousse par sa propre `navigationDestination`.
+    let ouvrir: (Championnat) -> Void
+
     var body: some View {
         VStack(spacing: 10) {
             // `NavigationLink` et non `Button`, pour la même raison que dans la liste des
@@ -309,7 +313,7 @@ struct ActionsChampionnat: View {
             .buttonStyle(StyleAppui(.grandeSurface))
 
             NavigationLink {
-                RejoindreChampionnatView(mesChampionnats: mesChampionnats)
+                RejoindreChampionnatView(mesChampionnats: mesChampionnats, ouvrir: ouvrir)
             } label: {
                 CarteAction(
                     logo: "icone-rejoindre",

@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.3
 Version backend actuelle : 0.86.0
-Version iOS actuelle : 0.56.1 (build 9)
+Version iOS actuelle : 0.56.2 (build 10)
 
 ## STACK TECHNIQUE
 
@@ -65,7 +65,10 @@ Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
-## CE QUI EST FAIT — VERSION iOS (0.56.1)
+## CE QUI EST FAIT — VERSION iOS (0.56.2)
+
+Code d'invitation et adhésion (iOS 0.56.2, build 10 — backend et widgets inchangés) : dans `ChampionnatDetailView`, vue Classement, le code d'invitation s'affiche sous « membres · Saison » dans une pastille discrète (`PastilleCodeInvitation` : fond `fondSegmentInactif` + damier filigrane, encre `encreSegmentInactif`, 28 pt visibles, 44 pt de cible), visible de tout membre — `code_invitation` est déjà servi par `/championnats/moi` à chacun, aucune modification backend. Tap = copie, haptique légère, confirmation **en place** (icône → coche `encreSucces`, « Code copié » / « Code copied ») pendant `Mouvement.tenueConfirmation` (1,6 s, nouveau jeton), annonce VoiceOver ; libellé « Code d'invitation, appuyer pour copier ». Masquée sur la piste par opacité, sa place réservée (l'en-tête ne saute pas) ; sans photo, sous la rangée titre + ⋯ (le ⋯ reste centré sur le titre). `RejoindreChampionnatView` : après un code valide **ou un `409` déjà membre** (championnat retrouvé par son code dans la liste rechargée), l'écran se ferme et l'appelant pousse le détail (`ActionsChampionnat.ouvrir` → `navigationDestination(item:)` de l'accueil et de l'onglet) ; retour = écran de départ ; liste rechargée `forcer: true`, le nouveau championnat au fond de la pile (`OrdrePile.rapprocher`). Le détail n'est poussé qu'à `onDisappear` de la saisie : fermer et pousser dans la même transaction laissait la saisie réapparaître. Vérifié au simulateur dans un harnais `DEBUG` temporaire (pas de session) : clair et sombre, nom long, avec photo, copie (presse-papiers = code, retour à l'état initial), enchaînement fermeture → détail → retour. **Non vérifié** : adhésion réelle contre l'API, iPhone réel.
+
 
 Ménage après le cache persistant (iOS 0.56.1, build 9 — backend et widget inchangés) : `POST /widget/token` ne part plus qu'**une fois par lancement** — `SynchroWidgetClassement.renouvelerJeton` retient en mémoire l'heure du dernier jeton obtenu et ignore le passage à `.active` qui suit le `.task` ; un retour au premier plan après plus de 24 h en redemande un ; un échec laisse le prochain passage réessayer ; `effacer()` (déconnexion, suppression, `signedOut`) remet le compteur à zéro pour le compte suivant. `docs/swift-app.md` §7.6 réécrit : cache persistant sur disque, ancienne valeur toujours affichée, revalidation en arrière-plan au-delà de 30 s (renvoi à `decisions.md` §29). Compilé ; non vérifié au simulateur (le décompte des requêtes demande une session).
 

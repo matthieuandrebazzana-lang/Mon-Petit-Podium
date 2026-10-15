@@ -25,7 +25,8 @@ struct ChampionnatsView: View {
     /// la liste le connaît, puis remis à `nil`.
     var championnatDemande: Binding<UUID?> = .constant(nil)
 
-    /// Le détail ouvert par le widget — les cartes, elles, poussent par `NavigationLink`.
+    /// Le détail ouvert par le widget ou après une adhésion — les cartes, elles, poussent
+    /// par `NavigationLink`.
     @State private var championnatOuvert: Championnat?
 
     /// Grands Prix restants — lus sur la liste de la saison, voir ``GPRestants``.
@@ -66,7 +67,9 @@ struct ChampionnatsView: View {
                         liste
 
                         Spacer().frame(height: 10)
-                        ActionsChampionnat(mesChampionnats: mesChampionnats)
+                        ActionsChampionnat(mesChampionnats: mesChampionnats) {
+                            championnatOuvert = $0
+                        }
 
                         Spacer().frame(height: 20)
                         blocSaison

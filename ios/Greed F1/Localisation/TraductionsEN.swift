@@ -295,6 +295,8 @@ enum TraductionsEN {
         "championnat.quitterImpossible": "Couldn't leave the championship",
         "championnat.photoImpossible": "Couldn't change the photo",
         "championnat.codeInvitation": "Invite code",
+        "championnat.codeCopie": "Code copied",
+        "championnat.a11y.codeCopier": "Invite code, tap to copy",
         "championnat.modifierPhoto": "Change photo",
         "championnat.quitterLeChampionnat": "Leave championship",
         "championnat.affichage": "View",

@@ -6,9 +6,14 @@ import SwiftUI
 ///
 /// **`POST /championnats/rejoindre`** (`docs/swift-app.md` §3.3). Le succès fige la
 /// saisie, écrit le nom du championnat rejoint sous le bouton, et le bouton devient
-/// « Voir le championnat ». Un refus — code inconnu (`404`), déjà membre (`409`) — s'écrit
-/// au même endroit (``ErreurEnLigne``), jamais dans une alerte, et s'efface à la frappe
-/// suivante. La liste de ``MesChampionnats`` est rechargée dès le succès.
+/// « Voir le championnat ». Un refus — code inconnu (`404`) — s'écrit au même endroit
+/// (``ErreurEnLigne``), jamais dans une alerte, et s'efface à la frappe suivante. La liste
+/// de ``MesChampionnats`` est rechargée dès le succès.
+///
+/// **Avec ``ouvrir``, le succès ne s'attarde pas** : l'écran se ferme et l'appelant pousse
+/// le détail du championnat rejoint à sa place — le retour ramène donc à l'écran d'où l'on
+/// est parti, jamais à la saisie. **Déjà membre (`409`), même chose** : le championnat est
+/// retrouvé par son code dans la liste rechargée, et s'ouvre sans erreur.
 ///
 /// **Six cases, mais un seul champ de texte.** Les cases sont un dessin ; ce qui reçoit la
 /// frappe est un `TextField` unique, invisible, posé par-dessus toute la rangée. C'est ce
@@ -29,6 +34,12 @@ struct RejoindreChampionnatView: View {
 
     @ObservedObject var mesChampionnats: MesChampionnats
 
+    /// Pousse le détail du championnat rejoint, **une fois cet écran fermé** — voir
+    /// ``ActionsChampionnat``. `nil` (aperçu) : l'ancien parcours, « Voir le championnat ».
+    var ouvrir: ((Championnat) -> Void)? = nil
+
+    @Environment(\.dismiss) private var dismiss
+
     @State private var code = ""
     @FocusState private var saisieActive: Bool
 
@@ -44,6 +55,8 @@ struct RejoindreChampionnatView: View {
     @State private var erreur: ErreurAPI?
     /// Le championnat rejoint. **Non nul, l'écran a fini son travail.**
     @State private var rejoint: Championnat?
+    /// Le championnat à pousser **une fois cet écran disparu** — voir ``aboutir(_:)``.
+    @State private var aOuvrir: Championnat?
 
     /// La longueur du code, écrite **une fois** : la rangée, la validité du bouton et le
     /// texte d'accessibilité s'y réfèrent tous les trois.
@@ -115,6 +128,11 @@ struct RejoindreChampionnatView: View {
         // Retour haptique **au même instant** que ce qu'il confirme.
         .sensoryFeedback(.success, trigger: rejoint) { _, nouveau in nouveau != nil }
         .sensoryFeedback(.error, trigger: erreur) { _, nouveau in nouveau != nil }
+        .onDisappear {
+            guard let aOuvrir else { return }
+            self.aOuvrir = nil
+            ouvrir?(aOuvrir)
+        }
     }
 
     // MARK: - Envoi
@@ -141,8 +159,17 @@ struct RejoindreChampionnatView: View {
                 let championnat: Championnat = try await APIClient.partage.requete(
                     "championnats/rejoindre", methode: .post, corps: corps)
                 envoi = false
-                rejoint = championnat
+                aboutir(championnat)
                 await mesChampionnats.charger(forcer: true)
+            } catch ErreurAPI.serveur(statut: 409, let message) {
+                // Déjà membre : ce n'est pas un échec, c'est le championnat qu'on cherchait.
+                await mesChampionnats.charger(forcer: true)
+                envoi = false
+                if let connu = connuParCode() {
+                    aboutir(connu)
+                } else {
+                    erreur = .serveur(statut: 409, message: message)
+                }
             } catch let refus as ErreurAPI {
                 envoi = false
                 erreur = refus
@@ -150,6 +177,28 @@ struct RejoindreChampionnatView: View {
                 envoi = false
             }
         }
+    }
+
+    /// Le championnat de la liste qui porte le code saisi — l'adhésion en double ne rend
+    /// rien d'autre qu'un `409`.
+    private func connuParCode() -> Championnat? {
+        guard case .pret(let liste) = mesChampionnats.etat else { return nil }
+        return liste.first { $0.codeInvitation.uppercased() == codeNormalise }
+    }
+
+    /// Le championnat est obtenu. ``rejoint`` porte l'haptique de succès ; avec ``ouvrir``,
+    /// l'écran se ferme et cède la place au détail.
+    ///
+    /// > **Le détail n'est poussé qu'à `onDisappear`**, jamais dans la même transaction
+    /// > que la fermeture : mesuré au simulateur, retirer un écran et en pousser un autre
+    /// > d'un même geste laisse la pile incohérente — la saisie réapparaissait sous le
+    /// > détail. Une fermeture « sans animation » (`disablesAnimations`) n'y change rien :
+    /// > la pile native l'anime quand même.
+    private func aboutir(_ championnat: Championnat) {
+        rejoint = championnat
+        guard ouvrir != nil else { return }
+        aOuvrir = championnat
+        dismiss()
     }
 
     /// La confirmation, à la place exacte où un refus se serait écrit.

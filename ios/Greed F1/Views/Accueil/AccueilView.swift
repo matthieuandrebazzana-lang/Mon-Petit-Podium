@@ -32,6 +32,10 @@ struct AccueilView: View {
     /// Le chemin du parcours de pronostics — voir ``EtapePronos``.
     @State private var cheminPronos: [EtapePronos] = []
 
+    /// Le championnat qui vient d'être rejoint, poussé **à la place** de l'écran de saisie.
+    /// Posé ici et non sur ``PileChampionnats`` : sans championnat, la pile n'est pas montée.
+    @State private var championnatRejoint: Championnat?
+
     /// La bande de la pile dépliée en aperçu — voir ``PileChampionnats``. Tenue ici parce
     /// qu'un tap **n'importe où** hors de la pile la referme.
     @State private var apercuPile: UUID?
@@ -92,6 +96,9 @@ struct AccueilView: View {
             // Revalidées à chaque apparition si elles ont plus de 30 s (``CacheService``, §7.6).
             .task { await mesChampionnats.charger() }
             .task { await prochainGP.charger() }
+            .navigationDestination(item: $championnatRejoint) { championnat in
+                ChampionnatDetailView(championnat: championnat, mesChampionnats: mesChampionnats)
+            }
             // Retour du parcours de pronostics : une grille vient peut-être d'être envoyée.
             .onChange(of: cheminPronos.isEmpty) { _, vide in
                 if vide { Task { await prochainGP.relirePronostics() } }
@@ -231,7 +238,9 @@ struct AccueilView: View {
 
     /// Les deux cartes d'action, dont la composition vit dans ``ActionsChampionnat``
     /// — la liste des championnats pose exactement le même bloc.
-    private var actions: some View { ActionsChampionnat(mesChampionnats: mesChampionnats) }
+    private var actions: some View {
+        ActionsChampionnat(mesChampionnats: mesChampionnats) { championnatRejoint = $0 }
+    }
 
     /// La ligne qui ferme l'écran. Elle répond à un vrai défaut de composition — sous une
     /// liste d'un ou deux championnats, le bas de l'écran restait vide sur toute sa moitié.

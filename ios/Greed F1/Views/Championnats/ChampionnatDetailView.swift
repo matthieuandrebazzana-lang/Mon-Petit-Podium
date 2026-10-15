@@ -352,17 +352,25 @@ struct ChampionnatDetailView: View {
     @ViewBuilder private var entete: some View {
         if let photo {
             DispositionEntete(titre: championnat.nom) {
-                titreEtSousTitre
+                VStack(alignment: .leading, spacing: 0) {
+                    titreEtSousTitre
+                    pastilleCode
+                }
                 PhotoChampionnat(nom: championnat.nom, photo: photo)
                 iconeMenu
                     .padding(.horizontal, -retraitGlyphe)
             }
         } else {
-            HStack(alignment: .center, spacing: 16) {
-                titreEtSousTitre
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                iconeMenu
-                    .padding(.horizontal, -retraitGlyphe)
+            // La pastille sous la rangée, et non dans le bloc texte : le ⋯ reste centré
+            // sur le titre et l'effectif, là où il était.
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .center, spacing: 16) {
+                    titreEtSousTitre
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    iconeMenu
+                        .padding(.horizontal, -retraitGlyphe)
+                }
+                pastilleCode
             }
         }
     }
@@ -383,6 +391,17 @@ struct ChampionnatDetailView: View {
                 .foregroundColor(.secondaire)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// Le code d'invitation sous l'effectif — ``PastilleCodeInvitation``.
+    ///
+    /// **Classement seul, mais sa place reste réservée sur la piste** : l'en-tête garde sa
+    /// hauteur d'un segment à l'autre, et le sélecteur ne saute pas sous le doigt. Même
+    /// bascule d'opacité que les deux contenus (`visible(_:)`).
+    private var pastilleCode: some View {
+        PastilleCodeInvitation(code: championnat.codeInvitation)
+            .visible(vue == .classement)
+            .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
     }
 
     /// La photo **de la liste rechargée** dès qu'elle y figure : ``championnat`` est celui
@@ -1027,6 +1046,79 @@ private struct WidgetGrandPrixSuivant: View {
 }
 
 // MARK: - Le code d'invitation
+
+/// Le code sous l'effectif, **copié d'un tap** — visible de tout membre : `code_invitation`
+/// est servi par `/championnats/moi` quel que soit l'appelant.
+///
+/// **Une pastille discrète, pas un bouton** : le fond neutre et le damier du sélecteur
+/// segmenté (``Color/fondSegmentInactif``), l'encre ``Color/encreSegmentInactif`` — 8,18:1
+/// sur ce fond posé sur le beige. La forme visible fait 28 pt ; la cible, 44 pt de haut.
+///
+/// **La confirmation se pose en place**, là où le doigt vient de toucher : l'icône devient
+/// une coche, le code devient « Code copié », puis tout revient après
+/// ``Mouvement/tenueConfirmation``. Rien ne bloque l'écran, rien n'apparaît ailleurs. Le
+/// retour haptique léger part dans la même image que la bascule ; VoiceOver annonce la
+/// copie. Un second tap pendant la tenue recopie et relance la tenue.
+private struct PastilleCodeInvitation: View {
+
+    let code: String
+
+    @State private var copie = false
+    /// Incrémenté à chaque copie : c'est lui qui déclenche l'haptique, y compris quand
+    /// ``copie`` est déjà vrai.
+    @State private var copies = 0
+    @State private var retour: Task<Void, Never>?
+
+    var body: some View {
+        Button(action: copier) {
+            HStack(spacing: 6) {
+                Image(systemName: copie ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 11, weight: .medium))
+                    // La coche est un graphique porteur de sens : `encreSucces`, ≥ 3:1.
+                    .foregroundColor(copie ? .encreSucces : .encreSegmentInactif)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 14)
+
+                Text(copie ? t("championnat.codeCopie") : code)
+                    .font(.custom("HelveticaNeue-Medium", size: 13))
+                    .tracking(copie ? 0 : 1.5)
+                    .foregroundColor(.encreSegmentInactif)
+                    .contentTransition(.opacity)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 28)
+            .background {
+                ZStack {
+                    Color.fondSegmentInactif
+                    Damier(opacite: Materiau.damierFiligrane, encre: .secondaire)
+                }
+                .clipShape(Capsule())
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(StyleAppui(.bouton))
+        .animation(Mouvement.entree(Mouvement.echangeIcone), value: copie)
+        .sensoryFeedback(.impact(weight: .light), trigger: copies)
+        .accessibilityLabel(t("championnat.a11y.codeCopier"))
+        .accessibilityValue(code.map(String.init).joined(separator: " "))
+        .onDisappear { retour?.cancel() }
+    }
+
+    private func copier() {
+        UIPasteboard.general.string = code
+        copie = true
+        copies += 1
+        AccessibilityNotification.Announcement(t("championnat.codeCopie")).post()
+        retour?.cancel()
+        retour = Task {
+            try? await Task.sleep(for: .seconds(Mouvement.tenueConfirmation))
+            guard !Task.isCancelled else { return }
+            copie = false
+        }
+    }
+}
 
 /// Le code, en grand, et le partage système. **Une feuille compacte, pas un écran** : on
 /// vient chercher six caractères, on repart — un glissement vers le bas suffit à la fermer.

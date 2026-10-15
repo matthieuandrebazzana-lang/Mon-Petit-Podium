@@ -123,6 +123,11 @@ enum Mouvement {
     /// regarde ce qui arrive, on ne regarde pas ce qui s'en va.
     static let accordeonOuverture: TimeInterval = 0.24
     static let accordeonFermeture: TimeInterval = 0.17
+
+    /// **Tenue d'une confirmation posée en place** — « Code copié » dans la pastille du
+    /// code d'invitation : le temps de la lire, puis l'état d'origine revient. Ce n'est
+    /// pas une animation (les deux bascules prennent ``echangeIcone``), c'est une pause.
+    static let tenueConfirmation: TimeInterval = 1.6
 }
 
 // MARK: - Retour d'appui
