@@ -9,8 +9,8 @@ struct EntreeClassement: TimelineEntry {
     let championnat: DonneesWidget.ChampionnatWidget?
     /// Le dernier classement reçu — de l'API à l'instant, ou de l'App Group.
     let releve: DonneesWidget.ReleveClassement?
-    /// Faux quand l'API n'a pas répondu (hors ligne, jeton expiré) : le widget dit alors
-    /// de quand datent ses données.
+    /// Faux quand l'API n'a pas répondu (hors ligne, jeton expiré) : le widget garde alors
+    /// silencieusement le dernier relevé — il n'affiche aucune date.
     let aJour: Bool
     let profilId: UUID?
     let affichage: AffichagePetit

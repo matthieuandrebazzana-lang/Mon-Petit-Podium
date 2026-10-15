@@ -305,23 +305,22 @@ extension Color {
     static let ligneMedianePiste = Color(clair: Color(hexadecimal: 0x1D1D1B).opacity(0.11),
                                          sombre: Color.white.opacity(0.11))
 
-    /// Le damier **du fond du widget « Classement »**, sur tout le widget — le bordeaux en
-    /// clair, le blanc en sombre, **opacité comprise** (elle diffère d'un mode à l'autre).
+    /// Le damier **du fond du widget « Classement »** dès qu'il porte du texte de
+    /// classement (« Classement », « Classement + piste », état neutre) — le bordeaux en
+    /// clair, le blanc en sombre, **opacité comprise** : une texture uniforme, sans fondu.
     ///
-    /// > **2 % en clair et non 5 %** : ``grisSecondaire`` (rangs au-delà du podium, « Mis à
-    /// > jour à ») ne tient que **4,71:1** sur le beige nu, et le bordeaux le fait tomber à
-    /// > 4,28:1 dès 5 %. Mesuré au pire pixel : **4,53:1** à 2 % (plafond 2,3 %). En sombre,
-    /// > 5 % : ``encrePrimaire`` **5,26:1**, ``grisSecondaire`` 6,71:1.
+    /// > **2 % en clair et non les 5 % demandés** : ``grisSecondaire`` (rangs au-delà du
+    /// > podium) ne tient que **4,71:1** sur le beige nu et tombe à **4,28:1** au pire pixel
+    /// > d'un damier à 5 % ; il faut ≤ 2,2 %. À 2 % : **4,53:1**. En sombre, 5 % :
+    /// > ``encrePrimaire`` **5,26:1**, ``grisSecondaire`` 6,71:1, ``texte`` 14,84:1.
     static let damierWidget = Color(clair: Color(hexadecimal: 0x800111).opacity(0.02),
                                     sombre: Color.white.opacity(0.05))
 
-    /// Le surcroît de damier **sous la piste** du widget, posé sur ``damierWidget`` : les
-    /// deux ensemble font **9 %** dans les deux modes (1 − 0,98 × 0,929 ; 1 − 0,95 × 0,958).
-    /// Aucun texte d'interface n'y est posé — la zone s'arrête au cadre de la piste, côté
-    /// texte —, seulement des voitures opaques. Y vaudraient : ``texte`` 12,91:1 en clair,
-    /// 13,09:1 en sombre ; ``encrePrimaire`` 4,64:1 en sombre.
-    static let damierWidgetPiste = Color(clair: Color(hexadecimal: 0x800111).opacity(0.071),
-                                         sombre: Color.white.opacity(0.042))
+    /// Le damier du widget quand **la piste est seule** — 8 % dans les deux modes, seul
+    /// calque sur le fond. Seul texte posé dessus : le nom du championnat en ``texte``,
+    /// **13,17:1** en clair, **13,52:1** en sombre au pire pixel.
+    static let damierWidgetPiste = Color(clair: Color(hexadecimal: 0x800111).opacity(0.08),
+                                         sombre: Color.white.opacity(0.08))
 }
 
 // MARK: - Typographie

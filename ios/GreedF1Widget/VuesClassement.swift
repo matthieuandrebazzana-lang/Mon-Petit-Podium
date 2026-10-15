@@ -21,7 +21,6 @@ struct VueClassement: View {
 
     @Environment(\.widgetFamily) private var format
     @Environment(\.widgetContentMargins) private var marges
-    @Environment(\.showsWidgetContainerBackground) private var afficheFond
 
     init(entree: EntreeClassement) {
         self.entree = entree
@@ -35,14 +34,14 @@ struct VueClassement: View {
                 switch (format, entree.affichage, entree.affichageGrand) {
                 case (.systemLarge, _, .pisteSeule):
                     PisteTitree(entree: entree, championnat: championnat, membres: releve.membres,
-                                tailleTitre: 16, miseAJourEnTete: false)
+                                tailleTitre: 16)
                 case (.systemLarge, _, _):
                     GrandClassement(entree: entree, championnat: championnat, membres: releve.membres)
                 case (.systemMedium, _, _):
                     switch entree.affichageMoyen {
                     case .piste:
                         PisteTitree(entree: entree, championnat: championnat, membres: releve.membres,
-                                    tailleTitre: 14, miseAJourEnTete: true)
+                                    tailleTitre: 14)
                     case .classement:
                         MoyenClassement(entree: entree, championnat: championnat, membres: releve.membres)
                     case .classementEtPiste:
@@ -51,7 +50,7 @@ struct VueClassement: View {
                     }
                 case (_, .piste, _):
                     PisteTitree(entree: entree, championnat: championnat, membres: releve.membres,
-                                tailleTitre: 13, miseAJourEnTete: false)
+                                tailleTitre: 13)
                 default:
                     PetitClassement(entree: entree, championnat: championnat, membres: releve.membres)
                 }
@@ -59,20 +58,22 @@ struct VueClassement: View {
                 ClassementNeutre()
             }
         }
-        // Les marges du système, posées ici (``ClassementWidget`` les désactive) : le
-        // surcroît de damier de la piste, peint au fond de cette vue, couvre alors tout le
-        // widget — le même cadre que le damier du `containerBackground`, donc le même motif,
-        // chevron sur chevron.
+        // Les marges du système, posées ici (``ClassementWidget`` les désactive).
         .padding(marges)
-        .backgroundPreferenceValue(ZoneDamierPiste.self) { zone in
-            if let zone, afficheFond {
-                GeometryReader { widget in
-                    DamierPiste(cadre: widget[zone.cadre], bords: zone.bords, widget: widget.size)
-                }
-            }
-        }
         .environment(\.locale, localeInterface)
         .widgetURL(entree.championnat.map { DonneesWidget.urlChampionnat($0.id) } ?? DonneesWidget.urlAccueil)
+    }
+
+    /// Vrai quand le widget ne montre **que la piste** — le fond y prend le damier plus
+    /// marqué (``Color/damierWidgetPiste``). « Classement + piste » n'en est pas : un seul
+    /// damier, continu, sur tout le fond.
+    static func pisteSeule(_ entree: EntreeClassement, format: WidgetFamily) -> Bool {
+        guard entree.championnat != nil, entree.releve != nil else { return false }
+        switch format {
+        case .systemLarge:  return entree.affichageGrand == .pisteSeule
+        case .systemMedium: return entree.affichageMoyen == .piste
+        default:            return entree.affichage == .piste
+        }
     }
 
     /// Les lignes affichées : les `tete` premiers, et l'utilisateur à la place de la
@@ -113,8 +114,6 @@ private struct PetitClassement: View {
                 ColonneLignes(membres: VueClassement.lignes(membres, tete: 5, moi: entree.profilId, enPlus: true),
                               entree: entree, gabarit: .petit)
             }
-            Spacer(minLength: 0)
-            MiseAJour(entree: entree)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
@@ -123,32 +122,19 @@ private struct PetitClassement: View {
 }
 
 /// La piste sous le nom du championnat — le petit format, le moyen, et le grand en « Piste
-/// seule ». **Une seule vue** : seuls le corps du titre et la place de « Mis à jour à »
-/// changent, la piste se dispose seule dans ce qu'on lui laisse.
+/// seule ». **Une seule vue** : seul le corps du titre change, la piste se dispose seule
+/// dans ce qu'on lui laisse.
 private struct PisteTitree: View {
 
     let entree: EntreeClassement
     let championnat: DonneesWidget.ChampionnatWidget
     let membres: [Membre]
     let tailleTitre: CGFloat
-    /// Au moyen format, la hauteur est ce qui manque le plus : « Mis à jour à » remonte à
-    /// droite du titre, où la largeur ne sert à rien.
-    let miseAJourEnTete: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                NomChampionnat(nom: championnat.nom, taille: tailleTitre)
-                if miseAJourEnTete {
-                    Spacer(minLength: 0)
-                    MiseAJour(entree: entree)
-                }
-            }
+            NomChampionnat(nom: championnat.nom, taille: tailleTitre)
             PisteSimplifiee(membres: membres, avatars: entree.avatars)
-                // Le titre au-dessus ; « Mis à jour à » dessous, s'il y est.
-                .zoneDamierPiste(bords: miseAJourEnTete || entree.aJour
-                                 ? [.leading, .trailing, .bottom] : [.leading, .trailing])
-            if !miseAJourEnTete { MiseAJour(entree: entree) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
@@ -170,12 +156,9 @@ private struct MoyenClassement: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                NomChampionnat(nom: championnat.nom, taille: 14)
-                Spacer(minLength: 0)
-                MiseAJour(entree: entree)
-            }
-            .padding(.bottom, 4)
+            NomChampionnat(nom: championnat.nom, taille: 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 4)
 
             if membres.isEmpty {
                 AucunMembre()
@@ -198,8 +181,7 @@ private struct MoyenClassement: View {
 
 /// Le classement à gauche, la piste à droite — le grand « Classement + piste » ramené au
 /// moyen format. Une colonne : les cinq premiers, et l'utilisateur **en plus** s'il n'y est
-/// pas, comme au petit format. « Mis à jour à » reste à droite du titre, comme au moyen
-/// « Classement » : la hauteur manque, pas la largeur. La piste prend toute la hauteur, à
+/// pas, comme au petit format. La piste prend toute la hauteur, à
 /// la largeur que lui donne le rapport de la piste de l'app — la hauteur la borne de toute
 /// façon, une colonne plus large ne grandirait pas les voitures.
 private struct MoyenClassementEtPiste: View {
@@ -211,12 +193,9 @@ private struct MoyenClassementEtPiste: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    NomChampionnat(nom: championnat.nom, taille: 14)
-                    Spacer(minLength: 0)
-                    MiseAJour(entree: entree)
-                }
-                .padding(.bottom, 4)
+                NomChampionnat(nom: championnat.nom, taille: 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 4)
 
                 if membres.isEmpty {
                     AucunMembre()
@@ -232,7 +211,6 @@ private struct MoyenClassementEtPiste: View {
                 .aspectRatio(DispositionPiste.pisteApp.width / DispositionPiste.pisteApp.height,
                              contentMode: .fit)
                 .frame(maxHeight: .infinity)
-                .zoneDamierPiste(bords: [.top, .bottom, .trailing])
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(VueClassement.resume(championnat, membres))
@@ -260,13 +238,11 @@ private struct GrandClassement: View {
                                   entree: entree, gabarit: .grand)
                 }
                 Spacer(minLength: 0)
-                MiseAJour(entree: entree)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             PisteSimplifiee(membres: membres, avatars: entree.avatars)
                 .frame(width: 112)
-                .zoneDamierPiste(bords: [.top, .bottom, .trailing])
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(VueClassement.resume(championnat, membres))
@@ -401,22 +377,6 @@ private struct PastilleWidget: View {
     }
 }
 
-/// « Mis à jour à 14h05 » — **seulement quand les données ne sont pas fraîches** : hors
-/// ligne ou jeton expiré. À jour, il n'y a rien à dire.
-private struct MiseAJour: View {
-    let entree: EntreeClassement
-
-    var body: some View {
-        if !entree.aJour, let date = entree.releve?.date {
-            Text(t("widgetClassement.misAJour", heureInterface(date)))
-                .font(.labelSm)
-                .foregroundColor(.grisSecondaire)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-    }
-}
-
 private struct AucunMembre: View {
     var body: some View {
         Text(t("piste.aucunMembre"))
@@ -448,69 +408,26 @@ struct ClassementNeutre: View {
 // MARK: - Le fond
 
 /// Le fond du widget, **dans tous ses états** — à jour, périmé, hors ligne, neutre : le
-/// beige et le damier en filigrane (``Color/damierWidget``), le composant ``Damier`` de
-/// l'app. Le motif est vectoriel et rendu à la taille du widget (≈ 5 Mo au grand format,
-/// 3×) : rien à précomposer sous la limite d'environ 30 Mo.
+/// beige et le damier en filigrane, le composant ``Damier`` de l'app. **Une texture
+/// uniforme** : opacité constante, ni fondu, ni masque, ni dégradé — un seul calque sur
+/// tout le widget, donc continu d'une zone à l'autre en « Classement + piste ».
+///
+/// L'encre (opacité comprise) suit l'affichage : ``Color/damierWidget`` dès qu'il y a du
+/// texte de classement, ``Color/damierWidgetPiste`` quand la piste est seule.
+///
+/// Le motif est vectoriel et rendu à la taille du widget (≈ 5 Mo au grand format, 3×) :
+/// rien à précomposer sous la limite d'environ 30 Mo.
 struct FondClassement: View {
+    let entree: EntreeClassement
+
+    @Environment(\.widgetFamily) private var format
+
     var body: some View {
         ZStack {
             Color.fondPrincipal
-            Damier(opacite: 1, encre: .damierWidget)
+            Damier(opacite: 1, encre: VueClassement.pisteSeule(entree, format: format)
+                   ? .damierWidgetPiste : .damierWidget)
         }
-    }
-}
-
-/// Le cadre de la piste, remonté à la racine du widget, et les **bords sans texte** — ceux
-/// où le surcroît de damier peut filer jusqu'au bord du widget.
-struct ZoneDamierPiste: PreferenceKey {
-    struct Zone {
-        let cadre: Anchor<CGRect>
-        let bords: Edge.Set
-    }
-
-    static let defaultValue: Zone? = nil
-
-    static func reduce(value: inout Zone?, nextValue: () -> Zone?) {
-        value = value ?? nextValue()
-    }
-}
-
-private extension View {
-    func zoneDamierPiste(bords: Edge.Set) -> some View {
-        anchorPreference(key: ZoneDamierPiste.self, value: .bounds) {
-            ZoneDamierPiste.Zone(cadre: $0, bords: bords)
-        }
-    }
-}
-
-/// Le surcroît de damier sous la piste (``Color/damierWidgetPiste``) : **le même motif**
-/// que le fond, au même cadre — le widget entier —, découvert par un masque adouci. Pas de
-/// couture : le motif ne fait que s'appuyer.
-///
-/// > **Côté texte, le fondu reste dans le cadre de la piste** (rentré de deux fois le
-/// > flou) : les points de la colonne voisine, le titre, « Mis à jour à » restent sur le
-/// > fond seul, où leur contraste est mesuré. Les autres bords filent au bord du widget.
-private struct DamierPiste: View {
-    let cadre: CGRect
-    let bords: Edge.Set
-    let widget: CGSize
-
-    private static let flou: CGFloat = 4
-
-    var body: some View {
-        let rentre = Self.flou * 2
-        let gauche = bords.contains(.leading) ? -rentre : cadre.minX + rentre
-        let droite = bords.contains(.trailing) ? widget.width + rentre : cadre.maxX - rentre
-        let haut = bords.contains(.top) ? -rentre : cadre.minY + rentre
-        let bas = bords.contains(.bottom) ? widget.height + rentre : cadre.maxY - rentre
-
-        Damier(opacite: 1, encre: .damierWidgetPiste)
-            .mask {
-                Rectangle()
-                    .frame(width: max(0, droite - gauche), height: max(0, bas - haut))
-                    .position(x: (gauche + droite) / 2, y: (haut + bas) / 2)
-                    .blur(radius: Self.flou)
-            }
     }
 }
 

@@ -13,10 +13,9 @@ struct ClassementWidget: Widget {
                                intent: IntentionClassement.self,
                                provider: FournisseurClassement()) { entree in
             VueClassement(entree: entree)
-                .containerBackground(for: .widget) { FondClassement() }
+                .containerBackground(for: .widget) { FondClassement(entree: entree) }
         }
-        // ``VueClassement`` pose elle-même les marges du système : le damier de la piste
-        // doit couvrir le widget entier pour tomber sur celui du fond.
+        // ``VueClassement`` pose elle-même les marges du système.
         .contentMarginsDisabled()
         // Lus à l'installation, dans la langue de l'app connue à cet instant.
         .configurationDisplayName(t("widgetClassement.nom"))

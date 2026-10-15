@@ -542,7 +542,6 @@ enum TraductionsEN {
         "widgetClassement.nom": "Standings",
         "widgetClassement.description": "The standings of one of your championships, as a list or on the track.",
         "widgetClassement.vide": "Open the app to load your standings",
-        "widgetClassement.misAJour": "Updated at %@",
         "widgetClassement.a11y.titre": "%@ championship standings. ",
 
         // FIN
