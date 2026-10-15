@@ -224,7 +224,12 @@ remplace le 10e), grand = top 10 (+ l'utilisateur, 11 lignes au plus), rangs ré
 (fichier propre, partagé) calculé **sur la piste de l'app** (`DispositionPiste.pisteApp`,
 365,71 × 548 pt mesurés) puis réduit **uniformément**, centré au rapport de la piste — jamais
 recalculé à la taille du widget —, posée directement sur le fond du widget (ni panneau ni ligne médiane), `VueVoiture(imagePhoto:)` avec l'avatar
-réduit de l'App Group (`AvatarsWidget`, le widget ne télécharge rien au rendu). Tap →
+réduit de l'App Group (`AvatarsWidget`, le widget ne télécharge rien au rendu). **Fond** :
+`FondClassement` (beige + `Damier` en `damierWidget`, 2 % clair / 5 % sombre — plafonné par
+`grisSecondaire`, 4,53:1) dans tous les états, plus un surcroît sous la piste
+(`damierWidgetPiste`, 9 % au total) au même cadre, découvert par un masque adouci depuis le
+cadre de la piste (`ZoneDamierPiste`) — jamais sous un texte. D'où `contentMarginsDisabled`
+et les marges posées par `VueClassement` : ne pas les rendre au système. Tap →
 `greedf1://championnat/<id>` → onglet Championnats, détail ouvert (`ChampionnatsView`).
 **Seule exception à `t()`** : les libellés de la configuration App Intents, extraits à la
 compilation et affichés par iOS dans la langue du téléphone, vivent dans
@@ -276,7 +281,7 @@ ios/
 │   ├── IntentionClassement.swift    championnat (`nil` = premier plan de la pile) + « Affichage » : liste / piste (petit), classement + piste / liste / piste (moyen), classement + piste / piste seule (grand) ; un seul visible par format (`parameterSummary`)
 │   ├── Intentions.xcstrings         libellés App Intents FR/EN — SEULE exception à `t()`
 │   ├── FournisseurClassement.swift  jeton widget → `GET /widget/…/classement`, App Group, `CadenceClassement`, `AvatarsWidget`
-│   ├── VuesClassement.swift         les trois formats, lignes, piste titrée (`PisteTitree`) et simplifiée (`PisteSimplifiee`), « Mis à jour à », état neutre
+│   ├── VuesClassement.swift         les trois formats, lignes, piste titrée (`PisteTitree`) et simplifiée (`PisteSimplifiee`), « Mis à jour à », état neutre, fond damier (`FondClassement`, `DamierPiste`)
 │   └── Info.plist                   `API_BASE_URL` (Config.xcconfig, réglages du projet)
 ├── GreedF1WidgetExtension.entitlements  App Group + Keychain partagé
 ├── AuthViewModel.swift          ┐

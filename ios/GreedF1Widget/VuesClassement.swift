@@ -20,6 +20,8 @@ struct VueClassement: View {
     let entree: EntreeClassement
 
     @Environment(\.widgetFamily) private var format
+    @Environment(\.widgetContentMargins) private var marges
+    @Environment(\.showsWidgetContainerBackground) private var afficheFond
 
     init(entree: EntreeClassement) {
         self.entree = entree
@@ -55,6 +57,18 @@ struct VueClassement: View {
                 }
             } else {
                 ClassementNeutre()
+            }
+        }
+        // Les marges du système, posées ici (``ClassementWidget`` les désactive) : le
+        // surcroît de damier de la piste, peint au fond de cette vue, couvre alors tout le
+        // widget — le même cadre que le damier du `containerBackground`, donc le même motif,
+        // chevron sur chevron.
+        .padding(marges)
+        .backgroundPreferenceValue(ZoneDamierPiste.self) { zone in
+            if let zone, afficheFond {
+                GeometryReader { widget in
+                    DamierPiste(cadre: widget[zone.cadre], bords: zone.bords, widget: widget.size)
+                }
             }
         }
         .environment(\.locale, localeInterface)
@@ -131,6 +145,9 @@ private struct PisteTitree: View {
                 }
             }
             PisteSimplifiee(membres: membres, avatars: entree.avatars)
+                // Le titre au-dessus ; « Mis à jour à » dessous, s'il y est.
+                .zoneDamierPiste(bords: miseAJourEnTete || entree.aJour
+                                 ? [.leading, .trailing, .bottom] : [.leading, .trailing])
             if !miseAJourEnTete { MiseAJour(entree: entree) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -215,6 +232,7 @@ private struct MoyenClassementEtPiste: View {
                 .aspectRatio(DispositionPiste.pisteApp.width / DispositionPiste.pisteApp.height,
                              contentMode: .fit)
                 .frame(maxHeight: .infinity)
+                .zoneDamierPiste(bords: [.top, .bottom, .trailing])
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(VueClassement.resume(championnat, membres))
@@ -248,6 +266,7 @@ private struct GrandClassement: View {
 
             PisteSimplifiee(membres: membres, avatars: entree.avatars)
                 .frame(width: 112)
+                .zoneDamierPiste(bords: [.top, .bottom, .trailing])
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(VueClassement.resume(championnat, membres))
@@ -423,6 +442,75 @@ struct ClassementNeutre: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Le fond
+
+/// Le fond du widget, **dans tous ses états** — à jour, périmé, hors ligne, neutre : le
+/// beige et le damier en filigrane (``Color/damierWidget``), le composant ``Damier`` de
+/// l'app. Le motif est vectoriel et rendu à la taille du widget (≈ 5 Mo au grand format,
+/// 3×) : rien à précomposer sous la limite d'environ 30 Mo.
+struct FondClassement: View {
+    var body: some View {
+        ZStack {
+            Color.fondPrincipal
+            Damier(opacite: 1, encre: .damierWidget)
+        }
+    }
+}
+
+/// Le cadre de la piste, remonté à la racine du widget, et les **bords sans texte** — ceux
+/// où le surcroît de damier peut filer jusqu'au bord du widget.
+struct ZoneDamierPiste: PreferenceKey {
+    struct Zone {
+        let cadre: Anchor<CGRect>
+        let bords: Edge.Set
+    }
+
+    static let defaultValue: Zone? = nil
+
+    static func reduce(value: inout Zone?, nextValue: () -> Zone?) {
+        value = value ?? nextValue()
+    }
+}
+
+private extension View {
+    func zoneDamierPiste(bords: Edge.Set) -> some View {
+        anchorPreference(key: ZoneDamierPiste.self, value: .bounds) {
+            ZoneDamierPiste.Zone(cadre: $0, bords: bords)
+        }
+    }
+}
+
+/// Le surcroît de damier sous la piste (``Color/damierWidgetPiste``) : **le même motif**
+/// que le fond, au même cadre — le widget entier —, découvert par un masque adouci. Pas de
+/// couture : le motif ne fait que s'appuyer.
+///
+/// > **Côté texte, le fondu reste dans le cadre de la piste** (rentré de deux fois le
+/// > flou) : les points de la colonne voisine, le titre, « Mis à jour à » restent sur le
+/// > fond seul, où leur contraste est mesuré. Les autres bords filent au bord du widget.
+private struct DamierPiste: View {
+    let cadre: CGRect
+    let bords: Edge.Set
+    let widget: CGSize
+
+    private static let flou: CGFloat = 4
+
+    var body: some View {
+        let rentre = Self.flou * 2
+        let gauche = bords.contains(.leading) ? -rentre : cadre.minX + rentre
+        let droite = bords.contains(.trailing) ? widget.width + rentre : cadre.maxX - rentre
+        let haut = bords.contains(.top) ? -rentre : cadre.minY + rentre
+        let bas = bords.contains(.bottom) ? widget.height + rentre : cadre.maxY - rentre
+
+        Damier(opacite: 1, encre: .damierWidgetPiste)
+            .mask {
+                Rectangle()
+                    .frame(width: max(0, droite - gauche), height: max(0, bas - haut))
+                    .position(x: (gauche + droite) / 2, y: (haut + bas) / 2)
+                    .blur(radius: Self.flou)
+            }
     }
 }
 
