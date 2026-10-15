@@ -1056,3 +1056,63 @@ widget serait vide la plupart du temps. *L'app pousse le classement dans l'App G
 réseau côté widget* : le classement ne bougerait qu'à l'ouverture de l'app, alors que le
 widget est fait pour le dimanche soir. *Un jeton opaque stocké en base* : une table, une
 purge et une lecture par appel, pour une révocation fine dont personne n'a besoin.
+
+---
+
+## 29. Instantanés sur disque et revalidation en arrière-plan sur iOS (révise §27)
+
+**Décision.** L'app iOS (`0.56.0`) affiche au lancement à froid **ce qu'elle savait au
+dernier passage**, puis revalide derrière.
+
+- **Une session locale suffit pour entrer.** `AuthViewModel` lit `currentSession` dans le
+  Keychain, sans réseau, même expirée : l'accueil est le premier écran rendu (avant, la
+  Landing s'affichait ~250 ms, le temps d'un `await auth.session`). Le rafraîchissement du
+  jeton part en arrière-plan ; **seul un refus du serveur déconnecte** (`supabase-swift`
+  efface la session et publie `signedOut` sur `session_not_found`,
+  `refresh_token_not_found`…). Avant, un rafraîchissement raté faute de réseau renvoyait
+  à la Landing. `emitLocalSessionAsInitialSession: true`.
+- **Instantanés disque** (`SnapshotsDisque`, `Caches/Instantanes/<compte>/<clé>.json`) :
+  championnats, prochain GP (avec l'existence d'un pronostic), classement du championnat
+  au premier plan, profil, ses statistiques, calendrier. **La réponse brute du serveur**
+  est écrite et relue par le même décodeur : aucun modèle n'a à savoir s'encoder, et un
+  aller-retour ne peut pas diverger. Enveloppe `version` + `compte` + `clé` : une version
+  inconnue, un compte différent ou un fichier illisible est ignoré sans erreur. Jamais de
+  jeton ni de secret. Effacé à la déconnexion, à la suppression du compte et sur
+  `signedOut`. Une réponse revenue après un changement de compte est jetée. `estAdmin` ne
+  vient jamais de l'instantané.
+- **Fraîcheur unique : 30 s.** L'ancienne valeur s'affiche toujours ; au-delà de 30 s elle
+  est relue en arrière-plan. Une relecture en vol n'est jamais doublée ; une demande
+  postérieure à une invalidation attend la relecture en vol puis relit. Un instantané relu
+  du disque est toujours revalidé. Un échec ne remplace jamais une valeur affichée.
+- **Lancement parallèle.** Championnats, prochain GP, statistiques et calendrier partent
+  ensemble depuis `BarreNavigation` (les onglets ne sont construits qu'à leur première
+  visite) ; les statistiques n'attendent plus le profil. Le prochain GP et son pronostic
+  sont **une** requête (jointure PostgREST `pronostics(id)`, filtrée sur le joueur). Puis le
+  classement du premier plan est préchargé.
+
+**Mesures** (simulateur, build Debug, médiane de 3 lancements à froid, session valide,
+Railway éveillé ; « lent » = +300 ms à l'aller et au retour de chaque requête) — temps
+jusqu'à l'onglet entièrement rempli :
+
+| Onglet | Avant | Après | Avant (lent) | Après (lent) |
+|---|---|---|---|---|
+| Accueil | 2 778 ms | 881 ms | 3 596 ms | 914 ms |
+| Championnats | 2 710 ms | 955 ms | 2 775 ms | 851 ms |
+| Calendrier | 1 676 ms | 867 ms | 2 005 ms | 843 ms |
+| Profil | 1 965 ms | 1 002 ms | 3 158 ms | 917 ms |
+
+Après, aucune lecture n'est attendue avant l'affichage (seuls partent, sans être attendus,
+`GET /health` et `POST /widget/token`). Données fraîches de l'accueil : 2 692 → 2 061 ms
+(normal), 3 519 → 2 769 ms (lent).
+
+**Raison.** `GET /championnats/moi` coûte 1 à 2,7 s côté serveur : l'accueil l'attendait à
+chaque lancement, derrière une Landing affichée à tort. Le contenu d'un lancement est
+presque toujours celui du précédent.
+
+**Écarté.** *Encoder les modèles* (`Codable` synthétisé) : plusieurs ont un
+`init(from:)` sur mesure, l'aller-retour n'aurait pas été garanti. *`UserDefaults`* : des
+réponses de plusieurs kilo-octets n'y ont pas leur place, et `Caches` peut être purgé par
+iOS sans perte. *Instantanés de tous les classements* : la demande se limite au premier
+plan, les autres restent en mémoire. *Une durée par famille* (60 s / 5 min, §27) : une
+seule règle, et la revalidation ne coûte plus d'attente puisqu'elle ne bloque rien.
+

@@ -21,6 +21,19 @@ struct BarreNavigation: View {
     /// l'onglet Championnats lisent la même liste (``MesChampionnats``).
     @StateObject private var mesChampionnats = MesChampionnats()
 
+    /// **Les lectures du lancement vivent ici, pas dans leurs onglets** : un onglet n'est
+    /// construit qu'à sa première visite, et ses données n'attendent pas ce tap. Chacune
+    /// naît avec son instantané disque (``CacheService``) et part en parallèle des autres
+    /// (``chargerAuLancement()``).
+    @StateObject private var prochainGP = ProchainGrandPrix()
+    @StateObject private var calendrier = CalendrierSaison()
+    @StateObject private var statistiques = StatistiquesProfil(
+        profilId: SupabaseManager.partage.idCompte, snapshot: true)
+
+    /// Les lectures du lancement sont revenues ; le préchargement peut partir, une fois.
+    @State private var lancementTermine = false
+    @State private var classementPrecharge = false
+
     /// L'onglet affiché. **Explicite** pour que l'avatar de l'accueil puisse mener au profil.
     @State private var ongletActif: Onglet = .accueil
 
@@ -37,7 +50,7 @@ struct BarreNavigation: View {
     var body: some View {
         TabView(selection: $ongletActif) {
             AccueilView(viewModel: viewModel, mesChampionnats: mesChampionnats,
-                        ongletActif: $ongletActif)
+                        prochainGP: prochainGP, ongletActif: $ongletActif)
                 .tabItem { Label(t("onglet.accueil"), image: "icone-accueil") }
                 .tag(Onglet.accueil)
 
@@ -46,12 +59,12 @@ struct BarreNavigation: View {
                 .tabItem { Label(t("onglet.championnats"), image: "icone-championnats") }
                 .tag(Onglet.championnats)
 
-            CalendrierView()
+            CalendrierView(calendrier: calendrier)
                 .tabItem { Label(t("onglet.calendrier"), image: "icone-calendrier") }
                 .tag(Onglet.calendrier)
 
             // La pile porte « Mes Grands Prix » (``HistoriqueGPView``).
-            NavigationStack { ProfilView(viewModel: viewModel) }
+            NavigationStack { ProfilView(viewModel: viewModel, statistiques: statistiques) }
                 .tabItem { Label(t("onglet.profil"), image: "icone-profil") }
                 .tag(Onglet.profil)
         }
@@ -79,17 +92,46 @@ struct BarreNavigation: View {
         .onChange(of: phase) { _, nouvelle in
             if nouvelle == .active { Task { await SynchroWidgetClassement.renouvelerJeton() } }
         }
-        .task { await mesChampionnats.charger() }
+        .task { await chargerAuLancement() }
         .onChange(of: mesChampionnats.etat) { _, etat in
             if case .pret(let liste) = etat {
                 SynchroWidgetClassement.publier(liste, profilId: viewModel.profil?.id)
             }
+            prechargerClassement()
         }
         .onChange(of: viewModel.profil?.id) { _, id in
             if case .pret(let liste) = mesChampionnats.etat {
                 SynchroWidgetClassement.publier(liste, profilId: id)
             }
         }
+    }
+
+    // MARK: - Lancement
+
+    /// Les quatre lectures indépendantes partent **ensemble** — aucune n'attend l'autre,
+    /// ni le profil (l'identifiant du compte est celui de la session locale). Puis, l'accueil
+    /// rempli, le classement du championnat au premier plan de la pile est préchargé, sans
+    /// rien afficher : l'ouvrir ne montre plus de silhouette.
+    private func chargerAuLancement() async {
+        async let championnats: Void = mesChampionnats.charger()
+        async let gp: Void = prochainGP.charger()
+        async let stats: Void = statistiques.charger(profilId: SupabaseManager.partage.idCompte)
+        async let saison: Void = calendrier.charger()
+        _ = await (championnats, gp, stats, saison)
+        lancementTermine = true
+        prechargerClassement()
+    }
+
+    /// Une fois les lectures du lancement revenues **et** la liste connue — l'accueil peut
+    /// avoir lancé la sienne le premier, auquel cas elle arrive après.
+    private func prechargerClassement() {
+        guard lancementTermine, !classementPrecharge,
+              case .pret(let liste) = mesChampionnats.etat,
+              let premier = OrdrePile.rapprocher(
+                OrdrePile.lire(pour: SupabaseManager.partage.idCompte), de: liste).first
+        else { return }
+        classementPrecharge = true
+        Task(priority: .utility) { await ClassementChampionnat.precharger(premier) }
     }
 
     // MARK: - Apparence

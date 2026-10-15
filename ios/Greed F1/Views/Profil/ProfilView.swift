@@ -51,7 +51,8 @@ struct ProfilView: View {
     @State private var envoiPhoto = false
     @State private var erreurPhoto: ErreurAPI?
 
-    @StateObject private var statistiques = StatistiquesProfil()
+    /// Possédées par ``BarreNavigation``, chargées dès le lancement, sur disque (§7.6).
+    @ObservedObject var statistiques: StatistiquesProfil
 
     /// **Un seul réglage déplié à la fois.** Quatre grilles ouvertes ensemble feraient du
     /// bloc un mur qu'on ne parcourt plus ; et refermer le précédent dit, sans un mot, que
@@ -149,11 +150,11 @@ struct ProfilView: View {
 
     // MARK: - Chargement
 
-    /// Le profil n'a pas pu être lu au lancement : on le redemande avant de conclure
-    /// qu'il n'y a personne à interroger.
+    /// Les statistiques n'attendent pas le profil : leur identifiant est celui de la session
+    /// locale. Un profil qui n'a pas pu être lu au lancement est redemandé à côté.
     private func chargerStatistiques() async {
-        if viewModel.profil == nil { await viewModel.rechargerProfil() }
-        await statistiques.charger(profilId: viewModel.profil?.id)
+        if viewModel.profil == nil { Task { await viewModel.rechargerProfil() } }
+        await statistiques.charger(profilId: viewModel.profil?.id ?? SupabaseManager.partage.idCompte)
     }
 
     /// Recopie la voiture du profil lu. **Jamais par-dessus un réglage en cours** : un
@@ -860,5 +861,5 @@ struct ProfilView: View {
 }
 
 #Preview {
-    ProfilView(viewModel: AuthViewModel())
+    ProfilView(viewModel: AuthViewModel(), statistiques: StatistiquesProfil())
 }

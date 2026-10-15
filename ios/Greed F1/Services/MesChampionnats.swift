@@ -7,10 +7,10 @@ import SwiftUI
 /// > appels écrits séparément auraient fini par ne plus dire la même chose — un
 /// > championnat rejoint visible ici et pas là.
 ///
-/// **Cache *stale-while-revalidate*, 60 s** (``CacheService``, `docs/swift-app.md` §7.6) :
-/// une apparition dans la minute ne rappelle pas la route ; au-delà, la liste connue reste
-/// affichée pendant le rechargement. Le spinner ne sert qu'au premier chargement et après
-/// un échec, sans quoi chaque changement d'onglet ferait clignoter l'écran.
+/// **Cache *stale-while-revalidate*, instantané sur disque** (``CacheService``,
+/// `docs/swift-app.md` §7.6) : l'instance naît avec la liste connue — au lancement à froid,
+/// celle du dernier passage —, relue en arrière-plan si elle a plus de 30 s. La silhouette
+/// ne sert que sans aucune donnée, et l'échec ne remplace jamais une liste affichée.
 @MainActor
 final class MesChampionnats: ObservableObject {
 
@@ -21,6 +21,14 @@ final class MesChampionnats: ObservableObject {
     }
 
     @Published private(set) var etat: Etat = .chargement
+
+    private static let cle = "championnats/moi"
+
+    init() {
+        if let liste: [Championnat] = CacheService.partage.valeur(Self.cle, snapshot: true) {
+            etat = .pret(liste)
+        }
+    }
 
     /// Vrai pendant un appel : deux écrans qui apparaissent ensemble n'en lancent qu'un.
     private var enCours = false
@@ -60,18 +68,18 @@ final class MesChampionnats: ObservableObject {
         if case .pret = etat {} else { etat = .chargement }
         do {
             try await CacheService.partage.charger(
-                "championnats/moi", duree: CacheService.Duree.court, forcer: forcer,
+                Self.cle, snapshot: true, forcer: forcer,
                 afficher: { (liste: [Championnat]) in
                     if etat != .pret(liste) { etat = .pret(liste) }
                 },
-                lire: { try await APIClient.partage.requete("championnats/moi") })
+                lire: { try await APIClient.partage.lireJSON(Self.cle) })
         } catch is CancellationError {
             // Écran quitté pendant l'appel : rien à signaler. Un premier chargement
             // interrompu garde son spinner, et la prochaine apparition le relance.
-        } catch let erreur as ErreurAPI {
-            etat = .echec(erreur)
         } catch {
-            etat = .echec(.serveur(statut: nil, message: nil))
+            // Une liste affichée le reste : l'échec ne se dit que s'il n'y a rien.
+            if case .pret = etat { return }
+            etat = .echec(error as? ErreurAPI ?? .serveur(statut: nil, message: nil))
         }
     }
 }

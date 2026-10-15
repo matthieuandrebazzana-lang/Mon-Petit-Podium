@@ -66,7 +66,17 @@ final class AuthViewModel: ObservableObject {
     /// vérifie qu'ils correspondent — un jeton intercepté ne se rejoue pas.
     private var nonceApple: String?
     
+    /// **Une session locale suffit pour entrer** (`docs/decisions.md` §29) : lue dans le
+    /// Keychain, sans réseau — même expirée —, elle ouvre l'accueil au premier rendu, avec
+    /// le profil du dernier passage (``CacheService``). Le rafraîchissement du jeton et la
+    /// relecture du profil partent ensuite en arrière-plan (``verifierSession()``) ; seul un
+    /// **refus du serveur** déconnecte.
     init() {
+        if supabase.auth.currentSession != nil {
+            estConnecte = true
+            // `estAdmin` n'est jamais tiré de l'instantané : il attend le serveur.
+            profil = CacheService.partage.valeur(Self.cleProfil, snapshot: true)
+        }
         Task {
             await verifierSession()
         }
@@ -86,15 +96,20 @@ final class AuthViewModel: ObservableObject {
         }
     }
     
-    /// Vérifie si une session existe déjà au lancement de l'app.
+    /// Vérifie la session — au lancement, en arrière-plan, et après une inscription.
+    ///
+    /// `auth.session` rafraîchit le jeton s'il a expiré. **Un échec ne déconnecte que si le
+    /// serveur a refusé** : `supabase-swift` efface alors la session locale et publie
+    /// `signedOut`. Un réseau absent la laisse en place — l'app reste ouverte sur ce
+    /// qu'elle sait, et le rafraîchissement sera retenté au prochain appel.
     func verifierSession() async {
         do {
             let session = try await supabase.auth.session
             estConnecte = true
             await chargerProfil(id: session.user.id)
         } catch {
-            // Pas de session valide — l'utilisateur verra l'écran de connexion.
-            oublierCompte()
+            // Plus de session locale : refus du serveur, ou il n'y en a jamais eu.
+            if supabase.auth.currentSession == nil { oublierCompte() }
         }
     }
     
@@ -283,6 +298,8 @@ final class AuthViewModel: ObservableObject {
                 .update(["pseudo": pseudo])
                 .eq("id", value: id)
                 .execute()
+            // Écriture directe, hors ``APIClient`` : le pseudo est dans les classements.
+            CacheService.partage.toutPerimer()
             await chargerProfil(id: id)
             estEnChargement = false
             return true
@@ -304,21 +321,36 @@ final class AuthViewModel: ObservableObject {
     /// Deux sens du doute (§3.9) : un pseudo ou une photo **périmés** valent mieux que
     /// rien, donc un échec garde le profil déjà connu ; `is_admin`, lui, retombe
     /// **toujours** à `false`.
+    ///
+    /// **Le profil est aussi un instantané sur disque** (``CacheService``) : l'accueil
+    /// salue par son pseudo dès le premier rendu. Toujours relu (`forcer`), et `estAdmin`
+    /// ne se lit **que** sur la réponse du serveur.
     func chargerProfil(id: UUID) async {
+        var lu: Profil?
         do {
-            let reponse = try await supabase
-                .from("profils")
-                .select(Profil.colonnes)
-                .eq("id", value: id)
-                .single()
-                .execute()
-            let lu = try JSONDecoder.api.decode(Profil.self, from: reponse.data)
-            profil = lu
-            estAdmin = lu.isAdmin
+            try await CacheService.partage.charger(
+                Self.cleProfil, snapshot: true, forcer: true,
+                afficher: { (profil: Profil) in
+                    if self.profil != profil { self.profil = profil }
+                    lu = profil
+                },
+                lire: { [supabase] in
+                    try await supabase
+                        .from("profils")
+                        .select(Profil.colonnes)
+                        .eq("id", value: id)
+                        .single()
+                        .execute()
+                        .data
+                })
+            estAdmin = lu?.isAdmin ?? false
         } catch {
             estAdmin = false
         }
     }
+
+    /// La clé du profil du compte connecté — ``CacheService`` la range sous le compte.
+    private static let cleProfil = "profil"
 
     /// Relit le profil du compte connecté, s'il y en a un — après un changement de
     /// pseudo, de photo ou de voiture.

@@ -38,8 +38,8 @@ struct CalendrierView: View {
 
     // MARK: - Données
 
-    /// Possédé par l'écran, servi par le cache *stale-while-revalidate* (``CacheService``, 5 min, §7.6).
-    @StateObject private var calendrier = CalendrierSaison()
+    /// Possédé par ``BarreNavigation``, chargé dès le lancement (``CacheService``, §7.6).
+    @ObservedObject var calendrier: CalendrierSaison
 
     /// Les cartes de la saison, croisées avec ce que la base sait — ou avec rien, tant qu'elle n'a
     /// pas répondu : leurs états sont alors **inconnus**, pas « à venir ».
@@ -617,5 +617,5 @@ private struct SqueletteCalendrier: View {
 }
 
 #Preview {
-    CalendrierView()
+    CalendrierView(calendrier: CalendrierSaison())
 }

@@ -19,7 +19,14 @@ import Supabase
 /// tombaient, le dimanche après-midi — le lundi seulement, il cède la place.
 ///
 /// **Il dit aussi si le joueur a déjà pronostiqué ce GP** (``aDesPronostics``) : c'est ce
-/// qui choisit le bouton du widget — « Faire mes pronos » ou « Voir mes pronos ».
+/// qui choisit le bouton du widget — « Faire mes pronos » ou « Voir mes pronos ». **Une
+/// seule requête** : les pronostics du joueur viennent en jointure PostgREST
+/// (`pronostics(id)`, filtrés sur son identifiant, une ligne au plus), sous la même RLS
+/// qu'avant — un joueur ne lit que les siens.
+///
+/// **Instantané sur disque** (``CacheService``) : possédé par ``BarreNavigation`` et chargé
+/// dès le lancement, il naît avec le GP et le bouton du dernier passage, relus en
+/// arrière-plan.
 @MainActor
 final class ProchainGrandPrix: ObservableObject {
 
@@ -38,9 +45,34 @@ final class ProchainGrandPrix: ObservableObject {
 
     private var enCours = false
 
-    /// Le GP passe par le cache *stale-while-revalidate* (``CacheService``, 5 min, comme le
-    /// calendrier) ; l'existence d'un pronostic, non — elle change au retour du parcours de
-    /// pronostics, et sa lecture est une requête d'une ligne.
+    private static let cle = "prochain-gp"
+
+    /// Une ligne de la réponse : le GP, et ses pronostics **du joueur** (zéro ou un).
+    private struct Ligne: Decodable {
+        let gp: GrandPrixEnBase
+        let aDesPronostics: Bool
+
+        private struct Pronostic: Decodable { let id: UUID }
+        private enum CodingKeys: String, CodingKey { case pronostics }
+
+        init(from decoder: Decoder) throws {
+            gp = try GrandPrixEnBase(from: decoder)
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            aDesPronostics = !(try c.decode([Pronostic].self, forKey: .pronostics)).isEmpty
+        }
+    }
+
+    private static func decoder(_ donnees: Data) throws -> Ligne? {
+        try JSONDecoder.api.decode([Ligne].self, from: donnees).first
+    }
+
+    init() {
+        if let ligne: Ligne? = CacheService.partage.valeur(Self.cle, snapshot: true,
+                                                            decoder: Self.decoder) {
+            montrer(ligne)
+        }
+    }
+
     func charger(forcer: Bool = false) async {
         guard !enCours else { return }
         enCours = true
@@ -49,56 +81,43 @@ final class ProchainGrandPrix: ObservableObject {
         if case .pret = etat {} else { etat = .chargement }
         do {
             try await CacheService.partage.charger(
-                "prochain-gp", duree: CacheService.Duree.calendrier, forcer: forcer,
-                afficher: { (gp: GrandPrixEnBase?) in
-                    if etat != .pret(gp) { etat = .pret(gp) }
-                    // Le widget « Prochain GP » lit ce que l'accueil vient de lire
-                    // (``DonneesWidget``) — et ne se redessine que si cela a changé.
-                    if let gp { DonneesWidget.recharger(si: DonneesWidget.fusionner([gp])) }
-                },
+                Self.cle, snapshot: true, forcer: forcer, decoder: Self.decoder,
+                afficher: { (ligne: Ligne?) in montrer(ligne) },
                 lire: {
+                    guard let moi = SupabaseManager.partage.idCompte else { throw ErreurAPI.session }
                     let reponse = try await SupabaseManager.partage.client
                         .from("grands_prix")
-                        .select("id,nom,date_course,date_qualifications,statut,statut_resultats")
+                        .select("id,nom,date_course,date_qualifications,statut,statut_resultats,pronostics(id)")
                         .or("statut.in.(a_venir,cotes_figees),date_course.gte.\(Self.debutDuJour())")
+                        .eq("pronostics.profil_id", value: moi.uuidString.lowercased())
                         .order("date_course", ascending: true, nullsFirst: false)
                         .limit(1)
+                        .limit(1, referencedTable: "pronostics")
                         .execute()
-                    return try JSONDecoder.api.decode([GrandPrixEnBase].self, from: reponse.data).first
+                    return reponse.data
                 })
-            await relirePronostics()
         } catch is CancellationError {
             // Écran quitté pendant l'appel : la prochaine apparition le relance.
-        } catch is URLError {
-            etat = .echec(.reseau)
         } catch {
-            etat = .echec(.serveur(statut: nil, message: nil))
+            // Un GP affiché le reste : l'échec ne se dit que s'il n'y a rien.
+            if case .pret = etat { return }
+            etat = .echec(error is URLError ? .reseau : (error as? ErreurAPI ?? .serveur(statut: nil, message: nil)))
+            aDesPronostics = nil
         }
     }
 
-    /// Relit la seule existence d'un pronostic du joueur pour le GP affiché, **en direct**
-    /// sous RLS (un joueur relit les siens) — rappelé au retour du parcours de pronostics,
-    /// sans recharger le GP.
+    /// Rappelé au retour du parcours de pronostics : une grille vient peut-être d'être
+    /// envoyée. La même requête relit le GP et le bouton.
     func relirePronostics() async {
-        guard case .pret(let gp?) = etat else { aDesPronostics = nil; return }
-        let client = SupabaseManager.partage.client
-        do {
-            let moi = try await client.auth.session.user.id
-            let reponse = try await client
-                .from("pronostics")
-                .select("id")
-                .eq("gp_id", value: gp.id.uuidString.lowercased())
-                .eq("profil_id", value: moi.uuidString.lowercased())
-                .limit(1)
-                .execute()
-            struct Ligne: Decodable { let id: UUID }
-            let lus = try JSONDecoder.api.decode([Ligne].self, from: reponse.data)
-            aDesPronostics = !lus.isEmpty
-        } catch is CancellationError {
-            // Écran quitté : la valeur connue reste.
-        } catch {
-            aDesPronostics = nil
-        }
+        await charger(forcer: true)
+    }
+
+    private func montrer(_ ligne: Ligne?) {
+        if etat != .pret(ligne?.gp) { etat = .pret(ligne?.gp) }
+        if aDesPronostics != ligne?.aDesPronostics { aDesPronostics = ligne?.aDesPronostics }
+        // Le widget « Prochain GP » lit ce que l'accueil vient de lire
+        // (``DonneesWidget``) — et ne se redessine que si cela a changé.
+        if let gp = ligne?.gp { DonneesWidget.recharger(si: DonneesWidget.fusionner([gp])) }
     }
 
     /// Minuit ce matin, heure locale, en ISO 8601 UTC — la borne du « GP du jour ». Un

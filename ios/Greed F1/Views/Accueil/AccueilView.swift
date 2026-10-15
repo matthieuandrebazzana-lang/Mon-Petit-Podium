@@ -17,15 +17,14 @@ struct AccueilView: View {
 
     @ObservedObject var viewModel: AuthViewModel
     @ObservedObject var mesChampionnats: MesChampionnats
+    /// Possédé par ``BarreNavigation``, chargé dès le lancement (``CacheService``, §7.6).
+    @ObservedObject var prochainGP: ProchainGrandPrix
     /// L'onglet de ``BarreNavigation`` : l'avatar de l'en-tête y bascule sur le profil.
     @Binding var ongletActif: BarreNavigation.Onglet
 
     /// Marge latérale commune à tous les blocs — la même que `LandingView`, sans quoi les
     /// deux écrans ne s'aligneraient pas au passage de l'un à l'autre.
     private let margeLaterale: CGFloat = 16
-
-    /// Possédé par l'écran, servi par le cache *stale-while-revalidate* (``CacheService``, 5 min, §7.6).
-    @StateObject private var prochainGP = ProchainGrandPrix()
 
     /// Grands Prix restants — lus sur la liste de la saison, voir ``GPRestants``.
     private var grandsPrixRestants: Int { GPRestants.compte }
@@ -90,7 +89,7 @@ struct AccueilView: View {
             .toolbar(.hidden, for: .navigationBar)
             .etapesPronos(libelleRetour: t("onglet.accueil"),
                           avancer: { cheminPronos.append($0) }) { cheminPronos.removeAll() }
-            // Servie par le cache *stale-while-revalidate* (``CacheService``, 60 s, §7.6).
+            // Revalidées à chaque apparition si elles ont plus de 30 s (``CacheService``, §7.6).
             .task { await mesChampionnats.charger() }
             .task { await prochainGP.charger() }
             // Retour du parcours de pronostics : une grille vient peut-être d'être envoyée.
@@ -744,5 +743,5 @@ private struct SilhouetteWidget: View {
 
 #Preview {
     AccueilView(viewModel: AuthViewModel(), mesChampionnats: MesChampionnats(),
-                ongletActif: .constant(.accueil))
+                prochainGP: ProchainGrandPrix(), ongletActif: .constant(.accueil))
 }

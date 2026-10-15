@@ -44,12 +44,25 @@ bundle** — elle ne quitte jamais Railway.
 > réessayer marche. Voir `docs/swift-app.md` §7. Un service cron (`keepalive/`) appelle
 > `/ping` toutes les 5 min (`docs/architecture.md` §9).
 
-> **Cache *stale-while-revalidate*** (`docs/decisions.md` §27). Une lecture d'écran passe
-> par `CacheService.partage.charger(clé, durée:, forcer:, afficher:, lire:)` — jamais un
-> second cache maison. 60 s (`CacheService.Duree.court`) pour ce qui bouge à chaque GP noté,
-> 5 min (`.calendrier`) pour le reste. Après une écriture, `charger(forcer: true)` ; les
-> écritures d'`APIClient` périment déjà tout. Une photo distante passe par `ImageCachee`,
-> **jamais** `AsyncImage`.
+> **Cache *stale-while-revalidate*, instantanés sur disque** (`docs/decisions.md` §27, §29).
+> Une lecture d'écran passe par `CacheService.partage.charger(clé, snapshot:, forcer:,
+> afficher:, lire:)` — jamais un second cache maison. `lire` rend le **JSON brut**
+> (`APIClient.lireJSON`, `.execute().data`), décodé par `JSONDecoder.api` pour le réseau
+> comme pour le disque. L'ancienne valeur s'affiche **toujours**, revalidée si elle a plus
+> de **30 s** ; une relecture en vol n'est jamais doublée ; un échec ne remplace jamais une
+> valeur affichée. `snapshot: true` (championnats, prochain GP, classement du premier plan,
+> profil, ses stats, calendrier) l'écrit dans `Caches/Instantanes/<compte>/` ; un service
+> **naît rempli** par `CacheService.partage.valeur(clé, snapshot:)`. Jamais de jeton ni de
+> secret sur disque ; tout est effacé par `vider()` (déconnexion, suppression, `signedOut`).
+> Réponse dont la forme change ? Incrémenter `SnapshotsDisque.version`. Après une écriture,
+> `charger(forcer: true)` ; les écritures d'`APIClient` (et le pseudo) périment déjà tout.
+> Une photo distante passe par `ImageCachee`, **jamais** `AsyncImage`.
+>
+> **Lancement : une session locale suffit** (`AuthViewModel.init`, `currentSession`, sans
+> réseau, même expirée). Le jeton se rafraîchit en arrière-plan ; seul un **refus du
+> serveur** (session effacée par `supabase-swift`, `signedOut`) déconnecte — jamais un
+> réseau absent. Les lectures du lancement vivent dans `BarreNavigation`
+> (`chargerAuLancement`, quatre en parallèle), pas dans leurs onglets.
 
 ## 3. Règles de développement
 
@@ -325,9 +338,9 @@ ios/
     │   ├── MesChampionnats.swift  `GET /championnats/moi` — propriétaire unique, accueil + onglet ; `premierId` → `EnvironmentValues.championnatParDefaut`
     │   ├── ClassementChampionnat.swift  `GET /championnats/{id}/classement` — un appel, deux segments
     │   ├── StatistiquesProfil.swift  `GET /profils/{id}/stats` — le sien comme celui d'un membre
-    │   ├── CacheService.swift     cache mémoire stale-while-revalidate — clé compte + route, 60 s / 5 min, vidé à la déconnexion
+    │   ├── CacheService.swift     cache stale-while-revalidate mémoire + instantanés disque (`SnapshotsDisque`) — clé compte + route, 30 s, sans doublon en vol, vidé à la déconnexion
     │   ├── CalendrierSaison.swift  `GET /calendrier` — états, `gp_id` et `a_des_cotes` du calendrier
-    │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil, lecture directe `grands_prix` + existence d'un pronostic du joueur (`pronostics`, RLS)
+    │   ├── ProchainGrandPrix.swift  GP suivant de l'accueil + existence d'un pronostic du joueur : UNE lecture directe `grands_prix` avec jointure `pronostics(id)` (RLS)
     │   ├── ResultatsGrandPrix.swift  `GET /grands-prix/{id}/resultats` — 404 / `disponible: false` ⇒ indisponible
     │   ├── GrandsPrixJoues.swift  « Ses / Mes Grands Prix » : calendrier du championnat, puis `GET /grands-prix/{gp}/resultats?championnat_id=` par GP terminé (podium + paris, filtrés sur le membre) ; un seul GP = un seul appel, sans calendrier
     │   ├── ResultatsParGrandPrix.swift  `GET /championnats/{id}/calendrier` puis `GET /grands-prix/{gp}/pronostics/championnat/{id}`, un GP à la fois

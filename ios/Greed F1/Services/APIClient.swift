@@ -75,6 +75,12 @@ final class APIClient {
         }
     }
 
+    /// Lit une route et rend son JSON **brut** — pour ``CacheService``, qui le décode et
+    /// l'écrit tel quel sur disque. Mêmes réessais, même classement des échecs.
+    func lireJSON(_ chemin: String) async throws -> Data {
+        try await executer(chemin, methode: .get, corps: nil, parametres: [], perime: true)
+    }
+
     /// Appelle une route dont la réponse ne sert à rien (`DELETE …/quitter`).
     func envoyer(
         _ chemin: String,

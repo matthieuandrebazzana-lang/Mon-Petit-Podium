@@ -23,7 +23,12 @@ final class SupabaseManager {
         client = SupabaseClient(
             supabaseURL: SupabaseConfig.supabaseURL,
             supabaseKey: SupabaseConfig.supabaseAnonKey,
-            options: SupabaseClientOptions(auth: .init(storage: Self.stockageSession))
+            options: SupabaseClientOptions(auth: .init(
+                storage: Self.stockageSession,
+                // La session locale est publiée telle quelle au démarrage, sans attendre
+                // un rafraîchissement réseau : ``AuthViewModel`` ne déconnecte que sur un
+                // refus du serveur (`signedOut`), jamais sur un réseau absent.
+                emitLocalSessionAsInitialSession: true))
         )
     }
 
@@ -41,6 +46,11 @@ final class SupabaseManager {
             $0 + (Bundle.main.bundleIdentifier ?? "com.bazzana.greedf1")
         })
     }
+
+    /// L'identifiant du compte de la session **locale** (Keychain), sans réseau — même
+    /// expirée. `nil` quand personne n'est connecté. Il range le cache par compte
+    /// (``CacheService``) ; il ne prouve rien au serveur, qui ne croit que le jeton.
+    var idCompte: UUID? { client.auth.currentUser?.id }
 
     func jetonAcces() async -> String? {
         try? await client.auth.session.accessToken

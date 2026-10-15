@@ -4,10 +4,12 @@ import Foundation
 /// comme celui d'un autre membre : **la même route pour les deux**, et c'est ce qui permet
 /// de comparer les deux grilles.
 ///
-/// Possédée par l'écran (`@StateObject`). **Cache *stale-while-revalidate*, 60 s**
-/// (``CacheService``, `docs/swift-app.md` §7.6) : la grille connue s'affiche aussitôt, et
-/// n'est relue que si elle a plus d'une minute. Le spinner ne sert qu'au premier
-/// chargement et après un échec.
+/// **Cache *stale-while-revalidate*** (``CacheService``, `docs/swift-app.md` §7.6) : la
+/// grille connue s'affiche aussitôt, relue si elle a plus de 30 s. **Les siennes seules
+/// vont sur disque** (`snapshot`) : l'instance du compte connecté, possédée par
+/// ``BarreNavigation`` et chargée dès le lancement, naît avec le dernier relevé ; celle
+/// d'un autre membre (``ProfilMembreView``) reste en mémoire. La silhouette ne sert que
+/// sans aucune donnée.
 @MainActor
 final class StatistiquesProfil: ObservableObject {
 
@@ -18,6 +20,23 @@ final class StatistiquesProfil: ObservableObject {
     }
 
     @Published private(set) var etat: Etat = .chargement
+
+    /// Les statistiques du compte connecté : écrites sur disque.
+    private let snapshot: Bool
+
+    /// - Parameter profilId: connu d'avance (le compte connecté), l'instance naît remplie.
+    init(profilId: UUID? = nil, snapshot: Bool = false) {
+        self.snapshot = snapshot
+        if let profilId, let lues: StatsProfil = CacheService.partage.valeur(
+            Self.chemin(profilId), snapshot: snapshot) {
+            etat = .pret(lues)
+        }
+    }
+
+    /// L'UUID en minuscules : la forme que sert le backend, et celle de ses journaux.
+    private static func chemin(_ profilId: UUID) -> String {
+        "profils/\(profilId.uuidString.lowercased())/stats"
+    }
 
     /// Vrai pendant un appel : un retour rapide sur l'écran n'en lance pas un second.
     private var enCours = false
@@ -41,20 +60,18 @@ final class StatistiquesProfil: ObservableObject {
 
         if case .pret = etat {} else { etat = .chargement }
         do {
-            // L'UUID en minuscules : la forme que sert le backend, et celle de ses journaux.
-            let chemin = "profils/\(profilId.uuidString.lowercased())/stats"
+            let chemin = Self.chemin(profilId)
             try await CacheService.partage.charger(
-                chemin, duree: CacheService.Duree.court, forcer: forcer,
+                chemin, snapshot: snapshot, forcer: forcer,
                 afficher: { (lues: StatsProfil) in
                     if etat != .pret(lues) { etat = .pret(lues) }
                 },
-                lire: { try await APIClient.partage.requete(chemin) })
+                lire: { try await APIClient.partage.lireJSON(chemin) })
         } catch is CancellationError {
             // Écran quitté pendant l'appel : rien à signaler.
-        } catch let erreur as ErreurAPI {
-            etat = .echec(erreur)
         } catch {
-            etat = .echec(.serveur(statut: nil, message: nil))
+            if case .pret = etat { return }
+            etat = .echec(error as? ErreurAPI ?? .serveur(statut: nil, message: nil))
         }
     }
 }

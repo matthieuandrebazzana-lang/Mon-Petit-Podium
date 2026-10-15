@@ -12,9 +12,10 @@ import Foundation
 /// requête, là où `/scraper/cotes` relisait toutes les cotes de chaque GP. Les cotes
 /// détaillées ne se chargent qu'à l'ouverture d'un GP (``DonneesPronostics``).
 ///
-/// **Cache *stale-while-revalidate*, 5 min** (``CacheService``) : revenir sur l'onglet
-/// affiche aussitôt les états connus, relus en arrière-plan s'ils ont plus de cinq minutes.
-/// Le spinner ne sert qu'au premier chargement et après un échec.
+/// **Cache *stale-while-revalidate*, instantané sur disque** (``CacheService``) : l'instance
+/// naît avec les états connus, relus en arrière-plan s'ils ont plus de 30 s. Possédée par
+/// ``BarreNavigation``, chargée dès le lancement avec le reste. La silhouette ne sert que
+/// sans aucune donnée.
 @MainActor
 final class CalendrierSaison: ObservableObject {
 
@@ -25,6 +26,14 @@ final class CalendrierSaison: ObservableObject {
     }
 
     @Published private(set) var etat: Etat = .chargement
+
+    private static let cle = "calendrier"
+
+    init() {
+        if let liste: [GrandPrixEnBase] = CacheService.partage.valeur(Self.cle, snapshot: true) {
+            etat = .pret(liste)
+        }
+    }
 
     private var enCours = false
 
@@ -44,17 +53,16 @@ final class CalendrierSaison: ObservableObject {
         if case .pret = etat {} else { etat = .chargement }
         do {
             try await CacheService.partage.charger(
-                "calendrier", duree: CacheService.Duree.calendrier, forcer: forcer,
+                Self.cle, snapshot: true, forcer: forcer,
                 afficher: { (liste: [GrandPrixEnBase]) in
                     if etat != .pret(liste) { etat = .pret(liste) }
                 },
-                lire: { try await APIClient.partage.requete("calendrier") })
+                lire: { try await APIClient.partage.lireJSON(Self.cle) })
         } catch is CancellationError {
             // Onglet quitté pendant l'appel : la prochaine apparition le relance.
-        } catch let erreur as ErreurAPI {
-            etat = .echec(erreur)
         } catch {
-            etat = .echec(.serveur(statut: nil, message: nil))
+            if case .pret = etat { return }
+            etat = .echec(error as? ErreurAPI ?? .serveur(statut: nil, message: nil))
         }
     }
 }
