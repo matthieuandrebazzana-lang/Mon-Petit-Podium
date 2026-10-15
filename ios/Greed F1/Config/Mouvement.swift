@@ -196,3 +196,15 @@ struct StyleAppui: ButtonStyle {
         }
     }
 }
+
+// MARK: - Confirmation flottante
+
+extension AnyTransition {
+    /// **Une confirmation qui sort de son déclencheur** — « Code copié » sous le bouton du
+    /// menu : elle grandit depuis le coin le plus proche du bouton (95 % → 100 %, jamais
+    /// depuis rien) en apparaissant, puis s'efface en fondu seul, plus vite lu que vu.
+    /// Sous mouvement réduit, l'écran passe `.opacity` à la place.
+    static let confirmationCopie = AnyTransition.asymmetric(
+        insertion: .scale(scale: 0.95, anchor: .topTrailing).combined(with: .opacity),
+        removal: .opacity)
+}

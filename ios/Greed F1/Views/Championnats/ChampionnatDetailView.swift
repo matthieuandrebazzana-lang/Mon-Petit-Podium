@@ -29,9 +29,16 @@ struct ChampionnatDetailView: View {
     /// ligne du classement : celle-ci a été servie avant une éventuelle modification dans
     /// l'onglet Profil, et ne se relit qu'à la prochaine apparition.
     @Environment(\.monProfil) private var monProfil
+    @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
-    /// La feuille du code d'invitation.
+    /// La feuille du code d'invitation — **plus montée** depuis que le menu porte le code
+    /// lui-même (``optionsChampionnat``) ; ``FeuilleCodeInvitation`` reste en place.
     @State private var codeAffiche = false
+    /// « Code copié », sous le bouton du menu — voir ``copierCode()``.
+    @State private var codeCopie = false
+    /// Incrémenté à chaque copie : il déclenche l'haptique, y compris pendant la tenue.
+    @State private var copies = 0
+    @State private var retourCopie: Task<Void, Never>?
     /// L'alerte qui précède le départ — **la seule confirmation de l'écran** : c'est la
     /// seule action destructive, et le départ ne se défait pas sans le code.
     @State private var confirmationDepart = false
@@ -119,9 +126,12 @@ struct ChampionnatDetailView: View {
                 // **Fond opaque** — sans lui le sol de la piste, posé juste derrière,
                 // remonterait sous le titre et le sélecteur au lieu de rester derrière eux.
                 VStack(spacing: 0) {
+                    // Au-dessus du sélecteur : la confirmation « Code copié » déborde
+                    // sous le bouton du menu (``confirmationCopie``).
                     entete
                         .padding(.horizontal, margeLaterale)
                         .padding(.top, 8)
+                        .zIndex(1)
 
                     selecteur
                         .padding(.horizontal, margeLaterale)
@@ -129,6 +139,7 @@ struct ChampionnatDetailView: View {
                         .padding(.bottom, 12)
                 }
                 .background(Color.fondPrincipal)
+                .zIndex(1)
 
                 // Un fondu court entre les deux contenus, et rien d'autre : un segment
                 // se bascule souvent, un glissement latéral finirait par se faire attendre.
@@ -336,9 +347,10 @@ struct ChampionnatDetailView: View {
 
     // MARK: - En-tête
 
-    /// Le retrait de l'icône ⋯ dans son cadre de 44 pt (glyphe ≈ 20 pt de large). Retiré
-    /// des deux côtés du bouton pour que les écarts se mesurent **au glyphe**, ce que l'œil
-    /// voit, et non au cadre tactile invisible.
+    /// > **Plus appliqué.** Le ⋯ nu se mesurait au glyphe ; le bouton rond (``iconeMenu``)
+    /// > se voit sur ses 44 pt, et c'est son cercle qui touche la marge.
+    ///
+    /// Le retrait de l'icône ⋯ dans son cadre de 44 pt (glyphe ≈ 20 pt de large).
     private let retraitGlyphe: CGFloat = 12
 
     /// **Trois colonnes** : le titre à gauche, la photo, les trois points à droite — tous
@@ -352,25 +364,15 @@ struct ChampionnatDetailView: View {
     @ViewBuilder private var entete: some View {
         if let photo {
             DispositionEntete(titre: championnat.nom) {
-                VStack(alignment: .leading, spacing: 0) {
-                    titreEtSousTitre
-                    pastilleCode
-                }
+                titreEtSousTitre
                 PhotoChampionnat(nom: championnat.nom, photo: photo)
                 iconeMenu
-                    .padding(.horizontal, -retraitGlyphe)
             }
         } else {
-            // La pastille sous la rangée, et non dans le bloc texte : le ⋯ reste centré
-            // sur le titre et l'effectif, là où il était.
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .center, spacing: 16) {
-                    titreEtSousTitre
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    iconeMenu
-                        .padding(.horizontal, -retraitGlyphe)
-                }
-                pastilleCode
+            HStack(alignment: .center, spacing: 16) {
+                titreEtSousTitre
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                iconeMenu
             }
         }
     }
@@ -393,6 +395,9 @@ struct ChampionnatDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// > **Non monté.** Le code vit désormais dans le menu (``optionsChampionnat``) : aucune
+    /// > ligne ajoutée à l'en-tête, qui garde sa place en Classement comme en Piste.
+    ///
     /// Le code d'invitation sous l'effectif — ``PastilleCodeInvitation``.
     ///
     /// **Classement seul, mais sa place reste réservée sur la piste** : l'en-tête garde sa
@@ -414,17 +419,30 @@ struct ChampionnatDetailView: View {
         return championnat.photoUrl
     }
 
-    /// Les trois options du menu — **un seul propriétaire** pour ``menuChampionnat`` et
+    /// Les options du menu — **un seul propriétaire** pour ``iconeMenu`` et
     /// ``menuSurPhoto``, qui n'en diffèrent que par leur déclencheur. Range l'action
     /// destructive en rouge, en dernier — ce que l'utilisateur d'iOS attend sans lire.
     ///
+    /// **L'invitation d'abord, code écrit sur la ligne** : il se lit dès l'ouverture du
+    /// menu, sans rien toucher. Visible de tout membre — `code_invitation` est servi par
+    /// `/championnats/moi` quel que soit l'appelant. Le tap ouvre la feuille de partage
+    /// avec la phrase de l'écran « Créer », dans la langue de l'app ; la ligne suivante
+    /// copie le code seul. Elles remplacent l'ancienne entrée « Code d'invitation », qui
+    /// ouvrait une feuille pour y lire ces mêmes six caractères.
+    ///
     /// Renommer viendra avec `PATCH /championnats/{id}`.
     @ViewBuilder private var optionsChampionnat: some View {
-        Button {
-            codeAffiche = true
-        } label: {
-            Label(t("championnat.codeInvitation"), systemImage: "person.badge.plus")
+        let code = championnat.codeInvitation
+        ShareLink(item: t("championnat.messagePartage", championnat.nom, code)) {
+            Label(t("championnat.inviterAmis", code), systemImage: "person.badge.plus")
         }
+        .accessibilityLabel(t("championnat.a11y.inviterAmis", code))
+
+        Button(action: copierCode) {
+            Label(t("championnat.copierCode"), systemImage: "doc.on.doc")
+        }
+
+        Divider()
 
         if championnat.estCreateur {
             Button {
@@ -441,9 +459,13 @@ struct ChampionnatDetailView: View {
         }
     }
 
-    /// Les trois points : icône nue, zone tactile 44 × 44 pt (le plancher iOS). Un `Menu`
-    /// natif — il s'ouvre depuis son déclencheur et se referme vers lui, porte seul
-    /// l'accessibilité. Monté par ``entete``, à droite de la photo.
+    /// Les trois points dans **un bouton rond de 44 pt** — la zone tactile devient visible,
+    /// sans rien agrandir : c'est la taille du cadre du ⋯ nu d'avant, et l'en-tête (titre
+    /// sur une ou deux lignes, ou photo de 72 à 100 pt) est toujours plus haut. Fond
+    /// neutre du sélecteur segmenté (``Color/fondSegmentInactif``), encre `secondaire`
+    /// (8,18:1 sur ce fond). Son cercle touche la marge, comme le bord du sélecteur
+    /// dessous. Un `Menu` natif — il s'ouvre depuis son déclencheur et se referme vers lui,
+    /// porte seul l'accessibilité. Monté par ``entete``, à droite de la photo.
     private var iconeMenu: some View {
         Menu {
             optionsChampionnat
@@ -454,15 +476,58 @@ struct ChampionnatDetailView: View {
                         .tint(.secondaire)
                 } else {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.secondaire)       // 9,32:1 sur le beige
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.secondaire)
                 }
             }
             .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
+            .background(Color.fondSegmentInactif, in: Circle())
+            .contentShape(Circle())
         }
         .disabled(occupe)
         .accessibilityLabel(envoiPhoto ? t("championnat.a11y.envoiPhoto") : t("championnat.a11y.options"))
+        .overlay(alignment: .bottomTrailing) {
+            confirmationCopie
+                .alignmentGuide(.bottom) { $0[.top] - 6 }
+        }
+        .sensoryFeedback(.impact(weight: .light), trigger: copies)
+        .onDisappear { retourCopie?.cancel() }
+    }
+
+    /// « Code copié », **sous le bouton d'où vient la copie** — le menu s'est refermé vers
+    /// lui, la confirmation en ressort. Elle déborde de l'en-tête sans le pousser, ne
+    /// reçoit aucun tap, et s'efface d'elle-même après ``Mouvement/tenueConfirmation``.
+    /// Encre et fond inversés (``Color/texte`` / ``Color/fondPrincipal``) : elle se détache
+    /// du beige comme du contenu qu'elle recouvre, dans les deux apparences.
+    @ViewBuilder private var confirmationCopie: some View {
+        if codeCopie {
+            Label(t("championnat.codeCopie"), systemImage: "checkmark")
+                .font(.custom("HelveticaNeue-Medium", size: 13))
+                .foregroundColor(.fondPrincipal)
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .background(Color.texte, in: Capsule())
+                .ombreFlottant()
+                .fixedSize()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .transition(mouvementReduit ? .opacity : .confirmationCopie)
+        }
+    }
+
+    /// Copie, haptique légère et confirmation **dans la même image**. Une seconde copie
+    /// pendant la tenue la relance ; VoiceOver l'annonce, la capsule lui étant masquée.
+    private func copierCode() {
+        UIPasteboard.general.string = championnat.codeInvitation
+        copies += 1
+        withAnimation(Mouvement.entree(Mouvement.passageEcran)) { codeCopie = true }
+        AccessibilityNotification.Announcement(t("championnat.codeCopie")).post()
+        retourCopie?.cancel()
+        retourCopie = Task {
+            try? await Task.sleep(for: .seconds(Mouvement.tenueConfirmation))
+            guard !Task.isCancelled else { return }
+            withAnimation(Mouvement.entree(Mouvement.passageEcran)) { codeCopie = false }
+        }
     }
 
     /// > **Non monté.** L'en-tête a désormais une seule mise en page, photo ou initiale
@@ -1047,6 +1112,9 @@ private struct WidgetGrandPrixSuivant: View {
 
 // MARK: - Le code d'invitation
 
+/// > **Non monté** — le code vit dans le menu (``ChampionnatDetailView``). Reste en place
+/// > (`CLAUDE.md` §6).
+///
 /// Le code sous l'effectif, **copié d'un tap** — visible de tout membre : `code_invitation`
 /// est servi par `/championnats/moi` quel que soit l'appelant.
 ///
@@ -1120,6 +1188,8 @@ private struct PastilleCodeInvitation: View {
     }
 }
 
+/// > **Non monté** — le menu porte le code et le partage lui-même.
+///
 /// Le code, en grand, et le partage système. **Une feuille compacte, pas un écran** : on
 /// vient chercher six caractères, on repart — un glissement vers le bas suffit à la fermer.
 ///
