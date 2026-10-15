@@ -2,7 +2,8 @@ import AppIntents
 import WidgetKit
 
 /// La configuration du widget « Classement » : le championnat, et son affichage — la liste
-/// ou la piste aux petit et moyen formats, les deux ou la piste seule au grand.
+/// ou la piste au petit format, les deux, la liste ou la piste au moyen, les deux ou la
+/// piste seule au grand.
 ///
 /// > **Les libellés de cette configuration sont la seule exception à `t()`.** App Intents
 /// > extrait titres et libellés **à la compilation** (constantes obligatoires) et c'est iOS
@@ -23,12 +24,21 @@ struct IntentionClassement: WidgetConfigurationIntent {
                                               table: "Intentions"))
     var championnat: ChampionnatEntite?
 
-    /// Petit et moyen formats. Le nom de la propriété ne change pas : c'est la clé sous
-    /// laquelle iOS a rangé la configuration des widgets déjà posés.
+    /// Petit format. Le nom de la propriété ne change pas : c'est la clé sous laquelle iOS a
+    /// rangé la configuration des widgets déjà posés.
     @Parameter(title: LocalizedStringResource("intention.affichage", defaultValue: "Affichage",
                                               table: "Intentions"),
                default: .classement)
     var affichage: AffichagePetit
+
+    /// Moyen format, depuis `ios 0.55.3` — il lisait `affichage` jusque-là. Un paramètre
+    /// ajouté prend sa valeur par défaut sur les widgets déjà posés : un moyen existant passe
+    /// donc à « Classement + piste », son ancien choix n'est plus lu (choix assumé, le
+    /// petit format restant intact).
+    @Parameter(title: LocalizedStringResource("intention.affichage", defaultValue: "Affichage",
+                                              table: "Intentions"),
+               default: .classementEtPiste)
+    var affichageMoyen: AffichageMoyen
 
     @Parameter(title: LocalizedStringResource("intention.affichage", defaultValue: "Affichage",
                                               table: "Intentions"),
@@ -43,15 +53,22 @@ struct IntentionClassement: WidgetConfigurationIntent {
                 \.$affichageGrand
             }
         } otherwise: {
-            Summary {
-                \.$championnat
-                \.$affichage
+            When(widgetFamily: .equalTo, .systemMedium) {
+                Summary {
+                    \.$championnat
+                    \.$affichageMoyen
+                }
+            } otherwise: {
+                Summary {
+                    \.$championnat
+                    \.$affichage
+                }
             }
         }
     }
 }
 
-/// Ce que montrent les petit et moyen formats.
+/// Ce que montre le petit format.
 enum AffichagePetit: String, AppEnum {
     case classement, piste
 
@@ -59,6 +76,25 @@ enum AffichagePetit: String, AppEnum {
         "intention.typeAffichage", defaultValue: "Affichage", table: "Intentions"))
 
     static var caseDisplayRepresentations: [AffichagePetit: DisplayRepresentation] = [
+        .classement: DisplayRepresentation(title: LocalizedStringResource(
+            "intention.affichage.classement", defaultValue: "Classement", table: "Intentions")),
+        .piste: DisplayRepresentation(title: LocalizedStringResource(
+            "intention.affichage.piste", defaultValue: "Piste", table: "Intentions"))
+    ]
+}
+
+/// Ce que montre le moyen format : le classement et la piste côte à côte, le classement
+/// seul sur deux colonnes, ou la piste seule. Mêmes clés de libellés que les deux autres.
+enum AffichageMoyen: String, AppEnum {
+    case classementEtPiste, classement, piste
+
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: LocalizedStringResource(
+        "intention.typeAffichage", defaultValue: "Affichage", table: "Intentions"))
+
+    static var caseDisplayRepresentations: [AffichageMoyen: DisplayRepresentation] = [
+        .classementEtPiste: DisplayRepresentation(title: LocalizedStringResource(
+            "intention.affichage.classementEtPiste", defaultValue: "Classement + piste",
+            table: "Intentions")),
         .classement: DisplayRepresentation(title: LocalizedStringResource(
             "intention.affichage.classement", defaultValue: "Classement", table: "Intentions")),
         .piste: DisplayRepresentation(title: LocalizedStringResource(

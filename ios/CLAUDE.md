@@ -215,9 +215,12 @@ L'app écrit liste, premier plan de la pile (`OrdrePile.ecrire`) et profil dans 
 `oublierCompte()` efface jeton, données et avatars. **La session Supabase est épinglée au
 groupe Keychain de l'app** (`SupabaseManager.stockageSession`) : depuis `keychain-access-groups`,
 un élément écrit sans groupe tombe dans le **premier** groupe listé — le partagé. Ne jamais
-retirer ce stockage explicite. Lignes : petit = top 5 (+ l'utilisateur au-delà), moyen =
-top 10 sur deux colonnes de 5 (l'utilisateur remplace le 10e), grand = top 10 (+ l'utilisateur,
-11 lignes au plus), rangs réels, corps ≥ 12 pt (`GabaritLigne`). Piste : `DispositionPiste`
+retirer ce stockage explicite. Lignes : petit = top 5 (+ l'utilisateur au-delà), moyen
+« Classement + piste » (défaut) = top 5 (+ l'utilisateur au-delà) à gauche, piste à droite
+sur toute la hauteur, moyen « Classement » = top 10 sur deux colonnes de 5 (l'utilisateur
+remplace le 10e), grand = top 10 (+ l'utilisateur, 11 lignes au plus), rangs réels, corps
+≥ 12 pt (`GabaritLigne`). **Le moyen a son propre réglage** (`affichageMoyen`, depuis 0.55.3) :
+`affichage` ne sert plus qu'au petit — un moyen posé avant est repassé au défaut. Piste : `DispositionPiste`
 (fichier propre, partagé) calculé **sur la piste de l'app** (`DispositionPiste.pisteApp`,
 365,71 × 548 pt mesurés) puis réduit **uniformément**, centré au rapport de la piste — jamais
 recalculé à la taille du widget —, posée directement sur le fond du widget (ni panneau ni ligne médiane), `VueVoiture(imagePhoto:)` avec l'avatar
@@ -270,7 +273,7 @@ ios/
 │   ├── FournisseurProchainGP.swift  App Group + `GET /calendrier`, `TimelineProchainGP` (calcul pur des entrées)
 │   ├── VuesProchainGP.swift         les trois formats, fond drapeau, décompte `Text(timerInterval:)`, état neutre
 │   ├── ClassementWidget.swift       widget « Classement » : petit + moyen + grand, `AppIntentConfiguration`
-│   ├── IntentionClassement.swift    championnat (`nil` = premier plan de la pile) + « Affichage » : liste / piste (petit, moyen), classement + piste / piste seule (grand) ; un seul visible par format (`parameterSummary`)
+│   ├── IntentionClassement.swift    championnat (`nil` = premier plan de la pile) + « Affichage » : liste / piste (petit), classement + piste / liste / piste (moyen), classement + piste / piste seule (grand) ; un seul visible par format (`parameterSummary`)
 │   ├── Intentions.xcstrings         libellés App Intents FR/EN — SEULE exception à `t()`
 │   ├── FournisseurClassement.swift  jeton widget → `GET /widget/…/classement`, App Group, `CadenceClassement`, `AvatarsWidget`
 │   ├── VuesClassement.swift         les trois formats, lignes, piste titrée (`PisteTitree`) et simplifiée (`PisteSimplifiee`), « Mis à jour à », état neutre

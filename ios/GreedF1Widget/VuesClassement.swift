@@ -4,8 +4,9 @@ import WidgetKit
 /// Le widget « Classement » dans ses trois formats.
 ///
 /// - **Petit** : les cinq premiers, et l'utilisateur en plus s'il n'y est pas — ou la piste.
-/// - **Moyen** : les dix premiers sur deux colonnes de cinq, l'utilisateur à la place du
-///   dixième s'il n'y est pas — ou la piste.
+/// - **Moyen** : les cinq premiers à gauche, et l'utilisateur en plus s'il n'y est pas, la
+///   piste à droite — ou les dix premiers sur deux colonnes de cinq, l'utilisateur à la
+///   place du dixième s'il n'y est pas — ou la piste seule.
 /// - **Grand** : les dix premiers à gauche, et l'utilisateur en plus s'il n'y est pas, la
 ///   piste à droite — ou la piste seule, sur toute la largeur.
 ///
@@ -35,11 +36,17 @@ struct VueClassement: View {
                                 tailleTitre: 16, miseAJourEnTete: false)
                 case (.systemLarge, _, _):
                     GrandClassement(entree: entree, championnat: championnat, membres: releve.membres)
-                case (.systemMedium, .piste, _):
-                    PisteTitree(entree: entree, championnat: championnat, membres: releve.membres,
-                                tailleTitre: 14, miseAJourEnTete: true)
                 case (.systemMedium, _, _):
-                    MoyenClassement(entree: entree, championnat: championnat, membres: releve.membres)
+                    switch entree.affichageMoyen {
+                    case .piste:
+                        PisteTitree(entree: entree, championnat: championnat, membres: releve.membres,
+                                    tailleTitre: 14, miseAJourEnTete: true)
+                    case .classement:
+                        MoyenClassement(entree: entree, championnat: championnat, membres: releve.membres)
+                    case .classementEtPiste:
+                        MoyenClassementEtPiste(entree: entree, championnat: championnat,
+                                               membres: releve.membres)
+                    }
                 case (_, .piste, _):
                     PisteTitree(entree: entree, championnat: championnat, membres: releve.membres,
                                 tailleTitre: 13, miseAJourEnTete: false)
@@ -167,6 +174,48 @@ private struct MoyenClassement: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(VueClassement.resume(championnat, membres))
+    }
+}
+
+/// Le classement à gauche, la piste à droite — le grand « Classement + piste » ramené au
+/// moyen format. Une colonne : les cinq premiers, et l'utilisateur **en plus** s'il n'y est
+/// pas, comme au petit format. « Mis à jour à » reste à droite du titre, comme au moyen
+/// « Classement » : la hauteur manque, pas la largeur. La piste prend toute la hauteur, à
+/// la largeur que lui donne le rapport de la piste de l'app — la hauteur la borne de toute
+/// façon, une colonne plus large ne grandirait pas les voitures.
+private struct MoyenClassementEtPiste: View {
+
+    let entree: EntreeClassement
+    let championnat: DonneesWidget.ChampionnatWidget
+    let membres: [Membre]
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    NomChampionnat(nom: championnat.nom, taille: 14)
+                    Spacer(minLength: 0)
+                    MiseAJour(entree: entree)
+                }
+                .padding(.bottom, 4)
+
+                if membres.isEmpty {
+                    AucunMembre()
+                } else {
+                    ColonneLignes(membres: VueClassement.lignes(membres, tete: 5, moi: entree.profilId, enPlus: true),
+                                  entree: entree, gabarit: .moyen)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            PisteSimplifiee(membres: membres, avatars: entree.avatars)
+                .aspectRatio(DispositionPiste.pisteApp.width / DispositionPiste.pisteApp.height,
+                             contentMode: .fit)
+                .frame(maxHeight: .infinity)
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(VueClassement.resume(championnat, membres))
     }

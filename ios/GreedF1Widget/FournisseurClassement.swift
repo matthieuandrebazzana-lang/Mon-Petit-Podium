@@ -14,6 +14,7 @@ struct EntreeClassement: TimelineEntry {
     let aJour: Bool
     let profilId: UUID?
     let affichage: AffichagePetit
+    let affichageMoyen: AffichageMoyen
     let affichageGrand: AffichageGrand
     /// Les avatars réduits, par profil — lus dans l'App Group, jamais téléchargés au rendu.
     let avatars: [UUID: UIImage]
@@ -21,7 +22,8 @@ struct EntreeClassement: TimelineEntry {
 
     static func neutre(_ date: Date = .now, affichage: AffichagePetit = .classement) -> EntreeClassement {
         EntreeClassement(date: date, championnat: nil, releve: nil, aJour: false, profilId: nil,
-                         affichage: affichage, affichageGrand: .classementEtPiste, avatars: [:], langue: DonneesWidget.langue)
+                         affichage: affichage, affichageMoyen: .classementEtPiste,
+                         affichageGrand: .classementEtPiste, avatars: [:], langue: DonneesWidget.langue)
     }
 }
 
@@ -36,7 +38,8 @@ struct FournisseurClassement: AppIntentTimelineProvider {
         let entree = Self.depuisAppGroup(configuration, aJour: true)
         // La galerie n'a pas de données à attendre : l'exemple, si l'App Group est vide.
         return entree.releve == nil && context.isPreview
-            ? Self.exemple(configuration.affichage, grand: configuration.affichageGrand) : entree
+            ? Self.exemple(configuration.affichage, moyen: configuration.affichageMoyen,
+                           grand: configuration.affichageGrand) : entree
     }
 
     func timeline(for configuration: IntentionClassement, in context: Context) async -> Timeline<EntreeClassement> {
@@ -65,6 +68,7 @@ struct FournisseurClassement: AppIntentTimelineProvider {
         return EntreeClassement(
             date: .now, championnat: championnat, releve: releve, aJour: aJour,
             profilId: contenu.profilId, affichage: configuration.affichage,
+            affichageMoyen: configuration.affichageMoyen,
             affichageGrand: configuration.affichageGrand,
             avatars: AvatarsWidget.lire(releve?.membres ?? []), langue: DonneesWidget.langue)
     }
@@ -89,6 +93,7 @@ struct FournisseurClassement: AppIntentTimelineProvider {
     /// La galerie et le `placeholder` — un classement plausible, jamais affiché comme une
     /// donnée réelle.
     static func exemple(_ affichage: AffichagePetit,
+                        moyen: AffichageMoyen = .classementEtPiste,
                         grand: AffichageGrand = .classementEtPiste) -> EntreeClassement {
         let pseudos = ["Matt", "Léa", "Hugo", "Inès", "Tom", "Zoé", "Noah", "Jade"]
         let points = [168, 151, 151, 122, 97, 80, 64, 41]
@@ -103,7 +108,8 @@ struct FournisseurClassement: AppIntentTimelineProvider {
         return EntreeClassement(
             date: .now, championnat: .init(id: UUID(), nom: "Team Bazzana"),
             releve: .init(membres: membres, date: .now), aJour: true,
-            profilId: membres[4].profilId, affichage: affichage, affichageGrand: grand, avatars: [:],
+            profilId: membres[4].profilId, affichage: affichage, affichageMoyen: moyen, affichageGrand: grand,
+            avatars: [:],
             langue: DonneesWidget.langue)
     }
 }
