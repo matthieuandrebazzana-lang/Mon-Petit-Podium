@@ -1116,3 +1116,35 @@ iOS sans perte. *Instantanés de tous les classements* : la demande se limite au
 plan, les autres restent en mémoire. *Une durée par famille* (60 s / 5 min, §27) : une
 seule règle, et la revalidation ne coûte plus d'attente puisqu'elle ne bloque rien.
 
+
+---
+
+## 30. Le widget « Mes pronos » réutilise le jeton widget, et le slug reste à l'app
+
+**Décision.** Le widget iOS « Mes pronos » (backend `0.87.0`) lit
+`GET /widget/pronos` avec **le même jeton widget** que « Classement » (§28) — même
+Keychain partagé, même App Group, jamais la session Supabase. La route rend **deux** Grands
+Prix : `prochain` (le premier non terminé, départ croissant, la règle de l'accueil) et
+`dernier` (le dernier `termine`), chacun avec les pronostics du porteur.
+
+- **Deux GP, pas un.** Le widget doit dire « Résultats disponibles » après la course puis
+  passer **seul** au suivant, hors ligne compris : sa timeline a besoin des deux.
+- **La même fonction SQL que les écrans** (`pronostics_du_joueur`) : les points en jeu ne
+  peuvent pas diverger du récapitulatif.
+- **Le podium en deux lignes**, chacune avec ses points en jeu et son verdict
+  (`points_gagnes_1/2`, `metier.md` §2) : le widget n'a rien à recouper.
+- **Total `null` tant que le GP n'est pas `termine`**, et sans pronostic jugé : jamais
+  `0` (règle 3.1).
+- **Le jeton n'ouvre que les routes `/widget/*`** ; une session Supabase n'ouvre pas
+  `/widget/pronos`.
+
+**Écart signalé : pas de slug dans la réponse.** La demande le prévoyait. Le slug (drapeau,
+tracé, nom traduit) a **un seul propriétaire**, `SlugCircuit.de(_:dateCourse:)` côté iOS
+(`decisions.md` §24) : le jour de course désigne le GP, le nom Unibet n'est qu'un repli. Le
+calculer au backend aurait créé une troisième table des dates de la saison, qui aurait
+divergé au premier report. L'app le tire du `nom` et de la `date_course` servis.
+
+**Écarté.** *Étendre `GET /grands-prix/{id}/pronostics/…` au jeton widget* : le jeton
+n'ouvrirait plus seulement des routes faites pour lui. *L'app pousse ses pronostics dans
+l'App Group, sans réseau côté widget* : les résultats du dimanche soir n'arriveraient
+qu'à l'ouverture de l'app.

@@ -12,7 +12,8 @@ Ce qu'il est, et ce qu'il ne doit jamais devenir :
 - porteur de l'identifiant du profil (`sub`), d'une expiration à 30 jours et
   d'une **portée en lecture seule** — aucune table, rien à révoquer en base : un
   secret changé les invalide tous d'un coup ;
-- accepté par **une seule route**, `GET /widget/championnats/{id}/classement`.
+- accepté par les **seules routes du widget** : `GET /widget/championnats/{id}/classement`
+  et `GET /widget/pronos`.
   `utilisateur_courant` le refuse explicitement (`est_jeton_widget`) au lieu de
   compter sur Supabase pour le rejeter : un secret recopié par erreur depuis
   celui de Supabase le rendrait sinon valable partout.

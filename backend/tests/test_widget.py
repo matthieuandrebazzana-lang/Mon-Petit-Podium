@@ -188,6 +188,8 @@ def test_jeton_session_refuse_par_le_widget(client):
         ("get", "/championnats/moi"),
         ("post", "/widget/token"),
         ("delete", "/push/token"),
+        ("get", f"/grands-prix/{uuid4()}/favoris"),
+        ("post", f"/grands-prix/{uuid4()}/pronostics"),
     ],
 )
 def test_jeton_widget_refuse_ailleurs(client, methode, chemin):
