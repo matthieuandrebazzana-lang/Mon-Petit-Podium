@@ -1144,6 +1144,15 @@ tracé, nom traduit) a **un seul propriétaire**, `SlugCircuit.de(_:dateCourse:)
 calculer au backend aurait créé une troisième table des dates de la saison, qui aurait
 divergé au premier report. L'app le tire du `nom` et de la `date_course` servis.
 
+**Côté iOS (`0.57.0`).** Le widget range **la réponse brute** dans l'App Group et la décode
+par `JSONDecoder.api` — hors ligne ou jeton expiré, il redessine la dernière, sans date. Sa
+timeline (`TimelinePronos`, pure) passe seule d'un état à l'autre ; les 36 h des résultats
+frais sont celles de la cadence de « Classement » (`CadenceClassement.apresDepart`), une
+seule valeur pour les deux questions. Pastille : « À faire » `primaireFixe` (10,88:1),
+« Pronos faits » `vertSauge` (4,86:1), « Résultats » `accent` + `encreSurClair` (7,86:1).
+Un tap pousse le parcours de pronostics de l'accueil (`EtapePronos.demandee`) : la porte
+d'entrée (récapitulatif ou cotes), ou les résultats après la course.
+
 **Écarté.** *Étendre `GET /grands-prix/{id}/pronostics/…` au jeton widget* : le jeton
 n'ouvrirait plus seulement des routes faites pour lui. *L'app pousse ses pronostics dans
 l'App Group, sans réseau côté widget* : les résultats du dimanche soir n'arriveraient

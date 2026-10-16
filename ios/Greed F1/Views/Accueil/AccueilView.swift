@@ -21,6 +21,9 @@ struct AccueilView: View {
     @ObservedObject var prochainGP: ProchainGrandPrix
     /// L'onglet de ``BarreNavigation`` : l'avatar de l'en-tête y bascule sur le profil.
     @Binding var ongletActif: BarreNavigation.Onglet
+    /// Le Grand Prix qu'un tap sur le widget « Mes pronos » demande d'ouvrir — consommé
+    /// dès qu'il est poussé.
+    @Binding var pronosDemandes: DonneesWidget.DemandePronos?
 
     /// Marge latérale commune à tous les blocs — la même que `LandingView`, sans quoi les
     /// deux écrans ne s'aligneraient pas au passage de l'un à l'autre.
@@ -98,6 +101,12 @@ struct AccueilView: View {
             .task { await prochainGP.charger() }
             .navigationDestination(item: $championnatRejoint) { championnat in
                 ChampionnatDetailView(championnat: championnat, mesChampionnats: mesChampionnats)
+            }
+            // Un tap sur le widget « Mes pronos » : le parcours repart de ce GP.
+            .onChange(of: pronosDemandes, initial: true) { _, demande in
+                guard let demande else { return }
+                pronosDemandes = nil
+                if let etape = EtapePronos.demandee(demande) { cheminPronos = [etape] }
             }
             // Retour du parcours de pronostics : une grille vient peut-être d'être envoyée.
             .onChange(of: cheminPronos.isEmpty) { _, vide in
@@ -752,5 +761,33 @@ private struct SilhouetteWidget: View {
 
 #Preview {
     AccueilView(viewModel: AuthViewModel(), mesChampionnats: MesChampionnats(),
-                prochainGP: ProchainGrandPrix(), ongletActif: .constant(.accueil))
+                prochainGP: ProchainGrandPrix(), ongletActif: .constant(.accueil),
+                pronosDemandes: .constant(nil))
+}
+
+// MARK: - Depuis le widget « Mes pronos »
+
+extension EtapePronos {
+
+    /// L'étape qu'un tap sur le widget « Mes pronos » demande, tirée du Grand Prix que le
+    /// widget a rangé dans l'App Group (``DonneesWidget/lirePronos()``) — la porte d'entrée
+    /// du parcours, ou les résultats après la course, **comme le widget de l'accueil**.
+    static func demandee(_ demande: DonneesWidget.DemandePronos) -> EtapePronos? {
+        let id: UUID
+        switch demande {
+        case let .pronos(valeur), let .resultats(valeur): id = valeur
+        }
+        guard let gp = DonneesWidget.lirePronos()?.grandPrix(id) else { return nil }
+        let date = gp.dateCourse?.formatted(.dateTime.day().month(.wide).year()
+            .locale(localeInterface)) ?? t("commun.dateAConfirmer")
+        switch demande {
+        case .resultats:
+            return .resultats(GrandPrixPronos(id: gp.id, nom: gp.nom, slug: gp.slug, sousTitre: date),
+                              date: date)
+        case .pronos:
+            let heure = gp.dateCourse.map(heureInterface) ?? t("echeance.aConfirmer")
+            return .entree(GrandPrixPronos(id: gp.id, nom: gp.nom, slug: gp.slug,
+                                           sousTitre: t("accueil.sousTitreGP", date, heure)))
+        }
+    }
 }

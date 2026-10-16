@@ -127,5 +127,7 @@ final class DonneesPronostics: ObservableObject {
     /// (« Les pronostics de ce Grand Prix sont fermés… ») : c'est la base qui fait foi.
     func enregistrer(_ corps: CorpsPronostics) async throws {
         try await APIClient.partage.envoyer("\(racine)/pronostics", methode: .post, corps: corps)
+        // Le widget « Mes pronos » relit la grille qui vient d'être enregistrée.
+        DonneesWidget.rechargerPronos()
     }
 }

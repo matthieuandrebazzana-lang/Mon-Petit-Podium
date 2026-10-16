@@ -549,6 +549,20 @@ enum TraductionsFR {
         "widgetClassement.vide": "Ouvre l’app pour charger ton classement",
         "widgetClassement.a11y.titre": "Classement du championnat %@. ",
 
+        // MARK: - Widget « Mes pronos »
+        "widgetPronos.nom": "Mes pronos",
+        "widgetPronos.description": "Tes pronos du prochain Grand Prix, le compte à rebours, puis tes points.",
+        "widgetPronos.vide": "Ouvre l’app pour charger tes pronos",
+        "widgetPronos.etat.aFaire": "À faire",
+        "widgetPronos.etat.faits": "Pronos faits",
+        "widgetPronos.etat.fermes": "Fermés",
+        "widgetPronos.etat.resultats": "Résultats",
+        "widgetPronos.resultatsDisponibles": "Résultats disponibles",
+        "widgetPronos.aucunPronos": "Tu n’as pas encore fait tes pronos",
+        "widgetPronos.aucunPronosFerme": "Pas de pronos pour ce Grand Prix",
+        "widgetPronos.mesPoints": "Mes points",
+        "widgetPronos.a11y": "Mes pronos, %1$@ : %2$@. %3$@.",
+
         // FIN
     ]
 }

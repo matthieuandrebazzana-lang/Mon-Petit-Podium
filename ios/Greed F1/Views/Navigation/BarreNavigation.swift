@@ -40,6 +40,9 @@ struct BarreNavigation: View {
     /// Le championnat qu'un tap sur le widget « Classement » demande d'ouvrir.
     @State private var championnatDemande: UUID?
 
+    /// Le Grand Prix qu'un tap sur le widget « Mes pronos » demande d'ouvrir.
+    @State private var pronosDemandes: DonneesWidget.DemandePronos?
+
     @Environment(\.scenePhase) private var phase
 
     /// Les quatre onglets, dans l'ordre de la barre.
@@ -50,7 +53,8 @@ struct BarreNavigation: View {
     var body: some View {
         TabView(selection: $ongletActif) {
             AccueilView(viewModel: viewModel, mesChampionnats: mesChampionnats,
-                        prochainGP: prochainGP, ongletActif: $ongletActif)
+                        prochainGP: prochainGP, ongletActif: $ongletActif,
+                        pronosDemandes: $pronosDemandes)
                 .tabItem { Label(t("onglet.accueil"), image: "icone-accueil") }
                 .tag(Onglet.accueil)
 
@@ -85,13 +89,27 @@ struct BarreNavigation: View {
                 ongletActif = .championnats
                 championnatDemande = id
             }
+            // Un tap sur le widget « Mes pronos » : saisie, récapitulatif ou résultats.
+            if let demande = DonneesWidget.demandePronos(de: url) {
+                ongletActif = .accueil
+                pronosDemandes = demande
+            }
         }
         // Widget « Classement » (`docs/decisions.md` §28) : un jeton neuf par lancement
         // (`renouvelerJeton` ignore le passage en actif qui suit, et ne redemande qu'après
         // 24 h), la liste et la carte du dessus de la pile à chaque lecture.
-        .task { await SynchroWidgetClassement.renouvelerJeton() }
+        // Le widget « Mes pronos » se relit à chaque ouverture de l'app, une fois le jeton
+        // renouvelé s'il le fallait.
+        .task {
+            await SynchroWidgetClassement.renouvelerJeton()
+            DonneesWidget.rechargerPronos()
+        }
         .onChange(of: phase) { _, nouvelle in
-            if nouvelle == .active { Task { await SynchroWidgetClassement.renouvelerJeton() } }
+            guard nouvelle == .active else { return }
+            Task {
+                await SynchroWidgetClassement.renouvelerJeton()
+                DonneesWidget.rechargerPronos()
+            }
         }
         .task { await chargerAuLancement() }
         .onChange(of: mesChampionnats.etat) { _, etat in

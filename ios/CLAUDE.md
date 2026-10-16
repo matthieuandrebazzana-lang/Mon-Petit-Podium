@@ -16,8 +16,8 @@
 | SDK | [`supabase-swift`](https://github.com/supabase/supabase-swift) **2.55.2**, épinglé — produits `Supabase` et `Auth` |
 | Xcode | **26.6** (`objectVersion = 77`) |
 | Bundle identifier | **`com.bazzana.greedf1`** |
-| Cibles | `Greed F1` (l'app) + **`GreedF1WidgetExtension`** (`com.bazzana.greedf1.GreedF1Widget`, widgets « Prochain GP » et « Classement ») |
-| App Group | **`group.com.bazzana.greedf1`** — sur les deux cibles, seul propriétaire `DonneesWidget` (`Services/DonneesWidget.swift` + `DonneesWidgetClassement.swift`) |
+| Cibles | `Greed F1` (l'app) + **`GreedF1WidgetExtension`** (`com.bazzana.greedf1.GreedF1Widget`, widgets « Prochain GP », « Classement » et « Mes pronos ») |
+| App Group | **`group.com.bazzana.greedf1`** — sur les deux cibles, seul propriétaire `DonneesWidget` (`Services/DonneesWidget.swift` + `DonneesWidgetClassement.swift` + `DonneesWidgetPronos.swift`) |
 | Keychain partagé | **`$(AppIdentifierPrefix)com.bazzana.greedf1.widget`** — le jeton widget seul (`Services/JetonWidget.swift`) ; la session Supabase reste dans le groupe de l'app |
 | Familles d'appareils | iPhone seulement · portrait seulement |
 | Simulateur cible | **iPhone 17 Pro, iOS 26.5** |
@@ -250,6 +250,25 @@ et les marges posées par `VueClassement` : ne pas les rendre au système. Tap �
 compilation et affichés par iOS dans la langue du téléphone, vivent dans
 `GreedF1Widget/Intentions.xcstrings` — rien d'autre n'y entre.
 
+**Le widget « Mes pronos » partage le jeton et l'App Group de « Classement »**
+(`docs/decisions.md` §30), jamais la session. Statique (aucun réglage, donc rien dans
+`Intentions.xcstrings`), petit et moyen. Il lit `GET /widget/pronos` (`prochain` + `dernier`)
+et range **la réponse brute** dans l'App Group (`DonneesWidgetPronos`), décodée par
+`JSONDecoder.api` : hors ligne ou jeton expiré, la dernière reçue, sans date ; sans rien,
+« Ouvre l'app pour charger tes pronos ». Le slug vient de `SlugCircuit` (nom + date), jamais
+du backend. `TimelinePronos` (pur) change d'état seul : avant l'ouverture / ouverts / fermés
+(``EcheancePronostics``), puis « Résultats disponibles » (GP `termine`) jusqu'à départ + 36 h
+(`CadenceClassement.apresDepart`), puis le GP suivant ; décompte `DecompteProchainGP`.
+Cadence `CadenceClassement.prochaine(apres:departs:)` (2 h, 15 min dans les 36 h). Pastille :
+« À faire » `primaireFixe`, « Pronos faits » `vertSauge`, « Résultats » `accent` +
+`encreSurClair`, « Fermés » matériau du drapeau. Fond `FondPronos` (drapeau voilé, sans
+tracé). L'app recharge le widget à chaque ouverture (après le jeton), après chaque
+`POST …/pronostics` (`DonneesPronostics.enregistrer`) et l'efface avec le jeton
+(`SynchroWidgetClassement.effacer`). Tap → `greedf1://pronos/<id>` (`EntreePronosView` :
+récap ou cotes) ou `greedf1://resultats/<id>` (`MesResultatsGPView`), poussés sur la pile de
+l'accueil (`EtapePronos.demandee`) ; avant l'ouverture → accueil. Les points sont habillés par
+`formaterPoints` (`Models/FormatPoints.swift`, PARTAGÉ depuis 0.57.0).
+
 ## 4. Règles de commit
 
 - **Incrémenter `MARKETING_VERSION`** dans `ios/Greed F1.xcodeproj/project.pbxproj` (deux
@@ -297,6 +316,9 @@ ios/
 │   ├── Intentions.xcstrings         libellés App Intents FR/EN — SEULE exception à `t()`
 │   ├── FournisseurClassement.swift  jeton widget → `GET /widget/…/classement`, App Group, `CadenceClassement`, `AvatarsWidget`
 │   ├── VuesClassement.swift         les trois formats, lignes, piste titrée (`PisteTitree`) et simplifiée (`PisteSimplifiee`), état neutre, fond damier uniforme (`FondClassement`)
+│   ├── PronosWidget.swift           widget « Mes pronos » : petit + moyen, `StaticConfiguration`
+│   ├── FournisseurPronos.swift      jeton widget → `GET /widget/pronos`, App Group, `TimelinePronos` (calcul pur), `PhasePronos`
+│   ├── VuesPronos.swift             pastille d'état, petit, moyen (obligatoires / bonus), état vide, fond drapeau (`FondPronos`)
 │   └── Info.plist                   `API_BASE_URL` (Config.xcconfig, réglages du projet)
 ├── GreedF1WidgetExtension.entitlements  App Group + Keychain partagé
 ├── AuthViewModel.swift          ┐
@@ -322,6 +344,7 @@ ios/
     │   └── LandingView.swift        écran d'accueil (non connecté)
     ├── Models/
     │   ├── DecodageJSON.swift   `JSONDecoder.api` — le décodeur unique, dates ISO 8601
+    │   ├── FormatPoints.swift   `formaterPoints`, `enPoints` — le seul habillage d'un nombre de points, PARTAGÉ avec le widget
     │   ├── Profil.swift         `Profil` + `ModeLivree`
     │   ├── StatsProfil.swift    stats d'un profil + `tuiles` — seul endroit qui les met en forme
     │   ├── Championnat.swift    `Championnat`, `ProchainGP`, `PositionMembre`
@@ -349,8 +372,9 @@ ios/
     │   ├── DepotPhoto.swift       photo réduite (800 px, JPEG 0,85) → Supabase Storage, rend l'URL `?v=`
     │   ├── DonneesWidget.swift    App Group du widget : GP à venir + langue, fusion par id, rechargement — PARTAGÉ avec le widget
     │   ├── DonneesWidgetClassement.swift  App Group du widget « Classement » : championnats, premier plan, profil, relevés, avatars — PARTAGÉ
+    │   ├── DonneesWidgetPronos.swift  App Group du widget « Mes pronos » : réponse brute de `/widget/pronos`, liens `greedf1://pronos|resultats/<id>` — PARTAGÉ
     │   ├── JetonWidget.swift      jeton widget dans le Keychain partagé — PARTAGÉ
-    │   ├── SynchroWidgetClassement.swift  app seule : `POST /widget/token` à chaque ouverture, publication de la liste, effacement
+    │   ├── SynchroWidgetClassement.swift  app seule : `POST /widget/token` à chaque ouverture, publication de la liste, effacement (des deux widgets à jeton)
     │   ├── NotificationsPush.swift  permission, jeton APNs → `POST`/`DELETE /push/token`, langue ; `DelegueApplication`
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/

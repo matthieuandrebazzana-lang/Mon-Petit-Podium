@@ -13,5 +13,6 @@ struct GreedF1WidgetBundle: WidgetBundle {
     var body: some Widget {
         GreedF1Widget()
         ClassementWidget()
+        PronosWidget()
     }
 }

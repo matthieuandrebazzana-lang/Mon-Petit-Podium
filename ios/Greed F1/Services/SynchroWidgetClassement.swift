@@ -43,6 +43,7 @@ enum SynchroWidgetClassement {
             if avant == nil || avant?.profilId != contenu.profilId
                 || (avant?.expireLe ?? .distantPast) < .now {
                 DonneesWidget.rechargerClassement()
+                DonneesWidget.rechargerPronos()
             }
         } catch {
             // `503` sans `WIDGET_TOKEN_SECRET` sur Railway, réseau absent : rien à dire à
@@ -72,5 +73,8 @@ enum SynchroWidgetClassement {
         JetonWidget.effacer()
         DonneesWidget.effacerClassement()
         DonneesWidget.rechargerClassement()
+        // Le widget « Mes pronos » partage le jeton : ses données partent avec lui.
+        DonneesWidget.effacerPronos()
+        DonneesWidget.rechargerPronos()
     }
 }

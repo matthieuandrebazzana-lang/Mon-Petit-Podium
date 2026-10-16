@@ -126,7 +126,11 @@ enum CadenceClassement {
     static let apresDepart: TimeInterval = 36 * 60 * 60
 
     static func prochaine(apres maintenant: Date, grandsPrix: [DonneesWidget.GrandPrix]) -> Date {
-        let departs = grandsPrix.compactMap(\.dateCourse)
+        prochaine(apres: maintenant, departs: grandsPrix.compactMap(\.dateCourse))
+    }
+
+    /// La même cadence, pour le widget « Mes pronos », qui a ses propres Grands Prix.
+    static func prochaine(apres maintenant: Date, departs: [Date]) -> Date {
         if departs.contains(where: { maintenant >= $0 && maintenant < $0.addingTimeInterval(apresDepart) }) {
             return maintenant.addingTimeInterval(course)
         }
