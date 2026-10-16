@@ -374,6 +374,11 @@ struct VueVoiture: View {
     /// ce que veut un aperçu sans membre derrière.
     var teintePilote: Color?
 
+    /// Cerne la silhouette de ``Color/lisereVoiturePiste`` — **sur la piste seulement**,
+    /// app et widget. En sombre, pneus, fond plat et coques foncées s'y confondaient avec le
+    /// sol `#1C1C1E` (1,01:1 pour les pneus) ; en clair le jeton est transparent.
+    var lisere: Bool = false
+
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
     /// Le rapport de toutes les fenêtres de voiture — 141,12 × 288,09. Il est le même sur
@@ -417,7 +422,8 @@ struct VueVoiture: View {
             let cadre = CadrePlanche(fenetre: fenetre, taille: geometrie.size)
 
             ZStack {
-                VuePlanche(planche: planche, fenetre: fenetre, substitutions: substitutions)
+                VuePlanche(planche: planche, fenetre: fenetre, substitutions: substitutions,
+                           contour: lisere ? .lisereVoiturePiste : nil)
 
                 cockpitDuMembre(cadre)
                 textesDeCarrosserie(cadre)

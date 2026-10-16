@@ -470,7 +470,8 @@ struct PisteSimplifiee: View {
                                numero: placement.membre.numeroAffiche,
                                nom: placement.membre.pseudo,
                                imagePhoto: avatars[placement.membre.profilId],
-                               teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte))
+                               teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte),
+                               lisere: true)
                         .frame(width: largeurVoiture, height: hauteurVoiture)
                         .offset(x: (piste.width / 2 + placement.decalage) * echelle - largeurVoiture / 2,
                                 y: placement.centre * echelle - hauteurVoiture / 2)

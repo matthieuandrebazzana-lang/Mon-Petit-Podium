@@ -372,8 +372,8 @@ ios/
     │   │   ├── MentionProvisoire.swift  `StatutResultats` (provisoire, non évaluable) + la mention « Provisoire », PARTAGÉS
     │   │   ├── SkeletonView.swift       silhouette de premier chargement (4 variantes, balayage calé sur l'écran) + `fonduChargement(_:)`, PARTAGÉS
     │   │   ├── ImageCachee.swift        `AsyncImage` avec `NSCache` partagé par URL (`CacheImages`) — avatars, photos de championnat, cockpits
-    │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
-    │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
+    │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas ; `contour:` = liseré 1 pt hors silhouette (traits puis aplats, Canvas débordant)
+    │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes ; `lisere: true` sur la piste (app + widget) — `lisereVoiturePiste`, blanc 50 % en sombre, pneus 1,01 → 5,15:1
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
     │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste (`SelecteurSegmente`), menu « ⋯ » en bouton rond 44 pt (`fondSegmentInactif`) : « Inviter des amis · CODE » (`ShareLink`), « Copier le code » (haptique légère, capsule « Code copié » sous le bouton pendant `Mouvement.tenueConfirmation`), séparateur, photo si créateur, quitter — rien d'ajouté à l'en-tête ; photo 100 pt réduite jusqu'à 72 pt pour un nom long, à équidistance du titre et du menu (`DispositionEntete`) — sans photo, rien : texte + ⋯ ; la piste n'est construite qu'au premier tap sur « Piste » (`pisteVue`), puis les deux contenus restent montés, seule l'opacité bascule (0,001, pas 0) ; damier en filigrane sur le sélecteur et la carte « Résultats par Grand Prix » — réels

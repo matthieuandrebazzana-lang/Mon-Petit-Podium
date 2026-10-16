@@ -334,7 +334,8 @@ struct VuePisteView: View {
                        numero: placement.membre.numeroAffiche,
                        nom: placement.membre.pseudo,
                        photo: placement.membre.avatarUrl,
-                       teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte))
+                       teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte),
+                       lisere: true)
                 .frame(width: largeurVoiture, height: hauteurVoiture)
 
             Text(String(placement.membre.totalPoints))

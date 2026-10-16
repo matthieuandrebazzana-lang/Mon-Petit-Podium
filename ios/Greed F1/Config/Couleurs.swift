@@ -305,6 +305,20 @@ extension Color {
     static let ligneMedianePiste = Color(clair: Color(hexadecimal: 0x1D1D1B).opacity(0.11),
                                          sombre: Color.white.opacity(0.11))
 
+    /// Le liseré d'**une voiture posée sur la piste** — invisible en clair, blanc à **50 %**
+    /// en sombre (``VueVoiture/lisere``), 1 pt autour de la silhouette.
+    ///
+    /// > Sur `#1C1C1E`, les pneus `#1d1d1b` ne tenaient que **1,01:1**, le fond plat
+    /// > `#3c3c3b` 1,54:1, Minuit 1,06:1, Azurite 1,17:1, le bordeaux `#800111` 1,56:1.
+    /// > Composité sur le sol, le liseré vaut `#8E8E8E` : pneus **5,15:1**, fond plat
+    /// > **3,37:1**, Minuit **5,53:1**, Azurite **4,43:1**, bordeaux **3,32:1**, le sol
+    /// > lui-même **5,19:1**. À 45 %, le bordeaux retombait à 2,83:1.
+    /// >
+    /// > **Pas un sol plus clair** : les pneus n'y atteignent 3:1 qu'à `#68686A`, un gris
+    /// > moyen où ``grisSecondaire`` tomberait à 2,51:1 et ``encrePrimaire`` à 1,97:1 dans
+    /// > le widget « Classement + piste », dont le fond est continu.
+    static let lisereVoiturePiste = Color(clair: .clear, sombre: Color.white.opacity(0.50))
+
     /// Le damier **du fond du widget « Classement »** dès qu'il porte du texte de
     /// classement (« Classement », « Classement + piste », état neutre) — le bordeaux en
     /// clair, le blanc en sombre, **opacité comprise** : une texture uniforme, sans fondu.
