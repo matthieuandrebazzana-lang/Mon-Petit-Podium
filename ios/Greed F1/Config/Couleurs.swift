@@ -306,8 +306,8 @@ extension Color {
                                          sombre: Color.white.opacity(0.11))
 
     /// **La route de la piste en sombre** — entre les kerbs et sous l'en-tête seulement
-    /// (``SolPiste``), sous les voitures du widget seulement (``PisteSimplifiee``).
-    /// Transparente en clair : sol et fond du widget y restent ceux d'avant.
+    /// (``SolPiste``), **dans l'app seulement** : la piste du widget (``PisteSimplifiee``)
+    /// reste sur le fond sombre ordinaire depuis `ios 0.57.1`. Transparente en clair.
     ///
     /// > Sur `#1C1C1E`, les pneus `#1d1d1b` ne tenaient que **1,01:1**. Trois valeurs
     /// > mesurées, à changer ici seulement (``texte`` des scores, blanc) :

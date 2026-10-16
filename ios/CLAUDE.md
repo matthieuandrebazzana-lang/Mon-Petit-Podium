@@ -236,7 +236,7 @@ remplace le 10e), grand = top 10 (+ l'utilisateur, 11 lignes au plus), rangs ré
 `affichage` ne sert plus qu'au petit — un moyen posé avant est repassé au défaut. Piste : `DispositionPiste`
 (fichier propre, partagé) calculé **sur la piste de l'app** (`DispositionPiste.pisteApp`,
 365,71 × 548 pt mesurés) puis réduit **uniformément**, centré au rapport de la piste — jamais
-recalculé à la taille du widget —, posée directement sur le fond du widget (ni kerbs ni ligne médiane ; en sombre, un panneau `surfacePiste` sous les voitures seulement, jamais sous le texte), `VueVoiture(imagePhoto:)` avec l'avatar
+recalculé à la taille du widget —, posée directement sur le fond du widget (ni kerbs ni ligne médiane ; **jamais** `surfacePiste` — en sombre, le fond sombre ordinaire et son damier, depuis 0.57.1 ; la route grise reste propre à l'app), `VueVoiture(imagePhoto:)` avec l'avatar
 réduit de l'App Group (`AvatarsWidget`, le widget ne télécharge rien au rendu). **Fond** :
 `FondClassement` (beige + `Damier`) dans tous les états — **texture uniforme**, un seul
 calque, ni fondu, ni masque, ni dégradé, donc continu dans « Classement + piste ». Encre :

@@ -434,7 +434,10 @@ struct FondClassement: View {
 // MARK: - La piste simplifiée
 
 /// Les voitures à leur place, **sans kerbs, scores ni ligne médiane** : posées directement
-/// sur le fond du widget en clair, sur la route (``Color/surfacePiste``) en sombre.
+/// sur le fond du widget — beige et damier en clair, fond sombre ordinaire et damier en
+/// sombre. **Jamais la route grise de l'app** (``Color/surfacePiste``) : les voitures du
+/// widget sont trop petites pour que des pneus peu visibles comptent, et un panneau plus
+/// clair découpait le fond (`ios 0.57.1`).
 ///
 /// **La disposition est celle de l'app, réduite d'un bloc.** ``DispositionPiste`` travaille
 /// sur la piste de l'app elle-même (``DispositionPiste/pisteApp``), avec les mêmes
@@ -476,12 +479,8 @@ struct PisteSimplifiee: View {
                                 y: placement.centre * echelle - hauteurVoiture / 2)
                 }
             }
-            // La piste réduite, au rapport de celle de l'app, centrée dans le bloc. **La
-            // route sous les voitures et nulle part ailleurs** — transparente en clair,
-            // jamais sous le texte du classement.
+            // La piste réduite, au rapport de celle de l'app, centrée dans le bloc.
             .frame(width: piste.width * echelle, height: piste.height * echelle)
-            .background(Color.surfacePiste,
-                        in: RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
             .frame(width: bloc.size.width, height: bloc.size.height)
         }
         .accessibilityHidden(true)
