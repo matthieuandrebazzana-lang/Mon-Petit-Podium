@@ -505,44 +505,16 @@ struct VuePlanche: View {
     /// Voir ``CadrePlanche/etiree``. Faux par défaut : une voiture ne se déforme pas.
     var etiree: Bool = false
 
-    /// Un liseré de ``epaisseurContour`` autour de la silhouette, **hors** de la fenêtre
-    /// comprise. `nil`, rien — et le rendu est exactement celui d'avant.
-    var contour: Color? = nil
-
-    /// L'épaisseur du liseré, en points d'écran quelle que soit l'échelle.
-    static let epaisseurContour: CGFloat = 1
-
     var body: some View {
-        // **Le `Canvas` déborde de la place reçue** d'un liseré de chaque côté : une voiture
-        // touche les bords de sa fenêtre (pneus, aileron avant), et le liseré y serait coupé.
-        // Le `padding` négatif ne change pas la taille annoncée au parent.
-        let marge = contour == nil ? 0 : Self.epaisseurContour
         Canvas { contexte, taille in
-            let cadre = CadrePlanche(fenetre: fenetre,
-                                     taille: CGSize(width: taille.width - 2 * marge,
-                                                    height: taille.height - 2 * marge),
-                                     etiree: etiree)
+            let cadre = CadrePlanche(fenetre: fenetre, taille: taille, etiree: etiree)
             contexte.transform = cadre.transformation
-                .concatenating(CGAffineTransform(translationX: marge, y: marge))
-            let formes = PlancheSVG.nommee(planche).formes
-            // **Deux passes** : tous les traits, puis tous les aplats par-dessus. Le trait
-            // ne survit donc que là où rien n'est peint — autour de la silhouette et dans
-            // ses jours (entre roue et coque) —, jamais entre deux pièces jointives.
-            if let contour, cadre.echelle > 0 {
-                let trait = StrokeStyle(lineWidth: 2 * marge / cadre.echelle, lineJoin: .round)
-                for forme in formes where EncreSVG.couleur(forme.remplissage) != nil {
-                    contexte.stroke(forme.chemin, with: .color(contour), style: trait)
-                }
-                // Les aplats restent bornés à la fenêtre, comme avant le débord.
-                contexte.clip(to: Path(fenetre))
-            }
-            for forme in formes {
+            for forme in PlancheSVG.nommee(planche).formes {
                 guard let encre = substitutions[forme.remplissage] ?? EncreSVG.couleur(forme.remplissage)
                 else { continue }
                 contexte.fill(forme.chemin, with: .color(encre))
             }
         }
-        .padding(-marge)
         .accessibilityHidden(true)
     }
 }

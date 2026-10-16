@@ -67,6 +67,17 @@ struct SolPiste: View {
         "#f4efea": .fondPrincipal
     ]
 
+    /// **Les deux kerbs, mesurés sur les tracés de la planche** — 24,88 et 561,17 sur
+    /// 589,5 — et non une tranche arithmétique. Les voitures de ``VuePisteView`` et la
+    /// route (``Color/surfacePiste``) s'arrêtent à eux.
+    static let margeGauche: CGFloat = 24.88 / 589.5
+    static let margeDroite: CGFloat = (589.5 - 561.17) / 589.5
+
+    /// Le haut de la zone de jeu, en coordonnées **globales** — remonté par
+    /// ``VuePisteView`` (``DebutRoutePiste``). La route n'est peinte que sous lui : l'en-tête
+    /// et le bandeau gardent le fond d'avant. `nil` tant qu'il n'est pas mesuré.
+    var debutRoute: CGFloat? = nil
+
     var body: some View {
         GeometryReader { bloc in
             // **Étirée aux deux axes, sur tout le bloc proposé**, zones sûres comprises.
@@ -77,14 +88,39 @@ struct SolPiste: View {
             // **Le bas de la planche passe sous l'écran**, de la hauteur de son arrondi :
             // les kerbs gardent leur damier jusqu'au bord, et l'arrondi du dessin laisse
             // la place à celui de l'écran. Le haut n'en a pas besoin.
-            VuePlanche(planche: "vue_piste", fenetre: Self.planche,
-                       substitutions: Self.substitutions, etiree: true)
-                .ignoresSafeArea()
-                .padding(.bottom, -debordBas(ecran: bloc.size.height
-                                             + bloc.safeAreaInsets.top
-                                             + bloc.safeAreaInsets.bottom))
+            ZStack {
+                VuePlanche(planche: "vue_piste", fenetre: Self.planche,
+                           substitutions: debutRoute == nil
+                               ? Self.substitutions
+                               : Self.substitutions.merging(["#1d1d1b": .clear]) { $1 },
+                           etiree: true)
+                if let debutRoute { route(sous: debutRoute) }
+            }
+            .ignoresSafeArea()
+            .padding(.bottom, -debordBas(ecran: bloc.size.height
+                                         + bloc.safeAreaInsets.top
+                                         + bloc.safeAreaInsets.bottom))
         }
         .allowsHitTesting(false)
+    }
+
+    /// **La route**, la même planche peinte une seconde fois — sol en ``Color/surfacePiste``,
+    /// ligne médiane comprise — et découpée entre les kerbs, sous ``debutRoute``. La ligne
+    /// médiane n'est alors peinte que par elle : redoublée, ses 11 % en vaudraient 21 en
+    /// clair, où la route est transparente. Au-dessus, l'en-tête la cache de toute façon.
+    private func route(sous debut: CGFloat) -> some View {
+        VuePlanche(planche: "vue_piste", fenetre: Self.planche,
+                   substitutions: ["#1d1d1b": .ligneMedianePiste, "#f4efea": .surfacePiste],
+                   etiree: true)
+            .mask(alignment: .topLeading) {
+                GeometryReader { calque in
+                    let cadre = calque.frame(in: .global)
+                    Rectangle()
+                        .padding(.top, max(0, debut - cadre.minY))
+                        .padding(.leading, Self.margeGauche * cadre.width)
+                        .padding(.trailing, Self.margeDroite * cadre.width)
+                }
+            }
     }
 
     /// Ce que la planche doit dépasser sous l'écran pour que son arrondi en sorte. Étirée,
@@ -120,14 +156,12 @@ struct VuePisteView: View {
     /// La disposition, recalculée au seul changement du classement ou de la piste.
     @State private var memo = DispositionPiste.Memo()
 
+    /// Le haut de la zone de jeu, pour la route du sol — plein écran seulement : intégrée,
+    /// c'est ``ChampionnatDetailView`` qui le lit.
+    @State private var debutRoute: CGFloat?
+
     @Environment(\.dismiss) private var fermer
     @Environment(\.accessibilityReduceMotion) private var mouvementReduit
-
-    /// **Les deux kerbs, mesurés sur les tracés de la planche** — 24,88 et 561,17 sur
-    /// 589,5 — et non une tranche arithmétique. La zone de jeu s'arrête à eux : les
-    /// voitures disposent de toute la largeur de la piste, et d'elle seule.
-    private static let margeGauche: CGFloat = 24.88 / 589.5
-    private static let margeDroite: CGFloat = (589.5 - 561.17) / 589.5
 
     /// La rangée du retour, puis celle du nom. **Deux rangées, et c'est mesuré côté web**
     /// (`--piste-retour-h`, `--piste-bandeau-h`) : partagées en une seule, il faudrait
@@ -152,14 +186,14 @@ struct VuePisteView: View {
                 // sous le sélecteur « Classement / Piste ». Un second sol peint ici par-dessus
                 // masquerait celui-là sans rien ajouter.
                 if !integree {
-                    SolPiste()
+                    SolPiste(debutRoute: debutRoute)
                 }
 
                 VStack(spacing: 0) {
                     if !integree { bandeau }
                     zoneDeJeu
-                        .padding(.leading, Self.margeGauche * bloc.size.width)
-                        .padding(.trailing, Self.margeDroite * bloc.size.width)
+                        .padding(.leading, SolPiste.margeGauche * bloc.size.width)
+                        .padding(.trailing, SolPiste.margeDroite * bloc.size.width)
                 }
             }
             .frame(width: bloc.size.width, height: bloc.size.height)
@@ -177,6 +211,13 @@ struct VuePisteView: View {
         // chemin sortant, et le geste de bord continue de fonctionner.
         // Intégrée, la piste laisse les barres à l'écran qui l'accueille.
         .toolbar(integree ? .automatic : .hidden, for: .navigationBar, .tabBar)
+        // Plein écran, le sol est le sien : la mesure s'arrête ici.
+        .onPreferenceChange(DebutRoutePiste.self) { debut in
+            if !integree { debutRoute = debut }
+        }
+        .transformPreference(DebutRoutePiste.self) { debut in
+            if !integree { debut = nil }
+        }
         // L'entrée part au montage de la piste, pas à celui d'une voiture : les huit
         // partagent une seule bascule, et c'est le retard de chacune qui les échelonne.
         .onAppear { if lancerEntree { entrer() } }
@@ -290,6 +331,7 @@ struct VuePisteView: View {
     /// fraction de la planche.
     private var zoneDeJeu: some View {
         GeometryReader { geometrie in
+
             let taille = geometrie.size
             let disposition = memo.disposition(membres, taille: taille)
 
@@ -310,6 +352,8 @@ struct VuePisteView: View {
             // d'assistance au profit de cette liste-ci.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(resume)
+            // Le haut de la zone, remonté au sol (``SolPiste/debutRoute``).
+            .preference(key: DebutRoutePiste.self, value: geometrie.frame(in: .global).minY)
         }
     }
 
@@ -334,8 +378,7 @@ struct VuePisteView: View {
                        numero: placement.membre.numeroAffiche,
                        nom: placement.membre.pseudo,
                        photo: placement.membre.avatarUrl,
-                       teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte),
-                       lisere: true)
+                       teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte))
                 .frame(width: largeurVoiture, height: hauteurVoiture)
 
             Text(String(placement.membre.totalPoints))
@@ -396,5 +439,16 @@ struct VuePisteView: View {
                                     moyenneTentee: membre.moyenneTentee,
                                     livree: membre.livree, numero: membre.numero).enMembre
                      })
+    }
+}
+
+// MARK: - Mesure
+
+/// Le haut de la zone de jeu, en coordonnées globales, remonté de ``VuePisteView`` vers le
+/// propriétaire du sol (``SolPiste/debutRoute``).
+struct DebutRoutePiste: PreferenceKey {
+    static var defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = value ?? nextValue()
     }
 }

@@ -305,19 +305,22 @@ extension Color {
     static let ligneMedianePiste = Color(clair: Color(hexadecimal: 0x1D1D1B).opacity(0.11),
                                          sombre: Color.white.opacity(0.11))
 
-    /// Le liseré d'**une voiture posée sur la piste** — invisible en clair, blanc à **50 %**
-    /// en sombre (``VueVoiture/lisere``), 1 pt autour de la silhouette.
+    /// **La route de la piste en sombre** — entre les kerbs et sous l'en-tête seulement
+    /// (``SolPiste``), sous les voitures du widget seulement (``PisteSimplifiee``).
+    /// Transparente en clair : sol et fond du widget y restent ceux d'avant.
     ///
-    /// > Sur `#1C1C1E`, les pneus `#1d1d1b` ne tenaient que **1,01:1**, le fond plat
-    /// > `#3c3c3b` 1,54:1, Minuit 1,06:1, Azurite 1,17:1, le bordeaux `#800111` 1,56:1.
-    /// > Composité sur le sol, le liseré vaut `#8E8E8E` : pneus **5,15:1**, fond plat
-    /// > **3,37:1**, Minuit **5,53:1**, Azurite **4,43:1**, bordeaux **3,32:1**, le sol
-    /// > lui-même **5,19:1**. À 45 %, le bordeaux retombait à 2,83:1.
+    /// > Sur `#1C1C1E`, les pneus `#1d1d1b` ne tenaient que **1,01:1**. Trois valeurs
+    /// > mesurées, à changer ici seulement (``texte`` des scores, blanc) :
     /// >
-    /// > **Pas un sol plus clair** : les pneus n'y atteignent 3:1 qu'à `#68686A`, un gris
-    /// > moyen où ``grisSecondaire`` tomberait à 2,51:1 et ``encrePrimaire`` à 1,97:1 dans
-    /// > le widget « Classement + piste », dont le fond est continu.
-    static let lisereVoiturePiste = Color(clair: .clear, sombre: Color.white.opacity(0.50))
+    /// > | Route | Pneus | Minuit | Azurite | Bordeaux | Scores |
+    /// > |---|---|---|---|---|---|
+    /// > | `#545456` | 2,23:1 | 2,40:1 | 1,92:1 | 1,44:1 | 7,56:1 |
+    /// > | **`#5C5C5E`** | **2,53:1** | 2,72:1 | 2,18:1 | 1,63:1 | 6,67:1 |
+    /// > | `#68686A` | 3,04:1 | 3,26:1 | 2,61:1 | 1,96:1 | 5,56:1 |
+    /// >
+    /// > `#5C5C5E` est le plus sombre où les pneus passent **2,5:1**. Jamais sous le texte
+    /// > du classement du widget : ``grisSecondaire`` y tomberait sous 4,5:1.
+    static let surfacePiste = Color(clair: .clear, sombre: Color(hexadecimal: 0x5C5C5E))
 
     /// Le damier **du fond du widget « Classement »** dès qu'il porte du texte de
     /// classement (« Classement », « Classement + piste », état neutre) — le bordeaux en

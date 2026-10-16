@@ -433,8 +433,8 @@ struct FondClassement: View {
 
 // MARK: - La piste simplifiée
 
-/// Les voitures à leur place, **sans kerbs, scores, ligne médiane ni panneau** : posées
-/// directement sur le fond du widget, le même beige que le classement.
+/// Les voitures à leur place, **sans kerbs, scores ni ligne médiane** : posées directement
+/// sur le fond du widget en clair, sur la route (``Color/surfacePiste``) en sombre.
 ///
 /// **La disposition est celle de l'app, réduite d'un bloc.** ``DispositionPiste`` travaille
 /// sur la piste de l'app elle-même (``DispositionPiste/pisteApp``), avec les mêmes
@@ -470,15 +470,18 @@ struct PisteSimplifiee: View {
                                numero: placement.membre.numeroAffiche,
                                nom: placement.membre.pseudo,
                                imagePhoto: avatars[placement.membre.profilId],
-                               teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte),
-                               lisere: true)
+                               teintePilote: .teinteAvatar(pour: placement.membre.cleTeinte))
                         .frame(width: largeurVoiture, height: hauteurVoiture)
                         .offset(x: (piste.width / 2 + placement.decalage) * echelle - largeurVoiture / 2,
                                 y: placement.centre * echelle - hauteurVoiture / 2)
                 }
             }
-            // La piste réduite, au rapport de celle de l'app, centrée dans le bloc.
+            // La piste réduite, au rapport de celle de l'app, centrée dans le bloc. **La
+            // route sous les voitures et nulle part ailleurs** — transparente en clair,
+            // jamais sous le texte du classement.
             .frame(width: piste.width * echelle, height: piste.height * echelle)
+            .background(Color.surfacePiste,
+                        in: RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
             .frame(width: bloc.size.width, height: bloc.size.height)
         }
         .accessibilityHidden(true)

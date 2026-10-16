@@ -236,7 +236,7 @@ remplace le 10e), grand = top 10 (+ l'utilisateur, 11 lignes au plus), rangs ré
 `affichage` ne sert plus qu'au petit — un moyen posé avant est repassé au défaut. Piste : `DispositionPiste`
 (fichier propre, partagé) calculé **sur la piste de l'app** (`DispositionPiste.pisteApp`,
 365,71 × 548 pt mesurés) puis réduit **uniformément**, centré au rapport de la piste — jamais
-recalculé à la taille du widget —, posée directement sur le fond du widget (ni panneau ni ligne médiane), `VueVoiture(imagePhoto:)` avec l'avatar
+recalculé à la taille du widget —, posée directement sur le fond du widget (ni kerbs ni ligne médiane ; en sombre, un panneau `surfacePiste` sous les voitures seulement, jamais sous le texte), `VueVoiture(imagePhoto:)` avec l'avatar
 réduit de l'App Group (`AvatarsWidget`, le widget ne télécharge rien au rendu). **Fond** :
 `FondClassement` (beige + `Damier`) dans tous les états — **texture uniforme**, un seul
 calque, ni fondu, ni masque, ni dégradé, donc continu dans « Classement + piste ». Encre :
@@ -372,13 +372,13 @@ ios/
     │   │   ├── MentionProvisoire.swift  `StatutResultats` (provisoire, non évaluable) + la mention « Provisoire », PARTAGÉS
     │   │   ├── SkeletonView.swift       silhouette de premier chargement (4 variantes, balayage calé sur l'écran) + `fonduChargement(_:)`, PARTAGÉS
     │   │   ├── ImageCachee.swift        `AsyncImage` avec `NSCache` partagé par URL (`CacheImages`) — avatars, photos de championnat, cockpits
-    │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas ; `contour:` = liseré 1 pt hors silhouette (traits puis aplats, Canvas débordant)
-    │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes ; `lisere: true` sur la piste (app + widget) — `lisereVoiturePiste`, blanc 50 % en sombre, pneus 1,01 → 5,15:1
+    │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
+    │   │   └── Voiture.swift            palette, les 11 livrées, la voiture, les vignettes
     │   ├── Championnats/
     │   │   ├── ChampionnatsView.swift       liste — données réelles (`MesChampionnats`)
     │   │   ├── ChampionnatDetailView.swift  segments Classement / Piste (`SelecteurSegmente`), menu « ⋯ » en bouton rond 44 pt (`fondSegmentInactif`) : « Inviter des amis · CODE » (`ShareLink`), « Copier le code » (haptique légère, capsule « Code copié » sous le bouton pendant `Mouvement.tenueConfirmation`), séparateur, photo si créateur, quitter — rien d'ajouté à l'en-tête ; photo 100 pt réduite jusqu'à 72 pt pour un nom long, à équidistance du titre et du menu (`DispositionEntete`) — sans photo, rien : texte + ⋯ ; la piste n'est construite qu'au premier tap sur « Piste » (`pisteVue`), puis les deux contenus restent montés, seule l'opacité bascule (0,001, pas 0) ; damier en filigrane sur le sélecteur et la carte « Résultats par Grand Prix » — réels
     │   │   ├── DispositionPiste.swift       le placement des voitures, sorti de `VuePisteView` — PARTAGÉ avec le widget
-    │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures — reçoit le classement ; taille UNIFORME, la plus grande par dichotomie entre 40 et 64 pt (disposition complète refaite à chaque essai ; boîtes dessin + score écartées de 4 pt, 8 pt aux kerbs) ; décalage vertical ≤ 12 pt avant d'ouvrir une voie (ordre conservé, ex æquo à la même hauteur), nombre de voies minimal, voies d'un groupe côte à côte à pas constant (largeur + 4 pt) et centrées sur l'axe, la largeur entre kerbs n'étant qu'une limite ; mémoïsée sur classement + taille (`DispositionPiste.Memo`)
+    │   │   ├── VuePisteView.swift           la piste, intégrée ou plein écran, placement des voitures ; `SolPiste(debutRoute:)` repeint la route en `surfacePiste` (sombre `#5C5C5E`, transparente en clair) entre les kerbs et sous l'en-tête seulement — haut de la zone remonté par `DebutRoutePiste` — reçoit le classement ; taille UNIFORME, la plus grande par dichotomie entre 40 et 64 pt (disposition complète refaite à chaque essai ; boîtes dessin + score écartées de 4 pt, 8 pt aux kerbs) ; décalage vertical ≤ 12 pt avant d'ouvrir une voie (ordre conservé, ex æquo à la même hauteur), nombre de voies minimal, voies d'un groupe côte à côte à pas constant (largeur + 4 pt) et centrées sur l'axe, la largeur entre kerbs n'étant qu'une limite ; mémoïsée sur classement + taille (`DispositionPiste.Memo`)
     │   │   ├── ResultatsParGPView.swift     résultats par GP : sélecteur des GP terminés, paris de chacun en accordéon ; fond `FondDrapeauFlou` du GP regardé (fondu au changement), en-tête blanc et piste du sélecteur voilée sur le drapeau, beige + encres sombres sans drapeau
     │   │   ├── CreerChampionnatView.swift   `POST /championnats` → code reçu, partage — photo pas encore envoyée
     │   │   └── RejoindreChampionnatView.swift  code à 6 cases → `POST /championnats/rejoindre` ; succès ou `409` (déjà membre, retrouvé par code) ⇒ l'écran se ferme et l'appelant pousse le détail (`ouvrir`, à `onDisappear` — jamais dans la transaction de fermeture)

@@ -95,6 +95,10 @@ struct ChampionnatDetailView: View {
     /// bascules suivantes ne font que changer son opacité (`visible(_:)`).
     @State private var pisteVue = false
 
+    /// Le haut de la zone de jeu de la piste intégrée (``DebutRoutePiste``) : la route du
+    /// sol ne commence que sous le sélecteur.
+    @State private var debutRoute: CGFloat?
+
     var body: some View {
         ZStack {
             Color.fondPrincipal
@@ -112,7 +116,7 @@ struct ChampionnatDetailView: View {
             // redessinait la planche plein écran dans la transaction de la pastille. Masqué
             // à 0,001 et non à 0, pour la même raison que les contenus (`visible(_:)`).
             if pisteVue {
-                SolPiste()
+                SolPiste(debutRoute: debutRoute)
                     .ignoresSafeArea()
                     .opacity(vue == .piste ? 1 : 0.001)
                     .animation(Mouvement.entree(Mouvement.passageEcran), value: vue)
@@ -190,6 +194,7 @@ struct ChampionnatDetailView: View {
                 .fonduChargement(classementEnChargement)
             }
         }
+        .onPreferenceChange(DebutRoutePiste.self) { debut in debutRoute = debut }
         .onChange(of: vue) { _, nouvelle in
             if nouvelle == .piste && !pisteVue {
                 withAnimation(Mouvement.entree(Mouvement.passageEcran)) { pisteVue = true }
