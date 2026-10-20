@@ -59,3 +59,6 @@ build/
 
 # --- Déploiement ---
 .vercel/
+
+# --- Championnat démo : script généré depuis un export de production ---
+supabase/demo/03_pronostics_gp_termines.sql

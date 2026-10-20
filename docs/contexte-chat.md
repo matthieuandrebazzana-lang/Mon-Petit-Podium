@@ -43,6 +43,40 @@ Pseudo : Reviewer
 Membre de : Team Bazzana (données réelles saison 2026)
 Mot de passe : à noter séparément
 
+## CHAMPIONNAT DÉMO (captures App Store)
+
+Championnat fictif « Démo F1 », code `DEMOF1`, id `67dc7eb8-a039-43da-9b2f-d7b782e1b20e`, créé par Alex. Il sert **uniquement** aux captures de la fiche App Store. Il a 9 membres : le reviewer et 8 comptes démo. Scripts dans `supabase/demo/` : ce **ne sont pas** des migrations.
+
+Comptes démo (aucune photo, livrée `perso`) :
+
+| Pseudo | Adresse | Coque / ailerons / texte | N° |
+|---|---|---|---|
+| Alex | demo-alex@greedf1.invalid | #003087 / #FFD700 / #FFFFFF | 7 |
+| Maya | demo-maya@greedf1.invalid | #E8027B / #000000 / #000000 | 21 |
+| Leo | demo-leo@greedf1.invalid | #005C43 / #F5F0EB / #F5F0EB | 14 |
+| Zoe | demo-zoe@greedf1.invalid | #FF8000 / #2D2D2D / #2D2D2D | 33 |
+| Hugo | demo-hugo@greedf1.invalid | #000000 / #CC0000 / #FFD700 | 5 |
+| Lina | demo-lina@greedf1.invalid | #00D2BE / #FFFFFF / #003087 | 18 |
+| Noah | demo-noah@greedf1.invalid | #960064 / #C0C0C0 / #C0C0C0 | 9 |
+| Eva | demo-eva@greedf1.invalid | #FFD700 / #003087 / #800111 | 42 |
+
+Un compte démo se reconnaît à **deux marques à la fois** : `auth.users.raw_app_meta_data.demo = true` et une adresse `demo-<pseudo>@greedf1.invalid`. Ces comptes ne peuvent pas se connecter : `.invalid` ne reçoit aucun e-mail (RFC 2606), le mot de passe est un bcrypt tiré dans la base et jamais affiché, aucune ligne `auth.identities` n'existe, et `banned_until` vaut 2999. Ils n'ont aucun jeton push, et le job de notifications ne fait que diffuser aux lignes de `push_tokens`.
+
+Procédure dans le SQL Editor, une étape après l'autre. Supabase n'affiche que le dernier résultat : les sections de `00` se lancent donc avec « Run selected ».
+
+1. `00_controles.sql` §1 et §4 : noter les empreintes, vérifier que les pseudos et le code sont libres.
+2. `01_comptes_et_championnat.sql` crée les comptes, les voitures, le championnat et les adhésions. Ensuite, contrôler avec `00` §1 (empreintes identiques), §2 et §5 (RLS : un étranger voit 0, le reviewer voit 1 championnat, 8 profils et 9 adhésions).
+3. `02_export_gp_termines.sql` : télécharger le CSV **hors du dépôt**.
+4. `cd backend && .venv/bin/python scripts/demo_pronostics.py <export>.csv > ../supabase/demo/03_pronostics_gp_termines.sql`. Le fichier est généré, et ignoré par git. Les pronostics sont choisis dans les vraies cotes et **jugés par `app.calcul.points.calculer`**. Le SQL n'écrit les verdicts que par `attribuer_points`, sur les seuls identifiants démo. Cibles : de 302 pour le premier à 18 pour le dernier membre démo, et Noah, Leo et Eva à 0 au dernier GP couru. Le reviewer reste à ses points réels.
+5. Exécuter `03_…sql`. Il refuse de s'exécuter si les cotes ou les résultats d'un GP ont changé depuis l'export. À la fin, il vérifie que `classement_du_championnat` rend exactement les totaux du calcul. Contrôler ensuite avec `00` §1 et §2.
+6. `04_pronostics_prochain_gp.sql` : **entre le figeage du samedi et le départ**. Les 8 membres démo pronostiquent via `enregistrer_pronostics`, le reviewer ne pronostique rien. Après la course, c'est le vrai job qui juge ces pronostics.
+
+Suppression : `99_supprimer_demo.sql`, puis `00` §1, dont les empreintes doivent être identiques. Le script supprime le championnat (les adhésions suivent, y compris celle du reviewer) puis les 8 comptes (profils, pronostics, favoris et jetons suivent par cascade). Il s'arrête net si un compte démo est membre d'un autre championnat. Le reviewer n'est pas supprimé.
+
+Risque connu : le code `DEMOF1` est visible sur les captures, et un vrai joueur pourrait rejoindre ce championnat. `99` liste ces comptes avant de les retirer, sans toucher à leurs pronostics.
+
+Testé de bout en bout sur `supabase/postgres:15.8.1.085` en local (Docker), avec les 31 migrations, le schéma `auth` mis au niveau de GoTrue et les 4 GP des fixtures. Chaque script a été joué deux fois. Les empreintes des données réelles sont restées identiques après 01, 03, 04 et 99, et les garde-fous de 03 et 04 ont bien levé.
+
 ## CE QUI EST FAIT — VERSION WEB (0.87.3)
 
 Authentification email/password + Google OAuth + onboarding pseudo
