@@ -553,6 +553,7 @@ enum TraductionsFR {
         "widgetPronos.nom": "Mes pronos",
         "widgetPronos.description": "Tes pronos du prochain Grand Prix, le compte à rebours, puis tes points.",
         "widgetPronos.vide": "Ouvre l’app pour charger tes pronos",
+        "widgetPronos.erreur": "Impossible de charger tes pronos",
         "widgetPronos.etat.aFaire": "À faire",
         "widgetPronos.etat.faits": "Pronos faits",
         "widgetPronos.etat.fermes": "Fermés",

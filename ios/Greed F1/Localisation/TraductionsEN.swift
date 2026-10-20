@@ -553,6 +553,7 @@ enum TraductionsEN {
         "widgetPronos.nom": "My predictions",
         "widgetPronos.description": "Your predictions for the next Grand Prix, the countdown, then your points.",
         "widgetPronos.vide": "Open the app to load your predictions",
+        "widgetPronos.erreur": "Couldn’t load your predictions",
         "widgetPronos.etat.aFaire": "To do",
         "widgetPronos.etat.faits": "Predictions in",
         "widgetPronos.etat.fermes": "Closed",

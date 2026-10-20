@@ -1,5 +1,10 @@
 import WidgetKit
 import Foundation
+import os
+
+/// Le journal du widget « Mes pronos » — Console.app, filtre `subsystem:com.bazzana.greedf1.GreedF1Widget`
+/// et `category:pronos`. Jamais le jeton : ni sa valeur, ni un fragment.
+let journalPronos = Logger(subsystem: "com.bazzana.greedf1.GreedF1Widget", category: "pronos")
 
 /// Ce que dit le widget « Mes pronos » d'un Grand Prix à un instant donné.
 enum PhasePronos: Equatable {
@@ -21,6 +26,9 @@ struct EntreePronos: TimelineEntry {
     /// relevé des cotes (comme ``TimelineProchainGP``).
     let statut: String
     let langue: Langue?
+    /// La lecture a échoué et rien n'est rangé : « Impossible de charger tes pronos » —
+    /// jamais un widget vide.
+    var echec = false
 
     /// L'échéance à cet instant — ``EcheancePronostics``, le seul calcul d'échéance.
     var echeance: EcheancePronostics? {
@@ -53,6 +61,20 @@ struct EntreePronos: TimelineEntry {
     static func vide(_ date: Date = .now, langue: Langue? = DonneesWidget.langue) -> EntreePronos {
         EntreePronos(date: date, grandPrix: nil, statut: "", langue: langue)
     }
+
+    static func echec(_ date: Date = .now, langue: Langue? = DonneesWidget.langue) -> EntreePronos {
+        EntreePronos(date: date, grandPrix: nil, statut: "", langue: langue, echec: true)
+    }
+}
+
+/// Ce qu'a donné la lecture de `GET /widget/pronos`.
+enum IssueLecturePronos {
+    /// Ni jeton ni jeton valide : seule l'app peut y remédier — « Ouvre l'app… ».
+    case sansJeton
+    /// Réseau, refus ou réponse illisible : « Impossible de charger tes pronos » s'il n'y a
+    /// rien de rangé à montrer.
+    case echec
+    case recue
 }
 
 /// Lit `GET /widget/pronos` avec le **jeton widget** du Keychain partagé (``JetonWidget``)
@@ -66,34 +88,73 @@ struct FournisseurPronos: TimelineProvider {
         let premiere = TimelinePronos.entrees(DonneesWidget.lirePronos(), langue: DonneesWidget.langue,
                                               le: .now).entrees.first ?? .vide()
         // La galerie n'a pas de données à attendre : l'exemple, si l'App Group est vide.
-        completion(premiere.grandPrix == nil && context.isPreview ? TimelinePronos.exemple() : premiere)
+        let entree = premiere.grandPrix == nil && context.isPreview ? TimelinePronos.exemple() : premiere
+        journalPronos.info("Aperçu \(context.family.description, privacy: .public)\(context.isPreview ? " (galerie)" : "", privacy: .public) : \(Self.decrire(entree), privacy: .public)")
+        completion(entree)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<EntreePronos>) -> Void) {
         Task {
-            await Self.lirePronos()
+            let issue = await Self.lirePronos()
             let maintenant = Date.now
-            let (entrees, relecture) = TimelinePronos.entrees(
-                DonneesWidget.lirePronos(), langue: DonneesWidget.langue, le: maintenant)
-            completion(Timeline(entries: entrees.isEmpty ? [.vide(maintenant)] : entrees,
-                                policy: .after(relecture)))
+            let rangee = DonneesWidget.lirePronos()
+            var (entrees, relecture) = TimelinePronos.entrees(rangee, langue: DonneesWidget.langue,
+                                                               le: maintenant)
+            if entrees.isEmpty { entrees = [.vide(maintenant)] }
+            // Rien à montrer après un échec : le dire, et réessayer au quart d'heure.
+            if issue == .echec, entrees.allSatisfy({ $0.grandPrix == nil }) {
+                entrees = [.echec(maintenant)]
+                relecture = min(relecture, maintenant.addingTimeInterval(CadenceClassement.course))
+            }
+            let premiere = entrees[0]
+            journalPronos.info("Timeline \(context.family.description, privacy: .public) : \(entrees.count, privacy: .public) entrée(s), première = \(Self.decrire(premiere), privacy: .public), relecture \(relecture, privacy: .public)")
+            completion(Timeline(entries: entrees, policy: .after(relecture)))
         }
+    }
+
+    /// Une entrée en une ligne de journal : l'état, le GP, la phase.
+    static func decrire(_ entree: EntreePronos) -> String {
+        if entree.echec { return "échec" }
+        guard let gp = entree.grandPrix else { return "vide" }
+        return "\(gp.nom) [\(gp.slug)] \(entree.statut) \(entree.phase.map { "\($0)" } ?? "sans phase"), \(gp.pronostics.count) ligne(s)"
     }
 
     /// `GET /widget/pronos`. **15 s au plus**, comme les deux autres widgets : un Railway
     /// endormi ne vaut pas d'attendre, l'App Group répond. Rien n'est rangé sans jeton,
     /// sur un refus, ou sur une réponse illisible.
-    static func lirePronos() async {
-        guard let jeton = JetonWidget.lire(), jeton.expireLe > .now else { return }
+    @discardableResult
+    static func lirePronos() async -> IssueLecturePronos {
+        guard let jeton = JetonWidget.lire() else {
+            journalPronos.notice("Jeton widget absent : aucune lecture, l'App Group seul répond")
+            return .sansJeton
+        }
+        guard jeton.expireLe > .now else {
+            journalPronos.notice("Jeton widget expiré le \(jeton.expireLe, privacy: .public)")
+            return .sansJeton
+        }
         var requete = URLRequest(url: SupabaseConfig.apiBaseURL.appendingPathComponent("widget/pronos"))
         requete.timeoutInterval = 15
         requete.setValue("Bearer \(jeton.jeton)", forHTTPHeaderField: "Authorization")
         requete.setValue("application/json", forHTTPHeaderField: "Accept")
-        guard let (donnees, reponse) = try? await URLSession.shared.data(for: requete),
-              (reponse as? HTTPURLResponse)?.statusCode == 200,
-              (try? JSONDecoder.api.decode(DonneesWidget.PronosWidget.self, from: donnees)) != nil
-        else { return }
+        let donnees: Data, reponse: URLResponse
+        do {
+            (donnees, reponse) = try await URLSession.shared.data(for: requete)
+        } catch {
+            journalPronos.error("GET /widget/pronos : réseau — \(error.localizedDescription, privacy: .public)")
+            return .echec
+        }
+        let code = (reponse as? HTTPURLResponse)?.statusCode ?? 0
+        journalPronos.info("GET /widget/pronos : \(code, privacy: .public), \(donnees.count, privacy: .public) octets")
+        guard code == 200 else { return .echec }
+        do {
+            let contenu = try JSONDecoder.api.decode(DonneesWidget.PronosWidget.self, from: donnees)
+            journalPronos.info("Décodé : prochain \(contenu.prochain?.nom ?? "—", privacy: .public) (\(contenu.prochain?.pronostics.count ?? 0, privacy: .public) lignes), dernier \(contenu.dernier?.nom ?? "—", privacy: .public)")
+        } catch {
+            journalPronos.error("Réponse illisible : \(String(describing: error), privacy: .public)")
+            return .echec
+        }
         DonneesWidget.enregistrerPronos(donnees)
+        return .recue
     }
 }
 
@@ -187,18 +248,18 @@ enum TimelinePronos {
     static func exemple(_ phase: PhasePronos = .ouverts, avecPronos: Bool = true,
                         le maintenant: Date = .now) -> EntreePronos {
         let lignes: [DonneesWidget.PronosticWidget] = [
-            .init(categorie: "obligatoire", type: "vainqueur", libelle: "Vainqueur", choix: "Lando Norris",
+            .init(categorie: "obligatoire", type: "vainqueur", libelle: "Vainqueur", choix: "L.Norris",
                   points: 28, pointsGagnes: phase == .resultats ? 28 : nil,
                   statut: phase == .resultats ? "gagne" : "en_attente"),
-            .init(categorie: "obligatoire", type: "podium", libelle: "Podium", choix: "Oscar Piastri",
+            .init(categorie: "obligatoire", type: "podium", libelle: "Podium", choix: "O.Piastri",
                   points: 14, pointsGagnes: phase == .resultats ? 0 : nil,
                   statut: phase == .resultats ? "perdu" : "en_attente"),
-            .init(categorie: "obligatoire", type: "podium", libelle: "Podium", choix: "George Russell",
+            .init(categorie: "obligatoire", type: "podium", libelle: "Podium", choix: "G.Russell",
                   points: 19, pointsGagnes: phase == .resultats ? 19 : nil,
                   statut: phase == .resultats ? "gagne" : "en_attente"),
-            .init(categorie: "bonus", type: "bonus", libelle: "Top 6", choix: "Lewis Hamilton",
+            .init(categorie: "bonus", type: "bonus", libelle: "Top 6", choix: "L.Hamilton",
                   points: 17, pointsGagnes: nil, statut: phase == .resultats ? "non_evaluable" : "en_attente"),
-            .init(categorie: "bonus", type: "bonus", libelle: "Top 10", choix: "Isack Hadjar",
+            .init(categorie: "bonus", type: "bonus", libelle: "Top 10", choix: "I.Hadjar",
                   points: 31, pointsGagnes: phase == .resultats ? 31 : nil,
                   statut: phase == .resultats ? "gagne" : "en_attente")
         ]

@@ -16,7 +16,7 @@
 | SDK | [`supabase-swift`](https://github.com/supabase/supabase-swift) **2.55.2**, épinglé — produits `Supabase` et `Auth` |
 | Xcode | **26.6** (`objectVersion = 77`) |
 | Bundle identifier | **`com.bazzana.greedf1`** |
-| Cibles | `Greed F1` (l'app) + **`GreedF1WidgetExtension`** (`com.bazzana.greedf1.GreedF1Widget`, widgets « Prochain GP », « Classement » et « Mes pronos ») |
+| Cibles | `Greed F1` (l'app) + **`GreedF1WidgetExtension`** (`com.bazzana.greedf1.GreedF1Widget`, widgets « Prochain GP » et « Classement » ; « Mes pronos » **désactivé**, voir §3) |
 | App Group | **`group.com.bazzana.greedf1`** — sur les deux cibles, seul propriétaire `DonneesWidget` (`Services/DonneesWidget.swift` + `DonneesWidgetClassement.swift` + `DonneesWidgetPronos.swift`) |
 | Keychain partagé | **`$(AppIdentifierPrefix)com.bazzana.greedf1.widget`** — le jeton widget seul (`Services/JetonWidget.swift`) ; la session Supabase reste dans le groupe de l'app |
 | Familles d'appareils | iPhone seulement · portrait seulement |
@@ -250,6 +250,15 @@ et les marges posées par `VueClassement` : ne pas les rendre au système. Tap �
 compilation et affichés par iOS dans la langue du téléphone, vivent dans
 `GreedF1Widget/Intentions.xcstrings` — rien d'autre n'y entre.
 
+> **« Mes pronos » est DÉSACTIVÉ depuis 0.57.2 — à diagnostiquer plus tard.** Posé sur
+> l'écran d'accueil, il s'affichait entièrement blanc ; cause non trouvée (état du
+> diagnostic : `docs/contexte-chat.md`). Retiré de `GreedF1WidgetBundle` (absent de la
+> galerie), code conservé et compilé, route `/widget/pronos` en place.
+> `DonneesWidget.widgetPronosActif = false` coupe les rechargements demandés par l'app et
+> l'écriture de l'App Group ; l'effacement à la déconnexion reste actif. Un widget déjà
+> posé n'est plus servi par l'extension : iOS le retire, aucun code de l'app ne le cherche.
+> **Réactiver** : remonter `PronosWidget()` dans le bundle **et** repasser le drapeau à `true`.
+
 **Le widget « Mes pronos » partage le jeton et l'App Group de « Classement »**
 (`docs/decisions.md` §30), jamais la session. Statique (aucun réglage, donc rien dans
 `Intentions.xcstrings`), petit et moyen. Il lit `GET /widget/pronos` (`prochain` + `dernier`)
@@ -281,6 +290,11 @@ l'accueil (`EtapePronos.demandee`) ; avant l'ouverture → accueil. Les points s
   l'app. Ne **jamais** les saisir dans l'onglet *General* d'une cible — Xcode les y écrirait
   au niveau de la cible et les désaligneraient. Contrôle : `grep MARKETING_VERSION` sur le
   `.pbxproj` rend exactement deux lignes. Incrémenter le build à chaque envoi TestFlight.
+- **Archiver avec le schéma `Greed F1`**, pas celui du widget (la build 15 l'a été par
+  `GreedF1WidgetExtension` — même `.app`, mais l'archive porte le nom du widget).
+  Contrôle de l'icône après archive : `CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName =
+  AppIcon` dans l'`Info.plist` du `.app`, `AppIcon60x60@2x.png` à sa racine, et
+  `assetutil --info Assets.car` liste les 8 tailles `phone` + le 1024 `marketing` opaque.
 - **La version web (`frontend/package.json`, `CLAUDE.md` §8) ne bouge pas** sur un commit
   iOS — la faire bouger laisserait croire à un déploiement Vercel qui n'a pas eu lieu.
   Même logique que la version backend (règle commune : `CLAUDE.md` §7).
@@ -316,7 +330,7 @@ ios/
 │   ├── Intentions.xcstrings         libellés App Intents FR/EN — SEULE exception à `t()`
 │   ├── FournisseurClassement.swift  jeton widget → `GET /widget/…/classement`, App Group, `CadenceClassement`, `AvatarsWidget`
 │   ├── VuesClassement.swift         les trois formats, lignes, piste titrée (`PisteTitree`) et simplifiée (`PisteSimplifiee`), état neutre, fond damier uniforme (`FondClassement`)
-│   ├── PronosWidget.swift           widget « Mes pronos » : petit + moyen, `StaticConfiguration`
+│   ├── PronosWidget.swift           widget « Mes pronos » : petit + moyen, `StaticConfiguration` — NON MONTÉ (désactivé)
 │   ├── FournisseurPronos.swift      jeton widget → `GET /widget/pronos`, App Group, `TimelinePronos` (calcul pur), `PhasePronos`
 │   ├── VuesPronos.swift             pastille d'état, petit, moyen (obligatoires / bonus), état vide, fond drapeau (`FondPronos`)
 │   └── Info.plist                   `API_BASE_URL` (Config.xcconfig, réglages du projet)

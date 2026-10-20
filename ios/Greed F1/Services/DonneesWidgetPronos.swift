@@ -17,6 +17,12 @@ extension DonneesWidget {
     /// Le `kind` du widget « Mes pronos ».
     static let typeWidgetPronos = "GreedF1PronosWidget"
 
+    /// **`false` : le widget « Mes pronos » est retiré de `GreedF1WidgetBundle`** — il
+    /// s'affichait en blanc sur l'écran d'accueil, cause non trouvée (`ios/CLAUDE.md` §3).
+    /// L'app ne demande alors plus aucun rechargement (``rechargerPronos()``). Réactiver =
+    /// repasser à `true` **et** remonter `PronosWidget()` dans le bundle.
+    static let widgetPronosActif = false
+
     // MARK: - Les données
 
     /// La réponse de `GET /widget/pronos`.
@@ -152,6 +158,7 @@ extension DonneesWidget {
     /// changé.
     @discardableResult
     static func enregistrerPronos(_ brut: Data) -> Bool {
+        guard widgetPronosActif else { return false }
         let stockage = UserDefaults(suiteName: groupe)
         guard stockage?.data(forKey: clePronos) != brut else { return false }
         stockage?.set(brut, forKey: clePronos)
@@ -163,8 +170,10 @@ extension DonneesWidget {
         UserDefaults(suiteName: groupe)?.removeObject(forKey: clePronos)
     }
 
-    /// Demande au widget « Mes pronos » de relire `GET /widget/pronos`.
+    /// Demande au widget « Mes pronos » de relire `GET /widget/pronos`. Sans effet tant
+    /// qu'il est désactivé (``widgetPronosActif``).
     static func rechargerPronos() {
+        guard widgetPronosActif else { return }
         WidgetCenter.shared.reloadTimelines(ofKind: typeWidgetPronos)
     }
 }

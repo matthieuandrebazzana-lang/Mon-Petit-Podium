@@ -4,6 +4,12 @@ import SwiftUI
 /// Le widget « Mes pronos » — petit et moyen formats de l'écran d'accueil. Statique : aucun
 /// réglage. Ses données viennent de `GET /widget/pronos`, avec le jeton widget — jamais la
 /// session (``FournisseurPronos``, `docs/decisions.md` §30).
+///
+/// **DÉSACTIVÉ — non monté dans `GreedF1WidgetBundle`.** Posé sur l'écran d'accueil, il
+/// s'affichait entièrement blanc ; la cause n'a pas été trouvée (le journal `category:pronos`
+/// de ``FournisseurPronos`` est là pour la chercher). Le code reste compilé, donc à jour.
+/// Réactiver : remonter `PronosWidget()` dans le bundle **et** repasser
+/// ``DonneesWidget/widgetPronosActif`` à `true`.
 struct PronosWidget: Widget {
 
     var body: some WidgetConfiguration {

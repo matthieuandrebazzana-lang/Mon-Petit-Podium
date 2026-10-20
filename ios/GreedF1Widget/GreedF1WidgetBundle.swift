@@ -13,6 +13,12 @@ struct GreedF1WidgetBundle: WidgetBundle {
     var body: some Widget {
         GreedF1Widget()
         ClassementWidget()
-        PronosWidget()
+        // « Mes pronos » est DÉSACTIVÉ (iOS 0.57.2, avant la soumission App Store) : posé sur
+        // l'écran d'accueil, il s'affichait entièrement blanc, et la cause n'a pas été
+        // trouvée. Son code reste en place (``PronosWidget``, ``FournisseurPronos``,
+        // `VuesPronos.swift`, ``DonneesWidget/PronosWidget``) ; la route `/widget/pronos`
+        // aussi. Pour le réactiver : décommenter la ligne ci-dessous ET repasser
+        // ``DonneesWidget/widgetPronosActif`` à `true` (rechargements côté app).
+        // PronosWidget()
     }
 }

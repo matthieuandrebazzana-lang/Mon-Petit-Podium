@@ -32,7 +32,7 @@ struct VuePronos: View {
                     MoyenPronos(entree: entree, gp: gp, phase: phase, echeance: echeance, apparence: apparence)
                 }
             } else {
-                VidePronos(compact: format == .systemSmall)
+                VidePronos(compact: format == .systemSmall, echec: entree.echec)
             }
         }
         .environment(\.locale, localeInterface)
@@ -335,11 +335,15 @@ struct LignePronos: View {
         }
     }
 
-    /// « L. Norris » → « Norris » : le nom de famille suffit et tient dans la colonne. Une
-    /// issue qui n'est pas un pilote (« Oui », « 5 - 10 s ») reste entière.
+    /// « L. Norris » → « Norris » : le nom de famille suffit et tient dans la colonne. **Seule
+    /// une initiale suivie d'un point est retirée** : une écurie (« Red Bull », « Aston
+    /// Martin ») ou une issue (« Entre 5 et 10 secondes ») reste entière. Le format de la
+    /// base, « L.Norris », n'a pas d'espace et passe tel quel.
     private func nomCourt(_ texte: String) -> String {
         let mots = texte.split(separator: " ")
-        guard mots.count >= 2, mots.allSatisfy({ $0.first?.isLetter ?? false }) else { return texte }
+        guard mots.count >= 2, let initiale = mots.first, initiale.count <= 2,
+              initiale.hasSuffix("."), initiale.first?.isLetter ?? false
+        else { return texte }
         return mots.dropFirst().joined(separator: " ")
     }
 }
@@ -347,9 +351,11 @@ struct LignePronos: View {
 // MARK: - État vide
 
 /// Aucune donnée : le logo et une invitation, sur le fond de l'app (clair et sombre par
-/// jetons). Jamais une grille inventée.
+/// jetons). Jamais une grille inventée. Après un échec de lecture sans rien de rangé :
+/// « Impossible de charger tes pronos », en encre `texte` (≥ 14:1 sur `fondPrincipal`).
 struct VidePronos: View {
     let compact: Bool
+    var echec = false
 
     var body: some View {
         VStack(spacing: compact ? 10 : 12) {
@@ -358,9 +364,9 @@ struct VidePronos: View {
                 .scaledToFit()
                 .frame(height: compact ? 56 : 64)
                 .accessibilityHidden(true)
-            Text(t("widgetPronos.vide"))
-                .font(.custom("HelveticaNeue", size: compact ? 12 : 13))
-                .foregroundStyle(Color.grisSecondaire)
+            Text(t(echec ? "widgetPronos.erreur" : "widgetPronos.vide"))
+                .font(.custom(echec ? "HelveticaNeue-Medium" : "HelveticaNeue", size: compact ? 12 : 13))
+                .foregroundStyle(echec ? Color.texte : Color.grisSecondaire)
                 .multilineTextAlignment(.center)
                 .lineLimit(3)
                 .minimumScaleFactor(0.85)
