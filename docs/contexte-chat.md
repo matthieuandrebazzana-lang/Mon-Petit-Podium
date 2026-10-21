@@ -45,7 +45,7 @@ Mot de passe : à noter séparément
 
 ## CHAMPIONNAT DÉMO (captures App Store)
 
-Championnat fictif « Démo F1 », code `DEMOF1`, id `67dc7eb8-a039-43da-9b2f-d7b782e1b20e`, créé par Alex. Il sert **uniquement** aux captures de la fiche App Store. Il a 9 membres : le reviewer et 8 comptes démo. Scripts dans `supabase/demo/` : ce **ne sont pas** des migrations.
+Championnat fictif « Démo F1 », code `G7B77V`, id `67dc7eb8-a039-43da-9b2f-d7b782e1b20e`, créé par Alex. Il sert **uniquement** aux captures de la fiche App Store. Il a 9 membres : le reviewer et 8 comptes démo. Scripts dans `supabase/demo/` : ce **ne sont pas** des migrations.
 
 Comptes démo (aucune photo, livrée `perso`) :
 
@@ -73,7 +73,7 @@ Procédure dans le SQL Editor, une étape après l'autre. Supabase n'affiche que
 
 Suppression : `99_supprimer_demo.sql`, puis `00` §1, dont les empreintes doivent être identiques. Le script supprime le championnat (les adhésions suivent, y compris celle du reviewer) puis les 8 comptes (profils, pronostics, favoris et jetons suivent par cascade). Il s'arrête net si un compte démo est membre d'un autre championnat. Le reviewer n'est pas supprimé.
 
-Risque connu : le code `DEMOF1` est visible sur les captures, et un vrai joueur pourrait rejoindre ce championnat. `99` liste ces comptes avant de les retirer, sans toucher à leurs pronostics.
+Risque connu : le code `G7B77V` (tiré au hasard, aucun mot lisible) est visible sur les captures, et un vrai joueur pourrait rejoindre ce championnat. `99` liste ces comptes avant de les retirer, sans toucher à leurs pronostics.
 
 Testé de bout en bout sur `supabase/postgres:15.8.1.085` en local (Docker), avec les 31 migrations, le schéma `auth` mis au niveau de GoTrue et les 4 GP des fixtures. Chaque script a été joué deux fois. Les empreintes des données réelles sont restées identiques après 01, 03, 04 et 99, et les garde-fous de 03 et 04 ont bien levé.
 

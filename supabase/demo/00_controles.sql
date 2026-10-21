@@ -25,7 +25,7 @@
 --
 -- Comptes démo : `raw_app_meta_data.demo = true` ET adresse
 -- `demo-<pseudo>@greedf1.invalid`. Les deux conditions, jamais une seule.
--- Championnat démo : id `67dc7eb8-a039-43da-9b2f-d7b782e1b20e`, code `DEMOF1`.
+-- Championnat démo : id `67dc7eb8-a039-43da-9b2f-d7b782e1b20e`, code `G7B77V`.
 -- =============================================================================
 
 
@@ -147,7 +147,7 @@ order by v.pseudo;
 
 select code_invitation, id,
        id <> '67dc7eb8-a039-43da-9b2f-d7b782e1b20e' as conflit
-from public.championnats where code_invitation = 'DEMOF1';
+from public.championnats where code_invitation = 'G7B77V';
 
 select id, email from auth.users
 where lower(email) = 'matthieu.andre.bazzana+reviewer@gmail.com';

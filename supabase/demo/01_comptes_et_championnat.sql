@@ -14,7 +14,7 @@
 --   · 8 comptes `auth.users` — Alex, Maya, Leo, Zoe, Hugo, Lina, Noah, Eva —
 --     et leurs profils (par le trigger d'inscription, comme une vraie
 --     inscription) ;
---   · le championnat « Démo F1 », code `DEMOF1`, créé par Alex ;
+--   · le championnat « Démo F1 », code `G7B77V`, créé par Alex ;
 --   · 9 adhésions : les 8 comptes démo et le reviewer.
 --
 -- Pourquoi les comptes ne sont PAS connectables, par quatre verrous :
@@ -64,9 +64,9 @@ begin
   end if;
 
   if exists (select 1 from public.championnats
-              where code_invitation = 'DEMOF1'
+              where code_invitation = 'G7B77V'
                 and id <> '67dc7eb8-a039-43da-9b2f-d7b782e1b20e') then
-    raise exception 'Le code DEMOF1 appartient déjà à un vrai championnat. Rien n''est créé.';
+    raise exception 'Le code G7B77V appartient déjà à un vrai championnat. Rien n''est créé.';
   end if;
 
   -- Un identifiant démo déjà porté par un compte NON marqué démo : jamais
@@ -154,7 +154,7 @@ update public.profils p
 -- Créé par Alex, un compte démo : le reviewer ne peut donc ni le renommer ni
 -- le supprimer depuis l'app (« Seul le createur modifie »). Pas de photo.
 insert into public.championnats (id, nom, code_invitation, cree_par, cree_le)
-values ('67dc7eb8-a039-43da-9b2f-d7b782e1b20e', 'Démo F1', 'DEMOF1',
+values ('67dc7eb8-a039-43da-9b2f-d7b782e1b20e', 'Démo F1', 'G7B77V',
         'f3b1a516-f030-4887-a2db-4172e5afa9e4', '2026-08-01 18:00:00+00')
 on conflict (id) do nothing;
 
