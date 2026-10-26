@@ -16,6 +16,10 @@ enum Mouvement {
         .timingCurve(0.22, 1, 0.36, 1, duration: duree)
     }
 
+    /// La même courbe, pour une piste d'images clés (`keyframeAnimator`).
+    static let courbeEntree = UnitCurve.bezier(startControlPoint: UnitPoint(x: 0.22, y: 1),
+                                               endControlPoint: UnitPoint(x: 0.36, y: 1))
+
     /// Déplacements — `cubic-bezier(0.77, 0, 0.175, 1)`.
     static func deplacement(_ duree: TimeInterval) -> Animation {
         .timingCurve(0.77, 0, 0.175, 1, duration: duree)
@@ -128,6 +132,17 @@ enum Mouvement {
     /// code d'invitation : le temps de la lire, puis l'état d'origine revient. Ce n'est
     /// pas une animation (les deux bascules prennent ``echangeIcone``), c'est une pause.
     static let tenueConfirmation: TimeInterval = 1.6
+
+    /// **L'onde qui invite à ouvrir le profil** (avatar de l'accueil, tant que le profil n'a
+    /// jamais été ouvert) : l'anneau grandit et s'efface en ``ondeInvitation`` sur
+    /// ``courbeEntree``, puis se tait jusqu'à la fin de ``periodeInvitation``.
+    ///
+    /// > Comme ``balayageSquelette``, un mouvement **continu**, pas une réponse à un geste :
+    /// > le plafond de 300 ms ne le concerne pas. Une onde par 3 s reste loin de
+    /// > l'oscillation lente à 0,2 Hz que /apple-design §14 déconseille, et le silence qui
+    /// > suit l'empêche de se lire comme un chargement. Absente sous mouvement réduit.
+    static let ondeInvitation: TimeInterval = 1.2
+    static let periodeInvitation: TimeInterval = 3.0
 }
 
 // MARK: - Retour d'appui

@@ -287,6 +287,7 @@ enum TraductionsEN {
         // MARK: - Détail d'un championnat
         "commun.annuler": "Cancel",
         "commun.ok": "OK",
+        "clavier.ok": "Done",
         "commun.partager": "Share",
         "championnat.a11y.chargementClassement": "Loading standings",
         "championnat.quitterTitre": "Leave “%@”?",

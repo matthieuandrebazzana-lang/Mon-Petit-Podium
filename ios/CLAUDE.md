@@ -184,6 +184,18 @@ drapeau ni tracé : `GrandPrixSaison.masquesDuCalendrier` (`Models/GrandPrixSais
 de l'onglet Calendrier seul, leurs données restent dans `saison2026`. Une fois leurs SVG
 extraits dans les assets, vider cet ensemble.
 
+**Un pavé numérique n'a pas de touche de fermeture : il en reçoit une.** Champ en
+`@FocusState`, barre « OK » (`clavier.ok`) en `ToolbarItemGroup(placement: .keyboard)` —
+l'écran doit être dans une `NavigationStack` —, `scrollDismissesKeyboard(.immediately)` et
+toucher hors du champ (geste **simultané**, ignoré dans le cadre du champ). Seul cas
+aujourd'hui : le numéro de voiture (`ProfilView`).
+
+**L'invitation au profil a un seul propriétaire, `DecouverteProfil`** (`UserDefaults`, une
+clé par compte, effacée par `oublierCompte()`). `BarreNavigation` la marque sur le passage
+à l'onglet Profil — jamais l'avatar ni `ProfilView` séparément. L'onde (`AnneauInvitation`,
+`Mouvement.ondeInvitation` / `periodeInvitation`) est un `overlay` sans hit-test : elle ne
+pousse rien et ne capte aucun tap.
+
 **Le sélecteur de langue est un seul composant** (`SelecteurLangue`) : ses états actif /
 inactif s'y règlent, jamais sur l'écran qui le monte. **Les deux options restent en couleur
 pleine** — drapeaux entiers, libellé inactif en `encreSegmentInactif` (`secondaire` plein) :

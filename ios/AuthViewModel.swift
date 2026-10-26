@@ -395,6 +395,8 @@ final class AuthViewModel: ObservableObject {
         CacheService.partage.vider()
         // Le widget « Classement » perd son jeton et ses données avec le compte.
         SynchroWidgetClassement.effacer()
+        // Le prochain compte connecté sur ce téléphone revoit l'invitation au profil.
+        DecouverteProfil.oublier()
         profil = nil
         estAdmin = false
         modeAdminActif = false

@@ -37,6 +37,10 @@ struct BarreNavigation: View {
     /// L'onglet affiché. **Explicite** pour que l'avatar de l'accueil puisse mener au profil.
     @State private var ongletActif: Onglet = .accueil
 
+    /// Le profil a déjà été ouvert (``DecouverteProfil``) — sinon l'avatar de l'accueil
+    /// pulse. Marqué ici, au seul endroit où passent l'avatar **et** l'onglet de la barre.
+    @State private var profilDecouvert = DecouverteProfil.faite(pour: SupabaseManager.partage.idCompte)
+
     /// Le championnat qu'un tap sur le widget « Classement » demande d'ouvrir.
     @State private var championnatDemande: UUID?
 
@@ -54,7 +58,7 @@ struct BarreNavigation: View {
         TabView(selection: $ongletActif) {
             AccueilView(viewModel: viewModel, mesChampionnats: mesChampionnats,
                         prochainGP: prochainGP, ongletActif: $ongletActif,
-                        pronosDemandes: $pronosDemandes)
+                        pronosDemandes: $pronosDemandes, invitationProfil: !profilDecouvert)
                 .tabItem { Label(t("onglet.accueil"), image: "icone-accueil") }
                 .tag(Onglet.accueil)
 
@@ -73,6 +77,11 @@ struct BarreNavigation: View {
                 .tag(Onglet.profil)
         }
         .tint(.encrePrimaire)
+        .onChange(of: ongletActif) { _, onglet in
+            guard onglet == .profil, !profilDecouvert else { return }
+            DecouverteProfil.marquer(pour: SupabaseManager.partage.idCompte)
+            profilDecouvert = true
+        }
         // La voiture du compte connecté, pour les écrans qui peignent le classement :
         // ``AuthViewModel`` en est la seule source (``Membre/avecVoiture(de:)``).
         .environment(\.monProfil, viewModel.profil)

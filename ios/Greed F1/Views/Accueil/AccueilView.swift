@@ -24,6 +24,8 @@ struct AccueilView: View {
     /// Le Grand Prix qu'un tap sur le widget « Mes pronos » demande d'ouvrir — consommé
     /// dès qu'il est poussé.
     @Binding var pronosDemandes: DonneesWidget.DemandePronos?
+    /// Le profil n'a encore jamais été ouvert (``DecouverteProfil``) : l'avatar pulse.
+    var invitationProfil = false
 
     /// Marge latérale commune à tous les blocs — la même que `LandingView`, sans quoi les
     /// deux écrans ne s'aligneraient pas au passage de l'un à l'autre.
@@ -131,6 +133,15 @@ struct AccueilView: View {
                     ongletActif = .profil
                 } label: {
                     Avatar(pseudo: pseudoAffiche, photo: viewModel.photoProfil)
+                        // Un calque, jamais un cadre : l'onde déborde du disque sans rien
+                        // pousser, et le tap la traverse jusqu'au bouton.
+                        .overlay {
+                            if invitationProfil {
+                                AnneauInvitation()
+                                    .allowsHitTesting(false)
+                                    .accessibilityHidden(true)
+                            }
+                        }
                 }
                 .buttonStyle(StyleAppui(.bouton))
             }
@@ -267,6 +278,54 @@ struct AccueilView: View {
             .textCase(.uppercase)
             .foregroundColor(.grisSecondaire)
             .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Invitation au profil
+
+/// **L'onde qui invite à ouvrir le profil** tant qu'il ne l'a jamais été — un anneau qui
+/// part du bord de l'avatar, grandit et s'efface, puis se tait jusqu'au cycle suivant.
+///
+/// > **Ni badge ni point rouge** : rien n'est en attente, il n'y a qu'un écran à découvrir.
+/// > Le silence entre deux ondes compte autant que l'onde : en continu, elle se lirait
+/// > comme un chargement. Sous mouvement réduit, un anneau fixe et discret, sans rien qui
+/// > bouge.
+private struct AnneauInvitation: View {
+
+    @Environment(\.accessibilityReduceMotion) private var mouvementReduit
+
+    private struct Onde {
+        var echelle: CGFloat = 1
+        var opacite: Double = 0
+    }
+
+    var body: some View {
+        if mouvementReduit {
+            Circle()
+                .strokeBorder(Color.encrePrimaire.opacity(0.5), lineWidth: 2)
+                .padding(-4)
+        } else {
+            Circle()
+                .strokeBorder(Color.encrePrimaire, lineWidth: 2)
+                .keyframeAnimator(initialValue: Onde(), repeating: true) { anneau, onde in
+                    anneau
+                        .scaleEffect(onde.echelle)
+                        .opacity(onde.opacite)
+                } keyframes: { _ in
+                    let repos = Mouvement.periodeInvitation - Mouvement.ondeInvitation
+                    KeyframeTrack(\.echelle) {
+                        MoveKeyframe(1)
+                        LinearKeyframe(1.4, duration: Mouvement.ondeInvitation,
+                                       timingCurve: Mouvement.courbeEntree)
+                        LinearKeyframe(1.4, duration: repos)
+                    }
+                    KeyframeTrack(\.opacite) {
+                        MoveKeyframe(0.7)
+                        LinearKeyframe(0, duration: Mouvement.ondeInvitation, timingCurve: .easeOut)
+                        LinearKeyframe(0, duration: repos)
+                    }
+                }
+        }
     }
 }
 

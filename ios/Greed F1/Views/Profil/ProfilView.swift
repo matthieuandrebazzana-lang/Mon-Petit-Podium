@@ -39,6 +39,15 @@ struct ProfilView: View {
     @State private var numeroEnregistre = ""
     @State private var numero = ""
 
+    /// Le pavé numérique n'a pas de touche de fermeture : la barre « OK » au-dessus du
+    /// clavier, un toucher hors du champ et le défilement le referment.
+    @FocusState private var numeroActif: Bool
+    /// Le cadre du champ, dans l'espace de l'écran : un toucher **dedans** (pour placer le
+    /// curseur) ne doit pas refermer le clavier.
+    @State private var cadreNumero: CGRect = .zero
+    private static let espaceEcran = "profil"
+    private static let idNumero = "numero"
+
     /// Le `PATCH /profils/moi` en vol, et son refus — dit sous le bouton (``ErreurEnLigne``).
     @State private var envoiVoiture = false
     @State private var erreurVoiture: ErreurAPI?
@@ -75,6 +84,7 @@ struct ProfilView: View {
             Color.fondPrincipal
                 .ignoresSafeArea()
 
+            ScrollViewReader { defilement in
             ScrollView {
                 VStack(spacing: 0) {
                     HStack(alignment: .center, spacing: 12) {
@@ -125,6 +135,30 @@ struct ProfilView: View {
                 .padding(.horizontal, margeLaterale)
                 .padding(.top, 8)
                 .padding(.bottom, 24)
+            }
+            .scrollDismissesKeyboard(.immediately)
+            // Simultané : les boutons de l'écran reçoivent leur tap comme avant.
+            .simultaneousGesture(
+                SpatialTapGesture(coordinateSpace: .named(Self.espaceEcran)).onEnded { toucher in
+                    if numeroActif && !cadreNumero.contains(toucher.location) { numeroActif = false }
+                }
+            )
+            // Le clavier monte par-dessus le bas de l'écran : le champ remonte au centre.
+            .onChange(of: numeroActif) { _, actif in
+                guard actif else { return }
+                withAnimation(mouvementReduit ? nil : Mouvement.deplacement(0.22)) {
+                    defilement.scrollTo(Self.idNumero, anchor: .center)
+                }
+            }
+            }
+        }
+        .coordinateSpace(.named(Self.espaceEcran))
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(t("clavier.ok")) { numeroActif = false }
+                    .font(.custom("HelveticaNeue-Medium", size: 17))
+                    .foregroundColor(.encrePrimaire)
             }
         }
         .onAppear { synchroniserVoiture(viewModel.profil) }
@@ -410,6 +444,7 @@ struct ProfilView: View {
                     .font(.custom("HelveticaNeue-Medium", size: 17))
                     .foregroundColor(.texte)
                     .keyboardType(.numberPad)
+                    .focused($numeroActif)
                     .multilineTextAlignment(.leading)
                     .frame(width: 34)
                     .onChange(of: numero) { _, nouvelle in
@@ -423,8 +458,12 @@ struct ProfilView: View {
             .frame(height: 44)
             .background(Color.fondPrincipal)
             .clipShape(RoundedRectangle(cornerRadius: Rayon.champ, style: .continuous))
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.espaceEcran)) } action: {
+                cadreNumero = $0
+            }
         }
         .frame(minHeight: 56)
+        .id(Self.idNumero)
     }
 
     /// Une rangée de réglage : libellé, valeur, pastille, chevron — et le sélecteur qu'elle
