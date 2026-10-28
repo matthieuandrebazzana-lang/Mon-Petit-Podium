@@ -1748,3 +1748,29 @@ sur les deux tables.
 - Lire un `422` d'une route décorée par `journaliser_echecs` comme une erreur de
   validation : la cause est dans les logs Railway, pas dans le corps envoyé.
 
+
+## 40. « Réussis » du classement inférieur à « Mes Grands Prix » (migration 32)
+
+**Symptôme.** Pour le même membre, le classement d'un championnat affiche « 8 réussis »
+et « Mes Grands Prix » (iOS) davantage de pronos réussis.
+
+**Causes supposées, fausses : le périmètre, ou un doublon de jointure.** Les deux comptent
+les pronostics jugés du membre, tous championnats confondus (`metier.md` §6) ; le
+classement ne joint rien qui puisse dupliquer une ligne, et « Mes Grands Prix » ne lit que
+des GP pourvus de résultats, seuls à porter des points.
+
+**Cause réelle : l'unité.** Le classement comptait les lignes de `pronostics` à
+`points_gagnes > 0` — un podium valait 1. L'écran compte des lignes d'affichage
+(`PronosticMembre.paris`) — depuis la migration 27, un podium détaillé en fait deux, une
+par pilote. L'écart vaut exactement le nombre de podiums **entièrement** réussis.
+
+**Correctif.** `reussites_du_pronostic(points, gain 1, gain 2)`, seule propriétaire de la
+règle, lue par `classement_du_championnat`. Points inchangés ; à points égaux, le 2e
+critère de départage peut réordonner deux membres.
+
+### Ce qu'il ne faut pas refaire
+
+- Recompter « réussis » ailleurs (`count(*) filter …`) : appeler la fonction.
+- Changer l'unité de `GrandPrixJoue.reussis` sans toucher à la fonction, ou l'inverse.
+- Rejouer la 18 (ou la 7, 8, 12, 16) après la 32 : le compteur par ligne revient.
+

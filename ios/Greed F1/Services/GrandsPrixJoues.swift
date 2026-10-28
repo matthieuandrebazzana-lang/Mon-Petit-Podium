@@ -52,6 +52,9 @@ final class GrandsPrixJoues: ObservableObject {
         /// calendrier, ou drapeau sans teinte mesurée).
         var slugDrapeau: String? { fiche != nil && TeintesDrapeaux.table[slug] != nil ? slug : nil }
 
+        /// Un par ligne gagnante — un podium détaillé compte un par pilote. Le classement
+        /// compte de même depuis la migration 32 (`reussites_du_pronostic`) : changer
+        /// l'unité ici sans y toucher là-bas ferait diverger les deux écrans.
         var reussis: Int { pronostics.filter { ($0.pointsGagnes ?? 0) > 0 }.count }
     }
 

@@ -494,7 +494,10 @@ atomiquement.
 
 Dans l'ordre :
 
-1. Le plus grand **nombre de pronostics réussis**
+1. Le plus grand **nombre de pronostics réussis** — comptés comme « Mes Grands Prix » les
+   affiche : un podium détaillé compte **un par pilote** sur le podium (0, 1 ou 2), tout
+   autre pronostic jugé compte 1 s'il a rapporté. Une seule propriétaire :
+   `reussites_du_pronostic` (migration 32)
 2. La **meilleure cote réussie** (le plus gros coup)
 3. L'**ordre d'inscription** au championnat (`rejoint_le`)
 4. `profil_id` — à `rejoint_le` égal, sans quoi la numérotation serait instable d'un

@@ -436,7 +436,8 @@ admin la remplace de nouveau seulement s'il est demandé avec `relire=true`.
 | `pronostics_du_championnat(championnat, gp)` | tous les membres, voiture et total |
 | `attribuer_points(gp, jsonb)` | **la fonction la plus sensible du projet** — calcul provisoire |
 | `remplacer_verdicts(gp, jsonb, donnees, statut)` | calcul définitif et recalcul admin : **remplace** résultats et verdicts, une transaction (migration 25) |
-| `classement_du_championnat(championnat)` | classement trié et rangé, avatars compris |
+| `classement_du_championnat(championnat)` | classement trié et rangé, avatars compris ; « réussis » par `reussites_du_pronostic` (32) |
+| `reussites_du_pronostic(points, gain 1, gain 2)` | `immutable` — réussites d'un pronostic, un par pilote gagnant pour un podium détaillé (migration 32) |
 | `stats_du_profil(profil, saison)` | les quatre chiffres de la grille 2×2 |
 | `calendrier_du_championnat(championnat, profil, saison)` | une ligne par GP |
 | `classement_du_grand_prix(gp)` | classement de la course |
@@ -602,7 +603,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les trente et une migrations
+## 6. Les trente-deux migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -637,6 +638,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 29 | `20261001120000_rattachement_par_date` | **`alertes_admin.gp_id` nullable**, unicité `nulls not distinct`, type `grand_prix_ambigu` ; **`adopter_grand_prix` remplacée** pour compter aussi `alertes_admin` (cinq tables filles). Avant ou après le backend `0.82.1`, indifféremment | 19, 26 |
 | 30 | `20261005120000_push_tokens` | **`push_tokens`** (un jeton APNs par appareil, clé = jeton) et **`notifications_envoyees`** (réservation `(gp_id, evenement)`, aucune politique). **À appliquer avant le backend `0.84.0`** | 3 |
 | 31 | `20261005180000_push_droits_service` | **`grant` explicite à `service_role`** sur les deux tables de la 30 — sans lui, `42501 permission denied for table` malgré la clé de service (`bugs-connus.md` §39) | **30** |
+| 32 | `20261027120000_reussis_par_pilote` | **`reussites_du_pronostic`** — la règle unique des « réussis » (un podium détaillé compte un par pilote, comme « Mes Grands Prix ») ; **`classement_du_championnat` remplacée** pour la lire. Points inchangés (`bugs-connus.md` §40). Ne change aucune signature | 18, **27** |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -665,6 +667,7 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **5** ou **6** après **25** | `statut_evaluation` dans les pronostics servis (un `non_evaluable` redevient « en attente » à l'écran) | rejouer 25 |
 | **24** ou **25** après **27** | les gains par pilote du podium : plus écrits par le calcul (24, 25), plus servis (25) — les écrans disent le pilote « en attente » | rejouer 27 |
 | **19** après **29** | `alertes_admin` dans le comptage de sécurité de `adopter_grand_prix` (une alerte rattachée à la ligne manuelle serait emportée en cascade) | rejouer 29 |
+| **7**, **8**, **12**, **16** ou **18** après **32** | les « réussis » comptés pilote par pilote : le classement repasse à une réussite par podium | rejouer 18 si besoin, puis 32 |
 
 **La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12
 et la 16 avant elle, et pour la même raison : la couleur choisie doit atteindre les écrans
