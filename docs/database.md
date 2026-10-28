@@ -603,7 +603,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les trente-deux migrations
+## 6. Les trente-trois migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -639,6 +639,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 30 | `20261005120000_push_tokens` | **`push_tokens`** (un jeton APNs par appareil, clé = jeton) et **`notifications_envoyees`** (réservation `(gp_id, evenement)`, aucune politique). **À appliquer avant le backend `0.84.0`** | 3 |
 | 31 | `20261005180000_push_droits_service` | **`grant` explicite à `service_role`** sur les deux tables de la 30 — sans lui, `42501 permission denied for table` malgré la clé de service (`bugs-connus.md` §39) | **30** |
 | 32 | `20261027120000_reussis_par_pilote` | **`reussites_du_pronostic`** — la règle unique des « réussis » (un podium détaillé compte un par pilote, comme « Mes Grands Prix ») ; **`classement_du_championnat` remplacée** pour la lire. Points inchangés (`bugs-connus.md` §40). Ne change aucune signature | 18, **27** |
+| 33 | `20261027130000_horaires_mexique_2026` | **Données** : qualifications et course du Mexique 2026 aux heures officielles (21:00Z, 20:00Z), seulement sur les deux instants faux exacts (`bugs-connus.md` §42) | 19, 20 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -803,7 +804,8 @@ passage dans le SQL Editor.**
 >
 > - la 19 s'exécute, ses six cas d'épreuve de `slug_gp` passent, elle insère onze lignes ;
 > - **rejouée, elle en insère zéro** — le garde-fou sur le slug tient ;
-> - la 20 corrige **neuf** lignes (Austin et le Mexique portaient déjà la bonne heure), et
+> - la 20 corrige **neuf** lignes (Austin et le Mexique portaient déjà la bonne heure —
+>   **fausse pour le Mexique**, corrigée par la 33), et
 >   rejouée n'en corrige plus aucune ;
 > - une heure qu'Unibet aurait annoncée entre-temps n'est **jamais** réécrite ;
 > - une ligne déjà **adoptée** — dont l'`id_unibet` n'est plus le placeholder — est bien

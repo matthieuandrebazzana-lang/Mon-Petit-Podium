@@ -195,6 +195,10 @@ dans le `ScrollView` : posée centrée, sans points de pagination (masqués sous
 `defaultScrollAnchor(.trailing)`, résolu quand la largeur vaut encore 0, la poussait hors de
 l'écran (`CarrouselGrandsPrix`, `bugs-connus.md` §41).
 
+**Les horaires de `FichesGrandPrix` recopient `GP_2026` du web**, à l'instant près :
+`backend/tests/test_horaires_2026.py` échoue au premier écart. Corriger le web d'abord,
+puis reporter ; une heure se confronte à OpenF1 (`bugs-connus.md` §42).
+
 **L'invitation au profil a un seul propriétaire, `DecouverteProfil`** (`UserDefaults`, une
 clé par compte, effacée par `oublierCompte()`). `BarreNavigation` la marque sur le passage
 à l'onglet Profil — jamais l'avatar ni `ProfilView` séparément. L'onde (`AnneauInvitation`,

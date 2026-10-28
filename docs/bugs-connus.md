@@ -1791,3 +1791,32 @@ pagination (masqués sous deux pages). Mesuré : 40 pt de chaque côté, tap →
 
 - Tester un carrousel avec plusieurs éléments seulement : 0 et 1 sont des cas à part.
 
+## 42. GP du Mexique 2026 : qualifications +2 h, course +1 h (migration 33)
+
+**Symptôme.** Heures affichées 2 h trop tard pour les qualifications, 1 h pour la course.
+
+**Cause supposée, fausse : le fuseau ou le changement d'heure.** Le Mexique est à UTC−6
+toute l'année depuis 2022 (OpenF1 `gmt_offset -06:00`) ; l'affichage formate un instant
+absolu dans le fuseau du téléphone, changement d'heure américain du 1ᵉʳ novembre compris.
+
+**Cause réelle : deux heures LOCALES fausses**, recopiées en base et dans les deux tables
+statiques — course à 15h00 (migration 19, « prévisionnelle ») au lieu de 14h00,
+qualifications à 17h00 (migration 20, crue relevée) au lieu de 15h00. Instants officiels :
+qualifications `2026-10-31T21:00Z`, course `2026-11-01T20:00Z`. Gravité : les pronostics
+ferment à `date_course`, ils seraient restés ouverts pendant la première heure de course.
+
+**Correctif.** Migration 33 (les deux instants faux exacts, rien d'autre) ;
+`GP_2026` et `FichesGrandPrix.horaires`. Le scraper ne réécrit pas l'erreur : il n'écrit
+les qualifications que si Unibet les publie, et la course depuis l'heure d'Unibet.
+`test_horaires_2026.py` garde la concordance iOS = web et les heures locales.
+
+### Ce qu'il ne faut pas refaire
+
+- Prendre une heure « relevée » d'une migration pour acquise : la confronter à OpenF1
+  (`/v1/sessions?year=…`), qui sert les instants officiels de toute la saison.
+
+> **Écarts restants, relevés le 2026-10-27 contre OpenF1, NON corrigés** : Brésil couru le
+> **8 novembre** (base et tables statiques : 15 novembre — qualifications
+> `2026-11-07T18:00Z`, course `2026-11-08T17:00Z`) ; Las Vegas, course `04:00Z` en base
+> `06:00Z` ; Qatar, course `16:00Z`, en base `17:00Z`. Les deux tables statiques ont déjà
+> les bonnes heures pour Las Vegas et le Qatar ; le Brésil y est faux aussi.

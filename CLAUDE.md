@@ -122,7 +122,7 @@ Sans cette règle, cette structure ne sert à rien.
 | Document | Contenu |
 |---|---|
 | [`architecture.md`](docs/architecture.md) | Monorepo, deux chemins de données, variables d'environnement, CORS, journalisation, schedulers |
-| [`database.md`](docs/database.md) | Tables, RLS, fonctions, triggers, les 32 migrations et leurs conflits d’ordre |
+| [`database.md`](docs/database.md) | Tables, RLS, fonctions, triggers, les 33 migrations et leurs conflits d’ordre |
 | [`metier.md`](docs/metier.md) | Points, structure d'un pronostic, calendrier d'un week-end, validation, départage |
 | [`glossary.md`](docs/glossary.md) | Vocabulaire canonique et termes à ne jamais renommer |
 | [`design-system.md`](docs/design-system.md) | Palette, typographie, formes, élévation, contraste, matériaux, mouvement |
@@ -206,4 +206,4 @@ Mettre à jour **uniquement le fichier `docs/` concerné** par la tâche.
 
 ## 8. État d'avancement
 
-Version actuelle : 0.87.3
+Version actuelle : 0.87.4
