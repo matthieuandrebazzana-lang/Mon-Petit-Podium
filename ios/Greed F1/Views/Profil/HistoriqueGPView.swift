@@ -417,6 +417,11 @@ struct HistoriqueGPView: View {
 /// l'opacité reste.
 ///
 /// **Il s'ouvre sur le plus récent** : c'est celui qu'on vient voir après une course.
+///
+/// **Une seule carte ne défile pas** : posée centrée hors de tout `ScrollView`, sans point de
+/// pagination. Dans le défilement, `defaultScrollAnchor(.trailing)`, résolu au premier tour
+/// de mise en page — `largeur` encore à 0 —, la poussait de 80 pt hors de l'écran, et
+/// aucune voisine ne venait ensuite recaler la position.
 private struct CarrouselGrandsPrix: View {
 
     let grandsPrix: [GrandsPrixJoues.GrandPrixJoue]
@@ -446,37 +451,52 @@ private struct CarrouselGrandsPrix: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: espacement) {
-                    ForEach(grandsPrix) { gp in
-                        Button { ouvrir(gp.id) } label: {
-                            CarteCarrousel(gp: gp, numero: numero(gp))
-                        }
-                        .buttonStyle(StyleAppui(.grandeSurface))
-                        .frame(width: largeurCarte, height: hauteurCarte)
-                        .matchedGeometryEffect(id: IdHeros.carte(gp.id), in: espace, isSource: true)
-                        .opacity(ouvert == gp.id ? 0 : 1)
-                        .scrollTransition(.interactive, axis: .horizontal) { [reduit = mouvementReduit] carte, phase in
-                            let ecart = min(abs(phase.value), 1)
-                            return carte
-                                .scaleEffect(reduit ? 1 : 1 - 0.1 * ecart)
-                                .opacity(1 - 0.1 * ecart)
+            if let seul = grandsPrix.first, grandsPrix.count == 1 {
+                // Une carte seule ne défile pas : rien à faire glisser, pas de voisine à
+                // montrer, et l'ancre de fin du défilement la poussait hors de l'écran.
+                carte(seul)
+                    .padding(.vertical, respiration)
+                    .frame(maxWidth: .infinity)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: espacement) {
+                        ForEach(grandsPrix) { gp in
+                            carte(gp)
+                                .scrollTransition(.interactive, axis: .horizontal) { [reduit = mouvementReduit] carte, phase in
+                                    let ecart = min(abs(phase.value), 1)
+                                    return carte
+                                        .scaleEffect(reduit ? 1 : 1 - 0.1 * ecart)
+                                        .opacity(1 - 0.1 * ecart)
+                                }
                         }
                     }
+                    .scrollTargetLayout()
+                    .padding(.vertical, respiration)
                 }
-                .scrollTargetLayout()
-                .padding(.vertical, respiration)
+                .contentMargins(.horizontal, marge, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned)
+                .scrollPosition(id: $actif)
+                .defaultScrollAnchor(.trailing)
+                .frame(height: hauteurCarte + 2 * respiration)
             }
-            .contentMargins(.horizontal, marge, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: $actif)
-            .defaultScrollAnchor(.trailing)
-            .frame(height: hauteurCarte + 2 * respiration)
 
-            PointsPagination(nombre: grandsPrix.count, actif: indexActif, surDrapeau: surDrapeau)
+            // Un indicateur ne dit quelque chose qu'à partir de deux pages.
+            if grandsPrix.count > 1 {
+                PointsPagination(nombre: grandsPrix.count, actif: indexActif, surDrapeau: surDrapeau)
+            }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { largeur = $0 }
         .onAppear { if actif == nil { actif = grandsPrix.last?.id } }
+    }
+
+    private func carte(_ gp: GrandsPrixJoues.GrandPrixJoue) -> some View {
+        Button { ouvrir(gp.id) } label: {
+            CarteCarrousel(gp: gp, numero: numero(gp))
+        }
+        .buttonStyle(StyleAppui(.grandeSurface))
+        .frame(width: largeurCarte, height: hauteurCarte)
+        .matchedGeometryEffect(id: IdHeros.carte(gp.id), in: espace, isSource: true)
+        .opacity(ouvert == gp.id ? 0 : 1)
     }
 
     private var indexActif: Int {

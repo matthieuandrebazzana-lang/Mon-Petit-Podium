@@ -190,6 +190,11 @@ l'écran doit être dans une `NavigationStack` —, `scrollDismissesKeyboard(.im
 toucher hors du champ (geste **simultané**, ignoré dans le cadre du champ). Seul cas
 aujourd'hui : le numéro de voiture (`ProfilView`).
 
+**Un carrousel se vérifie à 0, 1, 2 et plusieurs éléments.** Une carte seule n'entre pas
+dans le `ScrollView` : posée centrée, sans points de pagination (masqués sous deux pages) —
+`defaultScrollAnchor(.trailing)`, résolu quand la largeur vaut encore 0, la poussait hors de
+l'écran (`CarrouselGrandsPrix`, `bugs-connus.md` §41).
+
 **L'invitation au profil a un seul propriétaire, `DecouverteProfil`** (`UserDefaults`, une
 clé par compte, effacée par `oublierCompte()`). `BarreNavigation` la marque sur le passage
 à l'onglet Profil — jamais l'avatar ni `ProfilView` séparément. L'onde (`AnneauInvitation`,

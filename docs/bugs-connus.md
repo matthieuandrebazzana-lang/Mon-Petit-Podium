@@ -1774,3 +1774,20 @@ critère de départage peut réordonner deux membres.
 - Changer l'unité de `GrandPrixJoue.reussis` sans toucher à la fonction, ou l'inverse.
 - Rejouer la 18 (ou la 7, 8, 12, 16) après la 32 : le compteur par ligne revient.
 
+## 41. iOS — carrousel « Mes Grands Prix » décentré avec un seul GP (`ios 0.57.4`)
+
+**Symptôme.** Un seul GP joué : la carte est décalée de 80 pt vers la droite et sort de
+l'écran ; un point de pagination seul sous elle. Deux GP ou plus : correct.
+
+**Cause réelle.** `defaultScrollAnchor(.trailing)` est résolu au premier tour de mise en
+page, quand `largeur` vaut encore 0 : le contenu ne fait que les 2 × 40 pt de marges, et
+l'ancre de fin le colle à droite. Avec plusieurs cartes, `scrollPosition` recale ensuite ;
+avec une seule, rien ne bouge. Prouvé au simulateur : sans l'ancre, la carte se centre.
+
+**Correctif.** Une carte seule est posée hors de tout `ScrollView`, centrée, sans points de
+pagination (masqués sous deux pages). Mesuré : 40 pt de chaque côté, tap → détail → retour.
+
+### Ce qu'il ne faut pas refaire
+
+- Tester un carrousel avec plusieurs éléments seulement : 0 et 1 sont des cas à part.
+
