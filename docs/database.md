@@ -603,7 +603,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les trente-trois migrations
+## 6. Les trente-quatre migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -640,6 +640,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 31 | `20261005180000_push_droits_service` | **`grant` explicite à `service_role`** sur les deux tables de la 30 — sans lui, `42501 permission denied for table` malgré la clé de service (`bugs-connus.md` §39) | **30** |
 | 32 | `20261027120000_reussis_par_pilote` | **`reussites_du_pronostic`** — la règle unique des « réussis » (un podium détaillé compte un par pilote, comme « Mes Grands Prix ») ; **`classement_du_championnat` remplacée** pour la lire. Points inchangés (`bugs-connus.md` §40). Ne change aucune signature | 18, **27** |
 | 33 | `20261027130000_horaires_mexique_2026` | **Données** : qualifications et course du Mexique 2026 aux heures officielles (21:00Z, 20:00Z), seulement sur les deux instants faux exacts (`bugs-connus.md` §42) | 19, 20 |
+| 34 | `20261029120000_horaires_bresil_2026` | **Données** : week-end du Brésil 2026 ramené du 13–15 au **6–8 novembre** — qualifications `2026-11-07 18:00Z`, course `2026-11-08 17:00Z` (14h00 locale, pas 15h00), seulement sur les deux instants faux exacts de la ligne du Brésil (`bugs-connus.md` §42) | 19, 20 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 

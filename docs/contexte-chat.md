@@ -11,9 +11,9 @@ Ce fichier est à coller au début d'un nouveau chat Claude pour reprendre le tr
 Application web (PWA) + app native iOS. Permet à des amis de créer des championnats privés, inviter des membres via un code à 6 caractères, faire des pronostics avant chaque Grand Prix F1 en utilisant les vraies cotes bookmaker Unibet, et gagner des points selon les résultats réels.
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
-Version web actuelle : 0.87.4
+Version web actuelle : 0.87.5
 Version backend actuelle : 0.87.0
-Version iOS actuelle : 0.57.4 (build 18)
+Version iOS actuelle : 0.57.5 (build 19)
 
 ## STACK TECHNIQUE
 
@@ -32,7 +32,8 @@ Deux chats : Claude (décisions + prompts) / Claude Code terminal (code + commit
 Chaque prompt commence par "Lis CLAUDE.md et ios/CLAUDE.md."
 Migrations Supabase : toujours appliquées manuellement dans le SQL Editor
 Docker disponible (27/10) → une migration s'éprouve sur un PostgreSQL 16 jetable, contre un harnais réduit aux tables qu'elle lit
-31 migrations appliquées ; **32 (`reussis_par_pilote`) et 33 (`horaires_mexique_2026`) écrites le 27/10, à appliquer dans le SQL Editor** — la 33 avant la course du Mexique (1ᵉʳ novembre, 20:00Z)
+31 migrations appliquées ; **32 (`reussis_par_pilote`) et 33 (`horaires_mexique_2026`) écrites le 27/10, à appliquer dans le SQL Editor** — la 33 avant la course du Mexique (1ᵉʳ novembre, 20:00Z). **Constaté le 29/10 en lisant la base : la 33 n'est PAS appliquée** (Mexique encore à 23:00Z / 21:00Z)
+**34 (`horaires_bresil_2026`) écrite le 29/10, à appliquer** — avant l'ouverture de la page Unibet du Brésil et au plus tard avant les qualifications (7 novembre, 18:00Z)
 Après chaque session, Claude Code met à jour docs/contexte-chat.md
 Versions : web, backend et iOS sont indépendantes — chacune ne bouge que si son code change (`CLAUDE.md` §7). `CLAUDE.md` §8 suit la version web
 
@@ -77,7 +78,9 @@ Risque connu : le code `G7B77V` (tiré au hasard, aucun mot lisible) est visible
 
 Testé de bout en bout sur `supabase/postgres:15.8.1.085` en local (Docker), avec les 31 migrations, le schéma `auth` mis au niveau de GoTrue et les 4 GP des fixtures. Chaque script a été joué deux fois. Les empreintes des données réelles sont restées identiques après 01, 03, 04 et 99, et les garde-fous de 03 et 04 ont bien levé.
 
-## CE QUI EST FAIT — VERSION WEB (0.87.4)
+## CE QUI EST FAIT — VERSION WEB (0.87.5)
+
+Week-end du GP du Brésil (0.87.5, avec la migration 34) : le GP se court du **6 au 8 novembre**, pas du 13 au 15. `GP_2026.bresil` : `date` `2026-11-08`, cinq séances aux instants OpenF1 (meeting 1299, recoupés sur formula1.com) — EL1 `2026-11-06T15:30Z` (12h30 locale, la table disait 11h30), EL2 `06T19:00Z`, EL3 `07T14:30Z`, qualifications `07T18:00Z`, course `08T17:00Z`. Pas un week-end sprint ; UTC−3 toute l'année, la conversion était juste — c'étaient la date et deux heures locales. Base : migration 34 (qualifications et course, la course passait aussi de 15h00 à 14h00 locale), éprouvée sur PostgreSQL 16 (corrige, rejeu sans effet, autres GP identiques à l'empreinte près, colonne déjà réécrite par Unibet laissée intacte, ligne adoptée sous « GP São Paulo » reconnue). Le scraper ne réécrit pas l'erreur ; sans la 34, il ne rattacherait pas la ligne manuelle (±3 jours) et créerait un doublon (`bugs-connus.md` §42). Tests `test_horaires_2026.py` (instants, heures locales São Paulo, absence d'heure d'été, `GrandPrixSaison`, migration = table). Aucun autre GP touché.
 
 Horaires du GP du Mexique (0.87.4, avec la migration 33) : `GP_2026.mexique` passe aux heures officielles — qualifications `2026-10-31T21:00Z` (15h00 locale), course `2026-11-01T20:00Z` (14h00) ; c'étaient deux heures locales fausses (17h00, 15h00), pas un fuseau (`bugs-connus.md` §42). Même correction dans `FichesGrandPrix` (iOS). Base : migration 33, éprouvée sur PostgreSQL 16 (corrige, rejeu sans effet, ne touche pas une heure déjà écrite par Unibet). Le scraper ne réécrit pas l'erreur. Tests `test_horaires_2026.py` (iOS = web à l'instant près, heures locales Mexico / Chicago de part et d'autre du 1ᵉʳ novembre). **Écarts relevés et NON corrigés** (OpenF1, 27/10) : Brésil couru le 8 novembre (pas le 15) partout, course de Las Vegas (04:00Z) et du Qatar (16:00Z) fausses en base seulement.
 
@@ -103,7 +106,9 @@ Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
-## CE QUI EST FAIT — VERSION iOS (0.57.4)
+## CE QUI EST FAIT — VERSION iOS (0.57.5)
+
+Week-end du GP du Brésil (iOS 0.57.5, build 19) : `FichesGrandPrix.horaires.bresil` recopie `GP_2026` (voir version web) et `GrandPrixSaison.saison2026` date le GP au « 8 novembre 2026 ». **Non vérifié** : compilation et rendu au simulateur (changement de chaînes littérales seulement), iPhone réel.
 
 Carrousel « Mes Grands Prix » à un seul GP + horaires du Mexique (iOS 0.57.4, build 18). **Carrousel** : avec une carte, `defaultScrollAnchor(.trailing)` (résolu à largeur 0) la poussait de 80 pt hors de l'écran ; cause prouvée en retirant l'ancre. Correctif : carte seule hors `ScrollView`, centrée, points de pagination masqués sous deux pages (`bugs-connus.md` §41). Vérifié au simulateur (harnais `DEBUG` temporaire, retiré — aucune session) : 0, 1, 2 et 6 GP, clair et sombre ; carte seule à 40 pt de chaque bord (mesuré au pixel), fond du drapeau, tap → détail → croix → carte recentrée. **Horaires** : `FichesGrandPrix.mexique` aux heures officielles (voir version web) ; fiche du Mexique vérifiée au simulateur (fuseau de New York : qualifs 17h00 EDT, course 15h00 EST — le changement d'heure du 1ᵉʳ novembre est appliqué). **Non vérifié** : iPhone réel, données réelles de Team Bazzana.
 

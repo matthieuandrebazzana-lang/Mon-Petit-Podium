@@ -1815,8 +1815,15 @@ les qualifications que si Unibet les publie, et la course depuis l'heure d'Unibe
 - Prendre une heure « relevée » d'une migration pour acquise : la confronter à OpenF1
   (`/v1/sessions?year=…`), qui sert les instants officiels de toute la saison.
 
-> **Écarts restants, relevés le 2026-10-27 contre OpenF1, NON corrigés** : Brésil couru le
-> **8 novembre** (base et tables statiques : 15 novembre — qualifications
-> `2026-11-07T18:00Z`, course `2026-11-08T17:00Z`) ; Las Vegas, course `04:00Z` en base
-> `06:00Z` ; Qatar, course `16:00Z`, en base `17:00Z`. Les deux tables statiques ont déjà
-> les bonnes heures pour Las Vegas et le Qatar ; le Brésil y est faux aussi.
+> **Brésil corrigé le 2026-10-29 (migration 34, web 0.87.5, iOS 0.57.5)** : week-end posé
+> une semaine trop tard (13–15 novembre) partout, EL1 à 11h30 locale au lieu de 12h30 dans
+> les deux tables statiques, course à 15h00 locale au lieu de 14h00 en base. Instants
+> OpenF1 (meeting 1299) : EL1 `06T15:30Z`, EL2 `06T19:00Z`, EL3 `07T14:30Z`, qualifications
+> `07T18:00Z`, course `08T17:00Z` ; UTC−3 sans heure d'été. **La migration doit passer
+> avant qu'Unibet ouvre la page du GP** : le scraper rattache une ligne manuelle par date
+> à ±3 jours (`FENETRE_WEEK_END`), puis par nom — à 7 jours d'écart et sous le nom
+> « São Paulo », il créerait un doublon.
+>
+> **Écarts restants, relevés le 2026-10-27 contre OpenF1, NON corrigés** : Las Vegas,
+> course `04:00Z`, en base `06:00Z` ; Qatar, course `16:00Z`, en base `17:00Z`. Les deux
+> tables statiques ont déjà les bonnes heures pour ces deux GP.

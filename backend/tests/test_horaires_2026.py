@@ -6,6 +6,9 @@ relisent les deux tables statiques — `GP_2026` (web, propriétaire) et
 `FichesGrandPrix.horaires` (iOS, transcription) — et convertissent leurs instants
 dans le fuseau du circuit, de part et d'autre des changements d'heure d'automne :
 le Mexique n'en a plus depuis 2022, les États-Unis reculent le 1ᵉʳ novembre.
+
+Le Brésil (migration 34) était posé une semaine trop tard — du 13 au 15 novembre
+au lieu du 6 au 8 — avec un EL1 à 11h30 locale au lieu de 12h30.
 """
 
 import re
@@ -17,6 +20,8 @@ RACINE = Path(__file__).resolve().parents[2]
 WEB = RACINE / "frontend" / "src" / "lib" / "calendrier2026.js"
 IOS = RACINE / "ios" / "Greed F1" / "Views" / "Calendrier" / "FichesGrandPrix.swift"
 MIGRATION_33 = RACINE / "supabase" / "migrations" / "20261027130000_horaires_mexique_2026.sql"
+MIGRATION_34 = RACINE / "supabase" / "migrations" / "20261029120000_horaires_bresil_2026.sql"
+SAISON_IOS = RACINE / "ios" / "Greed F1" / "Models" / "GrandPrixSaison.swift"
 
 
 def _seances_web() -> dict[str, dict[str, str]]:
@@ -77,3 +82,49 @@ def test_la_migration_33_pose_les_memes_instants_que_la_table():
     sql = MIGRATION_33.read_text(encoding="utf-8")
     assert "set date_qualifications = timestamptz '2026-10-31 21:00:00+00'" in sql
     assert "set date_course = timestamptz '2026-11-01 20:00:00+00'" in sql
+
+
+def test_bresil_aux_heures_officielles():
+    # OpenF1, meeting 1299, sessions 11405 à 11412 — UTC−3 toute l'année.
+    gp = re.search(r'slug: "bresil".*?date: "([^"]+)"', WEB.read_text(encoding="utf-8"), re.S)
+    assert gp.group(1) == "2026-11-08"
+    seances = _seances_web()["bresil"]
+    assert seances == {
+        "el1": "2026-11-06T15:30:00Z",
+        "el2": "2026-11-06T19:00:00Z",
+        "el3": "2026-11-07T14:30:00Z",
+        "qualifications": "2026-11-07T18:00:00Z",
+        "course": "2026-11-08T17:00:00Z",
+    }
+    locales = {cle: _locale(iso, "America/Sao_Paulo") for cle, iso in seances.items()}
+    assert locales == {
+        "el1": "Fri 12:30",
+        "el2": "Fri 16:00",
+        "el3": "Sat 11:30",
+        "qualifications": "Sat 15:00",
+        "course": "Sun 14:00",
+    }
+
+
+def test_sao_paulo_sans_heure_d_ete():
+    # Le Brésil a aboli l'heure d'été en 2019 : UTC−3 en novembre comme en juillet.
+    for iso in ("2026-07-01T12:00:00Z", "2026-11-06T12:00:00Z"):
+        instant = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        decalage = instant.astimezone(ZoneInfo("America/Sao_Paulo")).utcoffset()
+        assert decalage.total_seconds() == -3 * 3600
+
+
+def test_saison_ios_date_le_bresil_au_8_novembre():
+    texte = SAISON_IOS.read_text(encoding="utf-8")
+    assert '.init(slug: "bresil", jour: "8", mois: "NOV", date: "8 novembre 2026")' in texte
+
+
+def test_la_migration_34_pose_les_memes_instants_que_la_table():
+    sql = MIGRATION_34.read_text(encoding="utf-8")
+    seances = _seances_web()["bresil"]
+    assert seances["qualifications"] == "2026-11-07T18:00:00Z"
+    assert seances["course"] == "2026-11-08T17:00:00Z"
+    assert "set date_qualifications = timestamptz '2026-11-07 18:00:00+00'" in sql
+    assert "where date_qualifications = timestamptz '2026-11-14 18:00:00+00'" in sql
+    assert "set date_course = timestamptz '2026-11-08 17:00:00+00'" in sql
+    assert "where date_course = timestamptz '2026-11-15 18:00:00+00'" in sql

@@ -193,13 +193,13 @@ export const GP_2026 = [
   },
   {
     slug: "bresil", nom: "GP Brésil", pays: "Brésil", circuit: "Interlagos",
-    date: "2026-11-15", mois: "NOV",
+    date: "2026-11-08", mois: "NOV",
     seances: {
-      el1: "2026-11-13T14:30:00Z",
-      el2: "2026-11-13T19:00:00Z",
-      el3: "2026-11-14T14:30:00Z",
-      qualifications: "2026-11-14T18:00:00Z",
-      course: "2026-11-15T17:00:00Z",
+      el1: "2026-11-06T15:30:00Z",
+      el2: "2026-11-06T19:00:00Z",
+      el3: "2026-11-07T14:30:00Z",
+      qualifications: "2026-11-07T18:00:00Z",
+      course: "2026-11-08T17:00:00Z",
     },
   },
   {

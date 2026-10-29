@@ -245,7 +245,7 @@ struct GrandPrixSaison {
         .init(slug: "singapour", jour: "11", mois: "OCT", date: "11 octobre 2026"),
         .init(slug: "etats-unis", jour: "25", mois: "OCT", date: "25 octobre 2026"),
         .init(slug: "mexique", jour: "1", mois: "NOV", date: "1er novembre 2026"),
-        .init(slug: "bresil", jour: "15", mois: "NOV", date: "15 novembre 2026"),
+        .init(slug: "bresil", jour: "8", mois: "NOV", date: "8 novembre 2026"),
         .init(slug: "las-vegas", jour: "21", mois: "NOV", date: "21 novembre 2026"),
         .init(slug: "qatar", jour: "29", mois: "NOV", date: "29 novembre 2026"),
         .init(slug: "abu-dhabi", jour: "6", mois: "DÉC", date: "6 décembre 2026")
