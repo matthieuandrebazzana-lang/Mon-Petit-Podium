@@ -47,7 +47,11 @@ struct BarreNavigation: View {
     /// Le Grand Prix qu'un tap sur le widget « Mes pronos » demande d'ouvrir.
     @State private var pronosDemandes: DonneesWidget.DemandePronos?
 
+    /// L'action demandée en fermant l'accueil du tutoriel, consommée par l'onglet Accueil.
+    @State private var actionTutoriel: ActionTutoriel?
+
     @Environment(\.scenePhase) private var phase
+    @Environment(\.accessibilityReduceMotion) private var mouvementReduit
 
     /// Les quatre onglets, dans l'ordre de la barre.
     enum Onglet: Hashable {
@@ -58,7 +62,8 @@ struct BarreNavigation: View {
         TabView(selection: $ongletActif) {
             AccueilView(viewModel: viewModel, mesChampionnats: mesChampionnats,
                         prochainGP: prochainGP, ongletActif: $ongletActif,
-                        pronosDemandes: $pronosDemandes, invitationProfil: !profilDecouvert)
+                        pronosDemandes: $pronosDemandes, actionTutoriel: $actionTutoriel,
+                        invitationProfil: !profilDecouvert)
                 .tabItem { Label(t("onglet.accueil"), image: "icone-accueil") }
                 .tag(Onglet.accueil)
 
@@ -77,6 +82,30 @@ struct BarreNavigation: View {
                 .tag(Onglet.profil)
         }
         .tint(.encrePrimaire)
+        // **L'accueil du tutoriel, en calque par-dessus toute la barre** (``Tutoriel``) :
+        // il sort en fondu, rien ne glisse, et l'app est déjà là, chargée, dessous.
+        .overlay {
+            if Tutoriel.partage.accueilOuvert {
+                AccueilTutorielView(profil: viewModel.profil) { action in
+                    withAnimation(Mouvement.entree(Mouvement.passageEcran)) {
+                        Tutoriel.partage.fermerAccueil()
+                    }
+                    guard let action else { return }
+                    ongletActif = .accueil
+                    actionTutoriel = action
+                }
+                .transition(.opacity)
+            }
+        }
+        // L'accueil s'ouvre pour un compte qui ne l'a jamais vu ; **la feuille système des
+        // notifications attend sa fermeture** — posée par-dessus, elle le couperait au
+        // premier écran. Les deux dans la même tâche, pour que l'ordre soit garanti. iOS ne
+        // montre la feuille qu'une fois.
+        .task(id: Tutoriel.partage.accueilOuvert) {
+            Tutoriel.partage.ouvrirAccueilSiNeuf()
+            guard !Tutoriel.partage.accueilOuvert else { return }
+            await NotificationsPush.partage.activer()
+        }
         .onChange(of: ongletActif) { _, onglet in
             guard onglet == .profil, !profilDecouvert else { return }
             DecouverteProfil.marquer(pour: SupabaseManager.partage.idCompte)

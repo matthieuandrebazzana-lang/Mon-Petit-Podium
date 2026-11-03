@@ -135,6 +135,7 @@ struct PronosView: View {
 
         Spacer().frame(height: 24)   // changement de sujet (§4.6)
         titreSection(t("pronos.obligatoires"))
+            .bulleAide(.pronosObligatoires, position: .dessous, pointe: 0.12)
 
         if lu.gp.marche(MarcheCote.vainqueur.slug) == nil || lu.gp.marche(MarcheCote.podium.slug) == nil {
             // Le serveur refuserait tout pronostic : le dire avant qu'on remplisse.

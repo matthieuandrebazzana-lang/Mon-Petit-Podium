@@ -121,7 +121,10 @@ struct ProfilView: View {
                     }
 
                     Spacer().frame(height: 12)
+                    // La bulle se pose sur le bloc et non dans lui : le bloc est découpé à
+                    // son arrondi, et la couperait.
                     blocLivree
+                        .bulleAide(.profilLivree)
 
                     // **`estAdmin`, et non `modePrevisualisation`, et ce n'est pas un
                     // oubli** : la section porte l'interrupteur qui rallume le mode, elle

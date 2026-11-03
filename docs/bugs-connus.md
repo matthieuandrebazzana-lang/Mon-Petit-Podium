@@ -1827,3 +1827,29 @@ les qualifications que si Unibet les publie, et la course depuis l'heure d'Unibe
 > **Écarts restants, relevés le 2026-10-27 contre OpenF1, NON corrigés** : Las Vegas,
 > course `04:00Z`, en base `06:00Z` ; Qatar, course `16:00Z`, en base `17:00Z`. Les deux
 > tables statiques ont déjà les bonnes heures pour ces deux GP.
+
+## 43. iOS — les marchés Vainqueur et Podium absents des paris bonus (écart doc / app, NON corrigé)
+
+**Symptôme.** Sur iOS, un favori pris sur le marché « Vainqueur » ou « Podium » ne
+figure jamais dans la liste des paris bonus de la saisie. Sur le web, il y figure.
+
+**Ce que dit la règle** (`metier.md` §2, depuis `0.78.0`). La route refuse un bonus dans
+**deux cas seulement** : le pilote du vainqueur choisi au marché `vainqueur`, l'un des deux
+pilotes du podium choisis au marché `podium` (`exiger_bonus_distincts_des_obligatoires`,
+`backend/app/api/routes/pronostics.py`). Tout autre pilote de ces deux marchés est un bonus
+valide — « Antonelli vainqueur » pour qui a Antonelli au podium, par exemple. Le web suit
+la règle : `Pronostics.jsx` liste tous les favoris.
+
+**Ce que fait iOS.** `MarcheCote.exclueDesBonus(slug:)` (`CotesView.swift`) retire les
+deux marchés **entiers** de la liste de `PronosView` : l'app est plus stricte que le
+serveur et que le web. Le tutoriel iOS (`ios 0.58.0`) décrit ce que fait l'app — « jusqu'à
+3 paris bonus sur les autres marchés » — et non la règle.
+
+**Relevé le 2026-11-03, pas corrigé** : la décision appartient au métier (aligner iOS sur
+la règle, ou resserrer la règle). Corriger d'un côté seulement laisserait le tutoriel, la
+saisie et le doc en désaccord.
+
+### Ce qu'il ne faut pas refaire
+
+- Corriger `exclueDesBonus` sans relire le texte du tutoriel (`tutoriel.pronos.corps`) :
+  c'est le seul autre endroit qui énonce la règle côté iOS.

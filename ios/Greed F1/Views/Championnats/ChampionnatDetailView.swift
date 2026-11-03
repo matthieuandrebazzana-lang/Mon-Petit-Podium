@@ -139,6 +139,9 @@ struct ChampionnatDetailView: View {
 
                     selecteur
                         .padding(.horizontal, margeLaterale)
+                        // Sous le segment « Piste », la moitié droite du sélecteur.
+                        .bulleAide(.championnatPiste, quand: vue == .classement,
+                                   position: .dessous, pointe: 0.75)
                         .padding(.top, 12)
                         .padding(.bottom, 12)
                 }

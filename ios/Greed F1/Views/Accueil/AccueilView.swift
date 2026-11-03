@@ -24,6 +24,9 @@ struct AccueilView: View {
     /// Le Grand Prix qu'un tap sur le widget « Mes pronos » demande d'ouvrir — consommé
     /// dès qu'il est poussé.
     @Binding var pronosDemandes: DonneesWidget.DemandePronos?
+    /// Ce que l'accueil du tutoriel demande en se fermant (``Tutoriel``) — consommé dès
+    /// que l'écran est poussé.
+    @Binding var actionTutoriel: ActionTutoriel?
     /// Le profil n'a encore jamais été ouvert (``DecouverteProfil``) : l'avatar pulse.
     var invitationProfil = false
 
@@ -44,6 +47,11 @@ struct AccueilView: View {
     /// La bande de la pile dépliée en aperçu — voir ``PileChampionnats``. Tenue ici parce
     /// qu'un tap **n'importe où** hors de la pile la referme.
     @State private var apercuPile: UUID?
+
+    /// Les deux écrans des cartes d'action, poussés **par le tutoriel** — les cartes, elles,
+    /// gardent leurs `NavigationLink`.
+    @State private var creerDemande = false
+    @State private var rejoindreDemande = false
 
     var body: some View {
         // L'accueil est la **racine de sa propre pile** : c'est de ses deux cartes
@@ -103,6 +111,23 @@ struct AccueilView: View {
             .task { await prochainGP.charger() }
             .navigationDestination(item: $championnatRejoint) { championnat in
                 ChampionnatDetailView(championnat: championnat, mesChampionnats: mesChampionnats)
+            }
+            .navigationDestination(isPresented: $creerDemande) {
+                CreerChampionnatView(mesChampionnats: mesChampionnats)
+            }
+            .navigationDestination(isPresented: $rejoindreDemande) {
+                RejoindreChampionnatView(mesChampionnats: mesChampionnats) { championnatRejoint = $0 }
+            }
+            // La dernière page du tutoriel : créer ou rejoindre, poussé d'ici comme par
+            // les cartes d'action.
+            .onChange(of: actionTutoriel, initial: true) { _, action in
+                guard let action else { return }
+                actionTutoriel = nil
+                cheminPronos.removeAll()
+                switch action {
+                case .creer:     creerDemande = true
+                case .rejoindre: rejoindreDemande = true
+                }
             }
             // Un tap sur le widget « Mes pronos » : le parcours repart de ce GP.
             .onChange(of: pronosDemandes, initial: true) { _, demande in
@@ -260,6 +285,13 @@ struct AccueilView: View {
     /// — la liste des championnats pose exactement le même bloc.
     private var actions: some View {
         ActionsChampionnat(mesChampionnats: mesChampionnats) { championnatRejoint = $0 }
+            .bulleAide(.accueilSansChampionnat, quand: sansChampionnat)
+    }
+
+    /// La liste est connue, et vide : les deux cartes d'action sont tout l'état vide.
+    private var sansChampionnat: Bool {
+        if case .pret(let liste) = mesChampionnats.etat { return liste.isEmpty }
+        return false
     }
 
     /// La ligne qui ferme l'écran. Elle répond à un vrai défaut de composition — sous une
@@ -821,7 +853,7 @@ private struct SilhouetteWidget: View {
 #Preview {
     AccueilView(viewModel: AuthViewModel(), mesChampionnats: MesChampionnats(),
                 prochainGP: ProchainGrandPrix(), ongletActif: .constant(.accueil),
-                pronosDemandes: .constant(nil))
+                pronosDemandes: .constant(nil), actionTutoriel: .constant(nil))
 }
 
 // MARK: - Depuis le widget « Mes pronos »

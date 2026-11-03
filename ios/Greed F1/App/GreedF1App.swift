@@ -24,10 +24,9 @@ struct GreedF1App: App {
                     if authViewModel.pseudoAConfigurer {
                         OnboardingView(viewModel: authViewModel)
                     } else {
+                        // La permission des notifications est demandée par la barre,
+                        // une fois l'accueil du tutoriel fermé (``Tutoriel``).
                         BarreNavigation(viewModel: authViewModel)
-                            // Permission demandée une fois connecté et le pseudo choisi ;
-                            // iOS ne montre la feuille qu'une fois, la suite est silencieuse.
-                            .task { await NotificationsPush.partage.activer() }
                     }
                 } else {
                     LandingView(viewModel: authViewModel)

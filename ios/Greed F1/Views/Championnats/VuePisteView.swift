@@ -46,7 +46,7 @@ import SwiftUI
 struct SolPiste: View {
 
     /// La `viewBox` de la planche, telle quelle.
-    private static let planche = CGRect(x: 0, y: 0, width: 589.5, height: 1280.4)
+    static let planche = CGRect(x: 0, y: 0, width: 589.5, height: 1280.4)
 
     /// **Le rayon des coins de la planche** — le `rx` de son aplat, 62,7 unités. Les kerbs
     /// s'y arrondissent et leurs bandes s'arrêtent avant : posé tel quel, le bas de l'écran
@@ -62,7 +62,7 @@ struct SolPiste: View {
     /// l'en-tête de ``ChampionnatDetailView`` — il devient donc ``Color/fondPrincipal``, et
     /// les scores posés dessus en `texte` restent lisibles dans les deux modes. Les kerbs
     /// rouges ne bougent pas.
-    private static let substitutions: [String: Color] = [
+    static let substitutions: [String: Color] = [
         "#1d1d1b": .ligneMedianePiste,
         "#f4efea": .fondPrincipal
     ]

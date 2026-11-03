@@ -296,6 +296,9 @@ struct CotesView: View {
                                         estEpingle: estEpingle) { cote, marche in
                                 basculer(cote, dans: marche)
                             }
+                            // Toutes les cartes sont fermées à l'arrivée : la bulle désigne
+                            // la pile, et dit d'ouvrir un marché pour trouver l'étoile.
+                            .bulleAide(.cotesEtoile)
                         }
                     }
                 }

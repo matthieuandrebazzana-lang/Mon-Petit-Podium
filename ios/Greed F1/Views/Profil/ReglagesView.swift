@@ -57,6 +57,9 @@ struct ReglagesView: View {
                     blocNotifications
 
                     Spacer().frame(height: 12)
+                    blocAide
+
+                    Spacer().frame(height: 12)
                     blocCompte
 
                     Spacer().frame(height: 20)
@@ -141,6 +144,30 @@ struct ReglagesView: View {
                 RangeeReglage(libelle: t("reglages.gererNotifications"),
                               encre: .texte,
                               icone: "arrow.up.forward")
+            }
+            .buttonStyle(StyleAppui(.bouton))
+        }
+        .modifier(BlocReglages())
+    }
+
+    // MARK: - Aide
+
+    /// **L'accueil du tutoriel seul** (``Tutoriel/ouvrirAccueil()``) : les bulles d'aide
+    /// déjà vues le restent. Il se pose en calque sur toute la barre, cet écran compris, et
+    /// le laisse en place à sa fermeture.
+    private var blocAide: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TitreDeBloc(texte: t("reglages.aide"))
+
+            Spacer().frame(height: 4)
+
+            Button {
+                withAnimation(Mouvement.entree(Mouvement.passageEcran)) {
+                    Tutoriel.partage.ouvrirAccueil()
+                }
+            } label: {
+                RangeeReglage(libelle: t("reglages.revoirTutoriel"), encre: .texte,
+                              icone: "arrow.counterclockwise")
             }
             .buttonStyle(StyleAppui(.bouton))
         }

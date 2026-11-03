@@ -205,6 +205,15 @@ clé par compte, effacée par `oublierCompte()`). `BarreNavigation` la marque su
 `Mouvement.ondeInvitation` / `periodeInvitation`) est un `overlay` sans hit-test : elle ne
 pousse rien et ne capte aucun tap.
 
+**Le tutoriel a un seul propriétaire, `Tutoriel`** (`Services/Tutoriel.swift`, `@Observable`) :
+l'accueil de première connexion (`AccueilTutorielView`, calque sur `BarreNavigation`) et les
+bulles d'aide (`.bulleAide(_:quand:position:pointe:)`, `Views/Composants/BulleAide.swift`).
+« Déjà vu » dans `UserDefaults`, une clé par compte (`tutoriel.*`), marqué **à l'affichage**,
+effacé par `oublierCompte()`. Une bulle à la fois, aucune pendant l'accueil ; elle ne capte
+aucun toucher — `DetecteurToucher`, posé sur la fenêtre le temps d'une bulle, la ferme au
+premier contact sans rien annuler. La permission des notifications attend la fermeture de
+l'accueil. Une règle métier citée par un texte du tutoriel (`tutoriel.*`) se relit avec lui.
+
 **Le sélecteur de langue est un seul composant** (`SelecteurLangue`) : ses états actif /
 inactif s'y règlent, jamais sur l'écran qui le monte. **Les deux options restent en couleur
 pleine** — drapeaux entiers, libellé inactif en `encreSegmentInactif` (`secondaire` plein) :
@@ -214,7 +223,7 @@ d'opacité réduite sur l'option inactive. Taille : segments 80 × 40, drapeau 2
 
 **Les notifications push partent du backend, jamais de l'app** (`docs/decisions.md` §25).
 `Services/NotificationsPush.swift` est le **seul propriétaire** du jeton APNs : permission
-demandée une fois connecté (`.task` sur `BarreNavigation`), jeton reçu par
+demandée une fois connecté et l'accueil du tutoriel fermé (`.task` sur `BarreNavigation`), jeton reçu par
 `DelegueApplication` (`@UIApplicationDelegateAdaptor`) puis envoyé à `POST /push/token` avec
 `langueInterface` — c'est la langue des notifications, et un changement de langue le
 renvoie. `DELETE /push/token` part **avant** `signOut()` et avant `DELETE /profils/moi` :
@@ -410,6 +419,7 @@ ios/
     │   ├── DonneesWidgetPronos.swift  App Group du widget « Mes pronos » : réponse brute de `/widget/pronos`, liens `greedf1://pronos|resultats/<id>` — PARTAGÉ
     │   ├── JetonWidget.swift      jeton widget dans le Keychain partagé — PARTAGÉ
     │   ├── SynchroWidgetClassement.swift  app seule : `POST /widget/token` à chaque ouverture, publication de la liste, effacement (des deux widgets à jeton)
+    │   ├── Tutoriel.swift         tutoriel : « déjà vu » par compte, accueil et bulle affichés, `DetecteurToucher`
     │   ├── NotificationsPush.swift  permission, jeton APNs → `POST`/`DELETE /push/token`, langue ; `DelegueApplication`
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
@@ -417,6 +427,8 @@ ios/
     │   ├── Navigation/
     │   │   ├── BarreNavigation.swift  TabView à 4 onglets + apparence de la barre
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
+    │   ├── Tutoriel/
+    │   │   └── AccueilTutorielView.swift  accueil de première connexion : 5 pages, « Passer », créer / rejoindre
     │   ├── Accueil/
     │   │   ├── AccueilView.swift       championnats et GP suivant réels, pastille + bouton selon l’état et l’existence d’un pronostic (`ProchainGrandPrix.aDesPronostics`) : « Faire » si ouvert sans, « Voir » si ouvert ou fermé avec, rien sinon
     │   │   ├── PileChampionnats.swift  championnats en paquet de cartes : carte du dessus pleine (tap = ouvrir, swipe = réordonner), bandes réduites de 3 % par cran vers le fond (`Perspective`, plancher 44 pt) : tap = aperçu sur place, 2ᵉ tap = ouvrir ; ordre mémorisé par compte (`OrdrePile`)
@@ -429,6 +441,7 @@ ios/
     │   │   ├── ErreurEnLigne.swift      refus d'une écriture, sous le bouton — jamais d'alerte
     │   │   ├── SelecteurSegmente.swift  sélecteur segmenté pleine largeur (une seule pastille `primaire`, ressort `Mouvement.glissement`, fond neutre + damier) — Classement / Piste
     │   │   ├── MentionProvisoire.swift  `StatutResultats` (provisoire, non évaluable) + la mention « Provisoire », PARTAGÉS
+    │   │   ├── BulleAide.swift          bulle d'aide contextuelle + `.bulleAide(...)`, une fois par compte (`Tutoriel`)
     │   │   ├── SkeletonView.swift       silhouette de premier chargement (4 variantes, balayage calé sur l'écran) + `fonduChargement(_:)`, PARTAGÉS
     │   │   ├── ImageCachee.swift        `AsyncImage` avec `NSCache` partagé par URL (`CacheImages`) — avatars, photos de championnat, cockpits
     │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas
@@ -457,7 +470,7 @@ ios/
     │   │   └── RecapView.swift      récapitulatif, après le `200` ou d'entrée (grille relue) : fond `FondDrapeauFlou`, en-tête blanc (nom, date · départ, total disponible en grand), bandeau vert + `BlocEcheance` sur le flou, une `CarteRecap` par pronostic (forme de `CarteVerdict` sans pastille d’icône, damier 6 %, fond teinté à 18 % à la couleur de la catégorie — `teinteVainqueur`, `teintePodium`, `teinteBonus` (ocre, tous les bonus) ; seconde encre `encreSurTeinte`) ; `EnteteDrapeau` et `RangeeRecap` non montés
     │   └── Profil/
     │       ├── ProfilView.swift         mon profil — stats réelles, voiture lue et enregistrée (`PATCH /profils/moi`), engrenage `icon-reglages` → Réglages
-    │       ├── ReglagesView.swift       apparence, langue, notifications (Réglages d'iOS), déconnexion, suppression du compte, version
+    │       ├── ReglagesView.swift       apparence, langue, notifications (Réglages d’iOS), aide (« Revoir le tutoriel »), déconnexion, suppression du compte, version
     │       ├── ProfilMembreView.swift   profil d'un autre membre, lecture seule — ligne du classement + stats réelles
     │       ├── HistoriqueGPView.swift   « Ses / Mes Grands Prix » : résumé saison en deux moitiés (total, réussis / tentés, rang à gauche ; voiture du membre à droite, reçue de l’appelant), carrousel de cartes GP (drapeau net + tracé ; drapeau clair : haut nu, voile sous le texte), fond = drapeau actif étiré et flouté, en fondu, tap → la carte se déploie en détail plein écran (`matchedGeometryEffect`) ; `ContenuDetailGrandPrix` et `CarteVerdict` (carte teintée + damier, verdict en pastille pleine) y sont PARTAGÉS avec `MesResultatsGPView` — données réelles (`GrandsPrixJoues`)
     │       └── ComposantsProfil.swift   pastille, en-tête, grille, `BlocStatistiques`, `LigneGrandsPrix`, PARTAGÉS
