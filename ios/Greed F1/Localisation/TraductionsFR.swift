@@ -504,6 +504,12 @@ enum TraductionsFR {
         "tutoriel.bulle.championnatPiste": "Touche Piste pour voir le classement comme une course.",
         "tutoriel.bulle.profilLivree": "Change ta livrée ici : couleurs, numéro ou écurie.",
         "tutoriel.bulle.accueilSansChampionnat": "Crée ton championnat ou rejoins celui d'un ami avec son code.",
+        "tutoriel.bulle.compris": "Compris",
+        "tutoriel.bulle.cotesEtoile.titre": "Les favoris",
+        "tutoriel.bulle.pronosObligatoires.titre": "Obligatoires et bonus",
+        "tutoriel.bulle.championnatPiste.titre": "La vue Piste",
+        "tutoriel.bulle.profilLivree.titre": "Ta livrée",
+        "tutoriel.bulle.accueilSansChampionnat.titre": "Commence ici",
 
         // MARK: - Profil — Grands Prix joués
         "profil.a11y.chargementStats": "Chargement des statistiques",

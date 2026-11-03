@@ -208,10 +208,12 @@ pousse rien et ne capte aucun tap.
 **Le tutoriel a un seul propriétaire, `Tutoriel`** (`Services/Tutoriel.swift`, `@Observable`) :
 l'accueil de première connexion (`AccueilTutorielView`, calque sur `BarreNavigation`) et les
 bulles d'aide (`.bulleAide(_:quand:position:pointe:)`, `Views/Composants/BulleAide.swift`).
-« Déjà vu » dans `UserDefaults`, une clé par compte (`tutoriel.*`), marqué **à l'affichage**,
-effacé par `oublierCompte()`. Une bulle à la fois, aucune pendant l'accueil ; elle ne capte
-aucun toucher — `DetecteurToucher`, posé sur la fenêtre le temps d'une bulle, la ferme au
-premier contact sans rien annuler. La permission des notifications attend la fermeture de
+« Déjà vu » dans `UserDefaults`, une clé par compte (`tutoriel.*`), effacé par
+`oublierCompte()` ; l'accueil est marqué **à l'affichage**, une bulle **au tap sur « Compris »
+seulement** (fermée autrement, elle revient). Une bulle à la fois, aucune pendant l'accueil ;
+elle bloque l'écran dans **sa propre fenêtre** (`FenetreBulle`, au-dessus des feuilles,
+modale pour VoiceOver) : voile `voileBulle` découpé autour de la vue, bulle `surface` avec
+titre (`tutoriel.bulle.<bulle>.titre`), texte et « Compris ». La permission des notifications attend la fermeture de
 l'accueil. Une règle métier citée par un texte du tutoriel (`tutoriel.*`) se relit avec lui.
 
 **Le sélecteur de langue est un seul composant** (`SelecteurLangue`) : ses états actif /
@@ -419,7 +421,7 @@ ios/
     │   ├── DonneesWidgetPronos.swift  App Group du widget « Mes pronos » : réponse brute de `/widget/pronos`, liens `greedf1://pronos|resultats/<id>` — PARTAGÉ
     │   ├── JetonWidget.swift      jeton widget dans le Keychain partagé — PARTAGÉ
     │   ├── SynchroWidgetClassement.swift  app seule : `POST /widget/token` à chaque ouverture, publication de la liste, effacement (des deux widgets à jeton)
-    │   ├── Tutoriel.swift         tutoriel : « déjà vu » par compte, accueil et bulle affichés, `DetecteurToucher`
+    │   ├── Tutoriel.swift         tutoriel : « déjà vu » par compte, accueil et bulle affichés, cible et fenêtre de la bulle (`DetecteurToucher` non monté)
     │   ├── NotificationsPush.swift  permission, jeton APNs → `POST`/`DELETE /push/token`, langue ; `DelegueApplication`
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
@@ -441,7 +443,7 @@ ios/
     │   │   ├── ErreurEnLigne.swift      refus d'une écriture, sous le bouton — jamais d'alerte
     │   │   ├── SelecteurSegmente.swift  sélecteur segmenté pleine largeur (une seule pastille `primaire`, ressort `Mouvement.glissement`, fond neutre + damier) — Classement / Piste
     │   │   ├── MentionProvisoire.swift  `StatutResultats` (provisoire, non évaluable) + la mention « Provisoire », PARTAGÉS
-    │   │   ├── BulleAide.swift          bulle d'aide contextuelle + `.bulleAide(...)`, une fois par compte (`Tutoriel`)
+    │   │   ├── BulleAide.swift          bulle d'aide + `.bulleAide(...)` (mesure), `FenetreBulle`, `CalqueBulleAide` (voile, découpe, placement), « Compris »
     │   │   ├── SkeletonView.swift       silhouette de premier chargement (4 variantes, balayage calé sur l'écran) + `fonduChargement(_:)`, PARTAGÉS
     │   │   ├── ImageCachee.swift        `AsyncImage` avec `NSCache` partagé par URL (`CacheImages`) — avatars, photos de championnat, cockpits
     │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas

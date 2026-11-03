@@ -17,6 +17,16 @@ enum BulleAide: String, CaseIterable {
 
     /// La clé du texte, traduite à l'affichage — jamais stockée traduite.
     var cleTexte: String { "tutoriel.bulle.\(rawValue)" }
+    /// La clé du titre court, en tête de la bulle.
+    var cleTitre: String { "tutoriel.bulle.\(rawValue).titre" }
+}
+
+/// Ce qu'une bulle désigne : le cadre de la vue **en coordonnées de l'écran**, et où la
+/// bulle préfère se poser.
+struct CibleBulle: Equatable {
+    var cadre: CGRect
+    var position: PositionBulle
+    var pointe: CGFloat
 }
 
 /// Ce que l'accueil du tutoriel demande à l'onglet Accueil en se fermant.
@@ -33,11 +43,13 @@ enum ActionTutoriel: Hashable {
 /// - **Jamais deux bulles à la fois, jamais une bulle pendant l'accueil.** Une demande qui
 ///   arrive alors est simplement ignorée : la bulle n'est pas marquée vue, elle reviendra
 ///   à la prochaine visite de son écran.
-/// - **Une bulle ne bloque rien.** Elle ne capte aucun toucher ; le premier toucher de
-///   l'écran, n'importe où — défilement compris —, la ferme et passe à ce qu'il visait
-///   (``DetecteurToucher``).
-/// - **Marquée vue dès qu'elle s'affiche**, de même que l'accueil : rien ne peut s'afficher
-///   deux fois, et une app quittée au milieu ne rouvre pas sur le tutoriel.
+/// - **Une bulle bloque l'écran jusqu'à « Compris ».** Elle vit dans sa propre fenêtre
+///   (``FenetreBulle``), au-dessus de l'app **et de ses feuilles** : un voile couvre tout,
+///   sauf une découpe autour de ce qu'elle désigne, et rien dessous ne reçoit de toucher
+///   ni de focus VoiceOver.
+/// - **Marquée vue au tap sur « Compris » seulement** (``compris()``). Une bulle fermée
+///   autrement — son écran est parti, l'app a été quittée — reviendra à la prochaine
+///   visite. L'accueil, lui, est marqué dès qu'il s'affiche.
 @MainActor @Observable
 final class Tutoriel {
 
@@ -46,10 +58,17 @@ final class Tutoriel {
     /// L'accueil de première connexion est à l'écran.
     private(set) var accueilOuvert = false
 
-    /// La bulle affichée, s'il y en a une.
+    /// La bulle affichée, s'il y en a une — jusqu'à la fin de sa sortie.
     private(set) var bulleActive: BulleAide?
 
-    @ObservationIgnored private var detecteur: DetecteurToucher?
+    /// Ce que désigne ``bulleActive``.
+    private(set) var cible: CibleBulle?
+
+    /// Le voile et la bulle sont à l'écran. Basculé **après** la pose de la fenêtre, pour
+    /// que l'entrée s'anime, et **avant** son retrait, pour que la sortie s'anime aussi.
+    private(set) var calqueVisible = false
+
+    @ObservationIgnored private var fenetre: UIWindow?
 
     private init() {}
 
@@ -78,47 +97,63 @@ final class Tutoriel {
     // MARK: Bulles
 
     /// Affiche `bulle` si elle n'a jamais été vue et que rien d'autre n'est à l'écran.
-    func demander(_ bulle: BulleAide) {
+    func demander(_ bulle: BulleAide, cible: CibleBulle) {
         guard !accueilOuvert, bulleActive == nil,
-              let compte = SupabaseManager.partage.idCompte else { return }
-        let cle = Self.cleBulle(bulle, compte)
-        guard !UserDefaults.standard.bool(forKey: cle) else { return }
-        UserDefaults.standard.set(true, forKey: cle)
-        withAnimation(Mouvement.entree(Mouvement.passageEcran)) { bulleActive = bulle }
-        installerDetecteur()
-        UIAccessibility.post(notification: .announcement, argument: t(bulle.cleTexte))
+              let compte = SupabaseManager.partage.idCompte,
+              !UserDefaults.standard.bool(forKey: Self.cleBulle(bulle, compte)),
+              let scene = Self.sceneActive else { return }
+        bulleActive = bulle
+        self.cible = cible
+        let nouvelle = FenetreBulle(scene: scene)
+        fenetre = nouvelle
+        // Le tour suivant : la vue est montée invisible, son entrée peut s'animer.
+        Task { @MainActor in
+            guard self.fenetre === nouvelle else { return }
+            withAnimation(Mouvement.entree(Mouvement.passageEcran)) { self.calqueVisible = true }
+            // Le focus VoiceOver passe à la fenêtre modale : son premier élément, le titre.
+            UIAccessibility.post(notification: .screenChanged, argument: nil)
+        }
     }
 
-    /// Ferme `bulle` si c'est elle qui est affichée — son écran est parti.
+    /// La vue désignée a bougé sous la bulle — rotation de contenu, chargement tardif.
+    func deplacer(_ bulle: BulleAide, cadre: CGRect) {
+        guard bulleActive == bulle, cible?.cadre != cadre else { return }
+        cible?.cadre = cadre
+    }
+
+    /// « Compris » : la seule façon de marquer une bulle vue.
+    func compris() {
+        guard let bulle = bulleActive else { return }
+        if let compte = SupabaseManager.partage.idCompte {
+            UserDefaults.standard.set(true, forKey: Self.cleBulle(bulle, compte))
+        }
+        fermerBulle()
+    }
+
+    /// Ferme `bulle` si c'est elle qui est affichée — son écran est parti. **Sans la
+    /// marquer** : elle reviendra.
     func fermer(_ bulle: BulleAide) {
         guard bulleActive == bulle else { return }
         fermerBulle()
     }
 
     private func fermerBulle() {
-        retirerDetecteur()
-        guard bulleActive != nil else { return }
-        withAnimation(Mouvement.entree(Mouvement.passageEcran)) { bulleActive = nil }
-    }
-
-    /// Le détecteur se pose sur la fenêtre le temps d'une bulle, et sur elle seule.
-    private func installerDetecteur() {
-        guard detecteur == nil,
-              let fenetre = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .flatMap(\.windows)
-                .first(where: \.isKeyWindow) else { return }
-        let nouveau = DetecteurToucher { [weak self] in
-            Task { @MainActor in self?.fermerBulle() }
+        guard let partante = fenetre else { return }
+        withAnimation(Mouvement.entree(Mouvement.passageEcran)) {
+            calqueVisible = false
+        } completion: { [weak self] in
+            partante.isHidden = true
+            guard let self, self.fenetre === partante else { return }
+            self.fenetre = nil
+            self.bulleActive = nil
+            self.cible = nil
+            UIAccessibility.post(notification: .screenChanged, argument: nil)
         }
-        fenetre.addGestureRecognizer(nouveau)
-        detecteur = nouveau
     }
 
-    private func retirerDetecteur() {
-        guard let detecteur else { return }
-        detecteur.view?.removeGestureRecognizer(detecteur)
-        self.detecteur = nil
+    private static var sceneActive: UIWindowScene? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
     }
 
     // MARK: Stockage
@@ -145,6 +180,9 @@ final class Tutoriel {
 
 // MARK: - Le toucher qui ferme une bulle
 
+/// > **Non monté depuis 0.58.1** — la bulle ne se ferme plus qu'à « Compris ». Conservé : il a
+/// > fait ses preuves pour voir un toucher sans le prendre.
+///
 /// **Voit chaque toucher de la fenêtre sans jamais le prendre.** Il échoue dès le premier
 /// contact — après avoir prévenu —, n'annule ni ne retarde rien, et cohabite avec tous les
 /// autres gestes : le bouton touché se déclenche, le défilement défile.

@@ -278,6 +278,11 @@ extension Color {
     /// assombrit une image, il ne suit pas l'interface.
     static let voile = Color.black
 
+    /// Voile d'une **bulle d'aide** (``BulleAideModificateur``) : tout l'écran sauf la
+    /// découpe. Noir à 55 % en clair, 70 % en sombre — sur le fond `#1C1C1E`, 55 % ne
+    /// séparait plus la découpe du reste. La bulle (``surface``) s'y détache sans filet.
+    static let voileBulle = Color(clair: Color.black.opacity(0.55), sombre: Color.black.opacity(0.70))
+
     /// Encre des quatre ombres (``View/ombreCarte()``…). Clair : le brun ``secondaire`` du
     /// design system. Sombre : noir — le `#EBEBF0` de ``secondaire`` y ferait un halo clair.
     static let encreOmbre = Color(clair: Color(hexadecimal: 0x543925), sombre: .black)
@@ -356,6 +361,10 @@ extension Font {
     static let labelSm = Font.custom("HelveticaNeue-Medium", size: 10)
     /// Code d'un sélecteur segmenté (« FR », « EN ») — un label agrandi pour se voir.
     static let segment = Font.custom("HelveticaNeue-Medium", size: 14)
+    /// Titre d'une bulle d'aide — la graisse 500 tient lieu de gras (`ios/CLAUDE.md` §3).
+    static let titreBulle = Font.custom("HelveticaNeue-Medium", size: 17)
+    /// Bouton « Compris » d'une bulle d'aide.
+    static let actionBulle = Font.custom("HelveticaNeue-Medium", size: 16)
 }
 
 /// Crénage — **spécifique à la taille**, et **positif** sur les petits labels.

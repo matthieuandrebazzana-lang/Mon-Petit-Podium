@@ -504,6 +504,12 @@ enum TraductionsEN {
         "tutoriel.bulle.championnatPiste": "Tap Track to see the standings as a race.",
         "tutoriel.bulle.profilLivree": "Change your livery here: colours, number or team.",
         "tutoriel.bulle.accueilSansChampionnat": "Create your championship or join a friend's with their code.",
+        "tutoriel.bulle.compris": "Got it",
+        "tutoriel.bulle.cotesEtoile.titre": "Favourites",
+        "tutoriel.bulle.pronosObligatoires.titre": "Required and bonus",
+        "tutoriel.bulle.championnatPiste.titre": "Track view",
+        "tutoriel.bulle.profilLivree.titre": "Your livery",
+        "tutoriel.bulle.accueilSansChampionnat.titre": "Start here",
 
         // MARK: - Profil — Grands Prix joués
         "profil.a11y.chargementStats": "Loading statistics",
