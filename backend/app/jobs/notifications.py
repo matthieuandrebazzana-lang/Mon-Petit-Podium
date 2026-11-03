@@ -2,9 +2,9 @@
 
 | Événement | Échéance | Texte (fr) |
 |---|---|---|
-| `ouverture_24h` | `date_qualifications` − 25 h | Les pronos pour [GP] ouvrent dans 24h |
-| `ouverture` | `date_qualifications` − 1 h | Les pronos pour [GP] sont ouverts |
-| `derniere_chance` | `date_course` − 1 h | Dernière chance de faire tes pronos pour [GP] |
+| `ouverture_24h` | `date_qualifications` − 25 h | Les pronos pour le [GP] ouvrent dans 24h |
+| `ouverture` | `date_qualifications` − 1 h | Les pronos pour le [GP] sont ouverts |
+| `derniere_chance` | `date_course` − 1 h | Dernière chance de faire tes pronos pour le [GP] |
 | `resultats` | `statut` passé à `termine` | Les résultats du [GP] sont disponibles |
 
 Le job tourne **toutes les cinq minutes**, et un événement daté part s'il tombe
@@ -19,7 +19,8 @@ obtenue envoie. La contrepartie est assumée : une panne d'APNs pendant ce tour
 perd la notification plutôt que de risquer un doublon au tour suivant.
 
 **La langue est celle du jeton**, enregistrée par l'app avec lui
-(`push_tokens.langue`), jamais devinée ici.
+(`push_tokens.langue`), jamais devinée ici. **Le nom du GP vient de son slug**
+(`app/noms_gp.py`), jamais du libellé français de la base.
 
 Même précaution que les deux autres jobs : un seul processus doit porter ce
 scheduler. À plusieurs instances, la clé primaire empêcherait quand même le
@@ -35,7 +36,7 @@ from datetime import UTC, datetime, timedelta
 
 from app import apns
 from app.config import get_settings
-from app.scraper.unibet import slug
+from app.noms_gp import nom_du_gp
 from app.supabase_client import ErreurSupabase, inserer_sans_doublon, selectionner, supprimer
 
 logger = logging.getLogger("uvicorn.error")
@@ -65,9 +66,9 @@ APRES_COURSE = timedelta(days=7)
 
 TEXTES = {
     "fr": {
-        OUVERTURE_24H: "Les pronos pour {gp} ouvrent dans 24h",
-        OUVERTURE: "Les pronos pour {gp} sont ouverts",
-        DERNIERE_CHANCE: "Dernière chance de faire tes pronos pour {gp}",
+        OUVERTURE_24H: "Les pronos pour le {gp} ouvrent dans 24h",
+        OUVERTURE: "Les pronos pour le {gp} sont ouverts",
+        DERNIERE_CHANCE: "Dernière chance de faire tes pronos pour le {gp}",
         RESULTATS: "Les résultats du {gp} sont disponibles",
     },
     "en": {
@@ -87,24 +88,6 @@ MESSAGES_TEST = {
 
 def message_test(langue: str) -> str:
     return MESSAGES_TEST.get(langue, MESSAGES_TEST["fr"])
-
-# Nom anglais d'un GP, par le slug de son nom en base. Le français est le nom de
-# la base lui-même. Un nom absent d'ici retombe sur « GP X » → « X GP ».
-NOMS_ANGLAIS = {
-    "pays-bas": "Dutch GP",
-    "italie": "Italian GP",
-    "espagne": "Spanish GP",
-    "azerbaidjan": "Azerbaijan GP",
-    "malaisie": "Malaysian GP",
-    "bahrein": "Bahrain GP",
-    "singapour": "Singapore GP",
-    "etats-unis": "United States GP",
-    "mexique": "Mexican GP",
-    "bresil": "Brazilian GP",
-    "las-vegas": "Las Vegas GP",
-    "qatar": "Qatar GP",
-    "abu-dhabi": "Abu Dhabi GP",
-}
 
 # Durée maximale d'une diffusion entière, chaque envoi étant lui-même borné à
 # `apns.DELAI_ENVOI` (deux fois, avec la reprise). Les routes de test ont la leur.
@@ -127,19 +110,18 @@ def _en_datetime(brut: object) -> datetime | None:
     return lue.replace(tzinfo=UTC) if lue.tzinfo is None else lue.astimezone(UTC)
 
 
-def nom_du_gp(nom: str, langue: str) -> str:
-    nom = (nom or "").strip() or "Grand Prix"
-    if langue != "en":
-        return nom
-    cle = slug(nom).removeprefix("gp-")
-    if cle in NOMS_ANGLAIS:
-        return NOMS_ANGLAIS[cle]
-    return f"{nom[3:].strip()} GP" if nom.upper().startswith("GP ") else nom
-
-
 def texte(evenement: str, nom_gp: str, langue: str) -> str:
     langue = langue if langue in TEXTES else "fr"
     return TEXTES[langue][evenement].format(gp=nom_du_gp(nom_gp, langue))
+
+
+def textes(evenement: str, nom_gp: str) -> dict[str, str]:
+    """Le message de cet événement dans chaque langue, calculé une fois par diffusion.
+
+    Un GP absent de la table n'est ainsi journalisé qu'une fois par langue, et
+    non une fois par jeton.
+    """
+    return {langue: texte(evenement, nom_gp, langue) for langue in TEXTES}
 
 
 def evenements_dus(gp: dict, maintenant: datetime, deja: set[str]) -> list[str]:
@@ -288,7 +270,8 @@ async def surveiller(maintenant: datetime | None = None) -> None:
             ):
                 continue
             nom = str(gp.get("nom") or "")
-            bilan = await diffuser(jetons, lambda langue: texte(evenement, nom, langue))
+            messages = textes(evenement, nom)
+            bilan = await diffuser(jetons, lambda langue: messages.get(langue, messages["fr"]))
             logger.info(
                 "[notifications] %s · %s : %d envoyée(s), %d échec(s).",
                 nom,

@@ -81,18 +81,27 @@ def test_un_gp_termine_n_envoie_plus_la_derniere_chance():
 
 def test_texte_dans_la_langue_du_jeton():
     assert job.texte(job.OUVERTURE_24H, "GP Singapour", "fr") == (
-        "Les pronos pour GP Singapour ouvrent dans 24h"
+        "Les pronos pour le GP de Singapour ouvrent dans 24h"
     )
     assert job.texte(job.RESULTATS, "GP Singapour", "fr") == (
-        "Les résultats du GP Singapour sont disponibles"
+        "Les résultats du GP de Singapour sont disponibles"
     )
     assert job.texte(job.DERNIERE_CHANCE, "GP Brésil", "en") == (
         "Last chance to make your predictions for the Brazilian GP"
     )
-    # Un GP inconnu de la table garde un nom lisible.
-    assert job.nom_du_gp("GP Chine", "en") == "Chine GP"
     # Langue inconnue : le français.
-    assert job.texte(job.OUVERTURE, "GP Qatar", "de") == "Les pronos pour GP Qatar sont ouverts"
+    assert job.texte(job.OUVERTURE, "GP Qatar", "de") == "Les pronos pour le GP du Qatar sont ouverts"
+
+
+def test_le_libelle_unibet_francais_ne_fuit_pas_en_anglais():
+    """Reçu sur iPhone : « …for the du Mexique GP »."""
+    assert job.texte(job.DERNIERE_CHANCE, "GP du Mexique", "en") == (
+        "Last chance to make your predictions for the Mexican GP"
+    )
+    assert job.textes(job.DERNIERE_CHANCE, "GP du Mexique") == {
+        "fr": "Dernière chance de faire tes pronos pour le GP du Mexique",
+        "en": "Last chance to make your predictions for the Mexican GP",
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -161,7 +170,7 @@ def test_trois_tours_dans_la_fenetre_un_seul_envoi(base):
 
     assert base.envoyees == {("gp-1", job.DERNIERE_CHANCE)}
     assert sorted(base.envois) == [
-        ("aa" * 32, "Dernière chance de faire tes pronos pour GP Singapour"),
+        ("aa" * 32, "Dernière chance de faire tes pronos pour le GP de Singapour"),
         ("bb" * 32, "Last chance to make your predictions for the Singapore GP"),
     ]
 
