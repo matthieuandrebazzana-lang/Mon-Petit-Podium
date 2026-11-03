@@ -20,7 +20,8 @@ perd la notification plutôt que de risquer un doublon au tour suivant.
 
 **La langue est celle du jeton**, enregistrée par l'app avec lui
 (`push_tokens.langue`), jamais devinée ici. **Le nom du GP vient de son slug**
-(`app/noms_gp.py`), jamais du libellé français de la base.
+(`app/noms_gp.py`), tiré de sa date de course puis de son libellé, jamais du
+libellé français de la base.
 
 Même précaution que les deux autres jobs : un seul processus doit porter ce
 scheduler. À plusieurs instances, la clé primaire empêcherait quand même le
@@ -110,18 +111,18 @@ def _en_datetime(brut: object) -> datetime | None:
     return lue.replace(tzinfo=UTC) if lue.tzinfo is None else lue.astimezone(UTC)
 
 
-def texte(evenement: str, nom_gp: str, langue: str) -> str:
+def texte(evenement: str, nom_gp: str, langue: str, date_course: object = None) -> str:
     langue = langue if langue in TEXTES else "fr"
-    return TEXTES[langue][evenement].format(gp=nom_du_gp(nom_gp, langue))
+    return TEXTES[langue][evenement].format(gp=nom_du_gp(nom_gp, langue, date_course))
 
 
-def textes(evenement: str, nom_gp: str) -> dict[str, str]:
+def textes(evenement: str, nom_gp: str, date_course: object = None) -> dict[str, str]:
     """Le message de cet événement dans chaque langue, calculé une fois par diffusion.
 
     Un GP absent de la table n'est ainsi journalisé qu'une fois par langue, et
     non une fois par jeton.
     """
-    return {langue: texte(evenement, nom_gp, langue) for langue in TEXTES}
+    return {langue: texte(evenement, nom_gp, langue, date_course) for langue in TEXTES}
 
 
 def evenements_dus(gp: dict, maintenant: datetime, deja: set[str]) -> list[str]:
@@ -270,7 +271,7 @@ async def surveiller(maintenant: datetime | None = None) -> None:
             ):
                 continue
             nom = str(gp.get("nom") or "")
-            messages = textes(evenement, nom)
+            messages = textes(evenement, nom, gp.get("date_course"))
             bilan = await diffuser(jetons, lambda langue: messages.get(langue, messages["fr"]))
             logger.info(
                 "[notifications] %s · %s : %d envoyée(s), %d échec(s).",
