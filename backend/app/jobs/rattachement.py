@@ -6,6 +6,12 @@ doit se voir, pas le soir de la course. OpenF1 connaît alors les engagés du GP
 par sa session de qualification (`openf1.engages`) ; chaque issue pilote ou
 écurie reçoit son numéro ou son identifiant d'écurie (`points.correspondance`).
 
+**Les engagés sont ceux du week-end, jamais une liste figée** : `/drivers` de la
+course dès que ses résultats sont en base (`engages_du_gp`), à défaut celui de
+la qualification. Un remplaçant d'un seul week-end y figure sous son numéro,
+sans action manuelle. Les choix de l'administrateur
+(`correspondances_manuelles`, migration 36) passent avant la règle de noms.
+
 **Rien ici ne bloque le figeage.** Il a déjà eu lieu quand `rattacher` est
 appelé, et un échec — OpenF1 muette, base non migrée — laisse les cotes sans
 identifiant : le calcul retombe sur le libellé, comme avant. Ce qui manque est
@@ -23,6 +29,9 @@ logger = logging.getLogger("uvicorn.error")
 
 RATTACHEMENT_IMPOSSIBLE = "rattachement_impossible"
 
+# Codes PostgREST / PostgreSQL d'une table absente : migration pas encore jouée.
+TABLE_ABSENTE = ("42P01", "PGRST205")
+
 
 def _en_datetime(brut: object) -> datetime | None:
     if not isinstance(brut, str) or not brut.strip():
@@ -32,6 +41,48 @@ def _en_datetime(brut: object) -> datetime | None:
     except ValueError:
         return None
     return lue.replace(tzinfo=UTC) if lue.tzinfo is None else lue.astimezone(UTC)
+
+
+async def engages_du_gp(gp: dict) -> dict[str, dict]:
+    """Les engagés d'un GP, index `{numéro: identité}` d'OpenF1.
+
+    `/drivers` de la **course** quand ses résultats sont en base — c'est la liste
+    sur laquelle le calcul juge, remplaçants compris —, sinon celui de la
+    **qualification** (`openf1.engages`), seul disponible au figeage. Lève
+    `ErreurOpenF1` si ni l'un ni l'autre n'est disponible.
+    """
+    gp_id = str(gp["id"])
+    nom = str(gp.get("nom") or gp_id)
+    resultats = await selectionner(
+        "resultats_gp", {"gp_id": f"eq.{gp_id}", "select": "donnees_brutes", "limit": "1"}
+    )
+    pilotes = ((resultats[0].get("donnees_brutes") or {}).get("pilotes") if resultats else None)
+    if isinstance(pilotes, dict) and pilotes:
+        return pilotes
+
+    reference = _en_datetime(gp.get("date_qualifications")) or _en_datetime(
+        gp.get("date_course")
+    )
+    if reference is None:
+        raise ErreurOpenF1(f"{nom} : ni heure de qualifications ni heure de départ.")
+    return await engages(nom, reference)
+
+
+async def correspondances_manuelles(gp_id: str) -> dict[str, dict]:
+    """Les choix de l'administrateur pour ce GP, par libellé normalisé.
+
+    Vide tant que la migration 36 n'est pas jouée : la règle de noms décide seule.
+    """
+    try:
+        lignes = await selectionner(
+            "correspondances_manuelles",
+            {"gp_id": f"eq.{gp_id}", "select": "cle,numero_pilote,ecurie_id"},
+        )
+    except ErreurSupabase as erreur:
+        if erreur.code in TABLE_ABSENTE:
+            return {}
+        raise
+    return {str(ligne["cle"]): ligne for ligne in lignes if ligne.get("cle")}
 
 
 async def rattacher(gp_id: str) -> dict:
@@ -49,18 +100,13 @@ async def rattacher(gp_id: str) -> dict:
     gp = lignes[0]
     nom = str(gp.get("nom") or gp_id)
 
-    reference = _en_datetime(gp.get("date_qualifications")) or _en_datetime(
-        gp.get("date_course")
-    )
-    if reference is None:
-        raise ErreurOpenF1(f"{nom} : ni heure de qualifications ni heure de départ.")
-
-    index = await engages(nom, reference)
+    index = await engages_du_gp(gp)
+    manuelles = await correspondances_manuelles(gp_id)
     cotes = await selectionner(
         "cotes",
         {"gp_id": f"eq.{gp_id}", "select": "id_outcome_unibet,marche,pilote"},
     )
-    resultat = calcul.correspondance(cotes, index)
+    resultat = calcul.correspondance(cotes, index, manuelles)
 
     ecrit = await appeler_fonction(
         "rattacher_issues",
@@ -77,7 +123,7 @@ async def rattacher(gp_id: str) -> dict:
             nom,
             len(resultat.non_reconnus),
             " ; ".join(
-                f"« {issue['libelle']} » [{issue['marche']}]"
+                f"« {issue['libelle']} » [{issue['marche']}] — {issue['raison']}"
                 for issue in resultat.non_reconnus
             ),
         )

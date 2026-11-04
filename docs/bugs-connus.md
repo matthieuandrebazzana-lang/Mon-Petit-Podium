@@ -1853,3 +1853,41 @@ saisie et le doc en désaccord.
 
 - Corriger `exclueDesBonus` sans relire le texte du tutoriel (`tutoriel.pronos.corps`) :
   c'est le seul autre endroit qui énonce la règle côté iOS.
+
+## 44. GP du Mexique 2026 : un remplaçant « Nom, Prénom » laissé en attente (backend `0.88.0`, migrations 35 et 36)
+
+**Symptôme.** Un pronostic bonus « Top 10 — Hirakawa, Ryo » reste « En attente » après le
+calcul définitif. Ryo Hirakawa (n°50, Haas) remplaçait Esteban Ocon pour ce seul week-end ;
+il finit **10ᵉ** — le pronostic valait 95 pts.
+
+**Cause supposée, fausse : la grille statique.** `pilotes.py` ne dit plus qui est engagé
+depuis la `0.79.0` : les engagés viennent de `/drivers` d'OpenF1, et Hirakawa y figure
+(« Ryo HIRAKAWA », `HIR`, sessions 11400 et 11404).
+
+**Cause réelle : la forme du libellé.** Unibet écrit ses titulaires « X.Nom », mais ce
+remplaçant « **Hirakawa, Ryo** ». Normalisé, « hirakawaryo » — et les cinq clés dérivées de
+l'engagé étaient « ryohirakawa », « hirakawa », « hir », « rhirakawa » : aucune dans l'ordre
+inverse. Au figeage, l'issue n'a reçu aucun `numero_pilote` ; au calcul, le repli par
+libellé n'a rien trouvé, d'où `en_attente`. Une alerte `libelle_non_reconnu` a bien pu être
+écrite au figeage — mais **l'écran admin iOS n'affichait aucune alerte** : seul le web les
+listait.
+
+**Ce que la vérification a trouvé d'autre** (cotes publiques + OpenF1, 4 novembre). Aucun
+autre libellé « Nom, Prénom » sur les huit GP courus ; aucun autre remplaçant. Les titulaires
+absents d'un week-end mais listés par Unibet (Hadjar aux Pays-Bas, Tsunoda à Bakou, Ocon au
+Mexique) restent non rapprochés, et leurs pronostics éventuels en attente. **Le Brésil
+publie déjà « Camara, Rafael »** : sans la `0.88.0`, le même défaut s'y reproduisait.
+
+**Correctif.**
+- Migration 35 : `numero_pilote = 50` sur les cinq cotes « Hirakawa, Ryo » du Mexique,
+  puis `POST /jobs/resultats/6cbac282-10ac-45c9-a382-05f4a4e05fa4/recalcul?relire=true`.
+  Marche avec le backend `0.87.2` : le numéro passe avant le libellé.
+- Backend `0.88.0` : clés « Nom Prénom » / « Nom P. », formes du libellé (suffixe ôté,
+  virgule remise à l'endroit), rapprochement structurel (nom de famille entier + prénom,
+  prénom abrégé ou initiale), raison explicite de chaque non-reconnu, alerte pour **chaque**
+  pronostic en attente après un calcul, résolution par l'admin (migration 36).
+- iOS `0.59.0` : les alertes dans le profil admin, résolution par la liste des engagés.
+
+**Ne pas refaire.** Ajouter un alias à `pilotes.py` pour un remplaçant : il n'a pas de ligne
+dans la grille, et l'alias exige numéro **et** nom de famille. Ni rapprocher « à peu près » :
+un nom de famille doit concorder en entier.

@@ -508,8 +508,13 @@ l'API. C'est ce qui permet de rejouer un calcul des semaines après la course.
 > verdict est alors celui d'avant. Un même libellé rattaché à deux identifiants différents
 > n'est rattaché à aucun. Ce qui suit reste la règle du repli, **et celle du figeage**.
 
-Isolé dans `Course.pilote_du_libelle`. Cinq clés sont indexées par pilote : nom complet,
-nom de famille, acronyme, initiale + nom, prénom + nom.
+Isolé dans `Course.pilote_du_libelle`. Sept clés sont indexées par pilote : nom complet,
+nom de famille, acronyme, initiale + nom, prénom + nom, et depuis la `0.88.0` nom + prénom
+et nom + initiale. Chaque libellé est cherché sous ses **formes** (`formes_du_libelle` :
+tel quel, suffixe « Jr » ôté, « Nom, Prénom » remis à l'endroit) ; à défaut, par sa
+**structure** (`_concorde` : nom de famille entier en tête ou en queue, reste compatible
+avec le prénom). C'est ce qui reconnaît « Hirakawa, Ryo », remplaçant du Mexique 2026
+(`bugs-connus.md` §44).
 
 > **Une clé revendiquée par DEUX pilotes est retirée de l'index**, jamais attribuée au
 > premier venu. Deux pilotes de même nom de famille rendraient « Verstappen » ambigu, et
@@ -765,7 +770,11 @@ curl -X POST https://<railway>/scraper/rattacher/<gp_id> -H "X-Admin-Secret: <va
 ```
 
 > Le job le fait seul après le figeage (§8). La route sert après un alias ajouté à
-> `pilotes.py`, ou quand OpenF1 était muette ce jour-là. Elle remplace les identifiants et
+> `pilotes.py`, ou quand OpenF1 était muette ce jour-là. Depuis la `0.88.0`, les engagés sont
+> ceux de la **course** si ses résultats sont en base, et les choix de l'admin
+> (`correspondances_manuelles`) passent avant la règle de noms. Le geste ordinaire n'est
+> plus ce `curl` mais le profil admin : `GET /admin/grands-prix/{id}/engages`, puis
+> `POST /admin/alertes/resoudre`, qui rattache et recalcule le GP. Elle remplace les identifiants et
 > les alertes de libellé du GP ; `502` si OpenF1 ne répond pas. La réponse liste les
 > issues non reconnues.
 

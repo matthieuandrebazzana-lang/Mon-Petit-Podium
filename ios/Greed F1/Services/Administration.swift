@@ -23,6 +23,128 @@ enum Administration {
             "admin/action", methode: .post, corps: DemandeAction(action: "scraper", figer: false))
         return reponse.message
     }
+
+    // MARK: - Alertes
+
+    /// `GET /admin/alertes` — ce que l'administrateur doit voir sans lire les logs Railway :
+    /// libellé Unibet non reconnu, rattachement impossible, définitif en échec, pronostics
+    /// en attente d'une donnée. Jusqu'à la `0.59.0`, l'app ne les montrait pas : seul le web
+    /// les listait, et l'alerte du remplaçant du Mexique est passée inaperçue
+    /// (`bugs-connus.md` §44).
+    static func chargerAlertes() async throws -> ReponseAlertes {
+        try await APIClient.partage.requete("admin/alertes")
+    }
+
+    /// `GET /admin/grands-prix/{id}/engages` — les engagés **du week-end**, parmi lesquels
+    /// une alerte de libellé se résout. Jamais une grille statique.
+    static func chargerEngages(gpId: String) async throws -> EngagesDuGP {
+        try await APIClient.partage.requete("admin/grands-prix/\(gpId)/engages")
+    }
+
+    /// `POST /admin/alertes/resoudre` — rattache le libellé au pilote (ou à l'écurie)
+    /// choisi, puis le backend **recalcule le GP** : toutes les cotes de ce libellé, tous
+    /// marchés confondus.
+    ///
+    /// - Returns: le message à afficher sous la liste.
+    static func resoudre(alerte: AlerteAdmin, numeroPilote: Int?, ecurieId: String?) async throws -> String {
+        let reponse: ReponseResolution = try await APIClient.partage.requete(
+            "admin/alertes/resoudre", methode: .post,
+            corps: DemandeResolution(gpId: alerte.gpId ?? "", libelle: alerte.libelle ?? "",
+                                     numeroPilote: numeroPilote, ecurieId: ecurieId))
+        return reponse.statut == "recalcule" ? t("admin.alertes.recalcule") : t("admin.alertes.enregistre")
+    }
+}
+
+/// Une alerte du profil admin. Chaque champ est facultatif : un backend plus ancien ou
+/// plus récent n'en envoie pas toujours la même liste (règle 3.3 du `CLAUDE.md`).
+struct AlerteAdmin: Decodable, Identifiable, Hashable {
+    let type: String
+    let gpId: String?
+    let gp: String?
+    let cle: String?
+    let nature: String?
+    let marche: String?
+    let libelle: String?
+    let tentatives: Int?
+    let derniereErreur: String?
+
+    var id: String { "\(type)-\(gpId ?? "")-\(cle ?? "")-\(libelle ?? "")" }
+
+    /// Seule une alerte de libellé, rattachée à un GP, se résout depuis l'app.
+    var resoluble: Bool {
+        type == "libelle_non_reconnu" && gpId != nil && !(libelle ?? "").isEmpty
+    }
+
+    /// L'écurie se choisit pour une issue écurie ; le pilote pour toutes les autres.
+    var choisitUneEcurie: Bool { nature == "ecurie" }
+
+    var titre: String {
+        switch type {
+        case "libelle_non_reconnu":    return t("admin.alertes.libelle", libelle ?? "?")
+        case "rattachement_impossible": return t("admin.alertes.rattachement")
+        case "definitif_en_echec":     return t("admin.alertes.definitif", tentatives ?? 0)
+        case "grand_prix_ambigu":      return t("admin.alertes.gpAmbigu")
+        case "pronostics_en_attente":  return t("admin.alertes.enAttente", tentatives ?? 0)
+        default:                       return type
+        }
+    }
+
+    var detail: String {
+        if type == "libelle_non_reconnu" {
+            return [marche.map { t("admin.alertes.marche", $0) }, derniereErreur]
+                .compactMap { $0 }.joined(separator: " · ")
+        }
+        return derniereErreur ?? ""
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type, gp, cle, nature, marche, libelle, tentatives
+        case gpId = "gp_id"
+        case derniereErreur = "derniere_erreur"
+    }
+}
+
+struct ReponseAlertes: Decodable {
+    let disponible: Bool
+    let alertes: [AlerteAdmin]
+}
+
+struct EngagesDuGP: Decodable {
+    struct Pilote: Decodable, Identifiable, Hashable {
+        let numero: Int
+        let nom: String
+        let equipe: String
+        var id: Int { numero }
+    }
+    struct Ecurie: Decodable, Identifiable, Hashable {
+        let ecurieId: String
+        let nom: String
+        var id: String { ecurieId }
+        enum CodingKeys: String, CodingKey {
+            case nom
+            case ecurieId = "ecurie_id"
+        }
+    }
+    let pilotes: [Pilote]
+    let ecuries: [Ecurie]
+}
+
+private struct DemandeResolution: Encodable {
+    let gpId: String
+    let libelle: String
+    let numeroPilote: Int?
+    let ecurieId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case libelle
+        case gpId = "gp_id"
+        case numeroPilote = "numero_pilote"
+        case ecurieId = "ecurie_id"
+    }
+}
+
+private struct ReponseResolution: Decodable {
+    let statut: String
 }
 
 private struct DemandeAction: Encodable {

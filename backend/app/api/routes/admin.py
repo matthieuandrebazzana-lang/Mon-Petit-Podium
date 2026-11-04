@@ -35,7 +35,7 @@ bouton ou d'un `curl`.
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -44,11 +44,15 @@ from pydantic import BaseModel
 
 from app.api.deps import exiger_admin
 from app.api.journal import journaliser_echecs
-from app.api.routes.resultats import RapportJob, traiter_grand_prix
+from app.api.routes.resultats import _REFUS, RapportJob, _traduire, traiter_grand_prix
 from app.api.routes.scraper import lancer_scraping
+from app.calcul import points as calcul
+from app.jobs import resultats as job
+from app.jobs.rattachement import TABLE_ABSENTE, engages_du_gp, rattacher
 from app.jobs.resultats import DEFINITIF_EN_ECHEC, SEUIL_ALERTE_DEFINITIF
+from app.scraper.openf1 import ErreurOpenF1
 from app.scraper.unibet import GRAND_PRIX_AMBIGU
-from app.supabase_client import ErreurSupabase, selectionner
+from app.supabase_client import ErreurSupabase, selectionner, upserter
 
 router = APIRouter(tags=["admin"])
 
@@ -182,6 +186,12 @@ class AlerteAdmin(BaseModel):
     type: str = ""
     gp_id: str | None = None
     gp: str = ""
+    # L'issue Unibet visée par une alerte de libellé, vide pour les autres.
+    cle: str = ""
+    # `pilote`, `ecurie` ou `pilote_ou_ecurie` pour une alerte de libellé : ce
+    # que l'administrateur peut choisir pour la résoudre (`POST
+    # /admin/alertes/resoudre`). `None` ailleurs.
+    nature: str | None = None
     marche: str | None = None
     libelle: str | None = None
     tentatives: int = 0
@@ -209,7 +219,7 @@ async def alertes(profil_id: str = Depends(exiger_admin)) -> ReponseAlertes:
         lignes = await selectionner(
             "alertes_admin",
             {
-                "select": "type,gp_id,marche,libelle,tentatives,derniere_erreur,"
+                "select": "type,gp_id,cle,marche,libelle,tentatives,derniere_erreur,"
                 "modifie_le,grands_prix(nom)",
                 "order": "modifie_le.desc",
             },
@@ -233,6 +243,11 @@ async def alertes(profil_id: str = Depends(exiger_admin)) -> ReponseAlertes:
         servies.append(
             AlerteAdmin(
                 **{cle: valeur for cle, valeur in ligne.items() if cle != "grands_prix"},
+                nature=(
+                    calcul.nature_des_issues(str(ligne.get("marche") or ""))
+                    if ligne.get("type") == job.LIBELLE_NON_RECONNU
+                    else None
+                ),
                 gp=str(
                     gp.get("nom")
                     or (ligne.get("libelle") if ligne.get("type") == GRAND_PRIX_AMBIGU else "")
@@ -241,3 +256,214 @@ async def alertes(profil_id: str = Depends(exiger_admin)) -> ReponseAlertes:
             )
         )
     return ReponseAlertes(alertes=servies)
+
+
+# --------------------------------------------------------------------------- #
+#  Résolution d'une alerte de libellé
+# --------------------------------------------------------------------------- #
+
+
+class EngageServi(BaseModel):
+    numero: int = 0
+    nom: str = ""
+    acronyme: str = ""
+    equipe: str = ""
+    ecurie_id: str = ""
+
+
+class EcurieServie(BaseModel):
+    ecurie_id: str = ""
+    nom: str = ""
+
+
+class ReponseEngages(BaseModel):
+    gp_id: str = ""
+    gp: str = ""
+    pilotes: list[EngageServi] = []
+    ecuries: list[EcurieServie] = []
+
+
+async def _gp_ou_404(gp_id: UUID) -> dict:
+    lignes = await selectionner(
+        "grands_prix",
+        {
+            "id": f"eq.{gp_id}",
+            "select": "id,nom,date_course,date_qualifications,statut,statut_resultats",
+            "limit": "1",
+        },
+    )
+    if not lignes:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ce Grand Prix n'existe pas.")
+    return lignes[0]
+
+
+async def _engages_ou_502(gp: dict) -> dict[str, dict]:
+    try:
+        return await engages_du_gp(gp)
+    except ErreurOpenF1 as erreur:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"OpenF1 : {erreur}"
+        ) from erreur
+
+
+def _servir_engages(gp: dict, index: dict[str, dict]) -> ReponseEngages:
+    pilotes = sorted(
+        (
+            EngageServi(
+                numero=int(numero),
+                nom=" ".join(
+                    part for part in (pilote.get("prenom"), pilote.get("nom_famille")) if part
+                ) or str(pilote.get("nom") or ""),
+                acronyme=str(pilote.get("acronyme") or ""),
+                equipe=str(pilote.get("equipe") or ""),
+                ecurie_id=calcul.identifiant_ecurie(pilote.get("equipe")) or "",
+            )
+            for numero, pilote in index.items()
+            if str(numero).isdigit()
+        ),
+        key=lambda engage: (engage.equipe, engage.numero),
+    )
+    ecuries = {engage.ecurie_id: engage.equipe for engage in pilotes if engage.ecurie_id}
+    return ReponseEngages(
+        gp_id=str(gp["id"]),
+        gp=str(gp.get("nom") or ""),
+        pilotes=pilotes,
+        ecuries=[EcurieServie(ecurie_id=cle, nom=nom) for cle, nom in sorted(ecuries.items(), key=lambda e: e[1])],
+    )
+
+
+@router.get("/admin/grands-prix/{gp_id}/engages", response_model=ReponseEngages)
+@journaliser_echecs(DOMAINE, "Chargement des engagés")
+async def engages_du_grand_prix(
+    gp_id: UUID, profil_id: str = Depends(exiger_admin)
+) -> ReponseEngages:
+    """Les engagés d'un GP, parmi lesquels l'administrateur résout une alerte.
+
+    Ceux du week-end, jamais la grille statique : `/drivers` de la course dès
+    que ses résultats sont en base, sinon celui de la qualification.
+    """
+    gp = await _gp_ou_404(gp_id)
+    return _servir_engages(gp, await _engages_ou_502(gp))
+
+
+class DemandeResolution(BaseModel):
+    """Le pilote — ou l'écurie — que désigne un libellé Unibet non reconnu.
+
+    Un seul des deux champs : `numero_pilote` pour une issue pilote,
+    `ecurie_id` (« haas-f1-team ») pour une issue écurie.
+    """
+
+    gp_id: UUID
+    libelle: str
+    numero_pilote: int | None = None
+    ecurie_id: str | None = None
+
+
+class ReponseResolution(BaseModel):
+    statut: str = ""
+    rattachees: int = 0
+    # Les issues du GP qui restent non reconnues après ce choix.
+    non_reconnues: int = 0
+    rapport: RapportJob | None = None
+
+
+@router.post("/admin/alertes/resoudre", response_model=ReponseResolution)
+@journaliser_echecs(DOMAINE, "Résolution d'une alerte de libellé")
+async def resoudre_alerte(
+    demande: DemandeResolution, profil_id: str = Depends(exiger_admin)
+) -> ReponseResolution:
+    """Rattache un libellé non reconnu à un engagé choisi, puis recalcule le GP.
+
+    1. **Le choix est vérifié** : le pilote (ou l'écurie) doit être engagé à CE
+       Grand Prix. Rien d'autre ne peut être désigné.
+    2. Il est conservé dans `correspondances_manuelles` (migration 36) : un
+       rattachement rejoué plus tard le retrouve, il ne l'efface pas.
+    3. Le GP est **rattaché à nouveau** — identifiants posés sur toutes les
+       cotes de ce libellé, tous marchés confondus, alertes de libellé
+       remplacées.
+    4. **Le calcul est relancé** : recalcul transactionnel d'un GP définitif
+       (sur les données conservées), calcul provisoire d'un GP provisoire (il
+       n'écrit que les pronostics encore en attente). Avant la course, rien à
+       calculer : le choix servira à l'arrivée.
+    """
+    libelle = demande.libelle.strip()
+    if not libelle or (demande.numero_pilote is None) == (demande.ecurie_id is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Indique un libellé, et soit un pilote, soit une écurie.",
+        )
+
+    gp = await _gp_ou_404(demande.gp_id)
+    engages = _servir_engages(gp, await _engages_ou_502(gp))
+    if demande.numero_pilote is not None and demande.numero_pilote not in {
+        engage.numero for engage in engages.pilotes
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Le n°{demande.numero_pilote} n'est pas engagé à ce Grand Prix.",
+        )
+    if demande.ecurie_id is not None and demande.ecurie_id not in {
+        ecurie.ecurie_id for ecurie in engages.ecuries
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Cette écurie n'est pas engagée à ce Grand Prix.",
+        )
+
+    logger.info(
+        "[%s] Libellé « %s » (%s) rattaché à %s par le profil %s.",
+        DOMAINE,
+        libelle,
+        gp.get("nom"),
+        f"n°{demande.numero_pilote}" if demande.numero_pilote is not None else demande.ecurie_id,
+        profil_id,
+    )
+    try:
+        await upserter(
+            "correspondances_manuelles",
+            [
+                {
+                    "gp_id": str(gp["id"]),
+                    "cle": calcul.normaliser(libelle),
+                    "libelle": libelle,
+                    "numero_pilote": demande.numero_pilote,
+                    "ecurie_id": demande.ecurie_id,
+                    "choisi_par": profil_id,
+                    "choisi_le": datetime.now(UTC).isoformat(),
+                }
+            ],
+            "gp_id,cle",
+        )
+    except ErreurSupabase as erreur:
+        if erreur.code in TABLE_ABSENTE:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Migration 36 à appliquer : les choix ne peuvent pas être enregistrés.",
+            ) from erreur
+        raise
+
+    try:
+        rattachement = await rattacher(str(gp["id"]))
+    except ErreurOpenF1 as erreur:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"OpenF1 : {erreur}"
+        ) from erreur
+
+    rapport = None
+    statut_calcul = "enregistre"
+    try:
+        if gp.get("statut_resultats") == job.DEFINITIF:
+            rapport = RapportJob(**await job.recalculer(str(gp["id"]), relire=False))
+            statut_calcul = "recalcule"
+        elif gp.get("statut_resultats") == job.PROVISOIRE:
+            rapport = RapportJob(**await job.declencher_maintenant(str(gp["id"])))
+            statut_calcul = "recalcule"
+    except _REFUS as erreur:
+        raise _traduire(erreur) from erreur
+
+    return ReponseResolution(
+        statut=statut_calcul,
+        rattachees=int(rattachement.get("rattachees") or 0),
+        non_reconnues=len(rattachement.get("non_reconnues") or []),
+        rapport=rapport,
+    )

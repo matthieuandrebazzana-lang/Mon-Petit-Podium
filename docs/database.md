@@ -603,7 +603,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les trente-quatre migrations
+## 6. Les trente-six migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -641,6 +641,8 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 32 | `20261027120000_reussis_par_pilote` | **`reussites_du_pronostic`** — la règle unique des « réussis » (un podium détaillé compte un par pilote, comme « Mes Grands Prix ») ; **`classement_du_championnat` remplacée** pour la lire. Points inchangés (`bugs-connus.md` §40). Ne change aucune signature | 18, **27** |
 | 33 | `20261027130000_horaires_mexique_2026` | **Données** : qualifications et course du Mexique 2026 aux heures officielles (21:00Z, 20:00Z), seulement sur les deux instants faux exacts (`bugs-connus.md` §42) | 19, 20 |
 | 34 | `20261029120000_horaires_bresil_2026` | **Données** : week-end du Brésil 2026 ramené du 13–15 au **6–8 novembre** — qualifications `2026-11-07 18:00Z`, course `2026-11-08 17:00Z` (14h00 locale, pas 15h00), seulement sur les deux instants faux exacts de la ligne du Brésil (`bugs-connus.md` §42) | 19, 20 |
+| 35 | `20261104120000_hirakawa_mexique_2026` | **Données** : `numero_pilote = 50` sur les cotes « Hirakawa, Ryo » du GP du Mexique, encore sans numéro (`bugs-connus.md` §44). Suivie du recalcul du GP | 26 |
+| 36 | `20261104130000_correspondances_manuelles` | **`correspondances_manuelles`** (choix de l'admin par GP et libellé normalisé, service seul), type d'alerte **`pronostics_en_attente`**, **`rattacher_issues` remplacée** pour garder la raison d'un libellé non reconnu. Rejouer la 26 après elle perd la raison | **26**, 29 |
 
 ### Le piège d'ordre — la seule chose à surveiller
 

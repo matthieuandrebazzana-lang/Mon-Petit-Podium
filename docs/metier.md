@@ -421,10 +421,31 @@ la `0.79.0`, et pour une issue non rattachée. Les verdicts sont les mêmes sur 
 rejoués.
 
 > **Un libellé qui ne désigne aucun engagé ne bloque pas le figeage.** Il est journalisé et
-> remonte dans le profil admin, avec le GP et le libellé exact, **le samedi** — plus le
-> dimanche soir. Les pronostics restent possibles : le jour de la course, l'issue est jugée
-> sur son libellé, et reste `en_attente` (jamais `0`) si rien ne la reconnaît. Le remède est
-> un alias dans `calcul/pilotes.py`, puis `POST /scraper/rattacher/{gp_id}`.
+> remonte dans le profil admin — **web et iOS depuis la `0.59.0`** —, avec le GP, le libellé
+> exact et sa raison (ambigu, pilote non engagé ce week-end, inconnu), **le samedi**. Les
+> pronostics restent possibles : le jour de la course, l'issue est jugée sur son libellé, et
+> reste `en_attente` (jamais `0`) si rien ne la reconnaît.
+
+### Remplaçants et formes de noms (v`0.88.0`)
+
+Un **remplaçant d'un week-end** est reconnu sans action : il figure dans les engagés
+d'OpenF1, et le nom se rapproche par sa structure — nom de famille **en entier**, en tête ou
+en queue, et le prénom, un prénom abrégé ou une initiale. Accents, casse, « Nom, Prénom »,
+« Prénom Nom », « P.Nom », « Nom P. », suffixe « Jr » et noms composés se valent. Jamais de
+ressemblance approximative, et deux candidats rendent le libellé **ambigu** : non jugé,
+jamais attribué au premier venu.
+
+> **Aucun pronostic ne reste en attente sans alerte.** Après chaque calcul, provisoire ou
+> définitif, une issue non rapprochée devient une alerte de libellé ; un pronostic en
+> attente pour une autre raison (qualifications absentes…), une alerte « pronostics en
+> attente ». L'administrateur résout une alerte de libellé **dans le profil** en choisissant
+> le pilote (ou l'écurie) parmi les engagés du GP : le choix vaut pour toutes les cotes de ce
+> libellé, et le GP est recalculé aussitôt — recalcul transactionnel s'il est définitif,
+> calcul des seuls pronostics en attente s'il est provisoire.
+
+> **Non tranché** : un titulaire listé par Unibet mais non engagé (Ocon au Mexique 2026)
+> n'a aucun choix juste parmi les engagés. Son alerte dit « pilote non engagé ce
+> week-end », ses pronostics restent en attente (`decisions.md` §31).
 
 ### Résultats provisoires, puis définitifs à J+1 (v`0.78.0`)
 

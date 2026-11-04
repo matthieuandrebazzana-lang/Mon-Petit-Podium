@@ -824,6 +824,14 @@ struct ProfilView: View {
                 ErreurEnLigne(erreur: erreurScraper)
                     .transition(.opacity)
             }
+
+            Rectangle()
+                .fill(Color.secondaire.opacity(0.15))
+                .frame(height: 1)
+                .padding(.vertical, 16)
+                .accessibilityHidden(true)
+
+            AlertesAdminView()
         }
         .animation(mouvementReduit ? nil : Mouvement.entree(0.20), value: retourScraper)
         .animation(mouvementReduit ? nil : Mouvement.entree(0.20), value: erreurScraper)

@@ -1157,3 +1157,34 @@ d'entrée (récapitulatif ou cotes), ou les résultats après la course.
 n'ouvrirait plus seulement des routes faites pour lui. *L'app pousse ses pronostics dans
 l'App Group, sans réseau côté widget* : les résultats du dimanche soir n'arriveraient
 qu'à l'ouverture de l'app.
+
+## 31. Un libellé Unibet se rapproche par la structure du nom, et ce qui reste se résout dans l'app
+
+**Contexte.** GP du Mexique 2026 : « Hirakawa, Ryo », remplaçant d'un week-end, reste en
+attente (`bugs-connus.md` §44). Les engagés venaient déjà d'OpenF1 ; c'est la forme du
+libellé qu'aucune clé ne couvrait.
+
+**Décision (backend `0.88.0`).**
+- **Les engagés sont ceux du week-end** : `/drivers` de la course dès que ses résultats sont
+  en base, sinon celui de la qualification (`rattachement.engages_du_gp`). Jamais la grille.
+- **Trois étages de rapprochement**, dans cet ordre : identifiant posé sur la cote (ou choix
+  de l'admin) ; clés exactes sur chaque forme du libellé (tel quel, sans « Jr », « Nom,
+  Prénom » remis à l'endroit) ; **structure** — le nom de famille en entier, en tête ou en
+  queue, et un reste compatible avec le prénom (entier, abrégé, initiale). Plusieurs
+  candidats = ambigu, jamais le premier venu.
+- **Aucun pronostic en attente sans alerte.** Après chaque calcul, provisoire ou définitif,
+  une issue non rapprochée devient `libelle_non_reconnu` (avec sa raison : ambigu, non engagé,
+  inconnu), le reste `pronostics_en_attente`.
+- **L'admin résout dans l'app** : il choisit parmi les engagés du GP ; le choix est conservé
+  (`correspondances_manuelles`, migration 36), le GP rattaché puis recalculé.
+
+**Écarté.** *Une distance d'édition* sur les noms : un pronostic jugé sur le mauvais pilote
+vaut `0` ou des points indus, définitivement ; un non-jugé se rattrape. *Un alias par
+remplaçant dans `pilotes.py`* : c'est une livraison de code un dimanche soir, pour un
+pilote qui ne reviendra peut-être pas. *Résoudre par une route au secret* : l'app n'a pas
+le secret (§14), et la résolution doit tenir sur un iPhone.
+
+**Écart signalé — non tranché.** Un titulaire listé par Unibet mais non engagé (Ocon au
+Mexique) n'a aucun choix juste parmi les engagés : son alerte reste, ses pronostics en
+attente. Un bookmaker rembourserait ; l'application n'a pas de notion de pari annulé. À
+décider.

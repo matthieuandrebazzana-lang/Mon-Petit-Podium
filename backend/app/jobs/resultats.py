@@ -93,8 +93,10 @@ INTERVALLE_DEFINITIF = timedelta(minutes=15)
 # trois tours de quinze minutes suffisent à écarter un hoquet d'OpenF1.
 SEUIL_ALERTE_DEFINITIF = 3
 
-# `alertes_admin.type` (migration 26).
+# `alertes_admin.type` (migration 26, et 36 pour le dernier).
 DEFINITIF_EN_ECHEC = "definitif_en_echec"
+LIBELLE_NON_RECONNU = "libelle_non_reconnu"
+PRONOSTICS_EN_ATTENTE = "pronostics_en_attente"
 
 # `grands_prix.statut_resultats` (migration `20260926200000`).
 PROVISOIRE = "provisoire"
@@ -302,6 +304,7 @@ async def traiter(gp: dict) -> dict:
             for attribution in attributions
             if attribution.statut == calcul.NON_EVALUABLE
         ]
+        await signaler_en_attente(gp_id, nom, pronostics, attributions, cotes, donnees)
     else:
         rapport["attribues"] = 0
         rapport["restants"] = 0
@@ -392,6 +395,7 @@ async def consolider(gp: dict, relire: bool = True) -> dict:
     )
 
     await _effacer_alerte_definitif(gp_id, nom)
+    await signaler_en_attente(gp_id, nom, pronostics, attributions, cotes, donnees)
 
     rapport["statut"] = "termine"
     rapport["statut_resultats"] = DEFINITIF
@@ -415,6 +419,84 @@ async def consolider(gp: dict, relire: bool = True) -> dict:
         rapport["restants"],
     )
     return rapport
+
+
+async def signaler_en_attente(
+    gp_id: str,
+    nom: str,
+    pronostics: list[dict],
+    attributions: list,
+    cotes: dict[str, dict],
+    donnees: dict,
+) -> None:
+    """**Aucun pronostic ne reste en attente sans alerte.** Appelé après chaque
+    calcul, provisoire comme définitif.
+
+    Une issue qui ne désigne aucun pilote de la course devient (ou reste) une
+    alerte `libelle_non_reconnu` — l'administrateur y choisit le pilote parmi
+    les engagés, et le GP est recalculé. Les pronostics en attente pour une
+    autre raison sont résumés dans une alerte `pronostics_en_attente`, effacée
+    dès qu'il n'en reste plus. Best effort : sans la migration 36, le second
+    type est refusé par la base et seul le journal le garde.
+    """
+    diagnostic = calcul.diagnostiquer_en_attente(pronostics, attributions, cotes, donnees)
+    maintenant = datetime.now(UTC).isoformat()
+    try:
+        if diagnostic.non_reconnus:
+            logger.warning(
+                "[resultats] ALERTE — %s : %d issue(s) ne désignent aucun pilote de la "
+                "course : %s",
+                nom,
+                len(diagnostic.non_reconnus),
+                " ; ".join(
+                    f"« {issue['libelle']} » [{issue['marche']}] — {issue['raison']}"
+                    for issue in diagnostic.non_reconnus
+                ),
+            )
+            await upserter(
+                "alertes_admin",
+                [
+                    {
+                        "gp_id": gp_id,
+                        "type": LIBELLE_NON_RECONNU,
+                        "cle": issue["id_outcome_unibet"],
+                        "marche": issue["marche"],
+                        "libelle": issue["libelle"],
+                        "derniere_erreur": issue["raison"][:1000],
+                        "modifie_le": maintenant,
+                    }
+                    for issue in diagnostic.non_reconnus
+                ],
+                "gp_id,type,cle",
+            )
+        if diagnostic.autres:
+            logger.warning(
+                "[resultats] ALERTE — %s : %d pronostic(s) en attente d'une donnée : %s",
+                nom,
+                len(diagnostic.autres),
+                " ; ".join(diagnostic.autres),
+            )
+            await upserter(
+                "alertes_admin",
+                [
+                    {
+                        "gp_id": gp_id,
+                        "type": PRONOSTICS_EN_ATTENTE,
+                        "cle": "",
+                        "tentatives": len(diagnostic.autres),
+                        "derniere_erreur": " ; ".join(diagnostic.autres)[:1000],
+                        "modifie_le": maintenant,
+                    }
+                ],
+                "gp_id,type,cle",
+            )
+        else:
+            await supprimer(
+                "alertes_admin",
+                {"gp_id": f"eq.{gp_id}", "type": f"eq.{PRONOSTICS_EN_ATTENTE}"},
+            )
+    except ErreurSupabase:
+        logger.exception("[resultats] %s : alertes des pronostics en attente non écrites.", nom)
 
 
 async def _noter_echec_definitif(gp_id: str, nom: str, erreur: BaseException) -> None:

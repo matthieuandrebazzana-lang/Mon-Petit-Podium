@@ -12,8 +12,8 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.5
-Version backend actuelle : 0.87.2
-Version iOS actuelle : 0.58.1 (build 21)
+Version backend actuelle : 0.88.0
+Version iOS actuelle : 0.59.0 (build 21)
 
 ## STACK TECHNIQUE
 
@@ -33,7 +33,8 @@ Chaque prompt commence par "Lis CLAUDE.md et ios/CLAUDE.md."
 Migrations Supabase : toujours appliquées manuellement dans le SQL Editor
 Docker disponible (27/10) → une migration s'éprouve sur un PostgreSQL 16 jetable, contre un harnais réduit aux tables qu'elle lit
 31 migrations appliquées ; **32 (`reussis_par_pilote`) et 33 (`horaires_mexique_2026`) écrites le 27/10, à appliquer dans le SQL Editor** — la 33 avant la course du Mexique (1ᵉʳ novembre, 20:00Z). **Constaté le 29/10 en lisant la base : la 33 n'est PAS appliquée** (Mexique encore à 23:00Z / 21:00Z)
-**34 (`horaires_bresil_2026`) écrite le 29/10, à appliquer** — avant l'ouverture de la page Unibet du Brésil et au plus tard avant les qualifications (7 novembre, 18:00Z)
+**34 (`horaires_bresil_2026`) écrite le 29/10, à appliquer**
+**35 (`hirakawa_mexique_2026`) et 36 (`correspondances_manuelles`) écrites le 04/11, à appliquer** — la 35 puis le recalcul du Mexique ; la 36 avant les qualifications du Brésil (7 novembre, 18:00Z), qui publie déjà « Camara, Rafael » — avant l'ouverture de la page Unibet du Brésil et au plus tard avant les qualifications (7 novembre, 18:00Z)
 Après chaque session, Claude Code met à jour docs/contexte-chat.md
 Versions : web, backend et iOS sont indépendantes — chacune ne bouge que si son code change (`CLAUDE.md` §7). `CLAUDE.md` §8 suit la version web
 
@@ -106,7 +107,7 @@ Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
-## CE QUI EST FAIT — VERSION iOS (0.58.1)
+## CE QUI EST FAIT — VERSION iOS (0.59.0)
 
 Bulles d'aide retravaillées (iOS 0.58.1, build 21 — web et backend inchangés). La bulle **reste jusqu'au tap sur « Compris »** (`tutoriel.bulle.compris`, « Got it ») — plus de fermeture au toucher ni au défilement ; `DetecteurToucher` reste dans `Tutoriel.swift`, non monté. Elle vit dans **sa propre fenêtre** (`FenetreBulle`, `windowLevel .normal + 1`, posée et retirée par `Tutoriel`) : un `overlay` n'aurait pas couvert les feuilles ni les plein écran (le détail de championnat s'ouvre dans un `fullScreenCover` après une création). Voile `voileBulle` (noir 55 % clair / 70 % sombre, `Couleurs.swift`) découpé en `eoFill` autour de la vue (8 pt de jour, `Rayon.carte`), la fenêtre prend tous les touchers. Bulle : fond `surface`, `ombreBloc`, titre `Font.titreBulle` (Medium 17 — la graisse 500 tient lieu de gras) en `texte`, texte `corps` en `secondaire`, bouton `primaire` + `encreSurAplat` 48 pt (10,9:1 · 6,17:1), pointe vers la vue. Titres : clés `tutoriel.bulle.<bulle>.titre`. Placement (`CalqueBulleAide`) : côté demandé, sinon l'autre, sinon retenue dans l'écran par-dessus la vue, sans pointe. **Marquée vue à « Compris » seulement** : fermée autrement (écran parti, app quittée), elle revient. VoiceOver : `accessibilityViewIsModal` sur la fenêtre (rendue clé), `screenChanged` à l'ouverture → le titre (en-tête), puis le texte, puis le bouton ; geste d'échappement = « Compris ». Mouvement réduit : fondu seul (`AnyTransition.bulleAide` sinon, inchangée). Le cadre mesuré n'est plus de l'état observé (boîte `Mesure`) : l'écran ne se redessine pas à chaque image de défilement. **Vérifié au simulateur** via un harnais `DEBUG` temporaire (aucune session sur le simulateur, retiré avant commit) : bulles Accueil sans championnat (vraies `ActionsChampionnat`, bulle au-dessus) et Profil (bloc haut, bulle au-dessus), clair et sombre, clés `tutoriel.bulle.*` effacées ; aucune clé posée à l'affichage. **Non vérifié** : tap réel sur « Compris » (pas d'outil de tap au simulateur en ligne de commande), VoiceOver, « Réduire les animations », bulles Cotes / Pronos / Piste, iPhone réel.
 
@@ -235,6 +236,7 @@ Pipeline provisoire (à l'arrivée) → définitif (J+1)
 235 tests backend (dont 36 notifications push, 7 calendrier)
 Identifiants canoniques des issues au figeage
 Alertes admin (libellés non reconnus, échecs OpenF1)
+Remplaçants et formes de noms (backend 0.88.0, iOS 0.59.0, `bugs-connus.md` §44, `decisions.md` §31) : au Mexique, « Hirakawa, Ryo » (n°50, remplaçant d'Ocon, 10ᵉ) n'était rapproché de personne — forme « Nom, Prénom » absente des clés — et son « Top 10 » (95 pts) restait en attente ; l'alerte existait sans doute, mais l'app iOS n'affichait aucune alerte. Rapprochement : clés « Nom Prénom » / « Nom P. », formes du libellé (Jr ôté, virgule remise à l'endroit), puis structure (nom de famille entier + prénom / abrégé / initiale), ambigu jamais tranché, raison de chaque non-reconnu (ambigu, non engagé, inconnu). Engagés : `/drivers` de la course si résultats en base, sinon qualification. Après chaque calcul, chaque prono en attente a une alerte (`libelle_non_reconnu` ou `pronostics_en_attente`). Résolution admin : `GET /admin/grands-prix/{id}/engages`, `POST /admin/alertes/resoudre` (choix vérifié parmi les engagés, conservé dans `correspondances_manuelles`, rattachement puis recalcul). iOS : alertes dans le bloc Administration du profil, feuille de choix des engagés. Vérifié sur les vraies cotes des 8 GP courus contre `/drivers` d'OpenF1 : seuls restent non rapprochés les titulaires absents du week-end (Hadjar NL, Tsunoda Bakou, Ocon Mexique). Migrations 35/36 éprouvées sur PostgreSQL 16 (application, rejeu, contraintes). 537 tests backend verts ; iOS compilé, **rendu non vérifié au simulateur** (pas de session admin), web inchangé (la liste web affiche le nouveau type sans libellé dédié). **Non tranché** : pronostic sur un titulaire non engagé (Ocon) — reste en attente avec alerte
 
 ## DOMAINE ET EMAILS
 
@@ -279,6 +281,9 @@ curl -X POST "https://mon-petit-podium-production.up.railway.app/push/test" -H "
 
 Notification de test (tous les appareils de tous les comptes, sans session) :
 curl -X POST "https://mon-petit-podium-production.up.railway.app/push/test/tous" -H "X-Admin-Secret: <ADMIN_SECRET>"
+
+Recalcul définitif du Mexique (après la migration 35) :
+curl -X POST "https://mon-petit-podium-production.up.railway.app/jobs/resultats/6cbac282-10ac-45c9-a382-05f4a4e05fa4/recalcul?relire=true" -H "X-Admin-Secret: <ADMIN_SECRET>"
 
 Recalcul définitif d'un GP :
 curl -X POST "https://mon-petit-podium-production.up.railway.app/jobs/resultats/{gp_id}/recalcul?relire=true" -H "X-Admin-Secret: monpetitpodium2026"

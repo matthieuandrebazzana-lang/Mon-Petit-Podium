@@ -69,6 +69,90 @@ def normaliser(texte: object) -> str:
     return re.sub(r"[^a-z0-9]", "", sans_accents.lower())
 
 
+# Les suffixes de filiation qu'une source écrit et l'autre non : Unibet écrit
+# « C.Sainz Jr », OpenF1 « Carlos SAINZ ». Ils ne désignent jamais le pilote à eux
+# seuls, et sont retirés avant tout rapprochement structurel.
+_SUFFIXES = frozenset({"jr", "junior", "sr", "senior", "ii", "iii"})
+
+
+def _jetons(texte: object) -> list[str]:
+    """Les mots d'un nom, sans accents ni casse : « Hülkenberg, N. » → [hulkenberg, n]."""
+    if not isinstance(texte, str):
+        return []
+    sans_accents = "".join(
+        caractere
+        for caractere in unicodedata.normalize("NFD", texte)
+        if unicodedata.category(caractere) != "Mn"
+    )
+    return [jeton for jeton in re.split(r"[^a-z0-9]+", sans_accents.lower()) if jeton]
+
+
+def _jetons_du_libelle(libelle: object) -> list[str]:
+    """Les mots d'un libellé, suffixe de filiation retiré."""
+    return [jeton for jeton in _jetons(libelle) if jeton not in _SUFFIXES]
+
+
+def formes_du_libelle(libelle: object) -> tuple[str, ...]:
+    """Les clés sous lesquelles chercher un libellé dans l'index des pilotes.
+
+    Le libellé tel quel d'abord, puis sans suffixe de filiation, puis — s'il
+    porte une virgule — remis dans l'ordre « Prénom Nom » : « Hirakawa, Ryo »
+    cherche aussi « ryohirakawa ». Chaque forme passe par `normaliser`, la règle
+    de l'index.
+    """
+    if not isinstance(libelle, str):
+        return ()
+    formes = [normaliser(libelle), "".join(_jetons_du_libelle(libelle))]
+    if "," in libelle:
+        nom, _, prenom = libelle.partition(",")
+        formes.append("".join(_jetons_du_libelle(f"{prenom} {nom}")))
+    return tuple(dict.fromkeys(forme for forme in formes if forme))
+
+
+def _prenom_compatible(jeton: str, prenoms: list[str]) -> bool:
+    """Un mot du libellé peut-il désigner ce prénom ?
+
+    Le prénom en entier (« ryo »), son début (« alex » pour « Alexander »), ou un
+    groupe d'initiales de trois lettres au plus dont l'une est celle d'un prénom
+    (« ak » pour « Kimi », qu'Unibet écrit « AK.Antonelli » d'après « Andrea
+    Kimi »). Une autre initiale, ou un autre prénom, ne l'est pas : « X.Verstappen »
+    ne désigne pas Max.
+    """
+    if not prenoms:
+        return False
+    if any(prenom.startswith(jeton) for prenom in prenoms):
+        return True
+    return len(jeton) <= 3 and any(prenom[0] in jeton for prenom in prenoms)
+
+
+def _concorde(jetons: list[str], pilote: dict) -> bool:
+    """Le libellé, découpé en mots, peut-il désigner ce pilote ?
+
+    **Le nom de famille doit y être en entier**, en tête (« Hirakawa, Ryo »,
+    « Hirakawa R. ») ou en queue (« Ryo Hirakawa », « R.Hirakawa »), sous la
+    forme de un ou plusieurs mots : « De Vries », « de-vries » et « DeVries » se
+    valent. Ce qui reste doit contenir au moins un mot compatible avec le prénom
+    (`_prenom_compatible`) — ou rien du tout, et c'est alors le nom seul.
+
+    Jamais de ressemblance approximative : une lettre de trop ou de moins dans le
+    nom de famille ne concorde pas. Un pronostic non jugé se rattrape ; un
+    pronostic jugé sur le mauvais pilote, non.
+    """
+    famille = "".join(_jetons(pilote.get("nom_famille")))
+    if not famille or not jetons:
+        return False
+    prenoms = _jetons(pilote.get("prenom"))
+
+    for coupure in range(len(jetons) + 1):
+        tete, queue = jetons[:coupure], jetons[coupure:]
+        for nom, reste in (("".join(queue), tete), ("".join(tete), queue)):
+            if nom != famille:
+                continue
+            if not reste or any(_prenom_compatible(jeton, prenoms) for jeton in reste):
+                return True
+    return False
+
+
 # --------------------------------------------------------------------------- #
 #  Lecture du résultat de course
 # --------------------------------------------------------------------------- #
@@ -121,6 +205,10 @@ class Course:
 
     # Index de rapprochement, construits une fois pour toutes.
     _par_nom: dict[str, int] = field(default_factory=dict)
+    # Les clés retirées de `_par_nom` parce que deux pilotes les revendiquent,
+    # avec leurs prétendants : c'est ce qui permet de DIRE « ambigu » plutôt que
+    # « inconnu » dans l'alerte admin.
+    _ambigus: dict[str, frozenset[int]] = field(default_factory=dict)
     _par_equipe: dict[str, str] = field(default_factory=dict)
     # Identifiants posés sur les cotes au figeage (`rattacher_identifiants`),
     # par libellé normalisé. Consultés AVANT le rapprochement par nom.
@@ -192,8 +280,55 @@ class Course:
         premier ; le rapprochement par nom n'est plus qu'un repli, pour les cotes
         d'avant la migration 26 et les issues non rattachées.
         """
-        cle = normaliser(libelle)
-        return self._rattaches_pilotes.get(cle) or self._par_nom.get(cle)
+        rattache = self._rattaches_pilotes.get(normaliser(libelle))
+        if rattache is not None:
+            return rattache
+        candidats = self.candidats_du_libelle(libelle)
+        if len(candidats) == 1:
+            return candidats[0]
+        if len(candidats) > 1:
+            logger.warning(
+                "[points] Le libellé « %s » désigne %d pilotes (%s) : non rapproché.",
+                libelle,
+                len(candidats),
+                ", ".join(str(numero) for numero in candidats),
+            )
+        return None
+
+    def candidats_du_libelle(self, libelle: str) -> tuple[int, ...]:
+        """Les pilotes que peut désigner un libellé : aucun, un seul, ou plusieurs.
+
+        Deux étages, et le second ne joue que si le premier ne trouve rien :
+
+        1. **les clés exactes** de l'index (`_indexer_pilotes`), essayées sur
+           chaque forme du libellé (`formes_du_libelle` : tel quel, suffixe
+           « Jr » ôté, « Nom, Prénom » remis à l'endroit) ;
+        2. **la structure du nom** (`_concorde`) : le nom de famille en entier,
+           en tête ou en queue, et ce qui reste doit être le prénom, un prénom
+           abrégé ou une initiale du prénom. C'est ce qui reconnaît un pilote
+           que personne n'a décrit : « Hirakawa, Ryo », « R. Hirakawa »,
+           « Ryo Hirakawa » pour un remplaçant d'un seul week-end.
+
+        Plusieurs candidats rendent le libellé **ambigu** : l'appelant ne
+        tranche pas, il signale.
+        """
+        trouves: set[int] = set()
+        for forme in formes_du_libelle(libelle):
+            if forme in self._par_nom:
+                trouves.add(self._par_nom[forme])
+            elif forme in self._ambigus:
+                trouves.update(self._ambigus[forme])
+        if trouves:
+            return tuple(sorted(trouves))
+
+        jetons = _jetons_du_libelle(libelle)
+        return tuple(
+            sorted(
+                numero
+                for numero, pilote in self.pilotes.items()
+                if _concorde(jetons, pilote)
+            )
+        )
 
     def equipe_du_libelle(self, libelle: str) -> str | None:
         """Retrouve une écurie OpenF1 derrière un libellé Unibet.
@@ -308,6 +443,10 @@ def _indexer_pilotes(course: Course) -> None:
             pilote.get("acronyme"),  # « VER »
             f"{prenom[:1]}{famille}" if prenom and famille else "",  # « M.Verstappen »
             f"{prenom} {famille}" if prenom and famille else "",
+            # L'ordre inverse, « Nom, Prénom » et « Nom P. » : la forme qu'Unibet
+            # donne aux remplaçants (« Hirakawa, Ryo » au Mexique 2026).
+            f"{famille} {prenom}" if prenom and famille else "",
+            f"{famille} {prenom[:1]}" if prenom and famille else "",
             *grille.alias_unibet(numero, famille),
         ]
         for candidat in candidats:
@@ -319,6 +458,7 @@ def _indexer_pilotes(course: Course) -> None:
         if len(numeros) == 1:
             course._par_nom[cle] = next(iter(numeros))
         else:
+            course._ambigus[cle] = frozenset(numeros)
             logger.warning(
                 "[points] Le libellé « %s » désigne %d pilotes (%s) : clé ignorée.",
                 cle,
@@ -1223,16 +1363,59 @@ class Correspondance:
     non_reconnus: list[dict] = field(default_factory=list)
 
 
-def correspondance(cotes: Iterable[dict], engages: dict) -> Correspondance:
+def _nom_affiche(pilote: dict) -> str:
+    return " ".join(
+        part for part in (pilote.get("prenom"), pilote.get("nom_famille")) if part
+    ) or str(pilote.get("nom") or "?")
+
+
+def raison_non_reconnu(course: Course, libelle: str, nature: str) -> str:
+    """Pourquoi une issue ne désigne aucun engagé — en clair, pour l'alerte admin.
+
+    Trois cas, qui n'appellent pas le même geste : **ambigu** (plusieurs
+    engagés possibles : choisir), **pilote non engagé** ce week-end (un titulaire
+    remplacé, que la grille statique reconnaît mais qu'OpenF1 n'a pas engagé :
+    aucun choix juste parmi les engagés), et **inconnu**.
+    """
+    if nature in (PILOTE, PILOTE_OU_ECURIE):
+        candidats = course.candidats_du_libelle(libelle)
+        if len(candidats) > 1:
+            return "Ambigu : " + ", ".join(
+                f"n°{numero} {_nom_affiche(course.pilotes[numero])}" for numero in candidats
+            ) + "."
+        titulaire = analyser({"pilotes": grille.index_pilotes()}).pilote_du_libelle(libelle)
+        if titulaire is not None and titulaire not in course.pilotes:
+            pilote = grille.PAR_NUMERO[titulaire]
+            return (
+                f"Pilote non engagé ce week-end (n°{titulaire} {pilote.prenom} "
+                f"{pilote.nom_famille}, absent des engagés d'OpenF1)."
+            )
+    return "Aucun engagé ne porte ce nom."
+
+
+def correspondance(
+    cotes: Iterable[dict], engages: dict, manuelles: dict[str, dict] | None = None
+) -> Correspondance:
     """Rattache chaque issue pilote ou écurie à un engagé du GP.
 
-    `engages` est l'index `{numéro: identité}` des pilotes de la session de
-    qualification (`openf1._index_pilotes`), jamais la grille statique. Le
-    rapprochement est **celui du calcul** (`Course.pilote_du_libelle`,
-    `Course.equipe_du_libelle`) : une seule règle répond à « qui est ce
-    libellé ? », au figeage comme après la course.
+    `engages` est l'index `{numéro: identité}` des pilotes du week-end
+    (`openf1._index_pilotes`), jamais la grille statique. Le rapprochement est
+    **celui du calcul** (`Course.pilote_du_libelle`, `Course.equipe_du_libelle`) :
+    une seule règle répond à « qui est ce libellé ? », au figeage comme après la
+    course.
+
+    `manuelles` — `{libellé normalisé: {numero_pilote, ecurie_id}}` — porte les
+    choix de l'administrateur (`correspondances_manuelles`, migration 36). Ils
+    passent **avant** le rapprochement par nom, et ne valent que s'ils désignent
+    un engagé de ce GP : un choix périmé rend la main à la règle.
     """
     course = analyser({"pilotes": engages})
+    equipes = {
+        identifiant_ecurie(pilote.get("equipe")): pilote.get("equipe")
+        for pilote in course.pilotes.values()
+        if pilote.get("equipe")
+    }
+    manuelles = manuelles or {}
     resultat = Correspondance()
 
     for cote in cotes:
@@ -1242,6 +1425,30 @@ def correspondance(cotes: Iterable[dict], engages: dict) -> Correspondance:
             continue
 
         libelle = str(cote.get("pilote") or "")
+        choix = manuelles.get(normaliser(libelle)) or {}
+        numero_choisi = _entier(choix.get("numero_pilote"))
+        if numero_choisi is not None and numero_choisi in course.pilotes and nature in (
+            PILOTE,
+            PILOTE_OU_ECURIE,
+        ):
+            resultat.rattachements.append(
+                {
+                    "id_outcome_unibet": cote.get("id_outcome_unibet"),
+                    "numero_pilote": numero_choisi,
+                    "ecurie_id": None,
+                }
+            )
+            continue
+        if choix.get("ecurie_id") in equipes and nature in (ECURIE, PILOTE_OU_ECURIE):
+            resultat.rattachements.append(
+                {
+                    "id_outcome_unibet": cote.get("id_outcome_unibet"),
+                    "numero_pilote": None,
+                    "ecurie_id": choix["ecurie_id"],
+                }
+            )
+            continue
+
         numero = (
             course.pilote_du_libelle(libelle)
             if nature in (PILOTE, PILOTE_OU_ECURIE)
@@ -1260,6 +1467,7 @@ def correspondance(cotes: Iterable[dict], engages: dict) -> Correspondance:
                     "marche": marche,
                     "libelle": libelle,
                     "nature": nature,
+                    "raison": raison_non_reconnu(course, libelle, nature),
                 }
             )
             continue
@@ -1585,3 +1793,92 @@ def calculer(
         )
 
     return attributions, en_attente
+
+
+@dataclass
+class Diagnostic:
+    """Pourquoi les pronostics d'un GP restent en attente après un calcul.
+
+    `non_reconnus` : les issues pilote ou écurie qui ne désignent aucun engagé
+    de la course, dans la forme de `Correspondance.non_reconnus` — elles
+    deviennent des alertes `libelle_non_reconnu`. `autres` : les pronostics en
+    attente pour une autre raison (qualifications absentes, écart illisible…),
+    une ligne chacun — ils deviennent une alerte `pronostics_en_attente`.
+    """
+
+    non_reconnus: list[dict] = field(default_factory=list)
+    autres: list[str] = field(default_factory=list)
+
+
+def _issues_du_pronostic(pronostic: dict) -> list[str]:
+    detail = pronostic.get("pronostic_podium") or {}
+    if isinstance(detail, list):
+        detail = detail[0] if detail else {}
+    if pronostic.get("type") == MARCHE_PODIUM:
+        issues = [detail.get("pilote_1") or pronostic.get("id_outcome_unibet"), detail.get("pilote_2")]
+    else:
+        issues = [pronostic.get("id_outcome_unibet")]
+    return [str(issue) for issue in issues if issue]
+
+
+def diagnostiquer_en_attente(
+    pronostics: list[dict],
+    attributions: list[Attribution],
+    cotes: dict[str, dict],
+    donnees: dict,
+) -> Diagnostic:
+    """Donne une cause à chaque pronostic que `calculer` n'a pas jugé.
+
+    **Aucun pronostic ne reste en attente sans signal** : ou l'une de ses issues
+    ne désigne aucun pilote de la course — alerte de libellé, que
+    l'administrateur résout en choisissant le pilote —, ou une donnée manque, et
+    sa raison est rendue en clair. Le rapprochement est celui du calcul,
+    identifiants posés au figeage compris.
+    """
+    juges = {attribution.pronostic_id for attribution in attributions}
+    en_attente = [p for p in pronostics if str(p.get("id")) not in juges]
+    diagnostic = Diagnostic()
+    if not en_attente:
+        return diagnostic
+
+    course = analyser(donnees)
+    rattacher_identifiants(course, cotes.values())
+    vus: set[str] = set()
+
+    for pronostic in en_attente:
+        libelle_en_cause = False
+        for issue in _issues_du_pronostic(pronostic):
+            cote = cotes.get(issue)
+            if cote is None:
+                continue
+            marche = str(cote.get("marche") or "")
+            nature = nature_des_issues(marche)
+            libelle = str(cote.get("pilote") or "")
+            if nature is None:
+                continue
+            reconnu = (
+                nature in (PILOTE, PILOTE_OU_ECURIE)
+                and course.pilote_du_libelle(libelle) is not None
+            ) or (
+                nature in (ECURIE, PILOTE_OU_ECURIE)
+                and course.equipe_du_libelle(libelle) is not None
+            )
+            if reconnu:
+                continue
+            libelle_en_cause = True
+            if issue not in vus:
+                vus.add(issue)
+                diagnostic.non_reconnus.append(
+                    {
+                        "id_outcome_unibet": issue,
+                        "marche": marche,
+                        "libelle": libelle,
+                        "nature": nature,
+                        "raison": raison_non_reconnu(course, libelle, nature),
+                    }
+                )
+        if not libelle_en_cause:
+            _, raison = points_du_pronostic(pronostic, cotes, course)
+            diagnostic.autres.append(f"{pronostic.get('type')} : {raison or 'raison inconnue'}")
+
+    return diagnostic

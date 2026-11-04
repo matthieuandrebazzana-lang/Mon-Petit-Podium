@@ -124,9 +124,9 @@ def test_un_libelle_invente_remonte_non_reconnu():
 
     assert resultat.non_reconnus == [
         {"id_outcome_unibet": "o-invente", "marche": "vainqueur", "libelle": "Z.Inventé",
-         "nature": P.PILOTE},
+         "nature": P.PILOTE, "raison": "Aucun engagé ne porte ce nom."},
         {"id_outcome_unibet": "o-brawn", "marche": "ecurie-vainqueur", "libelle": "Brawn GP",
-         "nature": P.ECURIE},
+         "nature": P.ECURIE, "raison": "Aucun engagé ne porte ce nom."},
     ]
     assert list(_par_issue(resultat)) == ["o-russell"]
 
@@ -207,6 +207,7 @@ def test_un_identifiant_absent_de_la_course_laisse_la_main_au_libelle():
 class BaseSimulee:
     def __init__(self, cotes: dict):
         self.cotes = cotes
+        self.manuelles: list[dict] = []
         self.appels: list[tuple[str, dict]] = []
         self.alertes: list[dict] = []
 
@@ -217,6 +218,11 @@ class BaseSimulee:
                      "date_course": "2026-09-20T11:00:00+00:00"}]
         if table == "cotes":
             return list(copy.deepcopy(self.cotes).values())
+        if table == "resultats_gp":
+            # Au figeage, la course n'a pas encore de résultats.
+            return []
+        if table == "correspondances_manuelles":
+            return list(self.manuelles)
         raise AssertionError(table)
 
     async def appeler_fonction(self, nom: str, arguments: dict):
