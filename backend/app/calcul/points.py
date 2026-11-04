@@ -34,6 +34,7 @@ import re
 import unicodedata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from functools import cache
 
 from app.calcul import pilotes as grille
 
@@ -330,6 +331,40 @@ class Course:
             )
         )
 
+    def engages_connus(self) -> bool:
+        """La liste des engagés est-elle là, et complète ?
+
+        Vide — OpenF1 en panne, `/drivers` pas encore publié — ou plus courte que
+        le classement, elle ne permet pas de conclure qu'un pilote n'a pas couru :
+        il manquerait peut-être seulement à la liste. Seule une liste qui couvre
+        chaque ligne de résultat fait foi.
+        """
+        return bool(self.pilotes) and set(self.lignes) <= set(self.pilotes)
+
+    def titulaire_absent(self, libelle: str) -> int | None:
+        """Le numéro du pilote que désigne ce libellé s'il n'est PAS engagé ce week-end.
+
+        Trois conditions, et chacune protège d'un `0` écrit à tort :
+
+        1. **la liste des engagés fait foi** (`engages_connus`) — sans elle,
+           « absent » voudrait dire « pas encore publié » ;
+        2. **le libellé ne désigne aucun engagé**, pas même plusieurs : un
+           libellé ambigu ou rattaché au figeage n'est pas un absent ;
+        3. **le référentiel le reconnaît** (`calcul/pilotes.py`), sous un numéro
+           sans ligne de résultat. Un libellé que le référentiel ne connaît pas
+           reste « inconnu » et part en alerte : rien ne dit alors qui il désigne.
+
+        Ocon au Mexique 2026, Hadjar aux Pays-Bas, Tsunoda à Bakou.
+        """
+        if not self.engages_connus():
+            return None
+        if normaliser(libelle) in self._rattaches_pilotes or self.candidats_du_libelle(libelle):
+            return None
+        numero = _referentiel().pilote_du_libelle(libelle)
+        if numero is None or numero in self.pilotes or numero in self.lignes:
+            return None
+        return numero
+
     def equipe_du_libelle(self, libelle: str) -> str | None:
         """Retrouve une écurie OpenF1 derrière un libellé Unibet.
 
@@ -583,6 +618,16 @@ def analyser(donnees: dict) -> Course:
     return course
 
 
+@cache
+def _referentiel() -> Course:
+    """Les pilotes de la saison (`calcul/pilotes.py`), indexés comme une course.
+
+    Il ne sert qu'à **reconnaître** un pilote absent des engagés : jamais à
+    juger, jamais à rattacher une issue.
+    """
+    return analyser({"pilotes": grille.index_pilotes()})
+
+
 def _poleman(classement: list[dict]) -> int | None:
     """Le numéro du premier des qualifications, ou `None`.
 
@@ -626,10 +671,20 @@ def _numero_au_plus(course: Course, numero: int, rang: int) -> bool:
     return ligne.classe and ligne.position <= rang
 
 
+def _non_engage(course: Course, libelle: str) -> bool | None:
+    """Le verdict d'un pari sur un pilote que le libellé ne rapproche d'aucun engagé.
+
+    `False` s'il s'agit d'un titulaire **non engagé** ce week-end : le pari est
+    perdu, les engagés étant connus avant la fermeture des pronostics. `None`
+    sinon — libellé inconnu, ambigu, ou engagés indisponibles : on ne juge pas.
+    """
+    return False if course.titulaire_absent(libelle) is not None else None
+
+
 def _position_au_plus(course: Course, libelle: str, rang: int) -> bool | None:
     numero = course.pilote_du_libelle(libelle)
     if numero is None:
-        return None
+        return _non_engage(course, libelle)
     return _numero_au_plus(course, numero, rang)
 
 
@@ -668,10 +723,12 @@ def _ecurie_gagnante(course: Course, libelle: str) -> bool | None:
 
 
 def _meilleur_tour(course: Course, libelle: str) -> bool | None:
-    if course.meilleur_tour is None:
-        return None
     numero = course.pilote_du_libelle(libelle)
     if numero is None:
+        # Un pilote qui n'a pas couru n'a pas signé le meilleur tour, que les
+        # tours soient lus ou non.
+        return _non_engage(course, libelle)
+    if course.meilleur_tour is None:
         return None
     return numero == course.meilleur_tour
 
@@ -1070,6 +1127,8 @@ def _voiture_du_meilleur_tour(course: Course, libelle: str) -> bool | None:
     """
     if course.pilote_du_libelle(libelle) is not None:
         return _meilleur_tour(course, libelle)
+    if course.titulaire_absent(libelle) is not None:
+        return False
     return _ecurie_du_meilleur_tour(course, libelle)
 
 
@@ -1153,6 +1212,12 @@ def _face_a_face(options: Sequence[str] = ()):
     """
     libelles = tuple(dict.fromkeys(libelle for libelle in options if libelle))
 
+    # **Un duel dont l'un des deux n'est pas engagé n'est pas jugé**, quelle que
+    # soit l'issue choisie (« O.Bearman / E.Ocon » au Mexique 2026) : la règle
+    # du pilote non engagé (`titulaire_absent`) ne s'y applique pas, sa
+    # transposition aux face-à-face n'est pas décidée. L'issue absente n'est
+    # rapprochée de personne, et le pronostic reste en attente.
+
     def valider(course: Course, libelle: str) -> bool | Partage | None:
         numeros = {course.pilote_du_libelle(option) for option in libelles}
         if len(libelles) != 2 or len(numeros) != 2 or None in numeros:
@@ -1220,6 +1285,8 @@ _EXACTS = {
     "les-2-voitures-sur-le-podium": lambda options: _les_deux_voitures_sur_le_podium,
 }
 
+_FACE_A_FACE = re.compile(r"face-a-face-[a-z0-9-]+")
+
 # Familles : le slug porte un paramètre (rang, écurie, duel).
 _FAMILLES = (
     (
@@ -1233,7 +1300,7 @@ _FAMILLES = (
         ),
     ),
     (
-        re.compile(r"face-a-face-[a-z0-9-]+"),
+        _FACE_A_FACE,
         lambda m, options: _face_a_face(options),
     ),
 )
@@ -1332,6 +1399,19 @@ def nature_des_issues(marche: str) -> str | None:
     return None
 
 
+def absence_jugee(marche: str) -> bool:
+    """Ce marché juge-t-il « perdu » un pari sur un pilote non engagé ?
+
+    Tous les marchés dont l'issue nomme un pilote, **sauf le face-à-face** :
+    vainqueur, podium, top N, tour le plus rapide, voiture du meilleur tour.
+    Le duel reste non jugé tant que sa règle n'est pas décidée.
+    """
+    slug = (marche or "").strip().lower()
+    return nature_des_issues(slug) in (PILOTE, PILOTE_OU_ECURIE) and not _FACE_A_FACE.fullmatch(
+        slug
+    )
+
+
 def identifiant_ecurie(nom: object) -> str | None:
     """L'identifiant d'une écurie : son nom OpenF1 en slug (« red-bull-racing »).
 
@@ -1377,6 +1457,8 @@ def raison_non_reconnu(course: Course, libelle: str, nature: str) -> str:
     remplacé, que la grille statique reconnaît mais qu'OpenF1 n'a pas engagé :
     aucun choix juste parmi les engagés), et **inconnu**.
     """
+    if not course.engages_connus():
+        return "Liste des engagés indisponible ou incomplète : rien n'est jugé."
     if nature in (PILOTE, PILOTE_OU_ECURIE):
         candidats = course.candidats_du_libelle(libelle)
         if len(candidats) > 1:
@@ -1461,6 +1543,16 @@ def correspondance(
         )
 
         if numero is None and equipe is None:
+            if absence_jugee(marche) and course.titulaire_absent(libelle) is not None:
+                # Pilote non engagé : ses pronostics seront perdus au calcul,
+                # il n'y a rien à choisir et donc rien à signaler.
+                logger.info(
+                    "[rattachement] « %s » [%s] : pilote non engagé ce week-end, "
+                    "pronostics perdus au calcul.",
+                    libelle,
+                    marche,
+                )
+                continue
             resultat.non_reconnus.append(
                 {
                     "id_outcome_unibet": cote.get("id_outcome_unibet"),
@@ -1726,6 +1818,8 @@ def points_du_pronostic(pronostic: dict, cotes: dict[str, dict], course: Course)
     else:
         points = valeur if reussi else 0
         verdict = f"réussi, {points} pts" if reussi else "raté"
+        if not reussi and course.titulaire_absent(str(cote.get("pilote") or "")) is not None:
+            verdict = "raté, pilote non engagé"
 
     return (
         Attribution(

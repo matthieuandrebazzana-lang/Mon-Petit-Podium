@@ -12,7 +12,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.5
-Version backend actuelle : 0.88.0
+Version backend actuelle : 0.88.1
 Version iOS actuelle : 0.59.0 (build 21)
 
 ## STACK TECHNIQUE
@@ -237,6 +237,8 @@ Pipeline provisoire (à l'arrivée) → définitif (J+1)
 Identifiants canoniques des issues au figeage
 Alertes admin (libellés non reconnus, échecs OpenF1)
 Remplaçants et formes de noms (backend 0.88.0, iOS 0.59.0, `bugs-connus.md` §44, `decisions.md` §31) : au Mexique, « Hirakawa, Ryo » (n°50, remplaçant d'Ocon, 10ᵉ) n'était rapproché de personne — forme « Nom, Prénom » absente des clés — et son « Top 10 » (95 pts) restait en attente ; l'alerte existait sans doute, mais l'app iOS n'affichait aucune alerte. Rapprochement : clés « Nom Prénom » / « Nom P. », formes du libellé (Jr ôté, virgule remise à l'endroit), puis structure (nom de famille entier + prénom / abrégé / initiale), ambigu jamais tranché, raison de chaque non-reconnu (ambigu, non engagé, inconnu). Engagés : `/drivers` de la course si résultats en base, sinon qualification. Après chaque calcul, chaque prono en attente a une alerte (`libelle_non_reconnu` ou `pronostics_en_attente`). Résolution admin : `GET /admin/grands-prix/{id}/engages`, `POST /admin/alertes/resoudre` (choix vérifié parmi les engagés, conservé dans `correspondances_manuelles`, rattachement puis recalcul). iOS : alertes dans le bloc Administration du profil, feuille de choix des engagés. Vérifié sur les vraies cotes des 8 GP courus contre `/drivers` d'OpenF1 : seuls restent non rapprochés les titulaires absents du week-end (Hadjar NL, Tsunoda Bakou, Ocon Mexique). Migrations 35/36 éprouvées sur PostgreSQL 16 (application, rejeu, contraintes). 537 tests backend verts ; iOS compilé, **rendu non vérifié au simulateur** (pas de session admin), web inchangé (la liste web affiche le nouveau type sans libellé dédié). **Non tranché** : pronostic sur un titulaire non engagé (Ocon) — reste en attente avec alerte
+
+Pilote non engagé (backend 0.88.1, `metier.md` §4, `decisions.md` §32) : un pronostic sur un titulaire reconnu par le référentiel mais absent des engagés de la course est **perdu** (0, sans alerte) — vainqueur, podium (par pilote), top N, tour le plus rapide, voiture du meilleur tour. Libellé inconnu ou ambigu, engagés absents ou incomplets → en attente avec alerte, jamais perdu. **Non décidé : face-à-face avec un absent** (reste en attente). Au figeage, plus d'alerte pour un titulaire absent (sauf duel). 552 tests verts (`test_non_engages.py`). **Rattrapage en attente d'accord** : Pays-Bas (Hadjar), Bakou (Tsunoda), Mexique (Ocon) — liste à tirer de la base, puis `/recalcul?relire=false` et `POST /scraper/rattacher/{gp_id}` pour effacer les alertes devenues sans objet
 
 ## DOMAINE ET EMAILS
 

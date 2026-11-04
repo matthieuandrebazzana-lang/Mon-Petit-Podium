@@ -168,7 +168,9 @@ def test_raisons_explicites_des_libelles_non_reconnus():
     engages["47"] = _avec((47, "Mick", "Schumacher", "Haas F1 Team"))["47"]
     engages["99"] = _avec((99, "Michael", "Schumacher", "Ferrari"))["99"]
     cotes = [
-        _cote("o-ocon", "top-10", "E.Ocon"),
+        # Un face-à-face : sur un top 10, le non-engagé est perdu sans alerte
+        # (`test_non_engages.py`).
+        _cote("o-ocon", "face-a-face-o-bearman-e-ocon", "E.Ocon"),
         _cote("o-schu", "top-10", "M.Schumacher"),
         _cote("o-z", "top-10", "Z.Inventé"),
     ]
@@ -239,6 +241,7 @@ def test_le_numero_pose_par_la_migration_35_suffit_au_calcul():
 
 def test_chaque_pronostic_en_attente_a_une_cause():
     cotes = {
+        # Titulaire non engagé : perdu, donc ni en attente ni en alerte.
         "o-ocon": _cote("o-ocon", "top-10", "E.Ocon"),
         "o-triple": _cote("o-triple", "vainqueur-course-qualification-et-tour-le-plus-rapide", "Oui"),
         "o-ham": _cote("o-ham", "podium", "L.Hamilton"),
@@ -253,11 +256,11 @@ def test_chaque_pronostic_en_attente_a_une_cause():
     ]
     donnees = _donnees_mexique()
     attributions, en_attente = P.calculer(pronostics, cotes, donnees)
-    assert len(en_attente) == 3
+    assert len(en_attente) == 2
+    assert [(a.pronostic_id, a.statut) for a in attributions] == [("p-ocon", P.PERDU)]
 
     diagnostic = P.diagnostiquer_en_attente(pronostics, attributions, cotes, donnees)
     assert [(i["id_outcome_unibet"], i["libelle"]) for i in diagnostic.non_reconnus] == [
-        ("o-ocon", "E.Ocon"),
         ("o-z", "Z.Inventé"),
     ]
     assert len(diagnostic.autres) == 1 and diagnostic.autres[0].startswith("bonus : ")

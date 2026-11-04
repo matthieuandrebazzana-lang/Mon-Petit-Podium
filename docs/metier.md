@@ -443,9 +443,38 @@ jamais attribué au premier venu.
 > libellé, et le GP est recalculé aussitôt — recalcul transactionnel s'il est définitif,
 > calcul des seuls pronostics en attente s'il est provisoire.
 
-> **Non tranché** : un titulaire listé par Unibet mais non engagé (Ocon au Mexique 2026)
-> n'a aucun choix juste parmi les engagés. Son alerte dit « pilote non engagé ce
-> week-end », ses pronostics restent en attente (`decisions.md` §31).
+### Un pronostic sur un pilote non engagé est perdu (backend `0.88.1`)
+
+Unibet liste parfois un titulaire qui ne court pas : Hadjar aux Pays-Bas, Tsunoda à
+Bakou, Ocon au Mexique 2026. **Le pronostic qui parie sur lui est perdu** — `0`, statut
+`perdu`, compté comme raté — sans alerte : les engagés sont connus avant la fermeture des
+pronostics, le joueur pouvait le savoir.
+
+Trois conditions, toutes nécessaires (`Course.titulaire_absent`) :
+
+| Condition | Sinon |
+|---|---|
+| la liste des engagés (`/drivers` de la course) est là **et couvre chaque ligne du classement** | indisponible ou incomplète → en attente, alerte |
+| le libellé ne désigne **aucun** engagé (ni un, ni plusieurs, ni par identifiant ou choix admin) | engagé → jugé normalement ; ambigu → alerte |
+| le **référentiel** (`calcul/pilotes.py`) le reconnaît, sous un numéro sans ligne de résultat | inconnu → en attente, alerte |
+
+> **« Inconnu » et « absent » ne se confondent jamais.** Un libellé que le référentiel ne
+> reconnaît pas peut être un remplaçant mal écrit : il reste en attente avec son alerte. Un
+> remplaçant engagé (Hirakawa) est jugé sur sa course.
+
+| Marché | Pari sur le pilote absent |
+|---|---|
+| vainqueur, podium, top N | perdu |
+| tour le plus rapide (`tour-le-plus-rapide`, `tour-le-plus-rapide-vainqueur`) | perdu, même si les tours manquent |
+| voiture du meilleur tour, issue lue comme pilote | perdu |
+| **face-à-face** dont l'un des deux est absent | **non décidé** : en attente, quelle que soit l'issue choisie |
+| écurie, « {écurie} / les 2 voitures… », oui/non, nationalité, écart | non concerné : l'issue ne nomme pas de pilote |
+
+**Podium** : chaque pilote pour son compte (§2). Le pilote absent rapporte `0`, l'autre est
+jugé normalement ; si l'autre n'est pas jugeable, le podium entier reste en attente.
+
+Au figeage, un tel libellé ne lève plus d'alerte (sauf sur un face-à-face). Voir
+`decisions.md` §32.
 
 ### Résultats provisoires, puis définitifs à J+1 (v`0.78.0`)
 

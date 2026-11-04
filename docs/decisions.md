@@ -1184,7 +1184,31 @@ remplaçant dans `pilotes.py`* : c'est une livraison de code un dimanche soir, p
 pilote qui ne reviendra peut-être pas. *Résoudre par une route au secret* : l'app n'a pas
 le secret (§14), et la résolution doit tenir sur un iPhone.
 
-**Écart signalé — non tranché.** Un titulaire listé par Unibet mais non engagé (Ocon au
-Mexique) n'a aucun choix juste parmi les engagés : son alerte reste, ses pronostics en
-attente. Un bookmaker rembourserait ; l'application n'a pas de notion de pari annulé. À
-décider.
+**Écart signalé — tranché au §32.** Un titulaire listé par Unibet mais non engagé (Ocon au
+Mexique) n'a aucun choix juste parmi les engagés.
+
+## 32. Un pronostic sur un pilote non engagé est perdu, pas remboursé
+
+**Contexte.** Hadjar aux Pays-Bas, Tsunoda à Bakou, Ocon au Mexique 2026 : Unibet les liste,
+ils ne courent pas. Leurs pronostics restaient en attente, avec une alerte qu'aucun choix
+parmi les engagés ne pouvait résoudre (§31).
+
+**Décision (backend `0.88.1`).** Le pari est **perdu** : `0`, `perdu`, compté comme raté,
+sans alerte. Les engagés sont publiés avant la fermeture des pronostics ; le joueur pouvait
+le savoir. Trois gardes, pour qu'un `0` irréversible ne s'écrive jamais à tort :
+- **la liste des engagés fait foi** — présente et couvrant tout le classement. Sinon rien
+  n'est jugé : « absent » voudrait dire « pas encore publié » ;
+- **le pilote est reconnu par le référentiel** (`calcul/pilotes.py`) sous un numéro sans
+  ligne de résultat. Un libellé inconnu ou ambigu garde son alerte ;
+- **le libellé ne désigne aucun engagé**, identifiants et choix admin compris.
+
+Le podium juge chaque pilote séparément : la moitié absente vaut `0`, l'autre est jugée.
+
+**Non décidé.** Le **face-à-face** dont l'un des deux est absent (« O.Bearman / E.Ocon »
+au Mexique) reste en attente, quelle que soit l'issue choisie. Aucun marché oui/non portant
+sur un pilote n'est au registre.
+
+**Écarté.** *Rembourser* (comme un bookmaker) : l'application n'a pas de mise, et un
+pronostic sans verdict laisserait le joueur à égalité avec qui n'a rien tenté. *Juger
+perdu tout libellé non rapproché* : un remplaçant mal écrit serait perdu à tort, et
+définitivement.
