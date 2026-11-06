@@ -382,14 +382,16 @@ struct CotesView: View {
 
     // MARK: - Mes favoris
 
-    /// Le panier du joueur : ce qu'il a épinglé, et ce dans quoi ``PronosView`` puisera.
-    /// La rangée défile à l'horizontale, calée sur les pastilles.
+    /// Les favoris du joueur : ce qu'il a marqué d'une étoile, et ce parmi quoi
+    /// ``PronosView`` fera choisir les paris bonus. **« Mes favoris », jamais « Mes paris
+    /// bonus »** : le pari bonus est ce qu'on joue, le favori ce qu'on met de côté
+    /// (`docs/glossary.md`). La rangée défile à l'horizontale, calée sur les pastilles.
     private var sectionParisBonus: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 // **L'encre est `secondaire` (9,32:1), pas `texteDoux`** : `#999999` ne
                 // tient pas sur le beige.
-                Text(t("pronos.mesBonus"))
+                Text(t("cotes.mesFavoris"))
                     .font(.label)
                     .tracking(Tracking.label)
                     .textCase(.uppercase)

@@ -13,7 +13,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.5
 Version backend actuelle : 0.88.1
-Version iOS actuelle : 0.60.1 (build 23)
+Version iOS actuelle : 0.60.2 (build 24)
 
 ## STACK TECHNIQUE
 
@@ -107,7 +107,9 @@ Suppression de compte (conformité App Store 5.1.1(v))
 Drapeau, tracé et croisement du calendrier par date de course (0.87.2) : `slugDuGp` (`lib/calendrier2026.js`), date à ±3 jours puis nom — corrige « GP Bahrein » couru à Sepang
 Drapeau de Singapour (0.87.3) : `DRAPEAUX.singapour` passe de deux bandes à `type: "svg"` — entrée `singapour` de `DRAPEAUX_SVG` (`DrapeauxSVG.jsx`), formes reprises telles quelles de `flag-singapour.svg` iOS (croissant et cinq étoiles blancs, rouge `#EF3340`, viewBox 900 × 600). Web et iOS réalignés : rejouer `ios/scripts/extraire-gp.mjs` régénère désormais un fichier identique
 
-## CE QUI EST FAIT — VERSION iOS (0.60.1)
+## CE QUI EST FAIT — VERSION iOS (0.60.2)
+
+Vocabulaire des favoris appliqué à l'écran réel des cotes (iOS 0.60.2, build 24) : la liste des cotes étoilées s'appelle « Mes favoris » / « My favourites » (nouvelle clé `cotes.mesFavoris`, `pronos.mesBonus` ne sert plus qu'à l'écran des pronos) ; textes corrigés après revue de toutes les chaînes FR/EN : `cotes.aucunFavori` (« Ajoute des favoris ci-dessous avec l'étoile… » / « Add favourites below with the star… »), `cotes.etape1` (« Ajoute tes favoris avec l'étoile »), `cotes.etape3` (« … parmi tes favoris »), `pronos.aucunBonusDetail` (« Ils se choisissent parmi tes favoris, marqués d'une étoile au tableau des cotes. »). Web inchangé : il dit encore « paris bonus » pour les cotes étoilées — écart noté dans `glossary.md`.
 
 Libellés des marchés de démo traduits (iOS 0.60.1, build 23) : `DonneesDemo` passe par `t()` (`parcours.demo.marche.*`, issues `parcours.demo.oui` / `.non`, Vainqueur et Podium par `MarcheCote.libelle`) — ils sont écrits par l'app, contrairement aux vrais marchés Unibet, qui ne se traduisent pas. Vocabulaire précisé (`glossary.md`) : **favori** = cote marquée d'une étoile, **pari bonus** = l'un des jusqu'à 3 pronos choisis parmi eux. Écart signalé, non corrigé : l'écran des cotes titre encore sa liste de favoris « Mes paris bonus » (`pronos.mesBonus`).
 

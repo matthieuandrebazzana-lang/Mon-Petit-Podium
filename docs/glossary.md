@@ -49,10 +49,15 @@ brouillon. *Ne pas dire « sélection » ni « panier ».*
 les favoris** du joueur. **Ne jamais appeler un pari bonus un « favori »**, ni un favori un
 « pari bonus » : le favori est ce qu'on met de côté, le pari bonus ce qu'on joue.
 
-> **Règle précisée en iOS `0.60.1`**, et elle révise la section qui suit. Le parcours guidé
-> l'applique (« Tes favoris », « Les bonus »). **Écart signalé, non corrigé** : l'écran des
-> cotes iOS titre encore sa liste de favoris « Mes paris bonus » (`pronos.mesBonus`), comme
-> le web depuis la `0.66.0`.
+> **Règle précisée en iOS `0.60.1`, appliquée à toute l'app iOS en `0.60.2`**, et elle
+> révise la section qui suit. Écran des cotes : la liste s'appelle « Mes favoris » /
+> « My favourites » (`cotes.mesFavoris`), son texte d'aide et le mode d'emploi parlent de
+> favoris ; « Mes paris bonus » (`pronos.mesBonus`) ne titre plus que la section de
+> l'écran des pronos, où l'on choisit les paris bonus parmi les favoris.
+>
+> **Écart restant — web, non corrigé** : depuis la `0.66.0`, le web appelle encore « paris
+> bonus » les cotes marquées d'une étoile, sur le tableau des cotes comme sur l'écran de
+> saisie (la section ci-dessous). Les deux apps ne disent donc plus la même chose.
 
 > ### Le mot a changé à l'écran, et nulle part ailleurs (version `0.66.0`)
 >
