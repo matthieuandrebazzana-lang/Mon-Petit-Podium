@@ -220,7 +220,10 @@ son cadre global** — l'échelle de l'entrée l'y faisait varier d'un arrondi e
 bouclait sans fin. **Données de démo** (`Models/DonneesDemo.swift`) : UUID réservés
 `00000000-DE30-…`, reconnus par les services (fixtures en mémoire, jamais `CacheService`, ni
 `MesChampionnats`, ni l'App Group) et **refusés par `APIClient`** ; seule la voiture de l'étape 10
-s'enregistre pour de vrai. Les écrans de démo sont les écrans réels (`EcranDemoView`), empilés
+s'enregistre pour de vrai. Ses libellés de marché passent par `t()` (`parcours.demo.marche.*`) :
+l'app les écrit, contrairement aux marchés Unibet. **Vocabulaire** : un *favori* est une cote
+marquée d'une étoile, un *pari bonus* l'un des trois pronos choisis parmi eux — jamais l'un
+pour l'autre (`docs/glossary.md`). Les écrans de démo sont les écrans réels (`EcranDemoView`), empilés
 sur l'accueil d'après l'étape (`EtapeParcours.pileAccueil`) — jamais par un lien. La permission
 des notifications attend que le parcours soit fermé. Une règle métier citée par un texte
 `parcours.*` se relit avec lui.

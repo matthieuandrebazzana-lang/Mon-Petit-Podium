@@ -41,10 +41,18 @@ court, « Grand Prix » en toutes lettres dans une phrase.
 bonus. *Le pluriel familier « pronos » est admis dans l'interface* (« Voir mes pronos »,
 « Pronos ouverts ») — c'est le registre du produit.
 
-**Pari bonus** — une cote qu'un joueur a **ajoutée** pour un GP, en attendant d'en faire
-un de ses trois bonus. Les bonus se choisissent **parmi les paris bonus** du joueur, qui
-sont **strictement privés** : ce sont des brouillons. *Ne pas dire « sélection » ni
-« panier ».*
+**Favori** — une cote qu'un joueur a **marquée d'une étoile** pour un GP, en attendant
+d'en faire un pari bonus. Aucune limite, propre à ce GP, **strictement privé** : c'est un
+brouillon. *Ne pas dire « sélection » ni « panier ».*
+
+**Pari bonus** — l'un des **jusqu'à trois** pronostics `bonus` d'un GP, **choisis parmi
+les favoris** du joueur. **Ne jamais appeler un pari bonus un « favori »**, ni un favori un
+« pari bonus » : le favori est ce qu'on met de côté, le pari bonus ce qu'on joue.
+
+> **Règle précisée en iOS `0.60.1`**, et elle révise la section qui suit. Le parcours guidé
+> l'applique (« Tes favoris », « Les bonus »). **Écart signalé, non corrigé** : l'écran des
+> cotes iOS titre encore sa liste de favoris « Mes paris bonus » (`pronos.mesBonus`), comme
+> le web depuis la `0.66.0`.
 
 > ### Le mot a changé à l'écran, et nulle part ailleurs (version `0.66.0`)
 >

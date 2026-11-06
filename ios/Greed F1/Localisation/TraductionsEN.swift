@@ -562,6 +562,12 @@ enum TraductionsEN {
         "parcours.demo.nomCree": "My championship",
         "parcours.demo.toi": "You",
         "parcours.demo.sousTitreGP": "Sample · predictions open",
+        "parcours.demo.marche.top6": "Top 6",
+        "parcours.demo.marche.meilleurTour": "Fastest lap",
+        "parcours.demo.marche.faceAFace": "Head-to-head Hamilton / Leclerc",
+        "parcours.demo.marche.safetyCar": "Safety car",
+        "parcours.demo.oui": "Yes",
+        "parcours.demo.non": "No",
         "parcours.demo.codeFaux": "For this example, enter the code %@.",
 
         // MARK: - Profil — Grands Prix joués

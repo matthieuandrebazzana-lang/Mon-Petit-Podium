@@ -11,6 +11,9 @@ import Foundation
 ///   des widgets. Rien de ce qui est ici ne survit au processus, sauf l'étape du parcours.
 /// - **Des points, jamais une cote** : chaque issue porte directement son nombre de points,
 ///   comme `cotes.valeur` en base (`CLAUDE.md` §3.1).
+/// - **Les libellés de marché et les issues oui / non se traduisent** (`parcours.demo.marche.*`) :
+///   ils sont écrits ici, pas par Unibet. Lus à chaque ``cotes(le:)`` — la langue ne peut pas
+///   changer pendant le parcours, les Réglages sont sous le voile.
 enum DonneesDemo {
 
     // MARK: Identifiants
@@ -92,7 +95,7 @@ enum DonneesDemo {
                                   dateCourse: maintenant.addingTimeInterval(2 * jour),
                                   dateQualifications: maintenant.addingTimeInterval(-jour))
         let marches = [
-            MarcheCotes(marche: MarcheCotes.vainqueur, libelle: "Vainqueur", cotes: [
+            MarcheCotes(marche: MarcheCotes.vainqueur, libelle: MarcheCote.vainqueur.libelle, cotes: [
                 Cote(pilote: "L.Norris", points: 28, id: "demo-v-1"),
                 Cote(pilote: "M.Verstappen", points: 35, id: "demo-v-2"),
                 Cote(pilote: "O.Piastri", points: 42, id: "demo-v-3"),
@@ -100,7 +103,7 @@ enum DonneesDemo {
                 Cote(pilote: "C.Leclerc", points: 85, id: "demo-v-5"),
                 Cote(pilote: "L.Hamilton", points: 120, id: "demo-v-6")
             ]),
-            MarcheCotes(marche: MarcheCotes.podium, libelle: "Podium", cotes: [
+            MarcheCotes(marche: MarcheCotes.podium, libelle: MarcheCote.podium.libelle, cotes: [
                 Cote(pilote: "L.Norris", points: 13, id: "demo-p-1"),
                 Cote(pilote: "M.Verstappen", points: 14, id: "demo-p-2"),
                 Cote(pilote: "O.Piastri", points: 16, id: "demo-p-3"),
@@ -108,26 +111,26 @@ enum DonneesDemo {
                 Cote(pilote: "C.Leclerc", points: 26, id: "demo-p-5"),
                 Cote(pilote: "L.Hamilton", points: 34, id: "demo-p-6")
             ]),
-            MarcheCotes(marche: "top-6", libelle: "Top 6", cotes: [
+            MarcheCotes(marche: "top-6", libelle: t("parcours.demo.marche.top6"), cotes: [
                 Cote(pilote: "AK.Antonelli", points: 15, id: "demo-t-1"),
                 Cote(pilote: "F.Alonso", points: 38, id: "demo-t-2"),
                 Cote(pilote: "C.Sainz Jr", points: 45, id: "demo-t-3"),
                 Cote(pilote: "P.Gasly", points: 70, id: "demo-t-4")
             ]),
-            MarcheCotes(marche: "meilleur-tour", libelle: "Tour le plus rapide", cotes: [
+            MarcheCotes(marche: "meilleur-tour", libelle: t("parcours.demo.marche.meilleurTour"), cotes: [
                 Cote(pilote: "M.Verstappen", points: 30, id: "demo-m-1"),
                 Cote(pilote: "L.Norris", points: 32, id: "demo-m-2"),
                 Cote(pilote: "C.Leclerc", points: 55, id: "demo-m-3"),
                 Cote(pilote: "G.Russell", points: 65, id: "demo-m-4")
             ]),
-            MarcheCotes(marche: "face-a-face-hamilton-leclerc", libelle: "Face-à-face Hamilton / Leclerc",
-                        cotes: [
+            MarcheCotes(marche: "face-a-face-hamilton-leclerc",
+                        libelle: t("parcours.demo.marche.faceAFace"), cotes: [
                 Cote(pilote: "L.Hamilton", points: 19, id: "demo-f-1"),
                 Cote(pilote: "C.Leclerc", points: 18, id: "demo-f-2")
             ]),
-            MarcheCotes(marche: "safety-car", libelle: "Safety car", cotes: [
-                Cote(pilote: "Oui", points: 22, id: "demo-s-1"),
-                Cote(pilote: "Non", points: 16, id: "demo-s-2")
+            MarcheCotes(marche: "safety-car", libelle: t("parcours.demo.marche.safetyCar"), cotes: [
+                Cote(pilote: t("parcours.demo.oui"), points: 22, id: "demo-s-1"),
+                Cote(pilote: t("parcours.demo.non"), points: 16, id: "demo-s-2")
             ])
         ]
         return CotesGrandPrix(id: grandPrixId, nom: "GP Abu Dhabi", horaires: horaires,
