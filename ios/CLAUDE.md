@@ -205,16 +205,25 @@ clé par compte, effacée par `oublierCompte()`). `BarreNavigation` la marque su
 `Mouvement.ondeInvitation` / `periodeInvitation`) est un `overlay` sans hit-test : elle ne
 pousse rien et ne capte aucun tap.
 
-**Le tutoriel a un seul propriétaire, `Tutoriel`** (`Services/Tutoriel.swift`, `@Observable`) :
-l'accueil de première connexion (`AccueilTutorielView`, calque sur `BarreNavigation`) et les
-bulles d'aide (`.bulleAide(_:quand:position:pointe:)`, `Views/Composants/BulleAide.swift`).
-« Déjà vu » dans `UserDefaults`, une clé par compte (`tutoriel.*`), effacé par
-`oublierCompte()` ; l'accueil est marqué **à l'affichage**, une bulle **au tap sur « Compris »
-seulement** (fermée autrement, elle revient). Une bulle à la fois, aucune pendant l'accueil ;
-elle bloque l'écran dans **sa propre fenêtre** (`FenetreBulle`, au-dessus des feuilles,
-modale pour VoiceOver) : voile `voileBulle` découpé autour de la vue, bulle `surface` avec
-titre (`tutoriel.bulle.<bulle>.titre`), texte et « Compris ». La permission des notifications attend la fermeture de
-l'accueil. Une règle métier citée par un texte du tutoriel (`tutoriel.*`) se relit avec lui.
+**Le parcours guidé a un seul propriétaire, `ParcoursGuide`** (`Services/ParcoursGuide.swift`,
+`@Observable`) : 16 étapes (`EtapeParcours`), progression par compte dans `UserDefaults`
+(`parcours.etape.<uuid>`, `parcours.termine.<uuid>`, **conservées à la déconnexion**), terminé au
+seul « Compris » de la dernière étape ; « Quitter » ne marque rien, et chaque lancement à froid
+propose alors de reprendre. Un écran se désigne par `.etapeParcours(_:position:pointe:actif:action:)`
+(`Views/Composants/BulleParcours.swift`) et annonce son geste par `signaler(_:)` — ignoré hors de
+l'étape. La bulle vit dans **sa propre fenêtre** (`FenetreBulle`, `normal + 1`, modale pour
+VoiceOver) qui ne prend **que les touchers de la bulle** ; le reste passe à `FiltreParcours`, posé
+sur la fenêtre de l'app : défilement libre, tap hors découpe annulé, tap dans la découpe aux
+étapes « geste ». Une feuille ou un menu ouvert par-dessus l'écran suspend le parcours
+(`suspendre(_:)`). **La hauteur de la bulle se lit dans sa taille propre, arrondie, jamais dans
+son cadre global** — l'échelle de l'entrée l'y faisait varier d'un arrondi et la mise en page
+bouclait sans fin. **Données de démo** (`Models/DonneesDemo.swift`) : UUID réservés
+`00000000-DE30-…`, reconnus par les services (fixtures en mémoire, jamais `CacheService`, ni
+`MesChampionnats`, ni l'App Group) et **refusés par `APIClient`** ; seule la voiture de l'étape 10
+s'enregistre pour de vrai. Les écrans de démo sont les écrans réels (`EcranDemoView`), empilés
+sur l'accueil d'après l'étape (`EtapeParcours.pileAccueil`) — jamais par un lien. La permission
+des notifications attend que le parcours soit fermé. Une règle métier citée par un texte
+`parcours.*` se relit avec lui.
 
 **Le sélecteur de langue est un seul composant** (`SelecteurLangue`) : ses états actif /
 inactif s'y règlent, jamais sur l'écran qui le monte. **Les deux options restent en couleur
@@ -225,7 +234,7 @@ d'opacité réduite sur l'option inactive. Taille : segments 80 × 40, drapeau 2
 
 **Les notifications push partent du backend, jamais de l'app** (`docs/decisions.md` §25).
 `Services/NotificationsPush.swift` est le **seul propriétaire** du jeton APNs : permission
-demandée une fois connecté et l'accueil du tutoriel fermé (`.task` sur `BarreNavigation`), jeton reçu par
+demandée une fois connecté et le parcours guidé fermé (`.task` sur `BarreNavigation`), jeton reçu par
 `DelegueApplication` (`@UIApplicationDelegateAdaptor`) puis envoyé à `POST /push/token` avec
 `langueInterface` — c'est la langue des notifications, et un changement de langue le
 renvoie. `DELETE /push/token` part **avant** `signOut()` et avant `DELETE /profils/moi` :
@@ -400,7 +409,8 @@ ios/
     │   ├── Membre.swift         une ligne de classement
     │   ├── ResultatsGP.swift    résultats d'une course : lignes, nom coupé, mention, livrée
     │   ├── PronosticsChampionnat.swift  GP du calendrier d'un championnat, paris de chaque membre, tri par GP
-    │   └── Pronostics.swift     cotes, favoris, mes pronostics, corps du POST, `ClePilote`, `OrdreMarches`
+    │   ├── Pronostics.swift     cotes, favoris, mes pronostics, corps du POST, `ClePilote`, `OrdreMarches`
+    │   └── DonneesDemo.swift    données fictives du parcours guidé : UUID réservés, championnat, classement, GP d'exemple et cotes en points
     ├── Services/
     │   ├── SupabaseManager.swift  chemin direct, sous RLS
     │   ├── APIClient.swift        chemin Railway : Bearer, décodage, réessais, réveil
@@ -421,7 +431,7 @@ ios/
     │   ├── DonneesWidgetPronos.swift  App Group du widget « Mes pronos » : réponse brute de `/widget/pronos`, liens `greedf1://pronos|resultats/<id>` — PARTAGÉ
     │   ├── JetonWidget.swift      jeton widget dans le Keychain partagé — PARTAGÉ
     │   ├── SynchroWidgetClassement.swift  app seule : `POST /widget/token` à chaque ouverture, publication de la liste, effacement (des deux widgets à jeton)
-    │   ├── Tutoriel.swift         tutoriel : « déjà vu » par compte, accueil et bulle affichés, cible et fenêtre de la bulle (`DetecteurToucher` non monté)
+    │   ├── ParcoursGuide.swift    parcours guidé : 16 étapes, progression par compte, reprise, cible, fenêtre et filtre de la bulle
     │   ├── NotificationsPush.swift  permission, jeton APNs → `POST`/`DELETE /push/token`, langue ; `DelegueApplication`
     │   └── ErreurAPI.swift        réseau / session / données / serveur, message affichable
     ├── Views/
@@ -429,8 +439,8 @@ ios/
     │   ├── Navigation/
     │   │   ├── BarreNavigation.swift  TabView à 4 onglets + apparence de la barre
     │   │   └── EcranProvisoire.swift  gabarit d'un onglet pas encore construit
-    │   ├── Tutoriel/
-    │   │   └── AccueilTutorielView.swift  accueil de première connexion : 5 pages, « Passer », créer / rejoindre
+    │   ├── Parcours/
+    │   │   └── EcranDemoView.swift   les écrans réels Créer / Rejoindre / championnat sur les données de démo
     │   ├── Accueil/
     │   │   ├── AccueilView.swift       championnats et GP suivant réels, pastille + bouton selon l’état et l’existence d’un pronostic (`ProchainGrandPrix.aDesPronostics`) : « Faire » si ouvert sans, « Voir » si ouvert ou fermé avec, rien sinon
     │   │   ├── PileChampionnats.swift  championnats en paquet de cartes : carte du dessus pleine (tap = ouvrir, swipe = réordonner), bandes réduites de 3 % par cran vers le fond (`Perspective`, plancher 44 pt) : tap = aperçu sur place, 2ᵉ tap = ouvrir ; ordre mémorisé par compte (`OrdrePile`)
@@ -443,7 +453,8 @@ ios/
     │   │   ├── ErreurEnLigne.swift      refus d'une écriture, sous le bouton — jamais d'alerte
     │   │   ├── SelecteurSegmente.swift  sélecteur segmenté pleine largeur (une seule pastille `primaire`, ressort `Mouvement.glissement`, fond neutre + damier) — Classement / Piste
     │   │   ├── MentionProvisoire.swift  `StatutResultats` (provisoire, non évaluable) + la mention « Provisoire », PARTAGÉS
-    │   │   ├── BulleAide.swift          bulle d'aide + `.bulleAide(...)` (mesure), `FenetreBulle`, `CalqueBulleAide` (voile, découpe, placement), « Compris »
+    │   │   ├── BulleParcours.swift      `.etapeParcours(...)` (mesure), `FenetreBulle` (touchers de la bulle seuls), `CalqueParcours` (voile, découpe, placement), progression, « Quitter », reprise, `PastilleExemple`
+    │   │   ├── FiltreParcours.swift     filtre de touchers du parcours (+ `DetecteurToucher`, non monté)
     │   │   ├── SkeletonView.swift       silhouette de premier chargement (4 variantes, balayage calé sur l'écran) + `fonduChargement(_:)`, PARTAGÉS
     │   │   ├── ImageCachee.swift        `AsyncImage` avec `NSCache` partagé par URL (`CacheImages`) — avatars, photos de championnat, cockpits
     │   │   ├── PlancheSVG.swift         lecture d'une planche SVG au runtime + rendu Canvas

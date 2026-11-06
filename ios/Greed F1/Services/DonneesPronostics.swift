@@ -47,7 +47,16 @@ final class DonneesPronostics: ObservableObject {
 
     // MARK: - Lecture
 
+    /// Le Grand Prix d'exemple du parcours guidé : tout se lit et s'écrit en mémoire
+    /// (``DonneesDemo``), rien ne part — ni au réseau, ni au cache, ni au widget.
+    private var estDemo: Bool { DonneesDemo.estDemo(gpId) }
+
     func charger() async {
+        if estDemo {
+            etat = .pret(Donnees(gp: DonneesDemo.cotes(), favoris: DonneesDemo.favoris,
+                                 miens: avecMesPronostics ? DonneesDemo.miens : nil))
+            return
+        }
         guard !enCours else { return }
         enCours = true
         defer { enCours = false }
@@ -109,6 +118,13 @@ final class DonneesPronostics: ObservableObject {
         }
         etat = .pret(donnees)
 
+        if estDemo {
+            DonneesDemo.favoris = donnees.favoris
+            // Le geste de l'étape « favoris » du parcours : deux issues mises de côté.
+            if donnees.favoris.count >= 2 { ParcoursGuide.partage.signaler(.favoris) }
+            return nil
+        }
+
         do {
             try await APIClient.partage.envoyer("\(racine)/favoris", methode: .post,
                                                 corps: CorpsFavori(id_outcome_unibet: cote.id))
@@ -126,6 +142,8 @@ final class DonneesPronostics: ObservableObject {
     /// Un `423` arrive en ``ErreurAPI/serveur(statut:message:)`` avec le message du serveur
     /// (« Les pronostics de ce Grand Prix sont fermés… ») : c'est la base qui fait foi.
     func enregistrer(_ corps: CorpsPronostics) async throws {
+        // La grille d'exemple ne part nulle part, et le widget ne la voit jamais.
+        guard !estDemo else { return }
         try await APIClient.partage.envoyer("\(racine)/pronostics", methode: .post, corps: corps)
         // Le widget « Mes pronos » relit la grille qui vient d'être enregistrée.
         DonneesWidget.rechargerPronos()

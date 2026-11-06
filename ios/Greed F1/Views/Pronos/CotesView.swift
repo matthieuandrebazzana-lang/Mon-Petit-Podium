@@ -163,6 +163,18 @@ enum EtapePronos: Hashable {
     case cotes(GrandPrixPronos)
     case pronos(GrandPrixPronos)
     case recap(GrandPrixPronos, GrilleEnregistree)
+    /// Un écran de démo du parcours guidé — empilé par lui seul (``EtapeParcours/pileAccueil``).
+    case demo(EcranDemo)
+
+    /// L'étape appartient au parcours guidé : écran de démo, ou Grand Prix d'exemple.
+    var estDemo: Bool {
+        switch self {
+        case .demo: return true
+        case let .entree(gp), let .cotes(gp), let .pronos(gp), let .resultats(gp, _),
+             let .recap(gp, _):
+            return DonneesDemo.estDemo(gp.id)
+        }
+    }
 }
 
 extension View {
@@ -197,6 +209,9 @@ extension View {
             case let .recap(gp, grille):
                 RecapView(grandPrix: gp, grille: grille,
                           libelleRetour: libelleRetour, retour: retour)
+
+            case let .demo(ecran):
+                EcranDemoView(ecran: ecran)
             }
         }
     }
@@ -296,9 +311,14 @@ struct CotesView: View {
                                         estEpingle: estEpingle) { cote, marche in
                                 basculer(cote, dans: marche)
                             }
-                            // Toutes les cartes sont fermées à l'arrivée : la bulle désigne
-                            // la pile, et dit d'ouvrir un marché pour trouver l'étoile.
-                            .bulleAide(.cotesEtoile)
+                            // Toutes les cartes sont fermées à l'arrivée : le parcours
+                            // désigne la pile, puis les étoiles qu'elle découvre.
+                            .etapeParcours(.marches, position: .dessus) {
+                                ParcoursGuide.partage.signaler(.marches)
+                            }
+                            .etapeParcours(.favoris, position: .dessus) {
+                                epinglerDeuxFavoris(lu.gp)
+                            }
                         }
                     }
                 }
@@ -312,12 +332,29 @@ struct CotesView: View {
         // de retour par le bord, qu'un bouton dessiné à la main ne donne pas.
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom, spacing: 0) { barreAction }
+        // Le parcours guidé mène lui-même à la saisie : sans barre, rien ne l'y devance.
+        .safeAreaInset(edge: .bottom, spacing: 0) { if !estDemo { barreAction } }
         .overlay(alignment: .bottomLeading) {
             if modeAdmin { PastillePrevisualisation().padding(.leading, margeLaterale) }
         }
+        // Le parcours guidé décide seul de ses écrans : pas de retour par le bord.
+        .navigationBarBackButtonHidden(estDemo)
         // Rechargé à chaque apparition — y compris au retour de la saisie (§7.6).
         .task { await donnees.charger() }
+    }
+
+    /// Le Grand Prix d'exemple du parcours guidé.
+    private var estDemo: Bool { DonneesDemo.estDemo(grandPrix.id) }
+
+    /// Le geste de l'étape « favoris », pour VoiceOver : les deux premières issues du
+    /// premier marché qui n'est ni le vainqueur ni le podium.
+    private func epinglerDeuxFavoris(_ gp: CotesGrandPrix) {
+        guard let marche = gp.marches.first(where: {
+            $0.marche != MarcheCotes.vainqueur && $0.marche != MarcheCotes.podium
+        }) else { return }
+        for cote in marche.cotes.prefix(2) where !estEpingle(cote) {
+            basculer(cote, dans: marche)
+        }
     }
 
     // MARK: - Titre
@@ -334,6 +371,10 @@ struct CotesView: View {
             Text(grandPrix.sousTitre)
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)
+
+            if estDemo {
+                PastilleExemple().padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)

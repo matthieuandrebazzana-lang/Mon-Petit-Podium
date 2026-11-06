@@ -38,6 +38,10 @@ struct RejoindreChampionnatView: View {
     /// ``ActionsChampionnat``. `nil` (aperçu) : l'ancien parcours, « Voir le championnat ».
     var ouvrir: ((Championnat) -> Void)? = nil
 
+    /// L'écran du parcours guidé : seul ``DonneesDemo/codeExemple`` est accepté, et rien
+    /// n'est envoyé — le parcours ouvre lui-même le championnat d'exemple.
+    var demo = false
+
     @Environment(\.dismiss) private var dismiss
 
     @State private var code = ""
@@ -97,10 +101,14 @@ struct RejoindreChampionnatView: View {
                     titre
 
                     Spacer().frame(height: 12)
-                    blocCode
-
-                    Spacer().frame(height: 12)   // espacement entre blocs (§4.6)
-                    boutonRejoindre
+                    VStack(spacing: 12) {   // espacement entre blocs (§4.6)
+                        blocCode
+                        boutonRejoindre
+                    }
+                    .etapeParcours(.codeExemple, position: .dessous) {
+                        code = DonneesDemo.codeExemple
+                        rejoindre()
+                    }
 
                     if let erreur {
                         Spacer().frame(height: 12)
@@ -123,6 +131,8 @@ struct RejoindreChampionnatView: View {
         // geste de retour par le bord, qu'un bouton dessiné à la main ne donne pas.
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        // Le parcours guidé décide seul de ses écrans : pas de retour par le bord.
+        .navigationBarBackButtonHidden(demo)
         .animation(Mouvement.entree(0.20), value: erreur)
         .animation(Mouvement.entree(0.20), value: rejoint)
         // Retour haptique **au même instant** que ce qu'il confirme.
@@ -153,6 +163,17 @@ struct RejoindreChampionnatView: View {
         erreur = nil
         envoi = true
         let corps = CorpsAdhesion(code: codeNormalise)
+
+        if demo {
+            envoi = false
+            guard codeNormalise == DonneesDemo.codeExemple else {
+                erreur = .serveur(statut: nil,
+                                  message: t("parcours.demo.codeFaux", DonneesDemo.codeExemple))
+                return
+            }
+            ParcoursGuide.partage.signaler(.codeExemple)
+            return
+        }
 
         Task {
             do {
@@ -215,13 +236,18 @@ struct RejoindreChampionnatView: View {
 
     private var titre: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(t("championnat.rejoindre"))
-                .font(.titre)
-                .tracking(Tracking.titre)
-                .foregroundColor(.texte)            // 15,37:1 sur le beige
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
+            HStack(alignment: .center, spacing: 12) {
+                Text(t("championnat.rejoindre"))
+                    .font(.titre)
+                    .tracking(Tracking.titre)
+                    .foregroundColor(.texte)            // 15,37:1 sur le beige
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+
+                if demo { PastilleExemple() }
+            }
 
             // **`grisSecondaire` et non le `#999999` de la version web** : sur le beige,
             // `#999999` ne vaut que 2,52:1 quand `#6B6B6B` y tient **4,71:1**, le plancher

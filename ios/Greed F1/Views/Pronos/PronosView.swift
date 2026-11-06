@@ -58,6 +58,7 @@ struct PronosView: View {
             Color.fondPrincipal
                 .ignoresSafeArea()
 
+            ScrollViewReader { defilement in
             ScrollView {
                 VStack(spacing: 0) {
                     titre
@@ -81,6 +82,19 @@ struct PronosView: View {
                 .padding(.top, 4)
                 .padding(.bottom, 24)
             }
+            // L'étape « bonus » du parcours amène ses favoris au-dessus de la barre.
+            // Le contenu compris : à la reprise, l'étape précède la lecture des données.
+            .onChange(of: ParcoursGuide.partage.actif && ParcoursGuide.partage.etape == .bonus
+                          && donnees.donnees != nil,
+                      initial: true) { _, oui in
+                guard oui else { return }
+                Task { @MainActor in
+                    withAnimation(mouvementReduit ? nil : Mouvement.deplacement(0.3)) {
+                        defilement.scrollTo(Self.idBonus, anchor: .bottom)
+                    }
+                }
+            }
+            }
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -89,6 +103,17 @@ struct PronosView: View {
         }
         .overlay(alignment: .bottomLeading) {
             if modeAdmin { PastillePrevisualisation().padding(.leading, margeLaterale) }
+        }
+        // Le parcours guidé décide seul de ses écrans : pas de retour par le bord.
+        .navigationBarBackButtonHidden(estDemo)
+        // La feuille de choix passe devant la bulle du parcours, et reçoit ses touchers.
+        .onChange(of: feuille) { _, ouverte in ParcoursGuide.partage.suspendre(ouverte != nil) }
+        // Les gestes des étapes « vainqueur et podium » et « bonus ».
+        .onChange(of: EmplacementProno.allCases.allSatisfy { choix[$0] != nil }) { _, complet in
+            if complet { ParcoursGuide.partage.signaler(.vainqueurPodium) }
+        }
+        .onChange(of: bonus.isEmpty) { _, vide in
+            if !vide { ParcoursGuide.partage.signaler(.bonus) }
         }
         .sheet(item: $feuille) { emplacement in
             FeuilleChoixPilote(
@@ -112,6 +137,25 @@ struct PronosView: View {
         preremplir()
     }
 
+    /// Le Grand Prix d'exemple du parcours guidé.
+    private var estDemo: Bool { DonneesDemo.estDemo(grandPrix.id) }
+
+    /// La section des bonus, où le parcours guidé fait défiler l'écran.
+    private static let idBonus = "bonus"
+
+    /// Le geste de l'étape « vainqueur et podium », pour VoiceOver : les trois premiers
+    /// pilotes des listes, sans doublon.
+    private func choisirObligatoires(_ lu: DonneesPronostics.Donnees) {
+        guard let vainqueurs = lu.gp.marche(MarcheCote.vainqueur.slug)?.cotes,
+              let podiums = lu.gp.marche(MarcheCote.podium.slug)?.cotes,
+              let vainqueur = vainqueurs.first else { return }
+        let autres = podiums.filter { ClePilote.de($0.pilote) != ClePilote.de(vainqueur.pilote) }
+        guard autres.count >= 2 else { return }
+        choix[.vainqueur] = vainqueur
+        choix[.podium1] = autres[0]
+        choix[.podium2] = autres[1]
+    }
+
     // MARK: - Titre
 
     private var titre: some View {
@@ -124,6 +168,10 @@ struct PronosView: View {
             Text(grandPrix.sousTitre)
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.grisSecondaire)   // 4,71:1 — `texteDoux` n'y tient que 2,52:1
+
+            if estDemo {
+                PastilleExemple().padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
@@ -135,7 +183,6 @@ struct PronosView: View {
 
         Spacer().frame(height: 24)   // changement de sujet (§4.6)
         titreSection(t("pronos.obligatoires"))
-            .bulleAide(.pronosObligatoires, position: .dessous, pointe: 0.12)
 
         if lu.gp.marche(MarcheCote.vainqueur.slug) == nil || lu.gp.marche(MarcheCote.podium.slug) == nil {
             // Le serveur refuserait tout pronostic : le dire avant qu'on remplisse.
@@ -149,20 +196,28 @@ struct PronosView: View {
         }
 
         Spacer().frame(height: 10)
-        BlocObligatoire(marche: .vainqueur) {
-            emplacement(.vainqueur)
-        }
+        VStack(spacing: 12) {   // espacement entre blocs (§4.6)
+            BlocObligatoire(marche: .vainqueur) {
+                emplacement(.vainqueur)
+            }
 
-        Spacer().frame(height: 12)   // espacement entre blocs (§4.6)
-        BlocObligatoire(marche: .podium) {
-            VStack(spacing: 8) {
-                emplacement(.podium1)
-                emplacement(.podium2)
+            BlocObligatoire(marche: .podium) {
+                VStack(spacing: 8) {
+                    emplacement(.podium1)
+                    emplacement(.podium2)
+                }
             }
         }
+        .etapeParcours(.vainqueurPodium, position: .dessus) { choisirObligatoires(lu) }
 
         Spacer().frame(height: 24)
         sectionParisBonus(favoris: favorisTries(lu))
+            .id(Self.idBonus)
+            .etapeParcours(.bonus, position: .dessus) {
+                if let premier = favorisTries(lu).first {
+                    basculerBonus(premier.idOutcomeUnibet, favoris: favorisTries(lu))
+                }
+            }
     }
 
     /// Titre de section. **L'encre est `grisSecondaire`, pas `texteDoux`** : sur le beige
@@ -333,6 +388,7 @@ struct PronosView: View {
             .buttonStyle(StyleAppui(.bouton))
             .disabled(envoi)
             .accessibilityLabel(envoi ? t("pronos.a11y.enregistrement") : t("accueil.validerPronos"))
+            .etapeParcours(.valider, position: .dessus) { Task { await valider(lu) } }
         }
         .animation(mouvementReduit ? .none : Mouvement.entree(0.18), value: total)
         .animation(mouvementReduit ? .none : Mouvement.entree(0.18), value: erreurEnvoi)
@@ -459,6 +515,13 @@ struct PronosView: View {
             return
         } catch {
             erreurEnvoi = (error as? ErreurAPI) ?? .serveur(statut: nil, message: nil)
+            return
+        }
+
+        // La grille d'exemple du parcours guidé n'a pas de récapitulatif : le parcours
+        // passe à sa dernière étape.
+        if estDemo {
+            ParcoursGuide.partage.signaler(.valider)
             return
         }
 

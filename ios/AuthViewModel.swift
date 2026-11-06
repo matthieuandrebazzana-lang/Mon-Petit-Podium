@@ -397,8 +397,8 @@ final class AuthViewModel: ObservableObject {
         SynchroWidgetClassement.effacer()
         // Le prochain compte connecté sur ce téléphone revoit l'invitation au profil.
         DecouverteProfil.oublier()
-        // Et le tutoriel : accueil et bulles d'aide, revus au prochain compte.
-        Tutoriel.oublier()
+        // Le parcours guidé se ferme ; sa progression, rangée par compte, reste.
+        ParcoursGuide.oublier()
         profil = nil
         estAdmin = false
         modeAdminActif = false

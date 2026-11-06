@@ -139,9 +139,10 @@ struct ChampionnatDetailView: View {
 
                     selecteur
                         .padding(.horizontal, margeLaterale)
-                        // Sous le segment « Piste », la moitié droite du sélecteur.
-                        .bulleAide(.championnatPiste, quand: vue == .classement,
-                                   position: .dessous, pointe: 0.75)
+                        // Le parcours guidé : « Classement », puis « Piste », la moitié
+                        // droite du sélecteur.
+                        .etapeParcours(.classement, position: .dessous, pointe: 0.25)
+                        .etapeParcours(.piste, position: .dessous, pointe: 0.75) { vue = .piste }
                         .padding(.top, 12)
                         .padding(.bottom, 12)
                 }
@@ -202,7 +203,10 @@ struct ChampionnatDetailView: View {
             if nouvelle == .piste && !pisteVue {
                 withAnimation(Mouvement.entree(Mouvement.passageEcran)) { pisteVue = true }
             }
+            if nouvelle == .piste { ParcoursGuide.partage.signaler(.piste) }
         }
+        // Le parcours guidé décide seul de ses écrans : pas de retour par le bord.
+        .navigationBarBackButtonHidden(estDemo)
         // À chaque apparition, retour du profil d'un membre compris — servi par le cache
         // *stale-while-revalidate* (``CacheService``, 60 s, `docs/swift-app.md` §7.6).
         .task { await classement.charger() }
@@ -399,9 +403,16 @@ struct ChampionnatDetailView: View {
             Text(tp("championnat.membresSaison", effectif))
                 .font(.custom("HelveticaNeue", size: 13))
                 .foregroundColor(.secondaire)
+
+            if estDemo {
+                PastilleExemple().padding(.top, 4)
+            }
         }
         .accessibilityElement(children: .combine)
     }
+
+    /// Le championnat d'exemple du parcours guidé.
+    private var estDemo: Bool { DonneesDemo.estDemo(championnat.id) }
 
     /// > **Non monté.** Le code vit désormais dans le menu (``optionsChampionnat``) : aucune
     /// > ligne ajoutée à l'en-tête, qui garde sa place en Classement comme en Piste.
@@ -441,6 +452,31 @@ struct ChampionnatDetailView: View {
     /// Renommer viendra avec `PATCH /championnats/{id}`.
     @ViewBuilder private var optionsChampionnat: some View {
         let code = championnat.codeInvitation
+        if estDemo {
+            optionsDemo(code: code)
+        } else {
+            optionsReelles(code: code)
+        }
+    }
+
+    /// **Le menu du championnat d'exemple** : l'invitation, sans rien partager — le code
+    /// est fictif —, la copie. Ni photo ni départ. Ouvert, il passe devant la bulle du
+    /// parcours, qui s'efface et lui laisse ses touchers.
+    @ViewBuilder private func optionsDemo(code: String) -> some View {
+        Button {
+            ParcoursGuide.partage.signaler(.inviter)
+        } label: {
+            Label(t("championnat.inviterAmis", code), systemImage: "person.badge.plus")
+        }
+        .onAppear { ParcoursGuide.partage.suspendre(true) }
+        .onDisappear { ParcoursGuide.partage.suspendre(false) }
+
+        Button(action: copierCode) {
+            Label(t("championnat.copierCode"), systemImage: "doc.on.doc")
+        }
+    }
+
+    @ViewBuilder private func optionsReelles(code: String) -> some View {
         ShareLink(item: t("championnat.messagePartage", championnat.nom, code)) {
             Label(t("championnat.inviterAmis", code), systemImage: "person.badge.plus")
         }
@@ -494,6 +530,9 @@ struct ChampionnatDetailView: View {
         }
         .disabled(occupe)
         .accessibilityLabel(envoiPhoto ? t("championnat.a11y.envoiPhoto") : t("championnat.a11y.options"))
+        .etapeParcours(.inviter, position: .dessous, pointe: 0.5) {
+            ParcoursGuide.partage.signaler(.inviter)
+        }
         .overlay(alignment: .bottomTrailing) {
             confirmationCopie
                 .alignmentGuide(.bottom) { $0[.top] - 6 }

@@ -25,7 +25,7 @@ struct GreedF1App: App {
                         OnboardingView(viewModel: authViewModel)
                     } else {
                         // La permission des notifications est demandée par la barre,
-                        // une fois l'accueil du tutoriel fermé (``Tutoriel``).
+                        // une fois le parcours guidé fermé (``ParcoursGuide``).
                         BarreNavigation(viewModel: authViewModel)
                     }
                 } else {

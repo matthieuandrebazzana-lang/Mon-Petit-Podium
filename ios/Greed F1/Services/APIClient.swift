@@ -100,6 +100,12 @@ final class APIClient {
         parametres: [URLQueryItem],
         perime: Bool
     ) async throws -> Data {
+        // **Le dernier filet du parcours guidé** : une route qui désigne une donnée de démo
+        // ne part jamais (``DonneesDemo``). Un écran qui l'oublierait échoue ici, à vide.
+        if DonneesDemo.cheminDeDemo(chemin) {
+            assertionFailure("Route de démo envoyée au backend : \(chemin)")
+            throw ErreurAPI.serveur(statut: nil, message: nil)
+        }
         // Seules les lectures sont rejouées d'office : rejouer une écriture dont on
         // ignore si la première a abouti n'est pas une décision de la couche réseau.
         let attentes = methode == .get ? attentesReveil : []

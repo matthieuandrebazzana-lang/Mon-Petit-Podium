@@ -121,10 +121,11 @@ struct ProfilView: View {
                     }
 
                     Spacer().frame(height: 12)
-                    // La bulle se pose sur le bloc et non dans lui : le bloc est découpé à
-                    // son arrondi, et la couperait.
+                    // Le parcours guidé désigne le bloc, pas son contenu : le bloc est
+                    // découpé à son arrondi, et couperait la bulle.
                     blocLivree
-                        .bulleAide(.profilLivree)
+                        .etapeParcours(.voiture, position: .dessus)
+                        .id(Self.idLivree)
 
                     // **`estAdmin`, et non `modePrevisualisation`, et ce n'est pas un
                     // oubli** : la section porte l'interrupteur qui rallume le mode, elle
@@ -140,6 +141,14 @@ struct ProfilView: View {
                 .padding(.bottom, 24)
             }
             .scrollDismissesKeyboard(.immediately)
+            // L'étape « voiture » du parcours amène le bloc à l'écran, sa bulle au-dessus.
+            .onChange(of: ParcoursGuide.partage.actif && ParcoursGuide.partage.etape == .voiture,
+                      initial: true) { _, oui in
+                guard oui else { return }
+                withAnimation(mouvementReduit ? nil : Mouvement.deplacement(0.3)) {
+                    defilement.scrollTo(Self.idLivree, anchor: .bottom)
+                }
+            }
             // Simultané : les boutons de l'écran reçoivent leur tap comme avant.
             .simultaneousGesture(
                 SpatialTapGesture(coordinateSpace: .named(Self.espaceEcran)).onEnded { toucher in
@@ -731,6 +740,9 @@ struct ProfilView: View {
 
     /// La tâche n'est **pas** liée à l'écran : changer d'onglet pendant l'appel ne
     /// l'annule pas, et la voiture s'enregistre quand même.
+    /// Le bloc de la livrée, où le parcours guidé fait défiler l'écran.
+    private static let idLivree = "livree"
+
     private func enregistrerVoiture() {
         guard aChange, !envoiVoiture else { return }
         erreurVoiture = nil
@@ -748,6 +760,8 @@ struct ProfilView: View {
                 // normalisées par le serveur —, sauf par-dessus ce réglage-là.
                 livreeEnregistree = livreeEnvoyee
                 numeroEnregistre = numeroEnvoye
+                // L'étape « voiture » du parcours guidé : l'enregistrement est son geste.
+                ParcoursGuide.partage.signaler(.voiture)
                 synchroniserVoiture(viewModel.profil)
                 withAnimation(mouvementReduit ? nil : Mouvement.deplacement(0.22)) {
                     replieDeplie = nil

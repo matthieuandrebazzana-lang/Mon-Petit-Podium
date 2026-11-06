@@ -24,9 +24,6 @@ struct AccueilView: View {
     /// Le Grand Prix qu'un tap sur le widget « Mes pronos » demande d'ouvrir — consommé
     /// dès qu'il est poussé.
     @Binding var pronosDemandes: DonneesWidget.DemandePronos?
-    /// Ce que l'accueil du tutoriel demande en se fermant (``Tutoriel``) — consommé dès
-    /// que l'écran est poussé.
-    @Binding var actionTutoriel: ActionTutoriel?
     /// Le profil n'a encore jamais été ouvert (``DecouverteProfil``) : l'avatar pulse.
     var invitationProfil = false
 
@@ -48,10 +45,10 @@ struct AccueilView: View {
     /// qu'un tap **n'importe où** hors de la pile la referme.
     @State private var apercuPile: UUID?
 
-    /// Les deux écrans des cartes d'action, poussés **par le tutoriel** — les cartes, elles,
-    /// gardent leurs `NavigationLink`.
-    @State private var creerDemande = false
-    @State private var rejoindreDemande = false
+    @Environment(\.accessibilityReduceMotion) private var mouvementReduit
+
+    /// L'identifiant des cartes d'action, où le parcours guidé fait défiler l'accueil.
+    private static let idActions = "actions"
 
     var body: some View {
         // L'accueil est la **racine de sa propre pile** : c'est de ses deux cartes
@@ -66,6 +63,7 @@ struct AccueilView: View {
                 Color.fondPrincipal
                     .ignoresSafeArea()
 
+                ScrollViewReader { defilement in
                 ScrollView {
                     VStack(spacing: 0) {
                         entete
@@ -80,6 +78,7 @@ struct AccueilView: View {
 
                         Spacer().frame(height: 10)
                         actions
+                            .id(Self.idActions)
 
                         Spacer().frame(height: 20)
                         blocSaison
@@ -100,6 +99,16 @@ struct AccueilView: View {
                         including: apercuPile == nil ? .subviews : .all
                     )
                 }
+                // Les étapes du parcours qui désignent les cartes d'action les amènent à
+                // l'écran : sous une pile de championnats, elles peuvent être plus bas.
+                .onChange(of: ParcoursGuide.partage.etape, initial: true) { _, etape in
+                    guard ParcoursGuide.partage.actif,
+                          [.carteCreer, .carteRejoindre, .fin].contains(etape) else { return }
+                    withAnimation(mouvementReduit ? nil : Mouvement.deplacement(0.3)) {
+                        defilement.scrollTo(Self.idActions, anchor: .bottom)
+                    }
+                }
+                }
             }
             // Pas de titre : le bouton de retour des écrans poussés d'ici affiche alors le
             // « Retour » générique du système, comme la capture de référence.
@@ -112,21 +121,14 @@ struct AccueilView: View {
             .navigationDestination(item: $championnatRejoint) { championnat in
                 ChampionnatDetailView(championnat: championnat, mesChampionnats: mesChampionnats)
             }
-            .navigationDestination(isPresented: $creerDemande) {
-                CreerChampionnatView(mesChampionnats: mesChampionnats)
-            }
-            .navigationDestination(isPresented: $rejoindreDemande) {
-                RejoindreChampionnatView(mesChampionnats: mesChampionnats) { championnatRejoint = $0 }
-            }
-            // La dernière page du tutoriel : créer ou rejoindre, poussé d'ici comme par
-            // les cartes d'action.
-            .onChange(of: actionTutoriel, initial: true) { _, action in
-                guard let action else { return }
-                actionTutoriel = nil
-                cheminPronos.removeAll()
-                switch action {
-                case .creer:     creerDemande = true
-                case .rejoindre: rejoindreDemande = true
+            // **Les écrans de démo du parcours guidé se déduisent de son étape**
+            // (``EtapeParcours/pileAccueil``) : ni lien ni retour ne les poussent. Le
+            // parcours fini ou quitté, ils sont retirés — et eux seuls.
+            .onChange(of: pileParcours, initial: true) { _, pile in
+                if ParcoursGuide.partage.actif {
+                    if cheminPronos != pile { cheminPronos = pile }
+                } else if cheminPronos.contains(where: \.estDemo) {
+                    cheminPronos.removeAll()
                 }
             }
             // Un tap sur le widget « Mes pronos » : le parcours repart de ce GP.
@@ -284,14 +286,14 @@ struct AccueilView: View {
     /// Les deux cartes d'action, dont la composition vit dans ``ActionsChampionnat``
     /// — la liste des championnats pose exactement le même bloc.
     private var actions: some View {
-        ActionsChampionnat(mesChampionnats: mesChampionnats) { championnatRejoint = $0 }
-            .bulleAide(.accueilSansChampionnat, quand: sansChampionnat)
+        ActionsChampionnat(mesChampionnats: mesChampionnats, ouvrir: { championnatRejoint = $0 },
+                           designeParLeParcours: true)
     }
 
-    /// La liste est connue, et vide : les deux cartes d'action sont tout l'état vide.
-    private var sansChampionnat: Bool {
-        if case .pret(let liste) = mesChampionnats.etat { return liste.isEmpty }
-        return false
+    /// La pile que demande le parcours guidé — vide hors du parcours.
+    private var pileParcours: [EtapePronos] {
+        let guide = ParcoursGuide.partage
+        return guide.actif ? guide.etape.pileAccueil : []
     }
 
     /// La ligne qui ferme l'écran. Elle répond à un vrai défaut de composition — sous une
@@ -853,7 +855,7 @@ private struct SilhouetteWidget: View {
 #Preview {
     AccueilView(viewModel: AuthViewModel(), mesChampionnats: MesChampionnats(),
                 prochainGP: ProchainGrandPrix(), ongletActif: .constant(.accueil),
-                pronosDemandes: .constant(nil), actionTutoriel: .constant(nil))
+                pronosDemandes: .constant(nil))
 }
 
 // MARK: - Depuis le widget « Mes pronos »

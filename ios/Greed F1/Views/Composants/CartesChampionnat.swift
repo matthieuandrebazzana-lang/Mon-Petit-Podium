@@ -294,36 +294,67 @@ struct ActionsChampionnat: View {
     /// chaque écran qui monte ce bloc le pousse par sa propre `navigationDestination`.
     let ouvrir: (Championnat) -> Void
 
+    /// Le bloc que désigne le parcours guidé — celui de l'accueil seulement : l'onglet
+    /// Championnats, monté en même temps, ne doit pas mesurer le sien.
+    var designeParLeParcours = false
+
     var body: some View {
+        // **Pendant le parcours guidé, les deux cartes mènent à la démo** : le parcours
+        // empile lui-même ses écrans (``EtapeParcours/pileAccueil``), la carte ne fait que
+        // dire que le geste est fait.
+        let parcours = ParcoursGuide.partage.actif && designeParLeParcours
         VStack(spacing: 10) {
             // `NavigationLink` et non `Button`, pour la même raison que dans la liste des
             // championnats : c'est lui qui porte le glissement d'écran natif et le geste de
             // retour par le bord. Les deux écrans qui montent ce bloc ont donc chacun leur
             // `NavigationStack`.
-            NavigationLink {
-                CreerChampionnatView(mesChampionnats: mesChampionnats)
-            } label: {
-                CarteAction(
-                    logo: "icone-creer",
-                    encreLogo: .encrePrimaire,
-                    titre: t("championnat.creer"),
-                    sousTitre: t("championnat.creerSousTitre")
-                )
+            Group {
+                if parcours {
+                    Button { ParcoursGuide.partage.signaler(.carteCreer) } label: { carteCreer }
+                } else {
+                    NavigationLink {
+                        CreerChampionnatView(mesChampionnats: mesChampionnats)
+                    } label: { carteCreer }
+                }
             }
             .buttonStyle(StyleAppui(.grandeSurface))
+            .etapeParcours(.carteCreer, position: .dessus, actif: designeParLeParcours) {
+                ParcoursGuide.partage.signaler(.carteCreer)
+            }
 
-            NavigationLink {
-                RejoindreChampionnatView(mesChampionnats: mesChampionnats, ouvrir: ouvrir)
-            } label: {
-                CarteAction(
-                    logo: "icone-rejoindre",
-                    encreLogo: .accent,
-                    titre: t("championnat.rejoindre"),
-                    sousTitre: t("championnat.rejoindreSousTitre")
-                )
+            Group {
+                if parcours {
+                    Button { ParcoursGuide.partage.signaler(.carteRejoindre) } label: { carteRejoindre }
+                } else {
+                    NavigationLink {
+                        RejoindreChampionnatView(mesChampionnats: mesChampionnats, ouvrir: ouvrir)
+                    } label: { carteRejoindre }
+                }
             }
             .buttonStyle(StyleAppui(.grandeSurface))
+            .etapeParcours(.carteRejoindre, position: .dessus, actif: designeParLeParcours) {
+                ParcoursGuide.partage.signaler(.carteRejoindre)
+            }
         }
+        .etapeParcours(.fin, position: .dessus, actif: designeParLeParcours)
+    }
+
+    private var carteCreer: some View {
+        CarteAction(
+            logo: "icone-creer",
+            encreLogo: .encrePrimaire,
+            titre: t("championnat.creer"),
+            sousTitre: t("championnat.creerSousTitre")
+        )
+    }
+
+    private var carteRejoindre: some View {
+        CarteAction(
+            logo: "icone-rejoindre",
+            encreLogo: .accent,
+            titre: t("championnat.rejoindre"),
+            sousTitre: t("championnat.rejoindreSousTitre")
+        )
     }
 }
 

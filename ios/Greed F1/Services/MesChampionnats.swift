@@ -24,11 +24,20 @@ final class MesChampionnats: ObservableObject {
 
     private static let cle = "championnats/moi"
 
-    init() {
+    /// - Parameter inerte: la liste vide des écrans de démo du parcours guidé
+    ///   (``EcranDemoView``) — ni le cache ni le réseau, et ``charger(forcer:)`` n'y fait rien.
+    init(inerte: Bool = false) {
+        self.inerte = inerte
+        if inerte {
+            etat = .pret([])
+            return
+        }
         if let liste: [Championnat] = CacheService.partage.valeur(Self.cle, snapshot: true) {
             etat = .pret(liste)
         }
     }
+
+    private let inerte: Bool
 
     /// Vrai pendant un appel : deux écrans qui apparaissent ensemble n'en lancent qu'un.
     private var enCours = false
@@ -49,6 +58,7 @@ final class MesChampionnats: ObservableObject {
     ///   chargement déjà en vol — lancé **avant** l'écriture — absorberait la demande, et
     ///   le championnat obtenu manquerait à la liste jusqu'au prochain changement d'onglet.
     func charger(forcer: Bool = false) async {
+        guard !inerte else { return }
         guard !enCours else {
             if forcer { aRelancer = true }
             return

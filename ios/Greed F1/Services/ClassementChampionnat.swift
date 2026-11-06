@@ -36,6 +36,11 @@ final class ClassementChampionnat: ObservableObject {
         self.championnatId = championnatId
         self.snapshot = snapshot
             ?? (OrdrePile.lire(pour: SupabaseManager.partage.idCompte).first == championnatId)
+        // Le championnat d'exemple du parcours guidé : ses membres fictifs, jamais le cache.
+        if DonneesDemo.estDemo(championnatId) {
+            etat = .pret(DonneesDemo.classement())
+            return
+        }
         if let membres: [Membre] = CacheService.partage.valeur(Self.chemin(championnatId),
                                                                snapshot: self.snapshot) {
             etat = .pret(membres)
@@ -55,7 +60,7 @@ final class ClassementChampionnat: ObservableObject {
 
     /// - Parameter forcer: rappelle la route même si le cache est frais.
     func charger(forcer: Bool = false) async {
-        guard !enCours else { return }
+        guard !DonneesDemo.estDemo(championnatId), !enCours else { return }
         enCours = true
         defer { enCours = false }
 

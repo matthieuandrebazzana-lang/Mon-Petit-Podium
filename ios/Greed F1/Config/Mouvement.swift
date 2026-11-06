@@ -227,10 +227,10 @@ extension AnyTransition {
 // MARK: - Bulle d'aide
 
 extension AnyTransition {
-    /// **Une bulle d'aide qui sort de ce qu'elle désigne** (``BulleAideModificateur``) :
+    /// **Une bulle du parcours guidé qui sort de ce qu'elle désigne** (``CalqueParcours``) :
     /// elle grandit depuis sa pointe (96 % → 100 %, jamais depuis rien) en apparaissant,
     /// puis s'efface en fondu seul — on regarde ce qui arrive, pas ce qui s'en va. Le temps
-    /// est ``Mouvement/passageEcran`` sur ``Mouvement/entree(_:)``, posé par ``Tutoriel``.
+    /// est ``Mouvement/passageEcran`` sur ``Mouvement/entree(_:)``, posé par ``ParcoursGuide``.
     /// Sous mouvement réduit, la bulle passe `.opacity` à la place.
     static func bulleAide(pointe: UnitPoint) -> AnyTransition {
         .asymmetric(insertion: .scale(scale: 0.96, anchor: pointe).combined(with: .opacity),

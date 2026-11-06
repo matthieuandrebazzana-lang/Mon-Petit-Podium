@@ -28,6 +28,10 @@ struct CreerChampionnatView: View {
 
     @ObservedObject var mesChampionnats: MesChampionnats
 
+    /// L'écran du parcours guidé : rien n'est envoyé, le code est tiré sur place
+    /// (``DonneesDemo/championnatCree(nom:)``), ni photo ni partage.
+    var demo = false
+
     @State private var nom = ""
     @FocusState private var nomActif: Bool
 
@@ -78,13 +82,16 @@ struct CreerChampionnatView: View {
                     titre
 
                     Spacer().frame(height: 12)
-                    blocIdentite
-
-                    Spacer().frame(height: 12)   // espacement entre blocs (§4.6)
-                    blocCode
-
-                    Spacer().frame(height: 12)
-                    boutonCreer
+                    VStack(spacing: 12) {   // espacement entre blocs (§4.6)
+                        blocIdentite
+                        blocCode
+                            .etapeParcours(.codeInvitation, position: .dessous)
+                        boutonCreer
+                    }
+                    .etapeParcours(.nomChampionnat, position: .dessous) {
+                        if !nomValide { nom = t("parcours.demo.nomCree") }
+                        creer()
+                    }
 
                     if let erreur {
                         Spacer().frame(height: 12)
@@ -103,6 +110,8 @@ struct CreerChampionnatView: View {
         // geste de retour par le bord, qu'un bouton dessiné à la main ne donne pas.
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        // Le parcours guidé décide seul de ses écrans : pas de retour par le bord.
+        .navigationBarBackButtonHidden(demo)
         .animation(Mouvement.entree(0.20), value: erreur)
         // Retour haptique **au même instant** que ce qu'il confirme : le code qui apparaît,
         // ou le refus qui s'écrit.
@@ -139,6 +148,13 @@ struct CreerChampionnatView: View {
         envoi = true
         let corps = CorpsCreation(nom: nomNettoye)
 
+        if demo {
+            envoi = false
+            cree = DonneesDemo.championnatCree(nom: nomNettoye)
+            ParcoursGuide.partage.signaler(.nomChampionnat)
+            return
+        }
+
         Task {
             do {
                 let championnat: Championnat = try await APIClient.partage.requete(
@@ -158,14 +174,18 @@ struct CreerChampionnatView: View {
     // MARK: - Titre
 
     private var titre: some View {
-        Text(t("championnat.creer"))
-            .font(.titre)
-            .tracking(Tracking.titre)
-            .foregroundColor(.texte)            // 15,37:1 sur le beige
-            .lineLimit(2)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityAddTraits(.isHeader)
+        HStack(alignment: .center, spacing: 12) {
+            Text(t("championnat.creer"))
+                .font(.titre)
+                .tracking(Tracking.titre)
+                .foregroundColor(.texte)            // 15,37:1 sur le beige
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+
+            if demo { PastilleExemple() }
+        }
     }
 
     // MARK: - Nom et photo
@@ -180,7 +200,8 @@ struct CreerChampionnatView: View {
                 champNom
             }
 
-            lignephoto
+            // Une photo choisie dans la démo ne servirait à rien : elle n'irait nulle part.
+            if !demo { lignephoto }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -365,7 +386,7 @@ struct CreerChampionnatView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityHidden(true)
 
-            if let cree {
+            if let cree, !demo {
                 partage(cree)
                     .transition(.opacity)
             }
@@ -442,7 +463,10 @@ struct CreerChampionnatView: View {
     /// garde une seule action, c'est seulement l'action suivante.
     @ViewBuilder
     private var boutonCreer: some View {
-        if let cree {
+        if cree != nil, demo {
+            // Le parcours mène lui-même à la suite : aucun championnat à ouvrir.
+            EmptyView()
+        } else if let cree {
             NavigationLink {
                 ChampionnatDetailView(championnat: cree, mesChampionnats: mesChampionnats)
             } label: {

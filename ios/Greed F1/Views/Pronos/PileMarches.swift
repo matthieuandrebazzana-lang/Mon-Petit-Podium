@@ -131,6 +131,8 @@ struct PileMarches: View {
                 ouverts.insert(id)
             }
         }
+        // Le geste de l'étape « marchés » du parcours guidé — ignoré hors de lui.
+        if ouverts.contains(id) { ParcoursGuide.partage.signaler(.marches) }
     }
 }
 
