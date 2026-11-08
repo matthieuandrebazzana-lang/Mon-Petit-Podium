@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.jobs import scraper as job
+from app.scraper import unibet
 from app.supabase_client import ErreurSupabase
 
 QUALIFS = datetime(2026, 11, 7, 18, 0, tzinfo=UTC)
@@ -260,3 +261,171 @@ def test_un_gp_fige_par_un_autre_n_est_pas_un_echec(base):
     tour(PREVU + timedelta(hours=2))
     assert base.alertes == {}
     assert base.notifications == []
+
+
+# --------------------------------------------------------------------------- #
+#  Événement de course renommé par Unibet (8 novembre 2026)
+# --------------------------------------------------------------------------- #
+
+
+# Libellé exact relevé sur le nœud racine, espace final compris.
+RENOMME = "Paris spéciaux Course principale "
+
+
+@pytest.mark.parametrize("libelle", ["Course", "course", " Course ", RENOMME, "Course principale"])
+def test_la_course_est_reconnue(libelle):
+    assert unibet.est_course(libelle)
+
+
+@pytest.mark.parametrize(
+    "libelle",
+    [
+        "Qualifications",
+        "Paris spéciaux Qualifications",
+        "Course sprint",
+        "Paris spéciaux Course sprint",
+        "Sprint",
+        "Paris spéciaux Essais libres 1",
+        "Essais libres 3",
+        "Paris spéciaux Qualifications sprint",
+        "Championnat du monde",
+        "Vainqueur du championnat",
+    ],
+)
+def test_les_autres_evenements_restent_ecartes(libelle):
+    assert not unibet.est_course(libelle)
+
+
+def _racine(*evenements):
+    items = {"p59405528": {"desc": "GP du Brésil", "parent": unibet.RACINE_F1}}
+    for identifiant, desc, start in evenements:
+        items[identifiant] = {"desc": desc, "parent": "p59405528", "start": start}
+    return {"items": items}
+
+
+def test_decouvrir_le_gp_du_bresil_sous_son_nouveau_libelle(monkeypatch):
+    async def json_lvs(_client, _noeud, _cle):
+        return _racine(
+            ("e3365675", RENOMME, "2611081700"),
+            ("e3365600", "Paris spéciaux Qualifications", "2611071800"),
+            ("e3365601", "Paris spéciaux Course sprint", "2611071400"),
+        )
+
+    monkeypatch.setattr(unibet, "_json_lvs", json_lvs)
+    (gp,) = asyncio.run(unibet.decouvrir(None, "jeton"))
+    assert (gp.id_unibet, gp.nom, gp.id_evenement) == ("p59405528", "GP du Brésil", "e3365675")
+    assert gp.date_course == datetime(2026, 11, 8, 17, 0, tzinfo=UTC)
+    assert gp.qualifications == [datetime(2026, 11, 7, 18, 0, tzinfo=UTC)]
+    # L'URL reste celle que sert Unibet, `/course`.
+    assert unibet.url_evenement(gp, unibet.CATEGORIE_F1).endswith("/gp-du-bresil/3365675/course")
+
+
+def test_seuls_des_evenements_speciaux_aucune_course(monkeypatch):
+    async def json_lvs(_client, _noeud, _cle):
+        return _racine(("e1", "Paris spéciaux Course sprint", "2611071400"))
+
+    monkeypatch.setattr(unibet, "_json_lvs", json_lvs)
+    with pytest.raises(unibet.ErreurScraper, match="Aucune course trouvée"):
+        asyncio.run(unibet.decouvrir(None, "jeton"))
+
+
+# --------------------------------------------------------------------------- #
+#  Un échec de découverte déclenche l'alerte
+# --------------------------------------------------------------------------- #
+
+DECOUVERTE = unibet.ErreurScraper(
+    "Aucune course trouvée sous le nœud racine. 1 nœud(s) examiné(s), 1 événement(s) écarté(s)."
+)
+
+
+def test_echec_de_decouverte_au_job_alerte(base, monkeypatch):
+    async def panne():
+        raise DECOUVERTE
+
+    monkeypatch.setattr(job, "scraper", panne)
+    tour(PREVU + timedelta(hours=1))
+    alerte = base.alertes[("gp-bresil", job.COTES_EN_RETARD, "")]
+    assert "Aucune course trouvée" in alerte["derniere_erreur"]
+    assert len(base.notifications) == 1
+
+
+def test_echec_de_decouverte_au_declenchement_manuel_alerte(base, monkeypatch):
+    async def panne():
+        raise DECOUVERTE
+
+    monkeypatch.setattr(job, "scraper", panne)
+    reel = job.datetime
+
+    class Horloge(reel):
+        @classmethod
+        def now(cls, tz=None):
+            return PREVU + timedelta(hours=7)
+
+    monkeypatch.setattr(job, "datetime", Horloge)
+    asyncio.run(job.declencher_en_tache_de_fond())
+    alerte = base.alertes[("gp-bresil", job.COTES_EN_RETARD, "")]
+    assert "Aucune course trouvée" in alerte["derniere_erreur"]
+    assert len(base.notifications) == 1
+
+
+def test_echec_manuel_dans_la_premiere_heure_n_alerte_pas(base, monkeypatch):
+    async def panne():
+        raise DECOUVERTE
+
+    monkeypatch.setattr(job, "scraper", panne)
+    asyncio.run(job._signaler_les_retards("x", PREVU + timedelta(minutes=30)))
+    assert base.alertes == {}
+
+
+# --------------------------------------------------------------------------- #
+#  Pas de figeage sans le marché « Vainqueur » (page partielle du 8 novembre)
+# --------------------------------------------------------------------------- #
+
+PARTIELLE = {
+    "grands_prix": [
+        {"nom": "GP du Brésil", "gp_id": "gp-bresil", "cotes": 20, "marches": ["top-2"], "fige": False}
+    ],
+    "echecs": [],
+}
+COMPLETE = {
+    "grands_prix": [
+        {
+            "nom": "GP du Brésil",
+            "gp_id": "gp-bresil",
+            "cotes": 146,
+            "marches": ["podium", "top-2", "vainqueur"],
+            "fige": False,
+        }
+    ],
+    "echecs": [],
+}
+
+
+def test_une_page_sans_vainqueur_ne_fige_pas_et_alerte(base):
+    base.unibet = PARTIELLE
+    tour(PREVU + timedelta(hours=7))
+    assert base.gp["statut"] == "a_venir"
+    alerte = base.alertes[("gp-bresil", job.COTES_EN_RETARD, "")]
+    assert "marché « vainqueur » absent" in alerte["derniere_erreur"]
+    assert "top-2" in alerte["derniere_erreur"]
+
+    base.unibet = COMPLETE
+    tour(PREVU + timedelta(hours=7, minutes=15))
+    assert base.gp["statut"] == "cotes_figees"
+    assert base.alertes == {}
+
+
+def test_le_declenchement_manuel_ne_fige_pas_non_plus_sans_vainqueur(base):
+    base.unibet = PARTIELLE
+    asyncio.run(job.declencher_en_tache_de_fond())
+    assert base.gp["statut"] == "a_venir"
+
+    base.unibet = COMPLETE
+    asyncio.run(job.declencher_en_tache_de_fond())
+    assert base.gp["statut"] == "cotes_figees"
+
+
+def test_marche_requis_absent():
+    assert job.marche_requis_absent({"cotes": 3, "marches": ["vainqueur"]}) is None
+    assert job.marche_requis_absent({"cotes": 3}) is None  # compte rendu ancien
+    assert "absent" in job.marche_requis_absent({"cotes": 3, "marches": ["top-2"]})

@@ -58,6 +58,7 @@ dédié — exactement la même note qu'en tête de `app/jobs/resultats.py`.
 import logging
 from datetime import UTC, datetime, timedelta
 
+from app.calcul.points import MARCHE_VAINQUEUR
 from app.jobs import notifications
 from app.jobs.rattachement import rattacher_sans_echec
 from app.noms_gp import nom_du_gp
@@ -85,6 +86,28 @@ DELAI_ALERTE = timedelta(hours=1)
 # Fin du rattrapage quand Unibet n'a pas donné de départ : une course se court
 # le lendemain des qualifications, au plus tard (26 h à Las Vegas).
 RATTRAPAGE_SANS_DEPART = timedelta(hours=30)
+
+# **Pas de figeage sans le marché « Vainqueur »** (backend `0.88.3`). La nuit
+# du 7 au 8 novembre 2026, la page du Brésil ne publiait plus que « Double
+# Chance » et « Top 2 » : figer sur ce scraping aurait arrêté les autres
+# marchés sur des cotes d'avant les qualifications. Le marché vedette est
+# toujours là quand Unibet publie vraiment le GP ; son absence est un échec
+# comme un autre — le job réessaie, et alerte passé l'heure prévue + 1 h.
+MARCHE_REQUIS = MARCHE_VAINQUEUR
+
+
+def marche_requis_absent(ligne: dict) -> str | None:
+    """La raison de ne pas figer cette ligne du compte rendu, ou `None`."""
+    marches = ligne.get("marches")
+    if marches is None or MARCHE_REQUIS in marches:
+        # `None` : compte rendu sans la liste (scraper d'avant la 0.88.3) — la
+        # règle des « au moins une cote » s'applique seule.
+        return None
+    return (
+        f"marché « {MARCHE_REQUIS} » absent chez Unibet, non figé "
+        f"({ligne.get('cotes') or 0} cote(s) écrite(s) sur : "
+        f"{', '.join(marches) or 'aucun marché'})"
+    )
 
 # `alertes_admin.type` (migration 37). `cle` vide : une alerte par GP.
 COTES_EN_RETARD = "cotes_en_retard"
@@ -272,6 +295,17 @@ async def scraper_et_figer(gp_id: str, nom: str) -> dict:
         )
         return {"gp": nom, "gp_id": gp_id, "fige": False, "echec": echec, "rapport": rapport}
 
+    absent = marche_requis_absent(resultat)
+    if absent:
+        logger.error(
+            "[scraper-job] %s : %s. Statut laissé à « %s », nouvel essai dans %s.",
+            nom,
+            absent,
+            STATUT_DECLENCHEUR,
+            INTERVALLE,
+        )
+        return {"gp": nom, "gp_id": gp_id, "fige": False, "echec": absent, "rapport": rapport}
+
     fige = await figer(gp_id, nom)
     if fige:
         await _apres_figeage(gp_id, nom)
@@ -432,6 +466,24 @@ async def surveiller(maintenant: datetime | None = None) -> None:
             await signaler_retard(gp, echec, maintenant)
 
 
+async def _signaler_les_retards(raison: str, maintenant: datetime | None = None) -> None:
+    """Alerte chaque GP en retard (heure prévue + 1 h passée, départ à venir).
+
+    Pour un échec qui ne désigne aucun GP — le scraping entier a levé. Le job
+    automatique, lui, sait quel GP il visait et passe par `signaler_retard`.
+    """
+    maintenant = maintenant or datetime.now(UTC)
+    try:
+        candidats = await _candidats()
+    except ErreurSupabase:
+        logger.exception("[scraper-job] Lecture des Grands Prix impossible.")
+        return
+    for gp in candidats:
+        bornes = echeances(gp)
+        if bornes and bornes[1] <= maintenant < bornes[2]:
+            await signaler_retard(gp, raison, maintenant)
+
+
 async def declencher_en_tache_de_fond(figer_apres: bool = True) -> None:
     """Point d'entrée du déclenchement manuel : ne laisse jamais rien fuir.
 
@@ -451,8 +503,11 @@ async def declencher_en_tache_de_fond(figer_apres: bool = True) -> None:
     """
     try:
         rapport = await scraper()
-    except Exception:  # noqa: BLE001 — dernier filet avant le silence complet
+    except Exception as erreur:  # noqa: BLE001 — dernier filet avant le silence complet
         logger.exception("[scraper-job] Échec complet du scraping.")
+        # Une découverte en échec (« Aucune course trouvée… ») ne dit rien du GP
+        # visé : l'alerte vaut pour tous ceux qui attendent leurs cotes.
+        await _signaler_les_retards(f"{type(erreur).__name__} : {erreur}")
         return
 
     if not figer_apres:
@@ -468,6 +523,12 @@ async def declencher_en_tache_de_fond(figer_apres: bool = True) -> None:
             # d'écrit : dans les deux cas il n'y a pas de succès à entériner.
             continue
         gp_id, nom = str(ligne["gp_id"]), str(ligne.get("nom") or ligne["gp_id"])
+        absent = marche_requis_absent(ligne)
+        if absent:
+            # Même règle que le job : les cotes écrites restent modifiables.
+            logger.error("[scraper-job] %s : %s.", nom, absent)
+            await _signaler_les_retards(absent)
+            continue
         try:
             if await figer(gp_id, nom):
                 await _apres_figeage(gp_id, nom)

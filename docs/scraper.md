@@ -108,6 +108,18 @@ faux Grand Prix, qui deviendrait le « prochain GP » de l'accueil.
 > **Tout événement écarté est journalisé avec son libellé** — si Unibet renomme
 > « Course », les logs le diront au lieu de laisser le scraper ne rien trouver en silence.
 
+> ### Unibet a renommé l'événement (backend `0.88.3`)
+> Le 8 novembre 2026, la course du **GP du Brésil** s'appelait **« Paris spéciaux Course
+> principale »** (espace final compris). Le slug exact `course` l'écartait : « Aucune course
+> trouvée sous le nœud racine », et aucun scraping n'aboutissait. `est_course` accepte
+> désormais `^(paris-speciaux-)?course(-principale)?$` sur le slug — **rien de plus large** :
+> « Paris spéciaux Qualifications », « Course sprint », « Essais libres » restent écartés
+> (un « contient course » prendrait le sprint pour la course). L'URL de la page garde
+> `/course` : Unibet sert la même page sous les deux slugs (vérifié en direct).
+>
+> Un échec de découverte déclenche l'alerte `cotes_en_retard` (§8) — au job comme au
+> déclenchement manuel, pour chaque GP en retard.
+
 ---
 
 ## 4. Le fuseau horaire — le piège qui a coûté deux heures
@@ -375,9 +387,16 @@ quinze minutes, puisque les cotes peuvent arriver des heures en retard. « Ouvre
 
 ### Le figeage ne suit qu'un scraping RÉUSSI
 
-Vérifié sur **trois points** : le GP visé figure dans le compte rendu, il n'était pas déjà
-figé, et **au moins une cote a été écrite**. À défaut, le statut reste `a_venir` et le
-tour suivant réessaie.
+Vérifié sur **quatre points** : le GP visé figure dans le compte rendu, il n'était pas déjà
+figé, **au moins une cote a été écrite**, et **le marché `vainqueur` en fait partie**
+(`MARCHE_REQUIS`, backend `0.88.3`). À défaut, le statut reste `a_venir` et le tour suivant
+réessaie — job comme déclenchement manuel.
+
+> **Pourquoi le vainqueur.** La nuit du 7 au 8 novembre 2026, la page du Brésil ne publiait
+> que « Double Chance » (sans évaluateur) et « Top 2 ». Figer aurait arrêté les autres
+> marchés sur des cotes écrites avant les qualifications. Le marché vedette est là dès
+> qu'Unibet publie vraiment le GP ; son absence est un échec comme un autre, alerté passé
+> l'heure prévue + 1 h.
 
 > Figer après un échec arrêterait les cotes sur ce que la base contenait avant — au pire,
 > sur rien du tout.

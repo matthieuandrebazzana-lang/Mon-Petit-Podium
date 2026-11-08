@@ -12,7 +12,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.5
-Version backend actuelle : 0.88.2
+Version backend actuelle : 0.88.3
 Version iOS actuelle : 0.60.2 (build 24)
 
 ## STACK TECHNIQUE
@@ -285,6 +285,8 @@ Rattachement d'un GP Unibet (backend 0.82.1, `docs/decisions.md` §24) : identif
 Le 4 octobre 2026 est le GP de Bahreïn délocalisé à Sepang : ligne unique `16a9c686-392a-4ef0-a624-f112825106d9`, nom Unibet « GP Bahrein », drapeau et tracé de Sepang (slug `malaisie`). Doublon avec la ligne manuelle « GP Malaisie » résorbé le 1er octobre par `adopter_grand_prix`.
 
 Cotes en retard (backend 0.88.2, `scraper.md` §8, migration 37) : le 7 novembre 2026, les cotes du GP du Brésil (qualifs 18:00Z, scraping prévu 20:00Z) n'étaient pas en base à la fin de la fenêtre fixe de 4 h, et le job s'est tu ; récupérées par `/scraper/declencher` à la main. Logs Railway non fournis dans la session : cause exacte non tranchée, requêtes de vérification données (migration 34 appliquée ? doublon « GP São Paulo » ? ligne figée ? `notifications_envoyees`). Correctif : tour toutes les 15 min, rattrapage **jusqu'au départ** (`date_course`, ou 30 h sans départ connu), et à heure prévue + 1 h sans cotes alerte `cotes_en_retard` + push aux seuls appareils `is_admin` (une fois ; la création de la ligne d'alerte tient lieu de réservation), effacée au figeage (job ou manuel). Notifications : « pronos ouverts » partait à qualifs − 1 h, **trois heures avant les cotes** — elle part maintenant au passage à `cotes_figees` (une cote en base vérifiée, avant le départ, sans fenêtre) ; « ouvrent dans 24h » à qualifs − 22 h tant que `a_venir` ; « dernière chance » seulement si `cotes_figees`. Tests `test_scraper_job.py` (16) + `test_notifications.py` ; 577 tests verts. Web et iOS non touchés : un type d'alerte inconnu s'y affiche sous son nom brut avec `derniere_erreur`.
+
+Événement renommé (backend 0.88.3, `scraper.md` §3) : le 8/11 la course du Brésil s'appelle chez Unibet « Paris spéciaux Course principale » — écartée par le slug exact `course`, d'où « Aucune course trouvée » (vraie cause du 7/11 ; migration 34 bien appliquée, pas de doublon, 146 cotes, statut `a_venir`). `est_course` : `^(paris-speciaux-)?course(-principale)?$`, rien de plus large. Un échec de découverte alerte aussi au déclenchement manuel. **Constaté en direct le 8/11 vers 03:00Z : la page ne publie que « Double Chance - Vainqueur de la course » (sans évaluateur) et « Top 2 »** — les 146 cotes en base viennent d'un scraping antérieur. D'où une garde : **pas de figeage sans le marché `vainqueur`** (job et manuel) ; le job réessaie tous les 1/4 h et alerte.
 
 Scraper (avec figeage) :
 curl -X POST "https://mon-petit-podium-production.up.railway.app/scraper/declencher" -H "X-Admin-Secret: monpetitpodium2026"

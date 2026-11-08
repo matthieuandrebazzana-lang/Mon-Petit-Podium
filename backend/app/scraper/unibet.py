@@ -129,6 +129,25 @@ MOTIF_ETAT_SSR = re.compile(
 # trouver en silence.
 EVENEMENT_COURSE = "course"
 
+# **Unibet a renommé l'événement** au GP du Brésil 2026 (7 novembre) :
+# « Paris spéciaux Course principale », espace final compris. Le slug exact
+# « course » l'écartait, et la découverte échouait — aucune course trouvée.
+#
+# Le motif porte sur le slug, donc ignore casse, accents et espaces. Il admet
+# le préfixe « Paris spéciaux » et le suffixe « principale », RIEN d'autre :
+# « Paris spéciaux Qualifications », « Course sprint », « Paris spéciaux
+# Essais libres 1 » restent écartés. Un motif plus large (« contient course »)
+# prendrait le sprint pour la course, et figerait ses cotes à sa place.
+#
+# L'URL de la page garde `EVENEMENT_COURSE` : Unibet sert la même page sous
+# « /course » et sous le slug complet (vérifié le 8 novembre 2026).
+MOTIF_COURSE = re.compile(r"^(paris-speciaux-)?course(-principale)?$")
+
+
+def est_course(libelle: str) -> bool:
+    """Vrai si ce libellé d'événement Unibet désigne la course du dimanche."""
+    return bool(MOTIF_COURSE.match(slug(libelle)))
+
 # Les qualifications, elles, ne sont pas un événement à parier ici : c'est leur
 # **heure** qui nous intéresse, parce que la règle 4.3 y accroche le scraping
 # (deux heures après, la grille est définitive et les cotes sont figées).
@@ -428,7 +447,7 @@ async def decouvrir(client: httpx.AsyncClient, cle: str) -> list[GrandPrix]:
 
         libelle = str(item.get("desc") or "")
 
-        if slug(libelle) != EVENEMENT_COURSE:
+        if not est_course(libelle):
             if MOTIF_QUALIFICATIONS.search(libelle):
                 depart_qualifs = date_de_depart(item.get("start"))
                 if depart_qualifs:
@@ -1013,6 +1032,9 @@ async def _enregistrer(gp: GrandPrix) -> dict:
         "gp_id": gp_id,
         "id_unibet": gp.id_unibet,
         "cotes": len(lignes),
+        # Les marchés écrits : le job ne fige pas sans « vainqueur »
+        # (`jobs/scraper.MARCHE_REQUIS`).
+        "marches": sorted({cote.marche for cote in gp.cotes}),
         "fige": False,
     }
 
