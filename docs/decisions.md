@@ -884,10 +884,15 @@ directement ; le drapeau et le tracé suivent le week-end (Sepang).
 
 | Événement | Échéance | Texte (fr) |
 |---|---|---|
-| `ouverture_24h` | `date_qualifications` − 25 h | Les pronos pour [GP] ouvrent dans 24h |
-| `ouverture` | `date_qualifications` − 1 h | Les pronos pour [GP] sont ouverts |
-| `derniere_chance` | `date_course` − 1 h | Dernière chance de faire tes pronos pour [GP] |
+| `ouverture_24h` | `date_qualifications` − 22 h, GP encore `a_venir` | Les pronos pour [GP] ouvrent dans 24h |
+| `ouverture` | `statut` passé à `cotes_figees`, une cote en base, avant le départ | Les pronos pour [GP] sont ouverts |
+| `derniere_chance` | `date_course` − 1 h, GP `cotes_figees` | Dernière chance de faire tes pronos pour [GP] |
 | `resultats` | `statut` passé à `termine` | Les résultats du [GP] sont disponibles |
+
+> **Révisé en backend `0.88.2`** : l'ouverture partait à `date_qualifications` − 1 h, trois
+> heures avant le scraping de qualifs + 2 h — au GP du Brésil 2026, elle a annoncé des
+> pronostics ouverts sans une cote en base. Elle suit désormais le statut, sans fenêtre de
+> 15 minutes (`scraper.md` §8).
 
 Un job tourne **toutes les 5 minutes** ; un événement daté part s'il tombe dans les
 **15 minutes** qui suivent son échéance, puis il est perdu. La ligne `(gp_id, evenement)` de

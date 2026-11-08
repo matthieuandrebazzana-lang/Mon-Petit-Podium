@@ -194,16 +194,22 @@ async def upserter(table: str, lignes: list[dict], sur_conflit: str) -> list[dic
     return reponse.json()
 
 
-async def inserer_sans_doublon(table: str, ligne: dict) -> bool:
+async def inserer_sans_doublon(
+    table: str, ligne: dict, sur_conflit: str | None = None
+) -> bool:
     """Insère une ligne si sa clé n'existe pas encore. Rend `True` si elle a été créée.
 
     `insert … on conflict do nothing` : la clé primaire tranche, pas une lecture
     préalable — deux appels simultanés ne peuvent pas obtenir `True` tous les
     deux. C'est la réservation des notifications push (`notifications_envoyees`).
+
+    `sur_conflit` nomme une contrainte d'unicité autre que la clé primaire —
+    `alertes_admin` a un `id` généré, son unicité porte sur `(gp_id, type, cle)`.
     """
     reponse = await _appeler(
         "POST",
         f"/{table}",
+        params={"on_conflict": sur_conflit} if sur_conflit else None,
         json=[ligne],
         headers={"Prefer": "resolution=ignore-duplicates,return=representation"},
     )

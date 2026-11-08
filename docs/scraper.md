@@ -321,10 +321,57 @@ exact s'ajoute au registre de `points.py` et à `SLUGS_EN_BASE` des tests.
 
 | Réglage | Valeur | Pourquoi |
 |---|---|---|
-| Vérification | **1 h** | Le job attend une heure **connue à l'avance** et écrite en base. Une rafale n'apporterait rien. |
+| Vérification | **15 min** | Avant l'heure prévue, un tour ne fait qu'une lecture en base. Une fois en retard, chaque quart d'heure gagné est du temps de pronostic rendu aux joueurs. |
 | Déclenchement | **qualifs + 2 h** | Règle métier. |
-| Fenêtre | **4 h** | Railway se met en veille. Un déclenchement à l'heure pile serait manqué **définitivement** si le service dort — la fenêtre laisse quatre tours pour rattraper. |
+| Rattrapage | **jusqu'au départ** (`date_course`) | Tant que les cotes ne sont pas en base, le GP reste `a_venir` et chaque tour réessaie. Départ inconnu : `RATTRAPAGE_SANS_DEPART` = 30 h après l'heure prévue. |
+| Alerte | **heure prévue + 1 h** (`DELAI_ALERTE`) | Alerte admin `cotes_en_retard` et notification push aux administrateurs, **une fois** (voir ci-dessous). |
 | Premier tour | **+2 min** | Le job de résultats prend le sien à 30 s ; les espacer évite de lancer de front un scraping Unibet et une rafale OpenF1 après un redéploiement. |
+
+`echeances(gp)` — fonction pure, testée dans `tests/test_scraper_job.py` — rend
+`(prévu, alerte, limite)`.
+
+> ### Il n'y a plus de fenêtre fixe (backend `0.88.2`)
+> Le job réessayait **quatre heures** après l'heure prévue, puis se taisait — « le silence
+> est rattrapable manuellement ». Le 7 novembre 2026, les cotes du **GP du Brésil**
+> (qualifications 18:00Z, scraping prévu 20:00Z) n'étaient pas en base à 00:00Z, et rien
+> ne l'a dit : elles n'ont été récupérées que par un `POST /scraper/declencher` passé à la
+> main. Le silence était rattrapable — encore fallait-il le savoir.
+>
+> **Seul le départ arrête le rattrapage** : après lui, des cotes n'ouvriraient plus rien.
+> Une page Unibet publiée en retard, un rattachement refusé puis corrigé à la main (§6),
+> une veille de Railway sont tous rattrapés au tour suivant.
+
+### L'alerte `cotes_en_retard` (migration 37)
+
+Une heure après l'heure prévue, tout tour qui n'a pas figé — GP absent du compte rendu,
+aucune cote écrite, `ErreurScraper`, panne Supabase — appelle `signaler_retard` :
+
+1. **l'alerte** `alertes_admin` (`type = cotes_en_retard`, `cle = ''`) est **insérée sans
+   doublon** (`on conflict (gp_id, type, cle) do nothing`). `derniere_erreur` dit depuis
+   combien de temps, la dernière raison, l'heure limite et la commande manuelle ;
+2. **seul le tour qui crée la ligne notifie** les administrateurs
+   (`notifications.notifier_admins` : jetons des profils `is_admin`, dans leur langue) —
+   « ⚠️ Cotes du [GP] toujours absentes — le scraping réessaie jusqu'au départ. » Les tours
+   suivants ne mettent à jour que `derniere_erreur` ;
+3. **au figeage**, d'où qu'il vienne (job ou déclenchement manuel, `_apres_figeage`),
+   l'alerte est effacée.
+
+> **Sans la migration 37**, la base refuse le type : l'alerte n'est que dans le journal
+> (`[scraper-job] ALERTE — …`), et un ensemble en mémoire garde la notification à **une
+> par processus** plutôt qu'une par quart d'heure.
+
+> Un GP figé par quelqu'un d'autre entre la lecture des candidats et le scraping n'est
+> **pas** un échec : le compte rendu le dit `fige`, aucune alerte n'est écrite.
+
+### La notification « pronos ouverts » suit les cotes
+
+Elle partait à **qualifs − 1 h** (`decisions.md` §25), soit **trois heures avant** le
+scraping : au Brésil, elle a annoncé des pronostics ouverts sur une base sans une cote. Elle
+part désormais au premier tour du job de notifications qui voit le GP **`cotes_figees`**,
+après avoir vérifié qu'une cote existe, tant que le départ n'est pas passé — sans fenêtre de
+quinze minutes, puisque les cotes peuvent arriver des heures en retard. « Ouvrent dans
+24h » vise l'ouverture prévue (qualifs − 22 h) et se tait si le GP est déjà figé ; la
+« dernière chance » se tait si les cotes manquent encore.
 
 ### Le figeage ne suit qu'un scraping RÉUSSI
 
@@ -347,14 +394,14 @@ tour suivant réessaie.
    à `cotes_figees` un GP que le job de résultats vient de passer à `termine`, et **le
    remettrait dans la boucle de surveillance**. Zéro ligne touchée n'est pas une panne :
    c'est l'état voulu, atteint par quelqu'un d'autre.
-2. **Passé la fenêtre, aucune alerte répétée** — contrairement au job de résultats. Le GP
-   resterait candidat jusqu'à ce qu'il passe à `termine`, et une erreur par heure noierait
-   les logs. Le silence est rattrapable manuellement.
+2. **Une alerte, pas une rafale** — `cotes_en_retard` est écrite une fois et mise à jour
+   ensuite, la notification ne part qu'une fois. Après le départ, le GP n'est plus scrapé ;
+   l'alerte reste au profil admin.
 
 ### Le rattachement des issues, juste après le figeage (v`0.79.0`)
 
 Le figeage ouvre les pronostics : c'est le moment où un libellé Unibet inconnu doit se
-voir. Dès que `figer` a réussi — job horaire **ou** déclenchement manuel —,
+voir. Dès que `figer` a réussi — job automatique **ou** déclenchement manuel —,
 `rattachement.rattacher_sans_echec` :
 
 1. lit les **engagés** du GP chez OpenF1 : `/drivers` de la session de qualification

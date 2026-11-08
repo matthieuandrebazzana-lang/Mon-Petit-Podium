@@ -12,21 +12,27 @@ referme le point.
 
 Le mécanisme, et pourquoi il est fait ainsi :
 
-- **Une vérification par heure**, pas toutes les cinq minutes. Le job de
-  résultats court après une donnée qui paraît d'un instant à l'autre ; celui-ci
-  attend une heure connue à l'avance et écrite en base. Une rafale n'apporterait
-  rien et solliciterait Unibet pour rien.
+- **Une vérification par quart d'heure.** Avant l'heure prévue, un tour ne fait
+  qu'une lecture en base ; Unibet n'est sollicité que pour un GP dû. Une fois en
+  retard, chaque quart d'heure gagné est du temps de pronostic rendu aux joueurs.
 
-- **Une fenêtre de quatre heures** après l'instant théorique, et non un
-  déclenchement à l'heure pile. Sur le plan gratuit de Railway le service se met
-  en veille (section 9) : s'il dort à l'instant exact, un déclenchement ponctuel
-  serait manqué **définitivement**, et le Grand Prix n'aurait jamais de cotes. La
-  fenêtre laisse quatre tours de boucle pour rattraper.
+- **Le rattrapage court jusqu'au départ de la course** (backend `0.88.2`), et non
+  plus une fenêtre fixe de quatre heures. Tant que les cotes ne sont pas en base
+  le GP reste `a_venir`, et chaque tour réessaie : une page Unibet publiée en
+  retard, un rattachement refusé puis corrigé à la main, une veille de Railway
+  sont tous rattrapés. Seul le départ arrête — après lui, des cotes n'ouvriraient
+  plus rien. Départ inconnu : `RATTRAPAGE_SANS_DEPART` après l'heure prévue.
+
+- **Une heure après l'heure prévue sans cotes : alerte admin
+  `cotes_en_retard` et notification push aux administrateurs, une fois.** La
+  fenêtre de quatre heures se taisait ensuite, et le GP du Brésil 2026 n'a eu ses
+  cotes que par un déclenchement manuel découvert par hasard. L'alerte s'efface
+  au figeage, d'où qu'il vienne.
 
 - **Le figeage ne suit qu'un scraping réussi.** Un échec est journalisé et le GP
-  reste en `a_venir` : il sera retenté au tour suivant, tant que la fenêtre n'est
-  pas passée. Figer après un échec arrêterait les cotes sur ce que la base
-  contenait avant — au pire, sur rien du tout.
+  reste en `a_venir` : il sera retenté au tour suivant. Figer après un échec
+  arrêterait les cotes sur ce que la base contenait avant — au pire, sur rien
+  du tout.
 
 - **Le Grand Prix visé est celui que le scraper écrit, et ce n'est plus une
   supposition.** Ce module choisit un `gp_id` en base, puis retrouve ce même
@@ -34,7 +40,7 @@ Le mécanisme, et pourquoi il est fait ainsi :
   scraper insérait une seconde ligne face à une ligne posée à la main
   (`manuel-<slug>-2026`, migration 19), il rendait un **autre** UUID que celui
   visé : le compte rendu ne contenait pas le Grand Prix attendu, rien n'était
-  figé, et la fenêtre de quatre heures s'épuisait sur cette erreur, semaine après
+  figé, et la fenêtre de rattrapage s'épuisait sur cette erreur, semaine après
   semaine. C'est `unibet._adopter` qui referme le point, en faisant porter le
   vrai `id_unibet` à la ligne existante **sans toucher à son UUID**. Les deux
   moitiés du mécanisme tiennent ensemble : sans l'adoption, le rapprochement par
@@ -52,22 +58,45 @@ dédié — exactement la même note qu'en tête de `app/jobs/resultats.py`.
 import logging
 from datetime import UTC, datetime, timedelta
 
+from app.jobs import notifications
 from app.jobs.rattachement import rattacher_sans_echec
+from app.noms_gp import nom_du_gp
 from app.scraper.unibet import ErreurScraper, scraper
-from app.supabase_client import ErreurSupabase, mettre_a_jour, selectionner
+from app.supabase_client import (
+    ErreurSupabase,
+    inserer_sans_doublon,
+    mettre_a_jour,
+    selectionner,
+    supprimer,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
 # Règle 4.3 : le scraping a lieu deux heures après les qualifications.
 DELAI_APRES_QUALIFS = timedelta(hours=2)
 
-# Vérification horaire.
-INTERVALLE = timedelta(hours=1)
+# Un tour par quart d'heure.
+INTERVALLE = timedelta(minutes=15)
 
-# Durée pendant laquelle un Grand Prix reste éligible au déclenchement, à
-# compter de l'instant théorique. Couvre une veille de Railway, un
-# redéploiement, et jusqu'à trois échecs de scraping successifs.
-FENETRE = timedelta(hours=4)
+# Retard, compté depuis l'heure prévue (qualifs + 2 h), à partir duquel un GP
+# encore sans cotes devient une alerte admin et une notification push.
+DELAI_ALERTE = timedelta(hours=1)
+
+# Fin du rattrapage quand Unibet n'a pas donné de départ : une course se court
+# le lendemain des qualifications, au plus tard (26 h à Las Vegas).
+RATTRAPAGE_SANS_DEPART = timedelta(hours=30)
+
+# `alertes_admin.type` (migration 37). `cle` vide : une alerte par GP.
+COTES_EN_RETARD = "cotes_en_retard"
+
+# GP déjà signalés par ce processus, quand l'alerte n'a pas pu s'écrire en base
+# (migration 37 absente) : la notification ne repart pas à chaque tour.
+_signales_en_memoire: set[str] = set()
+
+ALERTE_ADMIN = {
+    "fr": "⚠️ Cotes du {gp} toujours absentes — le scraping réessaie jusqu'au départ.",
+    "en": "⚠️ {gp} odds still missing — scraping keeps retrying until the race start.",
+}
 
 # Seul statut qui déclenche. Un GP déjà `cotes_figees` a eu son scraping ; un GP
 # `termine` est couru. Ni l'un ni l'autre ne doit repasser ici.
@@ -169,6 +198,26 @@ def _resultat_du_gp(rapport: dict, gp_id: str) -> dict | None:
     return None
 
 
+def echeances(gp: dict) -> tuple[datetime, datetime, datetime] | None:
+    """`(prévu, alerte, limite)` d'un GP, ou `None` sans heure de qualifications.
+
+    - **prévu** : qualifs + 2 h, le premier tour qui scrape ;
+    - **alerte** : prévu + `DELAI_ALERTE`, l'instant où un GP encore sans cotes
+      devient une alerte ;
+    - **limite** : le départ de la course — au-delà, des cotes n'ouvriraient plus
+      rien. Départ inconnu : prévu + `RATTRAPAGE_SANS_DEPART`.
+
+    Calcul pur, c'est lui que testent les fenêtres du job.
+    """
+    qualifs = _en_datetime(gp.get("date_qualifications"))
+    if qualifs is None:
+        return None
+    prevu = qualifs + DELAI_APRES_QUALIFS
+    depart = _en_datetime(gp.get("date_course"))
+    limite = depart if depart is not None else prevu + RATTRAPAGE_SANS_DEPART
+    return prevu, prevu + DELAI_ALERTE, limite
+
+
 async def scraper_et_figer(gp_id: str, nom: str) -> dict:
     """Scrape, puis fige le Grand Prix visé si et seulement si ça a marché.
 
@@ -177,51 +226,154 @@ async def scraper_et_figer(gp_id: str, nom: str) -> dict:
     (section 3.1). On scrape donc ce qui est disponible, et on **fige seulement
     celui qu'on visait** — les autres Grands Prix éventuellement rencontrés
     gardent leur statut, leurs propres qualifications n'ayant pas eu lieu.
+
+    Le compte rendu porte `echec` : la raison, en clair, pour laquelle les cotes
+    du GP visé ne sont toujours pas en base — `None` s'il est figé, ou s'il l'a
+    été par quelqu'un d'autre entre-temps.
     """
     rapport = await scraper()
     resultat = _resultat_du_gp(rapport, gp_id)
 
     if resultat is None:
-        # Le GP visé n'a pas été rencontré : Unibet est déjà passé au suivant,
-        # ou la page de celui-ci a échoué. Rien n'est figé, et le tour suivant
-        # réessaiera tant que la fenêtre est ouverte.
-        logger.error(
-            "[scraper-job] %s : le Grand Prix n'a pas été scrapé (absent du "
-            "compte rendu Unibet). Statut laissé à « %s », nouvel essai dans %s. "
-            "Échecs du scraping : %s",
-            nom,
-            STATUT_DECLENCHEUR,
-            INTERVALLE,
-            " ; ".join(rapport.get("echecs") or []) or "aucun",
+        # Le GP visé n'a pas été rencontré : Unibet n'a pas encore publié sa page,
+        # le rattachement a été refusé, ou la page a échoué. Rien n'est figé, et
+        # le tour suivant réessaiera, jusqu'au départ.
+        echecs = " ; ".join(rapport.get("echecs") or []) or "aucun"
+        decouverts = ", ".join(
+            str(ligne.get("nom")) for ligne in rapport.get("grands_prix") or []
+        ) or "aucun"
+        echec = (
+            f"absent du compte rendu Unibet (GP traités : {decouverts} ; échecs : {echecs})"
         )
-        return {"gp": nom, "gp_id": gp_id, "fige": False, "rapport": rapport}
-
-    if not resultat.get("cotes"):
         logger.error(
-            "[scraper-job] %s : scrapé mais aucune cote enregistrée. Statut laissé "
+            "[scraper-job] %s : le Grand Prix n'a pas été scrapé — %s. Statut laissé "
             "à « %s », nouvel essai dans %s.",
             nom,
+            echec,
             STATUT_DECLENCHEUR,
             INTERVALLE,
         )
-        return {"gp": nom, "gp_id": gp_id, "fige": False, "rapport": rapport}
+        return {"gp": nom, "gp_id": gp_id, "fige": False, "echec": echec, "rapport": rapport}
+
+    if resultat.get("fige"):
+        # Figé par quelqu'un d'autre entre la lecture des candidats et ce
+        # scraping (un déclenchement manuel) : l'état voulu, pas un échec.
+        logger.info("[scraper-job] %s : déjà figé, rien à faire.", nom)
+        return {"gp": nom, "gp_id": gp_id, "fige": False, "echec": None, "rapport": rapport}
+
+    if not resultat.get("cotes"):
+        echec = resultat.get("refus") or "scrapé, mais aucune cote enregistrée"
+        logger.error(
+            "[scraper-job] %s : %s. Statut laissé à « %s », nouvel essai dans %s.",
+            nom,
+            echec,
+            STATUT_DECLENCHEUR,
+            INTERVALLE,
+        )
+        return {"gp": nom, "gp_id": gp_id, "fige": False, "echec": echec, "rapport": rapport}
 
     fige = await figer(gp_id, nom)
     if fige:
-        # Le figeage ouvre les pronostics : c'est le moment de rattacher chaque
-        # issue à un engagé, et de signaler celles qui n'en désignent aucun.
-        await rattacher_sans_echec(gp_id, nom)
+        await _apres_figeage(gp_id, nom)
     return {
         "gp": nom,
         "gp_id": gp_id,
         "cotes": resultat["cotes"],
         "fige": fige,
+        "echec": None,
         "rapport": rapport,
     }
 
 
-async def surveiller() -> None:
-    """Un tour de boucle : appelé toutes les heures par le scheduler.
+async def _apres_figeage(gp_id: str, nom: str) -> None:
+    """Ce qui suit tout figeage réussi, job horaire ou déclenchement manuel.
+
+    Le figeage ouvre les pronostics : c'est le moment de rattacher chaque issue
+    à un engagé, et de signaler celles qui n'en désignent aucun. L'alerte de
+    retard, s'il y en avait une, n'a plus d'objet.
+    """
+    await rattacher_sans_echec(gp_id, nom)
+    _signales_en_memoire.discard(gp_id)
+    try:
+        await supprimer(
+            "alertes_admin", {"gp_id": f"eq.{gp_id}", "type": f"eq.{COTES_EN_RETARD}"}
+        )
+    except ErreurSupabase:
+        logger.exception("[scraper-job] %s : alerte de retard non effacée.", nom)
+
+
+async def signaler_retard(gp: dict, raison: str, maintenant: datetime) -> None:
+    """Alerte admin `cotes_en_retard` et notification push, **une fois par GP**.
+
+    La ligne d'alerte tient lieu de réservation, comme `notifications_envoyees`
+    pour les notifications : seul le tour qui la **crée** envoie la
+    notification ; les suivants ne mettent à jour que la dernière erreur. Sans
+    la migration 37, la base refuse le type : seul le journal garde l'alerte, et
+    un ensemble en mémoire empêche la notification de repartir à chaque tour.
+
+    Ne lève jamais : le scraping du tour suivant ne doit pas en dépendre.
+    """
+    gp_id = str(gp["id"])
+    nom = str(gp.get("nom") or gp_id)
+    prevu, _, limite = echeances(gp) or (maintenant, None, None)
+    message = (
+        f"Cotes absentes {_duree(maintenant - prevu)} après l'heure prévue "
+        f"({prevu.strftime('%d/%m %H:%M')} UTC). Dernier échec : {raison}. Le job réessaie toutes les "
+        f"{_duree(INTERVALLE)} jusqu'au départ"
+        + (f" ({limite.strftime('%d/%m %H:%M')} UTC)" if limite else "")
+        + ". Déclenchement manuel : POST /scraper/declencher."
+    )[:1000]
+    logger.error("[scraper-job] ALERTE — %s : %s", nom, message)
+
+    try:
+        cree = await inserer_sans_doublon(
+            "alertes_admin",
+            {
+                "gp_id": gp_id,
+                "type": COTES_EN_RETARD,
+                "cle": "",
+                "derniere_erreur": message,
+                "modifie_le": maintenant.isoformat(),
+            },
+            sur_conflit="gp_id,type,cle",
+        )
+        if not cree:
+            await mettre_a_jour(
+                "alertes_admin",
+                {"gp_id": f"eq.{gp_id}", "type": f"eq.{COTES_EN_RETARD}"},
+                {"derniere_erreur": message, "modifie_le": maintenant.isoformat()},
+            )
+    except ErreurSupabase:
+        logger.exception(
+            "[scraper-job] %s : alerte admin non enregistrée (migration 37 appliquée ?).",
+            nom,
+        )
+        cree = gp_id not in _signales_en_memoire
+
+    if not cree:
+        return
+    _signales_en_memoire.add(gp_id)
+    bilan = await notifications.notifier_admins(
+        {
+            langue: modele.format(gp=nom_du_gp(nom, langue, gp.get("date_course")))
+            for langue, modele in ALERTE_ADMIN.items()
+        }
+    )
+    logger.info(
+        "[scraper-job] %s : notification admin %s.",
+        nom,
+        f"envoyée à {bilan['envoyees']} appareil(s)" if bilan else "non envoyée",
+    )
+
+
+def _duree(ecart: timedelta) -> str:
+    minutes = max(0, int(ecart.total_seconds() // 60))
+    heures, minutes = divmod(minutes, 60)
+    return f"{heures} h {minutes:02d}" if heures else f"{minutes} min"
+
+
+async def surveiller(maintenant: datetime | None = None) -> None:
+    """Un tour de boucle : appelé tous les quarts d'heure par le scheduler.
 
     Rien ne s'en échappe. La boucle du scheduler doit survivre à l'échec d'un
     Grand Prix, exactement comme celle du job de résultats.
@@ -232,40 +384,36 @@ async def surveiller() -> None:
         logger.exception("[scraper-job] Lecture des Grands Prix impossible.")
         return
 
-    maintenant = datetime.now(UTC)
+    maintenant = maintenant or datetime.now(UTC)
 
     for gp in candidats:
         gp_id = str(gp["id"])
         nom = str(gp.get("nom") or gp_id)
-        qualifs = _en_datetime(gp.get("date_qualifications"))
-        if qualifs is None:
+        bornes = echeances(gp)
+        if bornes is None:
             continue
+        prevu, alerte, limite = bornes
 
-        debut = qualifs + DELAI_APRES_QUALIFS
-        if maintenant < debut:
+        if maintenant < prevu:
             continue  # Les qualifications n'ont pas eu lieu, ou pas depuis 2h.
 
-        if maintenant > debut + FENETRE:
-            # Passé la fenêtre, on n'insiste plus : la course est peut-être déjà
-            # courue, et scraper des cotes périmées vaut moins que ne rien faire.
-            # Aucune alerte répétée ici — le Grand Prix restera dans cette liste
-            # jusqu'à ce que le job de résultats le passe à `termine`, et une
-            # erreur par heure jusque-là noierait les logs. Le silence est
-            # rattrapable : `POST /scraper/declencher` reste disponible.
+        if maintenant >= limite:
+            # La course est partie sans cotes : plus rien à ouvrir. L'alerte,
+            # écrite une heure après l'heure prévue, reste au profil admin.
             continue
 
         logger.info(
-            "[scraper-job] Déclenchement automatique pour %s — qualifications à "
-            "%s, soit il y a %s. Heure courante : %s.",
+            "[scraper-job] Déclenchement automatique pour %s — prévu à %s, soit il y "
+            "a %s ; rattrapage jusqu'à %s.",
             nom,
-            qualifs.isoformat(),
-            maintenant - qualifs,
-            maintenant.isoformat(),
+            prevu.isoformat(),
+            _duree(maintenant - prevu),
+            limite.isoformat(),
         )
 
         try:
-            await scraper_et_figer(gp_id, nom)
-        except (ErreurScraper, ErreurSupabase):
+            echec = (await scraper_et_figer(gp_id, nom)).get("echec")
+        except (ErreurScraper, ErreurSupabase) as erreur:
             logger.exception(
                 "[scraper-job] %s : scraping automatique en échec. Statut laissé "
                 "à « %s », nouvel essai dans %s.",
@@ -273,10 +421,15 @@ async def surveiller() -> None:
                 STATUT_DECLENCHEUR,
                 INTERVALLE,
             )
-        except Exception:  # noqa: BLE001 — la boucle doit survivre à tout
+            echec = f"{type(erreur).__name__} : {erreur}"
+        except Exception as erreur:  # noqa: BLE001 — la boucle doit survivre à tout
             logger.exception(
                 "[scraper-job] %s : échec inattendu du scraping automatique.", nom
             )
+            echec = f"{type(erreur).__name__} : {erreur}"
+
+        if echec and maintenant >= alerte:
+            await signaler_retard(gp, echec, maintenant)
 
 
 async def declencher_en_tache_de_fond(figer_apres: bool = True) -> None:
@@ -317,7 +470,7 @@ async def declencher_en_tache_de_fond(figer_apres: bool = True) -> None:
         gp_id, nom = str(ligne["gp_id"]), str(ligne.get("nom") or ligne["gp_id"])
         try:
             if await figer(gp_id, nom):
-                await rattacher_sans_echec(gp_id, nom)
+                await _apres_figeage(gp_id, nom)
         except ErreurSupabase:
             logger.exception(
                 "[scraper-job] %s : cotes enregistrées mais statut non figé.",
@@ -333,7 +486,7 @@ _scheduler = None
 
 
 def demarrer() -> None:
-    """Démarre la surveillance horaire, au démarrage de l'application.
+    """Démarre la surveillance (un tour par quart d'heure), au démarrage de l'application.
 
     Mêmes précautions que le scheduler de l'étape 6, et pour les mêmes raisons :
 
@@ -381,10 +534,11 @@ def demarrer() -> None:
     _scheduler.start()
     logger.info(
         "[scraper-job] Surveillance démarrée : un tour toutes les %s, "
-        "déclenchement %s après les qualifications, fenêtre de rattrapage de %s.",
+        "déclenchement %s après les qualifications, rattrapage jusqu'au départ, "
+        "alerte admin %s après l'heure prévue.",
         INTERVALLE,
         DELAI_APRES_QUALIFS,
-        FENETRE,
+        DELAI_ALERTE,
     )
 
 

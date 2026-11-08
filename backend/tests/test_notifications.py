@@ -35,32 +35,70 @@ def dus(maintenant, deja=frozenset(), **champs):
 
 
 @pytest.mark.parametrize(
-    ("evenement", "echeance"),
+    ("evenement", "echeance", "statut"),
     [
-        (job.OUVERTURE_24H, QUALIFS - timedelta(hours=25)),
-        (job.OUVERTURE, QUALIFS - timedelta(hours=1)),
-        (job.DERNIERE_CHANCE, COURSE - timedelta(hours=1)),
+        # « Dans 24h » vise l'ouverture prévue, qualifs + 2 h.
+        (job.OUVERTURE_24H, QUALIFS - timedelta(hours=22), "a_venir"),
+        (job.DERNIERE_CHANCE, COURSE - timedelta(hours=1), "cotes_figees"),
     ],
 )
-def test_fenetre_de_quinze_minutes_apres_l_echeance(evenement, echeance):
-    assert dus(echeance - timedelta(seconds=1)) == []
-    assert dus(echeance) == [evenement]
-    assert dus(echeance + timedelta(minutes=14, seconds=59)) == [evenement]
-    assert dus(echeance + job.FENETRE) == []
+def test_fenetre_de_quinze_minutes_apres_l_echeance(evenement, echeance, statut):
+    # L'ouverture, déjà envoyée, ne brouille pas la fenêtre mesurée.
+    deja = {job.OUVERTURE}
+    assert dus(echeance - timedelta(seconds=1), deja, statut=statut) == []
+    assert dus(echeance, deja, statut=statut) == [evenement]
+    assert dus(echeance + timedelta(minutes=14, seconds=59), deja, statut=statut) == [evenement]
+    assert dus(echeance + job.FENETRE, deja, statut=statut) == []
 
 
 def test_un_redemarrage_de_dix_minutes_rattrape_l_evenement():
     # Tour manqué à l'échéance (Railway en redéploiement), repris 10 min après.
-    assert dus(COURSE - timedelta(minutes=50)) == [job.DERNIERE_CHANCE]
+    assert dus(COURSE - timedelta(minutes=50), {job.OUVERTURE}) == [job.DERNIERE_CHANCE]
 
 
 def test_un_evenement_deja_envoye_ne_repart_pas():
-    instant = QUALIFS - timedelta(hours=1)
-    assert dus(instant, deja={job.OUVERTURE}) == []
+    instant = COURSE - timedelta(hours=1)
+    assert dus(instant, deja={job.OUVERTURE, job.DERNIERE_CHANCE}) == []
 
 
 def test_sans_date_rien_ne_part():
-    assert dus(QUALIFS - timedelta(hours=1), date_qualifications=None) == []
+    assert dus(QUALIFS - timedelta(hours=22), statut="a_venir", date_qualifications=None) == []
+
+
+# --------------------------------------------------------------------------- #
+#  L'ouverture suit les cotes, jamais l'horloge (GP du Brésil 2026)
+# --------------------------------------------------------------------------- #
+
+
+def test_l_ouverture_ne_part_pas_avant_les_cotes():
+    """Elle partait à qualifs − 1 h, trois heures avant le scraping."""
+    for instant in (
+        QUALIFS - timedelta(hours=1),
+        QUALIFS + timedelta(hours=2),
+        COURSE - timedelta(minutes=30),
+    ):
+        assert job.OUVERTURE not in dus(instant, statut="a_venir")
+
+
+def test_l_ouverture_part_des_que_les_cotes_sont_figees_meme_en_retard():
+    # Cotes figées à qualifs + 9 h : aucune fenêtre ne la périme.
+    assert dus(QUALIFS + timedelta(hours=9)) == [job.OUVERTURE]
+
+
+def test_l_ouverture_ne_part_plus_apres_le_depart():
+    assert job.OUVERTURE not in dus(COURSE + timedelta(minutes=1))
+
+
+def test_l_ouverture_sans_depart_connu_part_quand_meme():
+    assert dus(QUALIFS + timedelta(hours=3), date_course=None) == [job.OUVERTURE]
+
+
+def test_dans_24h_se_tait_si_les_cotes_sont_deja_figees():
+    assert job.OUVERTURE_24H not in dus(QUALIFS - timedelta(hours=22), {job.OUVERTURE})
+
+
+def test_pas_de_derniere_chance_sans_cotes():
+    assert dus(COURSE - timedelta(hours=1), statut="a_venir") == []
 
 
 def test_resultats_au_passage_a_termine_une_seule_fois():
@@ -112,14 +150,18 @@ def test_le_libelle_unibet_francais_ne_fuit_pas_en_anglais():
 class Base:
     """`notifications_envoyees` et `push_tokens` en mémoire."""
 
-    def __init__(self, gps, jetons):
+    def __init__(self, gps, jetons, cotes=("gp-1",)):
         self.gps = gps
         self.jetons = list(jetons)
         self.envoyees: set[tuple[str, str]] = set()
+        self.cotes = set(cotes)
 
     async def selectionner(self, table, parametres):
         if table == "grands_prix":
             return self.gps
+        if table == "cotes":
+            gp_id = parametres["gp_id"].removeprefix("eq.")
+            return [{"id": "c-1"}] if gp_id in self.cotes else []
         if table == "notifications_envoyees":
             return [{"gp_id": g, "evenement": e} for g, e in self.envoyees]
         if table == "push_tokens":
@@ -150,6 +192,9 @@ def base(monkeypatch):
     for nom in ("selectionner", "inserer_sans_doublon", "supprimer"):
         monkeypatch.setattr(job, nom, getattr(simulee, nom))
     simulee.envois = []
+    # L'ouverture du GP de la fixture est déjà partie : les tests qui suivent
+    # mesurent la « dernière chance ». L'ouverture a les siens, plus bas.
+    simulee.envoyees.add(("gp-1", job.OUVERTURE))
 
     async def envoyer(token, corps, titre=None, tentative=1):
         simulee.envois.append((token, corps))
@@ -168,7 +213,7 @@ def test_trois_tours_dans_la_fenetre_un_seul_envoi(base):
     for minutes in (0, 5, 10):
         asyncio.run(job.surveiller(echeance + timedelta(minutes=minutes)))
 
-    assert base.envoyees == {("gp-1", job.DERNIERE_CHANCE)}
+    assert base.envoyees == {("gp-1", job.OUVERTURE), ("gp-1", job.DERNIERE_CHANCE)}
     assert sorted(base.envois) == [
         ("aa" * 32, "Dernière chance de faire tes pronos pour le GP de Singapour"),
         ("bb" * 32, "Last chance to make your predictions for the Singapore GP"),
@@ -188,7 +233,68 @@ def test_ligne_deja_reservee_par_un_autre_processus(base, monkeypatch):
 
 def test_hors_fenetre_rien_n_est_reserve(base):
     asyncio.run(job.surveiller(COURSE - timedelta(hours=3)))
+    assert base.envoyees == {("gp-1", job.OUVERTURE)}
+    assert base.envois == []
+
+
+def test_l_ouverture_part_au_premier_tour_qui_voit_les_cotes(base):
+    base.envoyees.clear()
+    base.gps[0]["statut"] = "a_venir"
+    asyncio.run(job.surveiller(QUALIFS - timedelta(hours=1)))
+    assert base.envois == []  # l'ancienne échéance : plus rien ne part
+
+    base.gps[0]["statut"] = "cotes_figees"  # le scraper a figé, en retard
+    for minutes in (0, 5):
+        asyncio.run(job.surveiller(QUALIFS + timedelta(hours=6, minutes=minutes)))
+    assert base.envoyees == {("gp-1", job.OUVERTURE)}
+    assert sorted(base.envois) == [
+        ("aa" * 32, "Les pronos pour le GP de Singapour sont ouverts"),
+        ("bb" * 32, "Predictions for the Singapore GP are open"),
+    ]
+
+
+def test_l_ouverture_attend_une_cote_en_base(base):
+    """Statut posé à la main sans une cote : rien n'est réservé, rien ne part."""
+    base.envoyees.clear()
+    base.cotes.clear()
+    asyncio.run(job.surveiller(QUALIFS + timedelta(hours=3)))
     assert base.envoyees == set()
+    assert base.envois == []
+
+    base.cotes.add("gp-1")
+    asyncio.run(job.surveiller(QUALIFS + timedelta(hours=3, minutes=5)))
+    assert base.envoyees == {("gp-1", job.OUVERTURE)}
+
+
+def test_alerte_admin_aux_seuls_appareils_administrateurs(base, monkeypatch):
+    base.jetons = [
+        {"token": "aa" * 32, "langue": "fr", "user_id": "admin"},
+        {"token": "bb" * 32, "langue": "en", "user_id": "joueur"},
+    ]
+    lu = {}
+
+    async def selectionner(table, parametres):
+        if table == "profils":
+            assert parametres["is_admin"] == "eq.true"
+            return [{"id": "admin"}]
+        assert table == "push_tokens"
+        lu.update(parametres)
+        ids = parametres["user_id"].removeprefix("in.(").removesuffix(")").split(",")
+        return [j for j in base.jetons if j["user_id"] in ids]
+
+    monkeypatch.setattr(job, "selectionner", selectionner)
+    bilan = asyncio.run(job.notifier_admins({"fr": "alerte", "en": "alert"}))
+    assert lu["user_id"] == "in.(admin)"
+    assert bilan["envoyees"] == 1
+    assert base.envois == [("aa" * 32, "alerte")]
+
+
+def test_alerte_admin_sans_apns_ne_leve_pas(base, monkeypatch):
+    def casse():
+        raise apns.ErreurAPNs("APNs non configuré")
+
+    monkeypatch.setattr(job.apns, "verifier_configuration", casse)
+    assert asyncio.run(job.notifier_admins({"fr": "alerte"})) is None
     assert base.envois == []
 
 
@@ -530,5 +636,5 @@ def test_le_job_ne_reserve_rien_si_apns_est_casse(base, monkeypatch):
     monkeypatch.setattr(apns, "verifier_configuration", casse)
     asyncio.run(job.surveiller(COURSE - timedelta(hours=1)))
 
-    assert base.envoyees == set()
+    assert base.envoyees == {("gp-1", job.OUVERTURE)}  # celle de la fixture, seule
     assert base.envois == []

@@ -317,6 +317,7 @@ et l'upsert en empilerait une par passage. Migrations 26 et 29.
 | `rattachement_impossible` | le backend, OpenF1 muette au figeage | `''` | le rattachement suivant du GP |
 | `definitif_en_echec` | `noter_echec_definitif`, `tentatives + 1` par échec | `''` | le backend, au succès du définitif |
 | `grand_prix_ambigu` | le scraper (`unibet._alerter`) : GP d'Unibet désigné par plusieurs lignes, ou par une ligne réelle sous un autre identifiant (`gp_id` NULL), ou doublon déjà formé (`gp_id` = la ligne qui porte l'identifiant) | `id_unibet` | le scraper, au premier rattachement sans ambiguïté |
+| `cotes_en_retard` | le job de scraping (`jobs/scraper.signaler_retard`) : cotes toujours absentes une heure après l'heure prévue (qualifs + 2 h). Sa **création** déclenche la notification push aux administrateurs, une fois. Migration 37 | `''` | le backend, au figeage (job ou déclenchement manuel) |
 
 > **RLS activée, aucune politique, `revoke` pour `anon` et `authenticated`.** Seul le
 > backend la lit (`GET /admin/alertes`, garde `exiger_admin`), qui ne sert un
@@ -603,7 +604,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 
 ---
 
-## 6. Les trente-six migrations
+## 6. Les trente-sept migrations
 
 | # | Fichier | Ce qu'elle fait | Dépend de |
 |---|---|---|---|
@@ -643,6 +644,7 @@ Le jour où `is_admin` doit vraiment garder quelque chose : une route backend qu
 | 34 | `20261029120000_horaires_bresil_2026` | **Données** : week-end du Brésil 2026 ramené du 13–15 au **6–8 novembre** — qualifications `2026-11-07 18:00Z`, course `2026-11-08 17:00Z` (14h00 locale, pas 15h00), seulement sur les deux instants faux exacts de la ligne du Brésil (`bugs-connus.md` §42) | 19, 20 |
 | 35 | `20261104120000_hirakawa_mexique_2026` | **Données** : `numero_pilote = 50` sur les cotes « Hirakawa, Ryo » du GP du Mexique, encore sans numéro (`bugs-connus.md` §44). Suivie du recalcul du GP | 26 |
 | 36 | `20261104130000_correspondances_manuelles` | **`correspondances_manuelles`** (choix de l'admin par GP et libellé normalisé, service seul), type d'alerte **`pronostics_en_attente`**, **`rattacher_issues` remplacée** pour garder la raison d'un libellé non reconnu. Rejouer la 26 après elle perd la raison | **26**, 29 |
+| 37 | `20261108120000_alerte_cotes_en_retard` | Type d'alerte **`cotes_en_retard`** : cotes toujours absentes une heure après l'heure prévue du scraping (`scraper.md` §8). Contrainte `alertes_admin_type_valide` remplacée. Avant ou après le backend `0.88.2` | 26, 29, **36** |
 
 ### Le piège d'ordre — la seule chose à surveiller
 
@@ -671,6 +673,7 @@ Plusieurs `create or replace function` la même fonction : rejouer une migration
 | **5** ou **6** après **25** | `statut_evaluation` dans les pronostics servis (un `non_evaluable` redevient « en attente » à l'écran) | rejouer 25 |
 | **24** ou **25** après **27** | les gains par pilote du podium : plus écrits par le calcul (24, 25), plus servis (25) — les écrans disent le pilote « en attente » | rejouer 27 |
 | **19** après **29** | `alertes_admin` dans le comptage de sécurité de `adopter_grand_prix` (une alerte rattachée à la ligne manuelle serait emportée en cascade) | rejouer 29 |
+| **26**, **29** ou **36** après **37** | le type `cotes_en_retard` : l'alerte de cotes en retard refusée par la base (journal et notification seuls) | rejouer 37 |
 | **7**, **8**, **12**, **16** ou **18** après **32** | les « réussis » comptés pilote par pilote : le classement repasse à une réussite par podium | rejouer 18 si besoin, puis 32 |
 
 **La 18 remplace `classement_du_championnat` et `pronostics_du_championnat`**, comme la 12

@@ -12,7 +12,7 @@ Application web (PWA) + app native iOS. Permet à des amis de créer des champio
 
 URL production web : https://greed-f1.com (alias de greed-f1.vercel.app)
 Version web actuelle : 0.87.5
-Version backend actuelle : 0.88.1
+Version backend actuelle : 0.88.2
 Version iOS actuelle : 0.60.2 (build 24)
 
 ## STACK TECHNIQUE
@@ -34,6 +34,7 @@ Migrations Supabase : toujours appliquées manuellement dans le SQL Editor
 Docker disponible (27/10) → une migration s'éprouve sur un PostgreSQL 16 jetable, contre un harnais réduit aux tables qu'elle lit
 31 migrations appliquées ; **32 (`reussis_par_pilote`) et 33 (`horaires_mexique_2026`) écrites le 27/10, à appliquer dans le SQL Editor** — la 33 avant la course du Mexique (1ᵉʳ novembre, 20:00Z). **Constaté le 29/10 en lisant la base : la 33 n'est PAS appliquée** (Mexique encore à 23:00Z / 21:00Z)
 **34 (`horaires_bresil_2026`) écrite le 29/10, à appliquer**
+**37 (`alerte_cotes_en_retard`) écrite le 08/11, à appliquer** — avant ou après le backend 0.88.2 ; sans elle l'alerte `cotes_en_retard` est refusée (journal + une notification admin par processus)
 **35 (`hirakawa_mexique_2026`) et 36 (`correspondances_manuelles`) écrites le 04/11, à appliquer** — la 35 puis le recalcul du Mexique ; la 36 avant les qualifications du Brésil (7 novembre, 18:00Z), qui publie déjà « Camara, Rafael » — avant l'ouverture de la page Unibet du Brésil et au plus tard avant les qualifications (7 novembre, 18:00Z)
 Après chaque session, Claude Code met à jour docs/contexte-chat.md
 Versions : web, backend et iOS sont indépendantes — chacune ne bouge que si son code change (`CLAUDE.md` §7). `CLAUDE.md` §8 suit la version web
@@ -282,6 +283,8 @@ Google OAuth iOS non encore testé sur iPhone réel
 
 Rattachement d'un GP Unibet (backend 0.82.1, `docs/decisions.md` §24) : identifiant Unibet, puis date de course à ±3 jours, puis nom en repli. Aucun candidat → GP nouveau, ligne créée. Deux candidats ou plus (ou une ligne réelle du même week-end sous un autre identifiant) → rien créé, alerte admin `grand_prix_ambigu`.
 Le 4 octobre 2026 est le GP de Bahreïn délocalisé à Sepang : ligne unique `16a9c686-392a-4ef0-a624-f112825106d9`, nom Unibet « GP Bahrein », drapeau et tracé de Sepang (slug `malaisie`). Doublon avec la ligne manuelle « GP Malaisie » résorbé le 1er octobre par `adopter_grand_prix`.
+
+Cotes en retard (backend 0.88.2, `scraper.md` §8, migration 37) : le 7 novembre 2026, les cotes du GP du Brésil (qualifs 18:00Z, scraping prévu 20:00Z) n'étaient pas en base à la fin de la fenêtre fixe de 4 h, et le job s'est tu ; récupérées par `/scraper/declencher` à la main. Logs Railway non fournis dans la session : cause exacte non tranchée, requêtes de vérification données (migration 34 appliquée ? doublon « GP São Paulo » ? ligne figée ? `notifications_envoyees`). Correctif : tour toutes les 15 min, rattrapage **jusqu'au départ** (`date_course`, ou 30 h sans départ connu), et à heure prévue + 1 h sans cotes alerte `cotes_en_retard` + push aux seuls appareils `is_admin` (une fois ; la création de la ligne d'alerte tient lieu de réservation), effacée au figeage (job ou manuel). Notifications : « pronos ouverts » partait à qualifs − 1 h, **trois heures avant les cotes** — elle part maintenant au passage à `cotes_figees` (une cote en base vérifiée, avant le départ, sans fenêtre) ; « ouvrent dans 24h » à qualifs − 22 h tant que `a_venir` ; « dernière chance » seulement si `cotes_figees`. Tests `test_scraper_job.py` (16) + `test_notifications.py` ; 577 tests verts. Web et iOS non touchés : un type d'alerte inconnu s'y affiche sous son nom brut avec `derniere_erreur`.
 
 Scraper (avec figeage) :
 curl -X POST "https://mon-petit-podium-production.up.railway.app/scraper/declencher" -H "X-Admin-Secret: monpetitpodium2026"
